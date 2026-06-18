@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Plus, AlignLeft, LayoutGrid } from 'lucide-react'
 import Timeline from './components/timeline/Timeline'
 import AddItemSheet from './components/timeline/AddItemSheet'
+import AddGroceryItemSheet from './components/expenses/AddGroceryItemSheet'
 import WeekHeader from './components/timeline/WeekHeader'
 import BottomNav, { type Page } from './components/BottomNav'
 import MealsPage from './pages/MealsPage'
@@ -23,6 +24,9 @@ export type ViewMode = 'daily' | 'weekly'
 
 const PAGE_ORDER: Page[] = ['meals', 'workout', 'schedule', 'habits', 'expenses']
 
+// Pages that have a floating "add" button
+const FAB_PAGES: Page[] = ['schedule', 'expenses']
+
 const pageVariants = {
   enter:  (d: number) => ({ x: d > 0 ? 28 : -28, opacity: 0 }),
   center: { x: 0, opacity: 1 },
@@ -33,6 +37,7 @@ function App() {
   // [page, direction] — direction drives the slide
   const [[activePage, dir], setPage] = useState<[Page, number]>(['schedule', 0])
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
 
   function go(p: Page) {
@@ -40,6 +45,14 @@ function App() {
     const from = PAGE_ORDER.indexOf(activePage)
     setPage([p, PAGE_ORDER.indexOf(p) > from ? 1 : -1])
   }
+
+  function openFab() {
+    if (activePage === 'expenses') setIsGroceryAddOpen(true)
+    else setIsAddOpen(true)
+  }
+
+  const showFab = FAB_PAGES.includes(activePage)
+  const fabOpen = activePage === 'expenses' ? isGroceryAddOpen : isAddOpen
 
   function renderPage() {
     switch (activePage) {
@@ -139,14 +152,14 @@ function App() {
         </AnimatePresence>
       </div>
 
-      {/* FAB — only on schedule page */}
+      {/* FAB — shown on pages that support quick-add */}
       <AnimatePresence>
-        {activePage === 'schedule' && (
+        {showFab && (
           <motion.button
-            onClick={() => setIsAddOpen(true)}
+            onClick={openFab}
             whileTap={tap}
             initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1, rotate: isAddOpen ? 135 : 0 }}
+            animate={{ scale: 1, opacity: 1, rotate: fabOpen ? 135 : 0 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={spring.snappy}
             className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-lg z-40"
@@ -157,6 +170,10 @@ function App() {
       </AnimatePresence>
 
       <AddItemSheet isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
+      <AddGroceryItemSheet
+        isOpen={isGroceryAddOpen}
+        onClose={() => setIsGroceryAddOpen(false)}
+      />
 
       <BottomNav active={activePage} onChange={go} />
     </div>

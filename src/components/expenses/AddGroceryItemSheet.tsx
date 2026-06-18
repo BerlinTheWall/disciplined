@@ -1,0 +1,326 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/immutability */
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Wand2 } from "lucide-react";
+import { useGroceryStore } from "../../store/groceryStore";
+import {
+  FOOD_CATEGORIES,
+  FOOD_CATEGORY_KEYS,
+  FALLBACK_FOOD_ICON,
+  type FoodCategoryKey,
+} from "../../lib/foodCategories";
+import {
+  estimateNutrition,
+  suggestCategory,
+  emptyNutrition,
+  NUTRITION_FIELDS,
+  UNITS,
+  type Nutrition,
+  type Unit,
+} from "../../lib/nutritions";
+import { spring, tap } from "../../lib/motion";
+import type { GroceryItem } from "../../types/grocery";
+
+interface AddGroceryItemSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  editItem?: GroceryItem | null;
+}
+
+export default function AddGroceryItemSheet({
+  isOpen,
+  onClose,
+  editItem,
+}: AddGroceryItemSheetProps) {
+  const addGroceryItem = useGroceryStore((s) => s.addGroceryItem);
+  const updateGroceryItem = useGroceryStore((s) => s.updateGroceryItem);
+  const deleteGroceryItem = useGroceryStore((s) => s.deleteGroceryItem);
+
+  const isEditing = !!editItem;
+
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<FoodCategoryKey>("protein");
+  const [categoryTouched, setCategoryTouched] = useState(false);
+  const [quantity, setQuantity] = useState("100");
+  const [unit, setUnit] = useState<Unit>("g");
+  const [price, setPrice] = useState("");
+  const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition());
+  const [auto, setAuto] = useState(true);
+
+  // Populate when opening for edit; reset when opening fresh
+  useEffect(() => {
+    if (editItem) {
+      setName(editItem.name);
+      setCategory(editItem.category);
+      setCategoryTouched(true);
+      setQuantity(String(editItem.quantity));
+      setUnit(editItem.unit);
+      setPrice(String(editItem.price));
+      setNutrition(editItem.nutrition);
+      setAuto(editItem.autoNutrition);
+    } else {
+      setName("");
+      setCategory("protein");
+      setCategoryTouched(false);
+      setQuantity("100");
+      setUnit("g");
+      setPrice("");
+      setNutrition(emptyNutrition());
+      setAuto(true);
+    }
+  }, [editItem]);
+
+  const qtyNum = parseFloat(quantity);
+
+  // Re-estimate whenever inputs change, as long as auto-estimate is on
+  useEffect(() => {
+    if (!auto) return;
+    setNutrition(estimateNutrition(name, category, qtyNum, unit));
+  }, [auto, name, category, qtyNum, unit]);
+
+  function handleNameChange(value: string) {
+    setName(value);
+    if (!categoryTouched) {
+      const guess = suggestCategory(value);
+      if (guess) setCategory(guess);
+    }
+  }
+
+  function pickCategory(key: FoodCategoryKey) {
+    setCategory(key);
+    setCategoryTouched(true);
+  }
+
+  function setNutritionField(key: keyof Nutrition, raw: string) {
+    const value = parseFloat(raw);
+    setNutrition((prev) => ({ ...prev, [key]: isFinite(value) ? value : 0 }));
+    setAuto(false); // a manual edit means stop auto-overwriting
+  }
+
+  function reEstimate() {
+    setAuto(true); // the effect recomputes from current inputs
+  }
+
+  function handleSubmit() {
+    if (!isFinite(qtyNum) || qtyNum <= 0) return;
+    const priceNum = parseFloat(price);
+
+    const payload = {
+      name: name.trim() || FOOD_CATEGORIES[category].label,
+      category,
+      price: isFinite(priceNum) ? Math.round(priceNum * 100) / 100 : 0,
+      quantity: qtyNum,
+      unit,
+      nutrition,
+      autoNutrition: auto,
+    };
+
+    if (isEditing) updateGroceryItem(editItem!.id, payload);
+    else addGroceryItem(payload);
+    onClose();
+  }
+
+  function handleDelete() {
+    if (!editItem) return;
+    deleteGroceryItem(editItem.id);
+    onClose();
+  }
+
+  const canSave = isFinite(qtyNum) && qtyNum > 0 && name.trim().length > 0;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            className="fixed inset-0 bg-black/40 z-40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+          <motion.div
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[88vh] overflow-y-auto"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={spring.snappy}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">
+                {isEditing ? "Edit grocery item" : "New grocery item"}
+              </h2>
+              <motion.button
+                onClick={onClose}
+                whileTap={tap}
+                className="p-2 -m-2 text-gray-400"
+              >
+                <X size={22} />
+              </motion.button>
+            </div>
+
+            {/* Name */}
+            <label className="text-sm text-gray-500 mb-1 block">Item</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="e.g. Chicken breast"
+              autoFocus
+              className="w-full text-base border border-gray-200 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-gray-400"
+            />
+
+            {/* Category */}
+            <label className="text-sm text-gray-500 mb-2 block">Category</label>
+            <div className="flex gap-2 flex-wrap mb-4">
+              {FOOD_CATEGORY_KEYS.map((key) => {
+                const { icon, label, color } = FOOD_CATEGORIES[key];
+                const Icon = icon ?? FALLBACK_FOOD_ICON;
+                const selected = category === key;
+                return (
+                  <motion.button
+                    key={key}
+                    onClick={() => pickCategory(key)}
+                    whileTap={tap}
+                    className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium ${
+                      selected
+                        ? "bg-gray-900 text-white"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    <span
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-white shrink-0"
+                      style={{ backgroundColor: color }}
+                    >
+                      <Icon size={13} />
+                    </span>
+                    {label}
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* Quantity + unit */}
+            <label className="text-sm text-gray-500 mb-1 block">Amount</label>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="0"
+                className="flex-1 min-w-0 text-base border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-gray-400"
+              />
+              <div className="flex bg-gray-100 rounded-xl p-1">
+                {UNITS.map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnit(u)}
+                    className="relative px-2.5 py-1.5 rounded-lg text-sm font-medium"
+                  >
+                    {unit === u && (
+                      <motion.div
+                        layoutId="unitToggle"
+                        transition={spring.snappy}
+                        className="absolute inset-0 bg-white rounded-lg shadow-sm"
+                      />
+                    )}
+                    <span
+                      className={`relative z-10 ${
+                        unit === u ? "text-gray-900" : "text-gray-500"
+                      }`}
+                    >
+                      {u}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price */}
+            <label className="text-sm text-gray-500 mb-1 block">Price</label>
+            <div className="relative mb-5">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-gray-400">
+                $
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full text-base border border-gray-200 rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:border-gray-400"
+              />
+            </div>
+
+            {/* Nutrition */}
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm text-gray-500">
+                Nutrition{" "}
+                <span className="text-gray-400">(for this amount)</span>
+              </label>
+              <motion.button
+                onClick={reEstimate}
+                whileTap={tap}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                  auto
+                    ? "bg-gray-900 text-white"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                <Wand2 size={12} />
+                {auto ? "Estimated" : "Re-estimate"}
+              </motion.button>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">
+              {auto
+                ? "Auto-estimated from the item and amount. Edit any value to override."
+                : "Manually set. Tap Re-estimate to recalculate from the amount."}
+            </p>
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              {NUTRITION_FIELDS.map(({ key, label, unit: u }) => (
+                <div key={key}>
+                  <label className="text-[11px] text-gray-400 mb-1 block">
+                    {label}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={nutrition[key]}
+                      onChange={(e) => setNutritionField(key, e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-lg pl-2.5 pr-7 py-2 focus:outline-none focus:border-gray-400"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">
+                      {u}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <motion.button
+              onClick={handleSubmit}
+              whileTap={tap}
+              disabled={!canSave}
+              className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-medium disabled:opacity-40"
+            >
+              {isEditing ? "Save changes" : "Add to list"}
+            </motion.button>
+
+            {isEditing && (
+              <motion.button
+                onClick={handleDelete}
+                whileTap={tap}
+                className="w-full mt-3 py-3.5 rounded-xl text-red-500 font-medium bg-red-50"
+              >
+                Remove from list
+              </motion.button>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
