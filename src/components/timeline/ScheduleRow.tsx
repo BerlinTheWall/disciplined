@@ -73,10 +73,10 @@ export default function ScheduleRow({
         zIndex: isActive ? 10 : 1,
       }}
     >
-      <div className="w-12 pt-2 text-xs text-gray-400 text-right shrink-0">
+      <div className="w-12 pt-0.5 leading-none text-xs text-gray-400 text-right shrink-0 whitespace-nowrap">
         {formatTimeLabel(startMinutes)}
       </div>
-      <>
+      <div className="flex-1 flex items-center gap-3">
         <div
           ref={move.setNodeRef}
           {...move.listeners}
@@ -126,7 +126,7 @@ export default function ScheduleRow({
             <div className="w-8 h-1 rounded-full bg-gray-200" />
           </div>
         </div>
-      </>
+      </div>
       <button
         onClick={() => onToggle(id)}
         className="w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
