@@ -7,6 +7,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { useHabitStore } from "../../store/habitStore";
 import { ICONS } from "../../lib/icons";
 import type { EditItem } from "./Timeline";
+import { spring, tap } from "../../lib/motion";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -170,7 +171,7 @@ export default function AddItemSheet({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            transition={spring.snappy}
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">
@@ -178,9 +179,13 @@ export default function AddItemSheet({
                   ? `Edit ${editItem!.type}`
                   : `New ${mode === "task" ? "task" : "habit"}`}
               </h2>
-              <button onClick={onClose} className="p-2 -m-2 text-gray-400">
+              <motion.button
+                onClick={onClose}
+                whileTap={tap}
+                className="p-2 -m-2 text-gray-400"
+              >
                 <X size={22} />
-              </button>
+              </motion.button>
             </div>
 
             {/* Mode toggle — only shown when adding, locked in edit mode */}
@@ -190,9 +195,20 @@ export default function AddItemSheet({
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium ${mode === m ? "bg-white shadow-sm text-gray-900" : "text-gray-500"}`}
+                    className="relative flex-1 py-2 rounded-lg text-sm font-medium"
                   >
-                    {m === "task" ? "One-time task" : "Repeating habit"}
+                    {mode === m && (
+                      <motion.div
+                        layoutId="sheetMode"
+                        transition={spring.snappy}
+                        className="absolute inset-0 bg-white rounded-lg shadow-sm"
+                      />
+                    )}
+                    <span
+                      className={`relative z-10 ${mode === m ? "text-gray-900" : "text-gray-500"}`}
+                    >
+                      {m === "task" ? "One-time task" : "Repeating habit"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -220,15 +236,16 @@ export default function AddItemSheet({
             <label className="text-sm text-gray-500 mb-2 block">Duration</label>
             <div className="flex gap-2 flex-wrap mb-4">
               {DURATION_OPTIONS.map((d) => (
-                <button
+                <motion.button
                   key={d}
                   onClick={() => setDuration(d)}
+                  whileTap={tap}
                   className={`px-3 py-2 rounded-full text-sm font-medium ${duration === d ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}
                 >
                   {d < 60
                     ? `${d}m`
                     : `${d / 60}h${d % 60 ? ` ${d % 60}m` : ""}`}
-                </button>
+                </motion.button>
               ))}
             </div>
 
@@ -241,13 +258,14 @@ export default function AddItemSheet({
                 </label>
                 <div className="flex gap-2 mb-4">
                   {DAY_OPTIONS.map(({ label, value }) => (
-                    <button
+                    <motion.button
                       key={value}
                       onClick={() => toggleDay(value)}
+                      whileTap={tap}
                       className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}
                     >
                       {label}
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               </>
@@ -260,13 +278,14 @@ export default function AddItemSheet({
                 .map((key) => {
                   const IconComp = ICONS[key];
                   return (
-                    <button
+                    <motion.button
                       key={key}
                       onClick={() => setIcon(key)}
+                      whileTap={tap}
                       className={`w-10 h-10 rounded-full flex items-center justify-center ${icon === key ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}
                     >
                       <IconComp size={18} />
-                    </button>
+                    </motion.button>
                   );
                 })}
             </div>
@@ -274,21 +293,31 @@ export default function AddItemSheet({
             <label className="text-sm text-gray-500 mb-2 block">Color</label>
             <div className="flex gap-3 mb-6">
               {COLOR_OPTIONS.map((c) => (
-                <button
+                <motion.button
                   key={c}
                   onClick={() => setColor(c)}
+                  whileTap={tap}
                   className="w-9 h-9 rounded-full flex items-center justify-center"
                   style={{ backgroundColor: c }}
                 >
-                  {color === c && (
-                    <div className="w-3 h-3 rounded-full bg-white" />
-                  )}
-                </button>
+                  <AnimatePresence>
+                    {color === c && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        exit={{ scale: 0 }}
+                        transition={spring.pop}
+                        className="w-3 h-3 rounded-full bg-white"
+                      />
+                    )}
+                  </AnimatePresence>
+                </motion.button>
               ))}
             </div>
 
-            <button
+            <motion.button
               onClick={handleSubmit}
+              whileTap={tap}
               disabled={
                 !title.trim() || (mode === "habit" && daysOfWeek.length === 0)
               }
@@ -299,15 +328,16 @@ export default function AddItemSheet({
                 : mode === "task"
                   ? "Add task"
                   : "Add habit"}
-            </button>
+            </motion.button>
 
             {isEditing && (
-              <button
+              <motion.button
                 onClick={handleDelete}
+                whileTap={tap}
                 className="w-full mt-3 py-3.5 rounded-xl text-red-500 font-medium bg-red-50"
               >
                 Delete {editItem!.type}
-              </button>
+              </motion.button>
             )}
           </motion.div>
         </>

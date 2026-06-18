@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { useTaskStore } from '../../store/taskStore'
 import { useHabitStore } from '../../store/habitStore'
@@ -139,26 +140,22 @@ export default function Timeline({ viewMode }: TimelineProps) {
                       <stop offset="100%" stopColor={next.color} />
                     </linearGradient>
                   </defs>
-                  <rect
-                    x="0"
-                    y="0"
-                    width="2"
-                    height={bottomY - topY}
-                    fill={`url(#${gradientId})`}
-                  />
+                  <rect x="0" y="0" width="2" height={bottomY - topY} fill={`url(#${gradientId})`} />
                 </svg>
               )
             })}
 
-            {items.map((item) => (
-              <ScheduleRow
-                key={item.id}
-                {...item}
-                startOffset={startOffset}
-                onToggle={handleToggle}
-                onLongPress={handleLongPress}
-              />
-            ))}
+            <AnimatePresence>
+              {items.map((item) => (
+                <ScheduleRow
+                  key={item.id}
+                  {...item}
+                  startOffset={startOffset}
+                  onToggle={handleToggle}
+                  onLongPress={handleLongPress}
+                />
+              ))}
+            </AnimatePresence>
           </div>
         </DndContext>
       )}

@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/refs */
 import { Check, Flame } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDraggable } from "@dnd-kit/core";
 import { ICONS } from "../../lib/icons";
 import {
@@ -12,6 +13,7 @@ import {
   PILL_BASE_SIZE,
 } from "../../lib/time";
 import { useLongPress } from "../../hooks/useLongPress";
+import { spring, tap } from "../../lib/motion";
 
 export const MIN_ROW_HEIGHT = 72;
 
@@ -66,12 +68,15 @@ export default function ScheduleRow({
   const endMinutes = startMinutes + liveOffsetMinutes + liveDuration;
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: isActive ? 0.9 : 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92 }}
+      transition={spring.pop}
       className="absolute left-0 right-0 flex items-start gap-3 pr-2"
       style={{
         top: minutesToPx(startMinutes + liveOffsetMinutes - startOffset),
         height: rowHeight,
-        opacity: isActive ? 0.9 : 1,
         zIndex: isActive ? 10 : 1,
       }}
     >
@@ -139,16 +144,28 @@ export default function ScheduleRow({
           </div>
         </div>
       </div>
-      <button
+
+      <motion.button
         onClick={() => onToggle(id)}
+        whileTap={tap}
+        animate={{ backgroundColor: completed ? color : "rgba(255,255,255,0)" }}
+        transition={spring.snappy}
         className="w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
-        style={{
-          borderColor: color,
-          backgroundColor: completed ? color : "transparent",
-        }}
+        style={{ borderColor: color }}
       >
-        {completed && <Check size={14} className="text-white" />}
-      </button>
-    </div>
+        <AnimatePresence>
+          {completed && (
+            <motion.span
+              initial={{ scale: 0, rotate: -40 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: -40 }}
+              transition={spring.pop}
+            >
+              <Check size={14} className="text-white" strokeWidth={3} />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </motion.button>
+    </motion.div>
   );
 }

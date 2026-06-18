@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Plus, AlignLeft, LayoutGrid } from 'lucide-react'
 import Timeline from './components/timeline/Timeline'
 import AddItemSheet from './components/timeline/AddItemSheet'
@@ -8,6 +9,7 @@ import MealsPage from './pages/MealsPage'
 import WorkoutPage from './pages/WorkoutPage'
 import HabitsPage from './pages/HabitsPage'
 import ExpensesPage from './pages/ExpensesPage'
+import { spring, tap } from './lib/motion'
 
 const PAGE_TITLES: Record<Page, string> = {
   meals: 'Meals',
@@ -19,65 +21,144 @@ const PAGE_TITLES: Record<Page, string> = {
 
 export type ViewMode = 'daily' | 'weekly'
 
+const PAGE_ORDER: Page[] = ['meals', 'workout', 'schedule', 'habits', 'expenses']
+
+const pageVariants = {
+  enter:  (d: number) => ({ x: d > 0 ? 28 : -28, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit:   (d: number) => ({ x: d > 0 ? -28 : 28, opacity: 0 }),
+}
+
 function App() {
-  const [activePage, setActivePage] = useState<Page>('schedule')
+  // [page, direction] — direction drives the slide
+  const [[activePage, dir], setPage] = useState<[Page, number]>(['schedule', 0])
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
 
-  return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* Page content — scrollable, padded above bottom nav */}
-      <div className="flex-1 overflow-y-auto px-4 pt-8 pb-28">
-        {/* Title row */}
-        <div className="flex items-center justify-between mb-6 ml-16 mr-0">
-          <h1 className="text-2xl font-bold">{PAGE_TITLES[activePage]}</h1>
+  function go(p: Page) {
+    if (p === activePage) return
+    const from = PAGE_ORDER.indexOf(activePage)
+    setPage([p, PAGE_ORDER.indexOf(p) > from ? 1 : -1])
+  }
 
-          {/* Daily / Weekly icon toggle — only on schedule page */}
-          {activePage === 'schedule' && (
-            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode('daily')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'daily' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
-                aria-label="Daily view"
-              >
-                <AlignLeft size={15} />
-              </button>
-              <button
-                onClick={() => setViewMode('weekly')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'weekly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
-                aria-label="Weekly view"
-              >
-                <LayoutGrid size={15} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {activePage === 'schedule' && (
+  function renderPage() {
+    switch (activePage) {
+      case 'schedule':
+        return (
           <>
             <WeekHeader leftGutter={viewMode === 'weekly' ? 32 : 0} />
             <Timeline viewMode={viewMode} />
           </>
-        )}
-        {activePage === 'meals'    && <MealsPage />}
-        {activePage === 'workout'  && <WorkoutPage />}
-        {activePage === 'habits'   && <HabitsPage />}
-        {activePage === 'expenses' && <ExpensesPage />}
+        )
+      case 'meals':
+        return <MealsPage />
+      case 'workout':
+        return <WorkoutPage />
+      case 'habits':
+        return <HabitsPage />
+      case 'expenses':
+        return <ExpensesPage />
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Title row — stays mounted; its contents animate */}
+      <div className="px-4 pt-8">
+        <div className="flex items-center justify-between mb-6 ml-16 mr-0">
+          <div className="relative h-8 flex items-center overflow-hidden">
+            <AnimatePresence mode="popLayout" custom={dir} initial={false}>
+              <motion.h1
+                key={activePage}
+                custom={dir}
+                initial={{ y: dir > 0 ? 22 : -22, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: dir > 0 ? -22 : 22, opacity: 0 }}
+                transition={spring.snappy}
+                className="text-2xl font-bold whitespace-nowrap"
+              >
+                {PAGE_TITLES[activePage]}
+              </motion.h1>
+            </AnimatePresence>
+          </div>
+
+          {/* Daily / Weekly toggle — only on schedule page */}
+          <AnimatePresence>
+            {activePage === 'schedule' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={spring.snappy}
+                className="flex items-center bg-gray-100 rounded-lg p-0.5"
+              >
+                {(['daily', 'weekly'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setViewMode(m)}
+                    className="relative p-1.5 rounded-md"
+                    aria-label={`${m} view`}
+                  >
+                    {viewMode === m && (
+                      <motion.div
+                        layoutId="viewToggle"
+                        transition={spring.snappy}
+                        className="absolute inset-0 bg-white rounded-md shadow-sm"
+                      />
+                    )}
+                    <span
+                      className={`relative z-10 block ${
+                        viewMode === m ? 'text-gray-900' : 'text-gray-400'
+                      }`}
+                    >
+                      {m === 'daily' ? <AlignLeft size={15} /> : <LayoutGrid size={15} />}
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* FAB — only shown on schedule page */}
-      {activePage === 'schedule' && (
-        <button
-          onClick={() => setIsAddOpen(true)}
-          className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform z-40"
-        >
-          <Plus size={26} />
-        </button>
-      )}
+      {/* Page body — slides between pages */}
+      <div className="relative flex-1 overflow-hidden">
+        <AnimatePresence mode="popLayout" custom={dir} initial={false}>
+          <motion.div
+            key={activePage}
+            custom={dir}
+            variants={pageVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={spring.gentle}
+            className="absolute inset-0 overflow-y-auto px-4 pb-28"
+          >
+            {renderPage()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* FAB — only on schedule page */}
+      <AnimatePresence>
+        {activePage === 'schedule' && (
+          <motion.button
+            onClick={() => setIsAddOpen(true)}
+            whileTap={tap}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1, rotate: isAddOpen ? 135 : 0 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={spring.snappy}
+            className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-lg z-40"
+          >
+            <Plus size={26} />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <AddItemSheet isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
 
-      <BottomNav active={activePage} onChange={setActivePage} />
+      <BottomNav active={activePage} onChange={go} />
     </div>
   )
 }
