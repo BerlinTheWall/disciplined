@@ -2,7 +2,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTaskStore } from '../../store/taskStore'
 import { getWeekDates, addDays, formatMonthYear, getDayLabel, toISODate, isSameDay } from '../../lib/date'
 
-export default function WeekHeader() {
+interface WeekHeaderProps {
+  leftGutter?: number
+}
+
+export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
   const selectedDate = useTaskStore((s) => s.selectedDate)
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate)
 
@@ -23,6 +27,9 @@ export default function WeekHeader() {
       </div>
 
       <div className="flex justify-between gap-1">
+        {/* Spacer to align day columns with the time axis gutter */}
+        {leftGutter > 0 && <div style={{ width: leftGutter, flexShrink: 0 }} />}
+
         {weekDates.map((date) => {
           const iso = toISODate(date)
           const isSelected = iso === selectedDate

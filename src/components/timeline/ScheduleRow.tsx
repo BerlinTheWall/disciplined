@@ -63,6 +63,8 @@ export default function ScheduleRow({
 
   const longPressHandlers = useLongPress(() => onLongPress(id));
 
+  const endMinutes = startMinutes + liveOffsetMinutes + liveDuration;
+
   return (
     <div
       className="absolute left-0 right-0 flex items-start gap-3 pr-2"
@@ -73,9 +75,19 @@ export default function ScheduleRow({
         zIndex: isActive ? 10 : 1,
       }}
     >
-      <div className="w-12 pt-0.5 leading-none text-xs text-gray-400 text-right shrink-0 whitespace-nowrap">
-        {formatTimeLabel(startMinutes)}
+      {/* Time column: start at top, end at bottom — sized to pill height only */}
+      <div
+        className="w-12 flex flex-col justify-between py-1 shrink-0"
+        style={{ height: pillHeight }}
+      >
+        <span className="leading-none text-xs text-gray-400 text-right whitespace-nowrap">
+          {formatTimeLabel(startMinutes + liveOffsetMinutes)}
+        </span>
+        <span className="leading-none text-xs text-gray-400 text-right whitespace-nowrap">
+          {formatTimeLabel(endMinutes)}
+        </span>
       </div>
+
       <div className="flex-1 flex items-center gap-3">
         <div
           ref={move.setNodeRef}

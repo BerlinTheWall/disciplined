@@ -6,10 +6,12 @@ import { useHabitStore } from '../../store/habitStore'
 import { isHabitActiveOnDate, getHabitStreak } from '../../lib/habits'
 import { minutesToPx, pxToMinutes, snapToGrid, getPillHeight } from '../../lib/time'
 import ScheduleRow, { MIN_ROW_HEIGHT, type ScheduleRowData } from './ScheduleRow'
+import WeeklyTimeline from './WeeklyTimeline'
 import AddItemSheet from './AddItemSheet'
 import { Plus } from 'lucide-react'
 import type { Task } from '../../types/task'
 import type { Habit } from '../../types/habits'
+import type { ViewMode } from '../../App'
 
 const ICON_CENTER_X = 82
 const DEFAULT_START_MINUTES = 6 * 60
@@ -18,7 +20,11 @@ export type EditItem =
   | { type: 'task'; data: Task }
   | { type: 'habit'; data: Habit }
 
-export default function Timeline() {
+interface TimelineProps {
+  viewMode: ViewMode
+}
+
+export default function Timeline({ viewMode }: TimelineProps) {
   const tasks = useTaskStore((s) => s.tasks)
   const selectedDate = useTaskStore((s) => s.selectedDate)
   const updateTaskTime = useTaskStore((s) => s.updateTaskTime)
@@ -86,6 +92,10 @@ export default function Timeline() {
     if (habit) {
       isResize ? updateHabitDuration(targetId, habit.durationMinutes + deltaMinutes) : updateHabitTime(targetId, habit.startMinutes + deltaMinutes)
     }
+  }
+
+  if (viewMode === 'weekly') {
+    return <WeeklyTimeline />
   }
 
   return (
