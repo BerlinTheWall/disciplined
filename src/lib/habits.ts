@@ -1,5 +1,5 @@
 import { addDays, toISODate } from './date'
-import type { Habit } from '../types/habit'
+import type { Habit } from '../types/habits'
 
 export function isHabitActiveOnDate(habit: Habit, date: Date) {
   return habit.daysOfWeek.includes(date.getDay())
