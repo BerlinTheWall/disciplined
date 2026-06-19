@@ -9,7 +9,7 @@ const TABS: { id: Page; icon: React.ElementType; label: string }[] = [
   { id: 'workout',  icon: Dumbbell,        label: 'Workout' },
   { id: 'schedule', icon: CalendarDays,    label: 'Schedule' },
   { id: 'habits',   icon: Flame,           label: 'Habits' },
-  { id: 'expenses', icon: Wallet,          label: 'Expenses' },
+  { id: 'expenses', icon: Wallet,          label: 'Wallet' },
 ]
 
 interface BottomNavProps {

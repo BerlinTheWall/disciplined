@@ -58,12 +58,23 @@ export default function Timeline({ viewMode }: TimelineProps) {
 
   const items = [...taskItems, ...habitItems].sort((a, b) => a.startMinutes - b.startMinutes)
 
+  // Start the timeline exactly at the first item (fall back to a default only
+  // when the day is empty — that case renders the empty state below anyway).
   const earliestItem = items[0]
-  const startOffset = earliestItem
-    ? Math.min(earliestItem.startMinutes, DEFAULT_START_MINUTES)
-    : DEFAULT_START_MINUTES
+  const startOffset = earliestItem ? earliestItem.startMinutes : DEFAULT_START_MINUTES
 
-  const containerHeight = minutesToPx(24 * 60 - startOffset) + MIN_ROW_HEIGHT
+  // End the timeline at the bottom of the last-finishing row — not at midnight.
+  // Each row renders at least MIN_ROW_HEIGHT, and a long earlier item can finish
+  // lower than a short later one, so take the largest rendered bottom.
+  const containerHeight = items.reduce(
+    (bottom, item) =>
+      Math.max(
+        bottom,
+        minutesToPx(item.startMinutes - startOffset) +
+          Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
+      ),
+    0,
+  )
 
   function handleLongPress(id: string) {
     const task = tasks.find((t) => t.id === id)

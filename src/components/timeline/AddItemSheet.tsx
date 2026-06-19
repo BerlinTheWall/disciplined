@@ -17,6 +17,7 @@ const COLOR_OPTIONS = [
   "#a78bfa",
   "#fb923c",
 ];
+
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
 const DAY_OPTIONS = [
   { label: "S", value: 0 },

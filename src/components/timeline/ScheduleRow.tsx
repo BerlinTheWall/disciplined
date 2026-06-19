@@ -120,13 +120,13 @@ export default function ScheduleRow({
                 className="font-semibold inline-block"
                 initial={false}
                 animate={{ color: completed ? "#9ca3af" : "#111827" }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
+                transition={{ duration: 0.25 }}
               >
                 {title}
               </motion.span>
               <motion.span
-                className="pointer-events-none absolute left-0 h-0.5 w-full rounded-full bg-gray-400"
-                style={{ top: "50%", originX: 0 }}
+                className="pointer-events-none absolute left-0 h-[2px] w-full rounded-full bg-gray-400"
+                style={{ top: "50%", marginTop: -1, originX: 0 }}
                 initial={false}
                 animate={{ scaleX: completed ? 1 : 0 }}
                 transition={spring.snappy}
@@ -142,63 +142,51 @@ export default function ScheduleRow({
           <p className="text-xs text-gray-400 mt-0.5">
             {formatTimeRange(startMinutes, durationMinutes)}
           </p>
-
-          <div
-            ref={resize.setNodeRef}
-            {...resize.attributes}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              resize.listeners?.onPointerDown?.(e);
-            }}
-            className="xl:flex h-5 w-16 hidden items-center cursor-ns-resize touch-none mt-1"
-          >
-            <div className="w-8 h-1 rounded-full bg-gray-200" />
-          </div>
         </div>
-      </div>
 
-      <motion.button
-        onClick={() => onToggle(id)}
-        whileTap={tap}
-        initial={false}
-        animate={{
-          backgroundColor: completed ? color : "rgba(255,255,255,0)",
-          scale: completed ? [1, 1.15, 1] : 1,
-        }}
-        transition={{
-          backgroundColor: spring.snappy,
-          scale: { duration: 0.3, times: [0, 0.45, 1], ease: "easeOut" },
-        }}
-        className="w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 cursor-pointer"
-        style={{ borderColor: color }}
-      >
-        <AnimatePresence initial={false}>
-          {completed && (
-            <motion.svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth={3.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={spring.pop}
-            >
-              <motion.path
-                d="M5 13l4 4L19 7"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                exit={{ pathLength: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut", delay: 0.05 }}
-              />
-            </motion.svg>
-          )}
-        </AnimatePresence>
-      </motion.button>
+        <motion.button
+          onClick={() => onToggle(id)}
+          whileTap={tap}
+          initial={false}
+          animate={{
+            backgroundColor: completed ? color : "rgba(255,255,255,0)",
+            scale: completed ? [1, 1.15, 1] : 1,
+          }}
+          transition={{
+            backgroundColor: spring.snappy,
+            scale: { duration: 0.3, times: [0, 0.45, 1], ease: "easeOut" },
+          }}
+          className="w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0"
+          style={{ borderColor: color }}
+        >
+          <AnimatePresence initial={false}>
+            {completed && (
+              <motion.svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth={3.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={spring.pop}
+              >
+                <motion.path
+                  d="M5 13l4 4L19 7"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  exit={{ pathLength: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut", delay: 0.05 }}
+                />
+              </motion.svg>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      </div>
     </motion.div>
   );
 }
