@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/refs */
-import { Check, Flame } from "lucide-react";
+import { Flame } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDraggable } from "@dnd-kit/core";
 import { ICONS } from "../../lib/icons";
@@ -115,11 +115,23 @@ export default function ScheduleRow({
           style={{ touchAction: "none" }}
         >
           <div className="flex items-center gap-2">
-            <p
-              className={`font-semibold text-gray-900 leading-tight ${completed ? "line-through text-gray-400" : ""}`}
-            >
-              {title}
-            </p>
+            <span className="relative inline-block leading-tight">
+              <motion.span
+                className="font-semibold inline-block"
+                initial={false}
+                animate={{ color: completed ? "#9ca3af" : "#111827" }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              >
+                {title}
+              </motion.span>
+              <motion.span
+                className="pointer-events-none absolute left-0 h-0.5 w-full rounded-full bg-gray-400"
+                style={{ top: "50%", originX: 0 }}
+                initial={false}
+                animate={{ scaleX: completed ? 1 : 0 }}
+                transition={spring.snappy}
+              />
+            </span>
             {streak !== undefined && streak > 0 && (
               <span className="flex items-center gap-0.5 text-xs font-medium text-orange-500 shrink-0">
                 <Flame size={12} className="fill-orange-500" />
@@ -148,21 +160,42 @@ export default function ScheduleRow({
       <motion.button
         onClick={() => onToggle(id)}
         whileTap={tap}
-        animate={{ backgroundColor: completed ? color : "rgba(255,255,255,0)" }}
-        transition={spring.snappy}
-        className="w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+        initial={false}
+        animate={{
+          backgroundColor: completed ? color : "rgba(255,255,255,0)",
+          scale: completed ? [1, 1.15, 1] : 1,
+        }}
+        transition={{
+          backgroundColor: spring.snappy,
+          scale: { duration: 0.3, times: [0, 0.45, 1], ease: "easeOut" },
+        }}
+        className="w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 cursor-pointer"
         style={{ borderColor: color }}
       >
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {completed && (
-            <motion.span
-              initial={{ scale: 0, rotate: -40 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: -40 }}
+            <motion.svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth={3.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
               transition={spring.pop}
             >
-              <Check size={14} className="text-white" strokeWidth={3} />
-            </motion.span>
+              <motion.path
+                d="M5 13l4 4L19 7"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                exit={{ pathLength: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut", delay: 0.05 }}
+              />
+            </motion.svg>
           )}
         </AnimatePresence>
       </motion.button>

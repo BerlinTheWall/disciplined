@@ -14,7 +14,7 @@ import type { Task } from '../../types/task'
 import type { Habit } from '../../types/habits'
 import type { ViewMode } from '../../App'
 
-const ICON_CENTER_X = 82
+const ICON_CENTER_X = 80
 const DEFAULT_START_MINUTES = 6 * 60
 
 export type EditItem =
