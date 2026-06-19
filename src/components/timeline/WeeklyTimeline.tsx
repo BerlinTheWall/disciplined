@@ -113,9 +113,11 @@ export default function WeeklyTimeline() {
   })
 
   // Global start offset: earliest across all 7 days
+// Global start offset: the earliest item across all 7 days becomes the single
+  // start line for every column. Falls back to the default only when the week is empty.
   const allStartMinutes = dayItems.flat().map((i) => i.startMinutes)
-  const earliestMinutes = allStartMinutes.length > 0 ? Math.min(...allStartMinutes) : DEFAULT_START_MINUTES
-  const startOffset = Math.min(earliestMinutes, DEFAULT_START_MINUTES)
+  const startOffset =
+    allStartMinutes.length > 0 ? Math.min(...allStartMinutes) : DEFAULT_START_MINUTES
 
   // Container height: cover until latest end
   const latestEnd = dayItems.flat().reduce((max, item) => {
@@ -157,7 +159,7 @@ export default function WeeklyTimeline() {
     <>
       <div className="flex overflow-x-hidden">
         {/* Time axis — labels only, no lines */}
-        <div className="w-8 shrink-0 relative" style={{ height: containerHeight }}>
+        <div className="w-8 shrink-0 relative mt-5" style={{ height: containerHeight }}>
           {timeLabels.map((mins) => (
             <div
               key={mins}

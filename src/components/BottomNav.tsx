@@ -20,7 +20,9 @@ interface BottomNavProps {
 export default function BottomNav({ active, onChange }: BottomNavProps) {
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex items-center justify-around px-2 pb-safe z-50"
+      // z-30 keeps the bar below the modal overlay (z-40) and sheets (z-50), so
+      // an open bottom sheet covers it instead of being clipped behind it.
+      className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex items-center justify-around px-2 pb-safe z-30"
       style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
     >
       {TABS.map(({ id, icon: Icon, label }) => {

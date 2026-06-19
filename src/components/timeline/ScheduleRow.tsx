@@ -138,7 +138,7 @@ export default function ScheduleRow({
               e.stopPropagation();
               resize.listeners?.onPointerDown?.(e);
             }}
-            className="h-5 w-16 flex items-center cursor-ns-resize touch-none mt-1"
+            className="xl:flex h-5 w-16 hidden items-center cursor-ns-resize touch-none mt-1"
           >
             <div className="w-8 h-1 rounded-full bg-gray-200" />
           </div>
