@@ -9,4 +9,5 @@ export interface Task {
   icon: IconKey
   completed: boolean
   date: string // ISO date, e.g. "2026-06-17"
+  shoppingListId?: string // set when this task is a grocery run
 }

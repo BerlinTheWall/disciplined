@@ -9,7 +9,8 @@ interface TaskStore {
   setSelectedDate: (date: string) => void;
   updateTaskTime: (id: string, startMinutes: number) => void;
   updateTaskDuration: (id: string, durationMinutes: number) => void;
-  addTask: (task: Omit<Task, "id" | "completed">) => void;
+  // Returns the new task's id so callers can link it (e.g. to a shopping list).
+  addTask: (task: Omit<Task, "id" | "completed">) => string;
   toggleTaskCompleted: (id: string) => void;
   deleteTask: (id: string) => void;
   updateTask: (id: string, changes: Partial<Omit<Task, "id">>) => void;
@@ -73,13 +74,13 @@ export const useTaskStore = create<TaskStore>()(
           ),
         })),
 
-      addTask: (task) =>
+      addTask: (task) => {
+        const id = crypto.randomUUID();
         set((state) => ({
-          tasks: [
-            ...state.tasks,
-            { ...task, id: crypto.randomUUID(), completed: false },
-          ],
-        })),
+          tasks: [...state.tasks, { ...task, id, completed: false }],
+        }));
+        return id;
+      },
 
       toggleTaskCompleted: (id) =>
         set((state) => ({

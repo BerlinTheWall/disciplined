@@ -1,4 +1,4 @@
-import { AlarmClock, Dumbbell, ShowerHead, UtensilsCrossed, Bike, BookOpen, Coffee, Briefcase, Heart, Circle } from 'lucide-react'
+import { AlarmClock, Dumbbell, ShowerHead, UtensilsCrossed, Bike, BookOpen, Coffee, Briefcase, Heart, ShoppingCart, Circle } from 'lucide-react'
 
 export const ICONS = {
   alarm: AlarmClock,
@@ -10,6 +10,7 @@ export const ICONS = {
   coffee: Coffee,
   work: Briefcase,
   health: Heart,
+  shopping: ShoppingCart,
   default: Circle,
 } as const
 

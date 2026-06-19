@@ -6,7 +6,8 @@ import { todayISODate } from "../lib/date";
 interface ExpenseStore {
   expenses: Expense[];
   monthlyBudget: number; // 0 = no budget set yet
-  addExpense: (expense: Omit<Expense, "id">) => void;
+  // Returns the new expense's id so callers can record provenance (e.g. a trip).
+  addExpense: (expense: Omit<Expense, "id">) => string;
   updateExpense: (id: string, changes: Partial<Omit<Expense, "id">>) => void;
   deleteExpense: (id: string) => void;
   setMonthlyBudget: (amount: number) => void;
@@ -37,13 +38,13 @@ export const useExpenseStore = create<ExpenseStore>()(
       expenses: initialExpenses,
       monthlyBudget: 600,
 
-      addExpense: (expense) =>
+      addExpense: (expense) => {
+        const id = crypto.randomUUID();
         set((state) => ({
-          expenses: [
-            ...state.expenses,
-            { ...expense, id: crypto.randomUUID() },
-          ],
-        })),
+          expenses: [...state.expenses, { ...expense, id }],
+        }));
+        return id;
+      },
 
       updateExpense: (id, changes) =>
         set((state) => ({

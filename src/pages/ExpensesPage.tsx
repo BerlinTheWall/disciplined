@@ -1,27 +1,36 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, Pencil, Plus, ShoppingCart, X } from 'lucide-react'
+import {
+  CalendarPlus,
+  Check,
+  Minus,
+  Pencil,
+  Plus,
+  ShoppingCart,
+  X,
+} from 'lucide-react'
 import { useExpenseStore } from '../store/expenseStore'
 import { useGroceryStore } from '../store/groceryStore'
+import { useShoppingListStore } from '../store/shoppingListStore'
+import { useTaskStore } from '../store/taskStore'
 import { CATEGORIES } from '../lib/categories'
 import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from '../lib/foodCategories'
-import { addNutrition, emptyNutrition } from '../lib/nutritions'
+import {
+  indexItems,
+  listTotals,
+  lineCost,
+  formatAmount,
+} from '../lib/grocery'
 import { todayISODate } from '../lib/date'
 import { spring, tap, press } from '../lib/motion'
 import AddGroceryItemSheet from '../components/expenses/AddGroceryItemSheet'
 import AddExpenseSheet from '../components/expenses/AddExpenseSheet'
+import CatalogPickerSheet from '../components/expenses/CatalogPickerSheet'
 import type { GroceryItem } from '../types/grocery'
 import type { Expense } from '../types/expense'
 
 function money(n: number) {
   return `$${n.toFixed(2)}`
-}
-
-function amountLabel(item: GroceryItem) {
-  if (item.unit === 'unit') {
-    return `${item.quantity} ${item.quantity === 1 ? 'pc' : 'pcs'}`
-  }
-  return `${item.quantity} ${item.unit}`
 }
 
 export default function ExpensesPage() {
@@ -31,14 +40,28 @@ export default function ExpensesPage() {
   const addExpense = useExpenseStore((s) => s.addExpense)
 
   const groceryItems = useGroceryStore((s) => s.groceryItems)
-  const toggleChecked = useGroceryStore((s) => s.toggleChecked)
-  const clearChecked = useGroceryStore((s) => s.clearChecked)
+
+  const lists = useShoppingListStore((s) => s.lists)
+  const activeListId = useShoppingListStore((s) => s.activeListId)
+  const createList = useShoppingListStore((s) => s.createList)
+  const setLineQty = useShoppingListStore((s) => s.setLineQty)
+  const removeLine = useShoppingListStore((s) => s.removeLine)
+  const toggleLine = useShoppingListStore((s) => s.toggleLine)
+  const setListTask = useShoppingListStore((s) => s.setListTask)
+  const markDone = useShoppingListStore((s) => s.markDone)
+
+  const addTask = useTaskStore((s) => s.addTask)
 
   const [editGrocery, setEditGrocery] = useState<GroceryItem | null>(null)
+  const [addItemOpen, setAddItemOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [editExpense, setEditExpense] = useState<Expense | null>(null)
   const [addExpenseOpen, setAddExpenseOpen] = useState(false)
   const [editingBudget, setEditingBudget] = useState(false)
   const [budgetDraft, setBudgetDraft] = useState('')
+
+  const items = indexItems(groceryItems)
+  const activeList = lists.find((l) => l.id === activeListId) ?? null
 
   // ---- Budget + spend (this month) ----
   const now = new Date()
@@ -58,13 +81,14 @@ export default function ExpensesPage() {
         ? '#fbbf24'
         : '#f87171'
 
-  // ---- Grocery checklist ----
-  const checked = groceryItems.filter((g) => g.checked)
-  const checkedCost = checked.reduce((sum, g) => sum + g.price, 0)
-  const checkedNutrition = checked.reduce(
-    (acc, g) => addNutrition(acc, g.nutrition),
-    emptyNutrition(),
-  )
+  // ---- Active shopping list (the current trip) ----
+  const allTotals = activeList
+    ? listTotals(activeList, items)
+    : { count: 0, cost: 0, nutrition: { calories: 0, protein: 0, fat: 0, carbs: 0, sugar: 0, fiber: 0 } }
+  const checkedTotals = activeList
+    ? listTotals(activeList, items, true)
+    : allTotals
+  const checkedCount = activeList ? activeList.lines.filter((l) => l.checked).length : 0
 
   function startEditBudget() {
     setBudgetDraft(monthlyBudget ? String(monthlyBudget) : '')
@@ -77,15 +101,35 @@ export default function ExpensesPage() {
     setEditingBudget(false)
   }
 
+  function startList() {
+    createList({ title: 'Shopping list', date: todayISODate() })
+  }
+
+  function scheduleRun() {
+    if (!activeList || activeList.taskId) return
+    const taskId = addTask({
+      title: activeList.title || 'Grocery run',
+      startMinutes: 17 * 60,
+      durationMinutes: 30,
+      color: '#fbbf24',
+      icon: 'shopping',
+      date: activeList.date,
+      shoppingListId: activeList.id,
+    })
+    setListTask(activeList.id, taskId)
+  }
+
   function logTrip() {
-    if (checked.length === 0) return
-    addExpense({
-      amount: Math.round(checkedCost * 100) / 100,
-      note: `Groceries (${checked.length} item${checked.length > 1 ? 's' : ''})`,
+    if (!activeList || checkedCount === 0) return
+    const expenseId = addExpense({
+      amount: checkedTotals.cost,
+      note: `Groceries (${checkedCount} item${checkedCount > 1 ? 's' : ''})`,
       category: 'food',
       date: todayISODate(),
     })
-    clearChecked()
+    markDone(activeList.id, expenseId)
+    // Start a fresh list so the page is ready for the next trip.
+    createList({ title: 'Shopping list', date: todayISODate() })
   }
 
   return (
@@ -186,127 +230,209 @@ export default function ExpensesPage() {
         )}
       </div>
 
-      {/* ---------- Grocery list ---------- */}
+      {/* ---------- Shopping list (current trip) ---------- */}
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between px-1">
-          <h2 className="text-base font-semibold text-gray-900">Grocery list</h2>
-          <span className="text-sm text-gray-400">
-            {groceryItems.length} item{groceryItems.length === 1 ? '' : 's'}
-          </span>
+          <h2 className="text-base font-semibold text-gray-900">
+            {activeList ? activeList.title : 'Shopping list'}
+          </h2>
+          {activeList && (
+            <span className="text-sm text-gray-400">
+              {allTotals.count} item{allTotals.count === 1 ? '' : 's'} ·{' '}
+              {money(allTotals.cost)}
+            </span>
+          )}
         </div>
 
-        {/* Checked-trip summary */}
-        <AnimatePresence>
-          {checked.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={spring.snappy}
-              className="rounded-2xl border border-gray-200 p-4"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500">
-                  {checked.length} selected ·{' '}
-                  <span className="font-semibold text-gray-900">
-                    {money(checkedCost)}
-                  </span>
-                </p>
-                <motion.button
-                  onClick={logTrip}
-                  whileTap={tap}
-                  className="flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium rounded-full px-3.5 py-1.5"
-                >
-                  <ShoppingCart size={14} />
-                  Log trip
-                </motion.button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                <NutriChip label={`${checkedNutrition.calories} kcal`} />
-                <NutriChip label={`${checkedNutrition.protein}g protein`} />
-                <NutriChip label={`${checkedNutrition.fat}g fat`} />
-                <NutriChip label={`${checkedNutrition.sugar}g sugar`} />
-                <NutriChip label={`${checkedNutrition.fiber}g fiber`} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {groceryItems.length === 0 ? (
+        {!activeList ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
               <ShoppingCart size={24} className="text-gray-400" />
             </div>
-            <p className="text-base font-medium text-gray-900">
-              No grocery items yet
-            </p>
-            <p className="text-sm text-gray-400 text-center">
-              Tap the + button to build your shopping list.
-            </p>
+            <p className="text-base font-medium text-gray-900">No active list</p>
+            <motion.button
+              onClick={startList}
+              whileTap={tap}
+              className="mt-1 bg-gray-900 text-white text-sm font-medium rounded-full px-4 py-2"
+            >
+              Start a list
+            </motion.button>
           </div>
         ) : (
-          groceryItems.map((item) => {
-            const cat = FOOD_CATEGORIES[item.category]
-            const Icon = cat.icon ?? FALLBACK_FOOD_ICON
-            return (
-              <div
-                key={item.id}
-                className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-gray-50"
+          <>
+            {/* Add-from-catalog + schedule row */}
+            <div className="flex items-center gap-2">
+              <motion.button
+                onClick={() => setPickerOpen(true)}
+                whileTap={tap}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
               >
-                {/* Checkbox */}
+                <Plus size={16} />
+                Add items
+              </motion.button>
+              {activeList.taskId ? (
+                <span className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-50 text-gray-400 text-sm">
+                  <CalendarPlus size={15} />
+                  Scheduled
+                </span>
+              ) : (
                 <motion.button
-                  onClick={() => toggleChecked(item.id)}
+                  onClick={scheduleRun}
                   whileTap={tap}
-                  className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors"
-                  style={{
-                    backgroundColor: item.checked ? cat.color : 'transparent',
-                    borderColor: item.checked ? cat.color : '#d1d5db',
-                  }}
-                  aria-label={item.checked ? 'Uncheck' : 'Check'}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
                 >
-                  <AnimatePresence>
-                    {item.checked && (
-                      <motion.span
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        exit={{ scale: 0 }}
-                        transition={spring.pop}
-                        className="text-white"
-                      >
-                        <Check size={15} strokeWidth={3} />
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  <CalendarPlus size={15} />
+                  Schedule
                 </motion.button>
+              )}
+            </div>
 
-                {/* Tap to edit */}
-                <motion.button
-                  onClick={() => setEditGrocery(item)}
-                  whileTap={press}
+            {/* Checked-trip summary */}
+            <AnimatePresence>
+              {checkedCount > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
                   transition={spring.snappy}
-                  className="flex-1 min-w-0 text-left"
+                  className="rounded-2xl border border-gray-200 p-4"
                 >
-                  <p className="font-semibold text-gray-900 leading-tight truncate">
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                    <span
-                      className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white shrink-0"
-                      style={{ backgroundColor: cat.color }}
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm text-gray-500">
+                      {checkedCount} in cart ·{' '}
+                      <span className="font-semibold text-gray-900">
+                        {money(checkedTotals.cost)}
+                      </span>
+                    </p>
+                    <motion.button
+                      onClick={logTrip}
+                      whileTap={tap}
+                      className="flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium rounded-full px-3.5 py-1.5"
                     >
-                      <Icon size={9} />
-                    </span>
-                    {amountLabel(item)} · {item.nutrition.calories} kcal ·{' '}
-                    {item.nutrition.protein}g protein
-                  </p>
-                </motion.button>
+                      <ShoppingCart size={14} />
+                      Log trip
+                    </motion.button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <NutriChip label={`${checkedTotals.nutrition.calories} kcal`} />
+                    <NutriChip label={`${checkedTotals.nutrition.protein}g protein`} />
+                    <NutriChip label={`${checkedTotals.nutrition.fat}g fat`} />
+                    <NutriChip label={`${checkedTotals.nutrition.sugar}g sugar`} />
+                    <NutriChip label={`${checkedTotals.nutrition.fiber}g fiber`} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                <p className="font-semibold text-gray-900 shrink-0">
-                  {money(item.price)}
-                </p>
-              </div>
-            )
-          })
+            {activeList.lines.length === 0 ? (
+              <p className="text-sm text-gray-400 px-1 py-6 text-center">
+                Empty list. Tap “Add items” to pull from the food and products
+                you’ve saved.
+              </p>
+            ) : (
+              activeList.lines.map((line) => {
+                const item = items[line.itemId]
+                if (!item) {
+                  return (
+                    <div
+                      key={line.itemId}
+                      className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-gray-50"
+                    >
+                      <span className="flex-1 text-sm text-gray-400">
+                        Item no longer in your catalog
+                      </span>
+                      <motion.button
+                        onClick={() => removeLine(activeList.id, line.itemId)}
+                        whileTap={tap}
+                        className="text-gray-400"
+                      >
+                        <X size={16} />
+                      </motion.button>
+                    </div>
+                  )
+                }
+                const cat = FOOD_CATEGORIES[item.category]
+                const Icon = cat.icon ?? FALLBACK_FOOD_ICON
+                return (
+                  <div
+                    key={line.itemId}
+                    className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-gray-50"
+                  >
+                    {/* Tick off during the trip */}
+                    <motion.button
+                      onClick={() => toggleLine(activeList.id, line.itemId)}
+                      whileTap={tap}
+                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors"
+                      style={{
+                        backgroundColor: line.checked ? cat.color : 'transparent',
+                        borderColor: line.checked ? cat.color : '#d1d5db',
+                      }}
+                      aria-label={line.checked ? 'Uncheck' : 'Check'}
+                    >
+                      <AnimatePresence>
+                        {line.checked && (
+                          <motion.span
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            exit={{ scale: 0 }}
+                            transition={spring.pop}
+                            className="text-white"
+                          >
+                            <Check size={15} strokeWidth={3} />
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </motion.button>
+
+                    {/* Tap to edit the catalog item */}
+                    <motion.button
+                      onClick={() => setEditGrocery(item)}
+                      whileTap={press}
+                      transition={spring.snappy}
+                      className="flex-1 min-w-0 text-left"
+                    >
+                      <p className="font-semibold text-gray-900 leading-tight truncate">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+                        <span
+                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white shrink-0"
+                          style={{ backgroundColor: cat.color }}
+                        >
+                          <Icon size={9} />
+                        </span>
+                        {formatAmount(item, line.qty)} ·{' '}
+                        {money(lineCost(item, line.qty))}
+                      </p>
+                    </motion.button>
+
+                    {/* Quantity stepper */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <motion.button
+                        onClick={() => setLineQty(activeList.id, line.itemId, line.qty - 1)}
+                        whileTap={tap}
+                        className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center"
+                        aria-label="Less"
+                      >
+                        <Minus size={14} />
+                      </motion.button>
+                      <span className="w-6 text-center text-sm font-medium text-gray-700">
+                        ×{line.qty}
+                      </span>
+                      <motion.button
+                        onClick={() => setLineQty(activeList.id, line.itemId, line.qty + 1)}
+                        whileTap={tap}
+                        className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center"
+                        aria-label="More"
+                      >
+                        <Plus size={14} />
+                      </motion.button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </>
         )}
       </div>
 
@@ -361,11 +487,20 @@ export default function ExpensesPage() {
         )}
       </div>
 
-      {/* Sheets — edit grocery, add/edit one-off expense */}
+      {/* Sheets */}
+      <CatalogPickerSheet
+        isOpen={pickerOpen}
+        listId={activeListId}
+        onClose={() => setPickerOpen(false)}
+        onNewItem={() => setAddItemOpen(true)}
+      />
       <AddGroceryItemSheet
-        isOpen={!!editGrocery}
+        isOpen={addItemOpen || !!editGrocery}
         editItem={editGrocery}
-        onClose={() => setEditGrocery(null)}
+        onClose={() => {
+          setAddItemOpen(false)
+          setEditGrocery(null)
+        }}
       />
       <AddExpenseSheet
         isOpen={addExpenseOpen || !!editExpense}

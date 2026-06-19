@@ -3,16 +3,19 @@ import { persist } from "zustand/middleware";
 import type { GroceryItem } from "../types/grocery";
 import { estimateNutrition } from "../lib/nutritions";
 
+// The item catalog: the single source of truth for every food/product the user
+// has added. Shopping lists and meals both reference these items by id. This
+// store holds DEFINITIONS only — per-trip state (what's ticked) lives on the
+// shopping list, and what's eaten lives on meals.
 interface GroceryStore {
   groceryItems: GroceryItem[];
-  addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
+  // Returns the new item's id so callers (e.g. a picker) can immediately use it.
+  addGroceryItem: (item: Omit<GroceryItem, "id">) => string;
   updateGroceryItem: (
     id: string,
     changes: Partial<Omit<GroceryItem, "id">>,
   ) => void;
   deleteGroceryItem: (id: string) => void;
-  toggleChecked: (id: string) => void;
-  clearChecked: () => void;
 }
 
 const initialGroceryItems: GroceryItem[] = [
@@ -25,7 +28,6 @@ const initialGroceryItems: GroceryItem[] = [
     unit: "g",
     nutrition: estimateNutrition("Chicken breast", "protein", 500, "g"),
     autoNutrition: true,
-    checked: false,
   },
   {
     id: "g2",
@@ -36,7 +38,6 @@ const initialGroceryItems: GroceryItem[] = [
     unit: "unit",
     nutrition: estimateNutrition("Bananas", "fruit", 6, "unit"),
     autoNutrition: true,
-    checked: false,
   },
   {
     id: "g3",
@@ -47,7 +48,6 @@ const initialGroceryItems: GroceryItem[] = [
     unit: "l",
     nutrition: estimateNutrition("Milk", "dairy", 2, "l"),
     autoNutrition: true,
-    checked: false,
   },
 ];
 
@@ -56,13 +56,13 @@ export const useGroceryStore = create<GroceryStore>()(
     (set) => ({
       groceryItems: initialGroceryItems,
 
-      addGroceryItem: (item) =>
+      addGroceryItem: (item) => {
+        const id = crypto.randomUUID();
         set((state) => ({
-          groceryItems: [
-            ...state.groceryItems,
-            { ...item, id: crypto.randomUUID(), checked: false },
-          ],
-        })),
+          groceryItems: [...state.groceryItems, { ...item, id }],
+        }));
+        return id;
+      },
 
       updateGroceryItem: (id, changes) =>
         set((state) => ({
@@ -74,20 +74,6 @@ export const useGroceryStore = create<GroceryStore>()(
       deleteGroceryItem: (id) =>
         set((state) => ({
           groceryItems: state.groceryItems.filter((g) => g.id !== id),
-        })),
-
-      toggleChecked: (id) =>
-        set((state) => ({
-          groceryItems: state.groceryItems.map((g) =>
-            g.id === id ? { ...g, checked: !g.checked } : g,
-          ),
-        })),
-
-      clearChecked: () =>
-        set((state) => ({
-          groceryItems: state.groceryItems.map((g) =>
-            g.checked ? { ...g, checked: false } : g,
-          ),
         })),
     }),
     {
