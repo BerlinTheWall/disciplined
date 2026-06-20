@@ -33,6 +33,9 @@ const DAY_OPTIONS = [
   { label: "S", value: 6 },
 ];
 
+// A task lives on a single day, so it can never run past midnight of its start day.
+const MINUTES_PER_DAY = 1440;
+
 /* ---- helpers ----------------------------------------------------- */
 
 function isLightColor(hex: string) {
@@ -231,11 +234,16 @@ export default function AddItemSheet({
       setTitle(editItem.data.title);
       setDate(editItem.type === "task" ? editItem.data.date : selectedDate);
       setTime(minutesToTimeString(editItem.data.startMinutes));
-      setDuration(editItem.data.durationMinutes);
-      const custom = !DURATION_OPTIONS.includes(editItem.data.durationMinutes);
+      // Heal any legacy item whose saved duration spilled past midnight.
+      const loadedDuration = Math.min(
+        editItem.data.durationMinutes,
+        MINUTES_PER_DAY - editItem.data.startMinutes,
+      );
+      setDuration(loadedDuration);
+      const custom = !DURATION_OPTIONS.includes(loadedDuration);
       setCustomMode(custom);
-      setCustomH(String(Math.floor(editItem.data.durationMinutes / 60)));
-      setCustomM(String(editItem.data.durationMinutes % 60));
+      setCustomH(String(Math.floor(loadedDuration / 60)));
+      setCustomM(String(loadedDuration % 60));
       setColor(editItem.data.color);
       setIcon(editItem.data.icon);
       setDaysOfWeek(
@@ -263,11 +271,31 @@ export default function AddItemSheet({
   function applyCustom(hStr: string, mStr: string) {
     const cleanH = hStr.replace(/\D/g, "").slice(0, 2);
     const cleanM = mStr.replace(/\D/g, "").slice(0, 2);
-    setCustomH(cleanH);
-    setCustomM(cleanM);
-    const h = Math.min(23, Number(cleanH || 0));
-    const m = Math.min(59, Number(cleanM || 0));
-    setDuration(h * 60 + m);
+    const maxDur = MINUTES_PER_DAY - timeStringToMinutes(time);
+    const raw =
+      Math.min(23, Number(cleanH || 0)) * 60 + Math.min(59, Number(cleanM || 0));
+    const clamped = Math.min(raw, maxDur);
+    if (clamped !== raw) {
+      // Typed past midnight — snap the inputs back to the largest duration that fits.
+      setCustomH(String(Math.floor(clamped / 60)));
+      setCustomM(String(clamped % 60));
+    } else {
+      setCustomH(cleanH);
+      setCustomM(cleanM);
+    }
+    setDuration(clamped);
+  }
+
+  // Moving the start time later can make an already-chosen duration overflow the day;
+  // re-clamp it so the task always ends by midnight.
+  function handleTimeChange(next: string) {
+    setTime(next);
+    const maxDur = MINUTES_PER_DAY - timeStringToMinutes(next);
+    if (duration > maxDur) {
+      setDuration(maxDur);
+      setCustomH(String(Math.floor(maxDur / 60)));
+      setCustomM(String(maxDur % 60));
+    }
   }
 
   function toggleDay(value: number) {
@@ -279,6 +307,8 @@ export default function AddItemSheet({
   function handleSubmit() {
     if (!title.trim() || duration < 5) return;
     const startMinutes = timeStringToMinutes(time);
+    // Final backstop: never persist a task that runs into the next day.
+    if (startMinutes + duration > MINUTES_PER_DAY) return;
 
     if (isEditing) {
       if (editItem!.type === "task") {
@@ -339,6 +369,9 @@ export default function AddItemSheet({
   }
 
   const startMin = timeStringToMinutes(time);
+  const maxDuration = MINUTES_PER_DAY - startMin; // minutes left until midnight
+  const endMin = startMin + duration;
+  const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : label24(endMin);
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
   const chipCls = (selected: boolean) =>
@@ -568,7 +601,7 @@ export default function AddItemSheet({
                         value={time}
                         durationMinutes={duration}
                         color={color}
-                        onChange={setTime}
+                        onChange={handleTimeChange}
                       />
                     </div>
 
@@ -580,19 +613,24 @@ export default function AddItemSheet({
                       className="wheel-col flex gap-2 overflow-x-auto pb-1"
                       style={{ scrollbarWidth: "none" }}
                     >
-                      {DURATION_OPTIONS.map((d) => (
-                        <motion.button
-                          key={d}
-                          onClick={() => {
-                            setCustomMode(false);
-                            setDuration(d);
-                          }}
-                          whileTap={tap}
-                          className={chipCls(!customMode && duration === d)}
-                        >
-                          {formatDuration(d)}
-                        </motion.button>
-                      ))}
+                      {DURATION_OPTIONS.map((d) => {
+                        const tooLong = d > maxDuration;
+                        return (
+                          <motion.button
+                            key={d}
+                            onClick={() => {
+                              if (tooLong) return;
+                              setCustomMode(false);
+                              setDuration(d);
+                            }}
+                            whileTap={tooLong ? undefined : tap}
+                            disabled={tooLong}
+                            className={`${chipCls(!customMode && duration === d)} disabled:opacity-30`}
+                          >
+                            {formatDuration(d)}
+                          </motion.button>
+                        );
+                      })}
                       <motion.button
                         onClick={() => {
                           setCustomMode(true);
@@ -635,6 +673,11 @@ export default function AddItemSheet({
                       </div>
                     )}
 
+                    <p className="text-xs text-gray-400 mt-3">
+                      Ends at <span className="tabular-nums">{endLabel}</span>
+                      {duration >= maxDuration && " — capped to stay on the same day"}
+                    </p>
+
                     <div className="flex gap-2 mt-6">
                       <motion.button
                         onClick={() => goTo(1)}
@@ -646,7 +689,7 @@ export default function AddItemSheet({
                       <motion.button
                         onClick={() => goTo(3)}
                         whileTap={tap}
-                        disabled={duration < 5}
+                        disabled={duration < 5 || startMin + duration > MINUTES_PER_DAY}
                         className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
                         style={{ backgroundColor: color, color: onColor }}
                       >
