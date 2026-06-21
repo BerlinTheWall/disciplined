@@ -44,3 +44,67 @@ export function formatTimeRange(startMinutes: number, durationMinutes: number) {
   return `${formatTimeLabel(startMinutes)} – ${formatTimeLabel(endMinutes)} · ${durationLabel}`
 }
 
+export const GAP_COMPRESS_THRESHOLD_MIN = 89 // 1.5 hours
+export const COMPRESSED_GAP_PX = 24
+
+export interface LayoutItem {
+  id: string
+  startMinutes: number
+  durationMinutes: number
+}
+
+export interface GapInfo {
+  afterId: string
+  beforeId: string
+  realMinutes: number
+  topY: number // px, top of the compressed gap segment
+  heightPx: number // always COMPRESSED_GAP_PX when compressed
+}
+
+export interface ComputedLayout {
+  topYById: Record<string, number> // virtual top position per item, in px
+  gaps: GapInfo[] // only the gaps that were compressed
+}
+
+// Walks items in start-time order and builds virtual top positions.
+// Any gap between one item's bottom and the next item's top that exceeds
+// GAP_COMPRESS_THRESHOLD_MIN is rendered as a fixed COMPRESSED_GAP_PX gap
+// instead of its real (proportional) pixel height.
+export function computeCompressedLayout(
+  items: LayoutItem[],
+  getBottomPadding: (item: LayoutItem) => number, // extra px below pill (e.g. row height vs pill height)
+): ComputedLayout {
+  const topYById: Record<string, number> = {}
+  const gaps: GapInfo[] = []
+
+  let cursorY = 0
+  let prev: LayoutItem | null = null
+
+  for (const item of items) {
+    if (prev) {
+      const prevEndMinutes = prev.startMinutes + prev.durationMinutes
+      const realGapMinutes = item.startMinutes - prevEndMinutes
+      const realGapPx = minutesToPx(Math.max(0, realGapMinutes))
+      const prevBottomY = cursorY // cursorY already sits at prev's bottom (set below)
+
+      if (realGapMinutes > GAP_COMPRESS_THRESHOLD_MIN) {
+        gaps.push({
+          afterId: prev.id,
+          beforeId: item.id,
+          realMinutes: realGapMinutes,
+          topY: prevBottomY,
+          heightPx: COMPRESSED_GAP_PX,
+        })
+        cursorY = prevBottomY + COMPRESSED_GAP_PX
+      } else {
+        cursorY = prevBottomY + realGapPx
+      }
+    }
+
+    topYById[item.id] = cursorY
+    cursorY += Math.max(minutesToPx(item.durationMinutes), getBottomPadding(item))
+    prev = item
+  }
+
+  return { topYById, gaps }
+}

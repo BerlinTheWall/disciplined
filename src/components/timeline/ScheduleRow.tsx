@@ -32,6 +32,7 @@ export interface ScheduleRowData {
 interface ScheduleRowProps extends ScheduleRowData {
   onToggle: (id: string) => void;
   onLongPress: (id: string) => void;
+  virtualTop?: number; // compressed-layout position; falls back to real-time position when omitted
 }
 
 export default function ScheduleRow({
@@ -44,6 +45,7 @@ export default function ScheduleRow({
   completed,
   streak,
   startOffset = 0,
+  virtualTop,
   onToggle,
   onLongPress,
 }: ScheduleRowProps) {
@@ -74,8 +76,10 @@ export default function ScheduleRow({
       exit={{ opacity: 0, scale: 0.92 }}
       transition={spring.pop}
       className="absolute left-0 right-0 flex items-start gap-3 pr-2"
-      style={{
-        top: minutesToPx(startMinutes + liveOffsetMinutes - startOffset),
+       style={{
+        top: isActive
+          ? minutesToPx(startMinutes + liveOffsetMinutes - startOffset)
+          : virtualTop ?? minutesToPx(startMinutes + liveOffsetMinutes - startOffset),
         height: rowHeight,
         zIndex: isActive ? 10 : 1,
       }}
