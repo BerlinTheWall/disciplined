@@ -77,8 +77,8 @@ function App() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Title row — stays mounted; its contents animate */}
-      <div className="px-4 pt-8">
-        <div className="flex items-center justify-between mb-6 ml-16 mr-0">
+      <div className="px-4 pt-4">
+        <div className="flex items-center justify-between mb-6">
           <div className="relative h-8 flex items-center overflow-hidden">
             <AnimatePresence mode="popLayout" custom={dir} initial={false}>
               <motion.h1
