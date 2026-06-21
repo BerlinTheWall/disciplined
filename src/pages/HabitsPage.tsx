@@ -14,11 +14,11 @@ export default function HabitsPage() {
   if (habits.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
-          <Repeat size={24} className="text-gray-400" />
+        <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
+          <Repeat size={24} className="text-fg-faint" />
         </div>
-        <p className="text-base font-medium text-gray-900">No habits yet</p>
-        <p className="text-sm text-gray-400 text-center">
+        <p className="text-base font-medium text-fg">No habits yet</p>
+        <p className="text-sm text-fg-faint text-center">
           Go to the Schedule tab and tap + to add a repeating habit.
         </p>
       </div>
@@ -36,7 +36,7 @@ export default function HabitsPage() {
         return (
           <div
             key={habit.id}
-            className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50"
+            className="flex items-center gap-4 p-4 rounded-2xl bg-surface-alt"
           >
             {/* Colored icon pill */}
             <div
@@ -48,7 +48,7 @@ export default function HabitsPage() {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 leading-tight">{habit.title}</p>
+              <p className="font-semibold text-fg leading-tight">{habit.title}</p>
 
               {/* Active days dots */}
               <div className="flex gap-1 mt-1.5">
@@ -57,8 +57,8 @@ export default function HabitsPage() {
                     key={i}
                     className={`w-5 h-5 rounded-full text-[9px] font-medium flex items-center justify-center ${
                       habit.daysOfWeek.includes(i)
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-200 text-gray-400'
+                        ? 'bg-surface-inverse text-fg-inverse'
+                        : 'bg-surface-subtle text-fg-faint'
                     }`}
                   >
                     {label}
@@ -79,13 +79,13 @@ export default function HabitsPage() {
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                   completedToday
                     ? 'bg-green-100 text-green-600'
-                    : 'bg-gray-100 text-gray-400'
+                    : 'bg-surface-raised text-fg-faint'
                 }`}>
                   {completedToday ? 'Done' : 'Pending'}
                 </span>
               )}
               {!isActiveToday && (
-                <span className="text-xs text-gray-300">Off today</span>
+                <span className="text-xs text-fg-disabled">Off today</span>
               )}
             </div>
           </div>

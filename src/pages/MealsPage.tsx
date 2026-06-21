@@ -37,7 +37,7 @@ export default function MealsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- Today's diet ---------- */}
-      <div className="rounded-2xl bg-gray-900 text-white p-5">
+      <div className="rounded-2xl bg-surface-feature text-white p-5">
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
           Eaten today
         </p>
@@ -55,11 +55,11 @@ export default function MealsPage() {
       {/* ---------- Meals ---------- */}
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between px-1">
-          <h2 className="text-base font-semibold text-gray-900">Today's meals</h2>
+          <h2 className="text-base font-semibold text-fg">Today's meals</h2>
           <motion.button
             onClick={() => setAddOpen(true)}
             whileTap={tap}
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-sm text-fg-muted"
           >
             <Plus size={15} />
             Log meal
@@ -68,14 +68,14 @@ export default function MealsPage() {
 
         {todaysMeals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
-              <UtensilsCrossed size={24} className="text-gray-400" />
+            <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
+              <UtensilsCrossed size={24} className="text-fg-faint" />
             </div>
-            <p className="text-base font-medium text-gray-900">
+            <p className="text-base font-medium text-fg">
               Nothing logged today
             </p>
-            <p className="text-sm text-gray-400 text-center">
-              Build a meal from the food you’ve saved to track your diet.
+            <p className="text-sm text-fg-faint text-center">
+              Build a meal from the food you've saved to track your diet.
             </p>
           </div>
         ) : (
@@ -91,27 +91,27 @@ export default function MealsPage() {
                 onClick={() => setEditMeal(meal)}
                 whileTap={press}
                 transition={spring.snappy}
-                className="flex items-center gap-3 p-4 rounded-2xl bg-gray-50 text-left w-full"
+                className="flex items-center gap-3 p-4 rounded-2xl bg-surface-alt text-left w-full"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold text-gray-900 leading-tight truncate">
+                    <p className="font-semibold text-fg leading-tight truncate">
                       {meal.name}
                     </p>
-                    <span className="text-[11px] font-medium text-gray-500 bg-gray-200 rounded-full px-2 py-0.5 shrink-0">
+                    <span className="text-[11px] font-medium text-fg-muted bg-surface-subtle rounded-full px-2 py-0.5 shrink-0">
                       {TYPE_LABELS[meal.type]}
                     </span>
                   </div>
                   {parts && (
-                    <p className="text-xs text-gray-400 mt-1 truncate">{parts}</p>
+                    <p className="text-xs text-fg-faint mt-1 truncate">{parts}</p>
                   )}
-                  <p className="text-xs text-gray-500 mt-1.5">
+                  <p className="text-xs text-fg-muted mt-1.5">
                     {n.protein}g protein · {n.fat}g fat · {n.carbs}g carbs
                   </p>
                 </div>
-                <p className="font-semibold text-gray-900 shrink-0">
+                <p className="font-semibold text-fg shrink-0">
                   {n.calories}
-                  <span className="text-xs font-medium text-gray-400"> kcal</span>
+                  <span className="text-xs font-medium text-fg-faint"> kcal</span>
                 </p>
               </motion.button>
             )
@@ -133,9 +133,9 @@ export default function MealsPage() {
 
 function Macro({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex-1 rounded-xl bg-gray-800 px-3 py-2">
+    <div className="flex-1 rounded-xl bg-surface-feature-alt px-3 py-2">
       <p className="text-[11px] text-gray-400">{label}</p>
-      <p className="text-sm font-semibold mt-0.5">{value}</p>
+      <p className="text-sm font-semibold mt-0.5 text-white">{value}</p>
     </div>
   )
 }

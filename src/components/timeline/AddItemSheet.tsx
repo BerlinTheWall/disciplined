@@ -33,7 +33,6 @@ const DAY_OPTIONS = [
   { label: "S", value: 6 },
 ];
 
-// A task lives on a single day, so it can never run past midnight of its start day.
 const MINUTES_PER_DAY = 1440;
 
 /* ---- helpers ----------------------------------------------------- */
@@ -148,7 +147,7 @@ function TimeWheel({
   }
 
   return (
-    <div className="bg-gray-100 rounded-2xl py-2">
+    <div className="bg-surface-raised rounded-2xl py-2">
       <div
         ref={ref}
         onScroll={handleScroll}
@@ -170,7 +169,7 @@ function TimeWheel({
                 {rangeLabel(min, durationMinutes)}
               </span>
             ) : (
-              <span className="text-base tabular-nums text-gray-300">
+              <span className="text-base tabular-nums text-fg-disabled">
                 {label24(min)}
               </span>
             )}
@@ -234,7 +233,6 @@ export default function AddItemSheet({
       setTitle(editItem.data.title);
       setDate(editItem.type === "task" ? editItem.data.date : selectedDate);
       setTime(minutesToTimeString(editItem.data.startMinutes));
-      // Heal any legacy item whose saved duration spilled past midnight.
       const loadedDuration = Math.min(
         editItem.data.durationMinutes,
         MINUTES_PER_DAY - editItem.data.startMinutes,
@@ -276,7 +274,6 @@ export default function AddItemSheet({
       Math.min(23, Number(cleanH || 0)) * 60 + Math.min(59, Number(cleanM || 0));
     const clamped = Math.min(raw, maxDur);
     if (clamped !== raw) {
-      // Typed past midnight — snap the inputs back to the largest duration that fits.
       setCustomH(String(Math.floor(clamped / 60)));
       setCustomM(String(clamped % 60));
     } else {
@@ -286,8 +283,6 @@ export default function AddItemSheet({
     setDuration(clamped);
   }
 
-  // Moving the start time later can make an already-chosen duration overflow the day;
-  // re-clamp it so the task always ends by midnight.
   function handleTimeChange(next: string) {
     setTime(next);
     const maxDur = MINUTES_PER_DAY - timeStringToMinutes(next);
@@ -307,7 +302,6 @@ export default function AddItemSheet({
   function handleSubmit() {
     if (!title.trim() || duration < 5) return;
     const startMinutes = timeStringToMinutes(time);
-    // Final backstop: never persist a task that runs into the next day.
     if (startMinutes + duration > MINUTES_PER_DAY) return;
 
     if (isEditing) {
@@ -369,13 +363,13 @@ export default function AddItemSheet({
   }
 
   const startMin = timeStringToMinutes(time);
-  const maxDuration = MINUTES_PER_DAY - startMin; // minutes left until midnight
+  const maxDuration = MINUTES_PER_DAY - startMin;
   const endMin = startMin + duration;
   const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : label24(endMin);
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
   const chipCls = (selected: boolean) =>
-    `px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`;
+    `px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`;
 
   return (
     <AnimatePresence>
@@ -390,7 +384,7 @@ export default function AddItemSheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 shadow-xl max-h-[92vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 shadow-xl max-h-[92vh] overflow-y-auto"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -471,14 +465,14 @@ export default function AddItemSheet({
               </div>
             </div>
 
-            {/* White body */}
+            {/* Sheet body */}
             <div className="p-4 pb-6">
               {/* Step dots */}
               <div className="flex gap-1.5 justify-center mb-4">
                 {[1, 2, 3].map((s) => (
                   <span
                     key={s}
-                    className={`h-1 rounded-full transition-all ${step === s ? "w-5 bg-gray-900" : "w-2 bg-gray-300"}`}
+                    className={`h-1 rounded-full transition-all ${step === s ? "w-5 bg-surface-inverse" : "w-2 bg-surface-subtle"}`}
                   />
                 ))}
               </div>
@@ -495,11 +489,11 @@ export default function AddItemSheet({
                     exit="exit"
                     transition={{ duration: 0.18 }}
                   >
-                    <label className="text-xs font-medium text-gray-500 mb-2 block">
+                    <label className="text-xs font-medium text-fg-muted mb-2 block">
                       Color
                     </label>
                     <div
-                      className="wheel-col flex gap-3 overflow-x-auto bg-gray-100 rounded-full p-1.5 mb-5"
+                      className="wheel-col flex gap-3 overflow-x-auto bg-surface-raised rounded-full p-1.5 mb-5"
                       style={{ scrollbarWidth: "none" }}
                     >
                       {COLOR_OPTIONS.map((c) => (
@@ -510,14 +504,14 @@ export default function AddItemSheet({
                           className="w-8 h-8 rounded-full shrink-0"
                           style={{
                             backgroundColor: c,
-                            outline: color === c ? "2px solid #111827" : "none",
+                            outline: color === c ? "2px solid var(--fg)" : "none",
                             outlineOffset: 2,
                           }}
                         />
                       ))}
                     </div>
 
-                    <label className="text-xs font-medium text-gray-500 mb-2 block">
+                    <label className="text-xs font-medium text-fg-muted mb-2 block">
                       Icon
                     </label>
                     <div
@@ -536,8 +530,8 @@ export default function AddItemSheet({
                               whileTap={tap}
                               className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                               style={{
-                                backgroundColor: selected ? color : "#f3f4f6",
-                                color: selected ? onColor : "#6b7280",
+                                backgroundColor: selected ? color : "var(--surface-raised)",
+                                color: selected ? onColor : "var(--fg-muted)",
                               }}
                             >
                               <IconComp size={18} />
@@ -569,17 +563,16 @@ export default function AddItemSheet({
                     exit="exit"
                     transition={{ duration: 0.18 }}
                   >
-                    {/* Date pill — native picker underneath */}
-                    <label className="text-xs font-medium text-gray-500 mb-2 block">
+                    <label className="text-xs font-medium text-fg-muted mb-2 block">
                       Date
                     </label>
                     <div className="relative mb-5">
-                      <div className="flex items-center justify-between bg-gray-100 rounded-2xl px-4 py-3">
-                        <span className="flex items-center gap-2 text-gray-900 font-medium">
-                          <Calendar size={18} className="text-gray-400" />
+                      <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3">
+                        <span className="flex items-center gap-2 text-fg font-medium">
+                          <Calendar size={18} className="text-fg-faint" />
                           {formatFullDate(date)}
                         </span>
-                        <span className="flex items-center gap-1 text-gray-400 text-sm">
+                        <span className="flex items-center gap-1 text-fg-faint text-sm">
                           {relativeDayLabel(date)}
                           <ChevronRight size={16} />
                         </span>
@@ -592,8 +585,7 @@ export default function AddItemSheet({
                       />
                     </div>
 
-                    {/* Time wheel */}
-                    <label className="text-xs font-medium text-gray-500 mb-2 block">
+                    <label className="text-xs font-medium text-fg-muted mb-2 block">
                       Start time
                     </label>
                     <div className="mb-5">
@@ -605,8 +597,7 @@ export default function AddItemSheet({
                       />
                     </div>
 
-                    {/* Duration */}
-                    <label className="text-xs font-medium text-gray-500 mb-2 block">
+                    <label className="text-xs font-medium text-fg-muted mb-2 block">
                       Duration
                     </label>
                     <div
@@ -645,7 +636,7 @@ export default function AddItemSheet({
                     </div>
 
                     {customMode && (
-                      <div className="flex items-center gap-2 mt-3 bg-gray-100 rounded-2xl px-4 py-3">
+                      <div className="flex items-center gap-2 mt-3 bg-surface-raised rounded-2xl px-4 py-3">
                         <input
                           type="number"
                           inputMode="numeric"
@@ -653,9 +644,9 @@ export default function AddItemSheet({
                           value={customH}
                           onChange={(e) => applyCustom(e.target.value, customM)}
                           placeholder="0"
-                          className="w-12 bg-white rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
+                          className="w-12 bg-surface rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
                         />
-                        <span className="text-gray-500 text-sm">hours</span>
+                        <span className="text-fg-muted text-sm">hours</span>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -664,16 +655,16 @@ export default function AddItemSheet({
                           value={customM}
                           onChange={(e) => applyCustom(customH, e.target.value)}
                           placeholder="0"
-                          className="w-12 bg-white rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
+                          className="w-12 bg-surface rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
                         />
-                        <span className="text-gray-500 text-sm">mins</span>
-                        <span className="ml-auto text-sm text-gray-400 tabular-nums">
+                        <span className="text-fg-muted text-sm">mins</span>
+                        <span className="ml-auto text-sm text-fg-faint tabular-nums">
                           {formatDuration(duration)}
                         </span>
                       </div>
                     )}
 
-                    <p className="text-xs text-gray-400 mt-3">
+                    <p className="text-xs text-fg-faint mt-3">
                       Ends at <span className="tabular-nums">{endLabel}</span>
                       {duration >= maxDuration && " — capped to stay on the same day"}
                     </p>
@@ -682,7 +673,7 @@ export default function AddItemSheet({
                       <motion.button
                         onClick={() => goTo(1)}
                         whileTap={tap}
-                        className="px-5 rounded-2xl py-3.5 font-medium bg-gray-100 text-gray-700"
+                        className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
                       >
                         Back
                       </motion.button>
@@ -711,7 +702,7 @@ export default function AddItemSheet({
                     transition={{ duration: 0.18 }}
                   >
                     {/* Summary preview */}
-                    <div className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3 mb-5">
+                    <div className="flex items-center gap-3 bg-surface-alt rounded-2xl p-3 mb-5">
                       <div
                         className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                         style={{ backgroundColor: color, color: onColor }}
@@ -719,16 +710,16 @@ export default function AddItemSheet({
                         <HeaderIcon size={18} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-fg-faint">
                           {rangeLabel(startMin, duration)} · {relativeDayLabel(date)}
                         </p>
-                        <p className="font-semibold text-gray-900 truncate">
+                        <p className="font-semibold text-fg truncate">
                           {title.trim() || "Untitled"}
                         </p>
                       </div>
                     </div>
 
-                    <label className="text-xs font-medium text-gray-500 mb-2 block">
+                    <label className="text-xs font-medium text-fg-muted mb-2 block">
                       This is a…
                     </label>
                     <div className="flex flex-col gap-2">
@@ -741,13 +732,13 @@ export default function AddItemSheet({
                             onClick={() => !isEditing && setMode(m)}
                             whileTap={isEditing ? undefined : tap}
                             disabled={locked}
-                            className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-gray-900 bg-gray-50" : "border-gray-200"} ${locked ? "opacity-40" : ""}`}
+                            className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-surface-inverse bg-surface-alt" : "border-border-strong"} ${locked ? "opacity-40" : ""}`}
                           >
                             <div
                               className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                               style={{
-                                backgroundColor: selected ? color : "#f3f4f6",
-                                color: selected ? onColor : "#6b7280",
+                                backgroundColor: selected ? color : "var(--surface-raised)",
+                                color: selected ? onColor : "var(--fg-muted)",
                               }}
                             >
                               {m === "task" ? (
@@ -757,17 +748,17 @@ export default function AddItemSheet({
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900">
+                              <p className="font-semibold text-fg">
                                 {m === "task" ? "One-time task" : "Repeating habit"}
                               </p>
-                              <p className="text-xs text-gray-400">
+                              <p className="text-xs text-fg-faint">
                                 {m === "task"
                                   ? "Happens once on the chosen date"
                                   : "Repeats on the days you pick"}
                               </p>
                             </div>
                             {selected && (
-                              <Check size={18} className="text-gray-900 shrink-0" />
+                              <Check size={18} className="text-fg shrink-0" />
                             )}
                           </motion.button>
                         );
@@ -776,7 +767,7 @@ export default function AddItemSheet({
 
                     {mode === "habit" && (
                       <>
-                        <label className="text-xs font-medium text-gray-500 mb-2 block mt-4">
+                        <label className="text-xs font-medium text-fg-muted mb-2 block mt-4">
                           Repeat on
                         </label>
                         <div className="flex gap-2">
@@ -785,7 +776,7 @@ export default function AddItemSheet({
                               key={value}
                               onClick={() => toggleDay(value)}
                               whileTap={tap}
-                              className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}
+                              className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
                             >
                               {label}
                             </motion.button>
@@ -798,7 +789,7 @@ export default function AddItemSheet({
                       <motion.button
                         onClick={() => goTo(2)}
                         whileTap={tap}
-                        className="px-5 rounded-2xl py-3.5 font-medium bg-gray-100 text-gray-700"
+                        className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
                       >
                         Back
                       </motion.button>

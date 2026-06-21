@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, AlignLeft, LayoutGrid } from 'lucide-react'
+import { Plus, AlignLeft, LayoutGrid, Sun, Moon } from 'lucide-react'
 import Timeline from './components/timeline/Timeline'
 import AddItemSheet from './components/timeline/AddItemSheet'
 import AddGroceryItemSheet from './components/expenses/AddGroceryItemSheet'
@@ -11,6 +11,7 @@ import WorkoutPage from './pages/WorkoutPage'
 import HabitsPage from './pages/HabitsPage'
 import ExpensesPage from './pages/ExpensesPage'
 import { spring, tap } from './lib/motion'
+import { useThemeStore } from './store/themeStore'
 
 const PAGE_TITLES: Record<Page, string> = {
   meals: 'Meals',
@@ -39,6 +40,8 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
+
+  const { theme, toggleTheme } = useThemeStore()
 
   function go(p: Page) {
     if (p === activePage) return
@@ -75,7 +78,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-surface flex flex-col">
       {/* Title row — stays mounted; its contents animate */}
       <div className="px-4 pt-4">
         <div className="flex items-center justify-between mb-6">
@@ -88,49 +91,61 @@ function App() {
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: dir > 0 ? -22 : 22, opacity: 0 }}
                 transition={spring.snappy}
-                className="text-2xl font-bold whitespace-nowrap"
+                className="text-2xl font-bold whitespace-nowrap text-fg"
               >
                 {PAGE_TITLES[activePage]}
               </motion.h1>
             </AnimatePresence>
           </div>
 
-          {/* Daily / Weekly toggle — only on schedule page */}
-          <AnimatePresence>
-            {activePage === 'schedule' && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={spring.snappy}
-                className="flex items-center bg-gray-100 rounded-lg p-0.5"
-              >
-                {(['daily', 'weekly'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setViewMode(m)}
-                    className="relative p-1.5 rounded-md"
-                    aria-label={`${m} view`}
-                  >
-                    {viewMode === m && (
-                      <motion.div
-                        layoutId="viewToggle"
-                        transition={spring.snappy}
-                        className="absolute inset-0 bg-white rounded-md shadow-sm"
-                      />
-                    )}
-                    <span
-                      className={`relative z-10 block ${
-                        viewMode === m ? 'text-gray-900' : 'text-gray-400'
-                      }`}
+          <div className="flex items-center gap-2">
+            {/* Daily / Weekly toggle — only on schedule page */}
+            <AnimatePresence>
+              {activePage === 'schedule' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={spring.snappy}
+                  className="flex items-center bg-surface-raised rounded-lg p-0.5"
+                >
+                  {(['daily', 'weekly'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setViewMode(m)}
+                      className="relative p-1.5 rounded-md"
+                      aria-label={`${m} view`}
                     >
-                      {m === 'daily' ? <AlignLeft size={15} /> : <LayoutGrid size={15} />}
-                    </span>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                      {viewMode === m && (
+                        <motion.div
+                          layoutId="viewToggle"
+                          transition={spring.snappy}
+                          className="absolute inset-0 bg-surface rounded-md shadow-sm"
+                        />
+                      )}
+                      <span
+                        className={`relative z-10 block ${
+                          viewMode === m ? 'text-fg' : 'text-fg-faint'
+                        }`}
+                      >
+                        {m === 'daily' ? <AlignLeft size={15} /> : <LayoutGrid size={15} />}
+                      </span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Theme toggle */}
+            <motion.button
+              onClick={toggleTheme}
+              whileTap={tap}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-fg-faint"
+              aria-label="Toggle theme"
+            >
+              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            </motion.button>
+          </div>
         </div>
       </div>
 
@@ -162,7 +177,7 @@ function App() {
             animate={{ scale: 1, opacity: 1, rotate: fabOpen ? 135 : 0 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={spring.snappy}
-            className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-lg z-40"
+            className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-surface-inverse text-fg-inverse flex items-center justify-center shadow-lg z-40"
           >
             <Plus size={26} />
           </motion.button>

@@ -37,13 +37,9 @@ interface TimelineProps {
 export default function Timeline({ viewMode }: TimelineProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const selectedDate = useTaskStore((s) => s.selectedDate);
-  // const updateTaskTime = useTaskStore((s) => s.updateTaskTime);
-  // const updateTaskDuration = useTaskStore((s) => s.updateTaskDuration);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
 
   const habits = useHabitStore((s) => s.habits);
-  // const updateHabitTime = useHabitStore((s) => s.updateHabitTime);
-  // const updateHabitDuration = useHabitStore((s) => s.updateHabitDuration);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
 
   const [editItem, setEditItem] = useState<EditItem | null>(null);
@@ -74,16 +70,11 @@ export default function Timeline({ viewMode }: TimelineProps) {
   const layout = computeCompressedLayout(items, (item) =>
     Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
   );
-  // Start the timeline exactly at the first item (fall back to a default only
-  // when the day is empty — that case renders the empty state below anyway).
   const earliestItem = items[0];
   const startOffset = earliestItem
     ? earliestItem.startMinutes
     : DEFAULT_START_MINUTES;
 
-  // End the timeline at the bottom of the last-finishing row — not at midnight.
-  // Each row renders at least MIN_ROW_HEIGHT, and a long earlier item can finish
-  // lower than a short later one, so take the largest rendered bottom.
   const containerHeight = items.length
     ? Math.max(
         ...items.map(
@@ -109,28 +100,6 @@ export default function Timeline({ viewMode }: TimelineProps) {
     else toggleHabitCompleted(id, selectedDate);
   }
 
-  // function handleDragEnd(event: DragEndEvent) {
-  //   const { active, delta } = event;
-  //   const activeId = String(active.id);
-  //   const deltaMinutes = snapToGrid(pxToMinutes(delta.y));
-  //   const isResize = activeId.startsWith("resize-");
-  //   const targetId = isResize ? activeId.replace("resize-", "") : activeId;
-
-  //   const task = tasks.find((t) => t.id === targetId);
-  //   if (task) {
-  //     isResize
-  //       ? updateTaskDuration(targetId, task.durationMinutes + deltaMinutes)
-  //       : updateTaskTime(targetId, task.startMinutes + deltaMinutes);
-  //     return;
-  //   }
-  //   const habit = habits.find((h) => h.id === targetId);
-  //   if (habit) {
-  //     isResize
-  //       ? updateHabitDuration(targetId, habit.durationMinutes + deltaMinutes)
-  //       : updateHabitTime(targetId, habit.startMinutes + deltaMinutes);
-  //   }
-  // }
-
   if (viewMode === "weekly") {
     return <WeeklyTimeline />;
   }
@@ -139,18 +108,17 @@ export default function Timeline({ viewMode }: TimelineProps) {
     <>
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
-            <Plus size={24} className="text-gray-400" />
+          <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
+            <Plus size={24} className="text-fg-faint" />
           </div>
-          <p className="text-base font-medium text-gray-900">
+          <p className="text-base font-medium text-fg">
             Nothing scheduled
           </p>
-          <p className="text-sm text-gray-400 text-center">
+          <p className="text-sm text-fg-faint text-center">
             Tap the + button to add a task or habit for this day.
           </p>
         </div>
       ) : (
-        // <DndContext onDragEnd={handleDragEnd}>
         <div className="relative" style={{ height: containerHeight }}>
           {/* Gradient connector lines between items */}
           {items.slice(0, -1).map((item, i) => {
@@ -174,9 +142,6 @@ export default function Timeline({ viewMode }: TimelineProps) {
                   ? `${hours} hour break`
                   : `${hours.toFixed(1)} hour break`;
 
-              // Label position: centered in the actual visible gap between pill
-              // edges, not between pill centers (which skews when the next pill
-              // is tall, e.g. a long-duration task).
               const prevBottomEdge =
                 layout.topYById[item.id] + getPillHeight(item.durationMinutes);
               const nextTopEdge = layout.topYById[next.id];
@@ -202,13 +167,13 @@ export default function Timeline({ viewMode }: TimelineProps) {
                       y1="0"
                       x2="1"
                       y2={bottomY - topY}
-                      stroke="#9ca3af"
+                      style={{ stroke: "var(--fg-faint)" }}
                       strokeWidth="2"
                       strokeDasharray="4 4"
                     />
                   </svg>
                   <span
-                    className="absolute text-[11px] text-gray-400 whitespace-nowrap"
+                    className="absolute text-[11px] text-fg-faint whitespace-nowrap"
                     style={{
                       left: 12,
                       top: labelY - topY,
@@ -263,7 +228,6 @@ export default function Timeline({ viewMode }: TimelineProps) {
             ))}
           </AnimatePresence>
         </div>
-        // </DndContext>
       )}
 
       <AddItemSheet
