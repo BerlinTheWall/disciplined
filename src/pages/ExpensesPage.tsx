@@ -128,14 +128,13 @@ export default function ExpensesPage() {
       date: todayISODate(),
     })
     markDone(activeList.id, expenseId)
-    // Start a fresh list so the page is ready for the next trip.
     createList({ title: 'Shopping list', date: todayISODate() })
   }
 
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- Budget ---------- */}
-      <div className="rounded-2xl bg-gray-900 text-white p-5">
+      <div className="rounded-2xl bg-surface-feature text-white p-5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
             Spent this month
@@ -169,7 +168,7 @@ export default function ExpensesPage() {
                   onChange={(e) => setBudgetDraft(e.target.value)}
                   placeholder="0"
                   autoFocus
-                  className="w-full bg-gray-800 text-white rounded-xl pl-7 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  className="w-full bg-surface-feature-alt text-white rounded-xl pl-7 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-gray-500"
                 />
               </div>
               <motion.button
@@ -182,7 +181,7 @@ export default function ExpensesPage() {
               <motion.button
                 onClick={() => setEditingBudget(false)}
                 whileTap={tap}
-                className="px-3 rounded-xl bg-gray-800 text-gray-300"
+                className="px-3 rounded-xl bg-surface-feature-alt text-gray-300"
               >
                 <X size={18} />
               </motion.button>
@@ -202,7 +201,7 @@ export default function ExpensesPage() {
 
             {hasBudget ? (
               <>
-                <div className="mt-4 h-2 rounded-full bg-gray-800 overflow-hidden">
+                <div className="mt-4 h-2 rounded-full bg-surface-feature-alt overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
                     style={{ backgroundColor: barColor }}
@@ -233,11 +232,11 @@ export default function ExpensesPage() {
       {/* ---------- Shopping list (current trip) ---------- */}
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between px-1">
-          <h2 className="text-base font-semibold text-gray-900">
+          <h2 className="text-base font-semibold text-fg">
             {activeList ? activeList.title : 'Shopping list'}
           </h2>
           {activeList && (
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-fg-faint">
               {allTotals.count} item{allTotals.count === 1 ? '' : 's'} ·{' '}
               {money(allTotals.cost)}
             </span>
@@ -246,14 +245,14 @@ export default function ExpensesPage() {
 
         {!activeList ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
-              <ShoppingCart size={24} className="text-gray-400" />
+            <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
+              <ShoppingCart size={24} className="text-fg-faint" />
             </div>
-            <p className="text-base font-medium text-gray-900">No active list</p>
+            <p className="text-base font-medium text-fg">No active list</p>
             <motion.button
               onClick={startList}
               whileTap={tap}
-              className="mt-1 bg-gray-900 text-white text-sm font-medium rounded-full px-4 py-2"
+              className="mt-1 bg-surface-inverse text-fg-inverse text-sm font-medium rounded-full px-4 py-2"
             >
               Start a list
             </motion.button>
@@ -265,13 +264,13 @@ export default function ExpensesPage() {
               <motion.button
                 onClick={() => setPickerOpen(true)}
                 whileTap={tap}
-                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-raised text-fg-muted text-sm font-medium"
               >
                 <Plus size={16} />
                 Add items
               </motion.button>
               {activeList.taskId ? (
-                <span className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-50 text-gray-400 text-sm">
+                <span className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-surface-alt text-fg-faint text-sm">
                   <CalendarPlus size={15} />
                   Scheduled
                 </span>
@@ -279,7 +278,7 @@ export default function ExpensesPage() {
                 <motion.button
                   onClick={scheduleRun}
                   whileTap={tap}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-surface-raised text-fg-muted text-sm font-medium"
                 >
                   <CalendarPlus size={15} />
                   Schedule
@@ -295,19 +294,19 @@ export default function ExpensesPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={spring.snappy}
-                  className="rounded-2xl border border-gray-200 p-4"
+                  className="rounded-2xl border border-border-strong p-4"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-fg-muted">
                       {checkedCount} in cart ·{' '}
-                      <span className="font-semibold text-gray-900">
+                      <span className="font-semibold text-fg">
                         {money(checkedTotals.cost)}
                       </span>
                     </p>
                     <motion.button
                       onClick={logTrip}
                       whileTap={tap}
-                      className="flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium rounded-full px-3.5 py-1.5"
+                      className="flex items-center gap-1.5 bg-surface-inverse text-fg-inverse text-sm font-medium rounded-full px-3.5 py-1.5"
                     >
                       <ShoppingCart size={14} />
                       Log trip
@@ -325,9 +324,9 @@ export default function ExpensesPage() {
             </AnimatePresence>
 
             {activeList.lines.length === 0 ? (
-              <p className="text-sm text-gray-400 px-1 py-6 text-center">
-                Empty list. Tap “Add items” to pull from the food and products
-                you’ve saved.
+              <p className="text-sm text-fg-faint px-1 py-6 text-center">
+                Empty list. Tap "Add items" to pull from the food and products
+                you've saved.
               </p>
             ) : (
               activeList.lines.map((line) => {
@@ -336,15 +335,15 @@ export default function ExpensesPage() {
                   return (
                     <div
                       key={line.itemId}
-                      className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-gray-50"
+                      className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-surface-alt"
                     >
-                      <span className="flex-1 text-sm text-gray-400">
+                      <span className="flex-1 text-sm text-fg-faint">
                         Item no longer in your catalog
                       </span>
                       <motion.button
                         onClick={() => removeLine(activeList.id, line.itemId)}
                         whileTap={tap}
-                        className="text-gray-400"
+                        className="text-fg-faint"
                       >
                         <X size={16} />
                       </motion.button>
@@ -356,7 +355,7 @@ export default function ExpensesPage() {
                 return (
                   <div
                     key={line.itemId}
-                    className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-gray-50"
+                    className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-surface-alt"
                   >
                     {/* Tick off during the trip */}
                     <motion.button
@@ -365,7 +364,7 @@ export default function ExpensesPage() {
                       className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors"
                       style={{
                         backgroundColor: line.checked ? cat.color : 'transparent',
-                        borderColor: line.checked ? cat.color : '#d1d5db',
+                        borderColor: line.checked ? cat.color : 'var(--border-input)',
                       }}
                       aria-label={line.checked ? 'Uncheck' : 'Check'}
                     >
@@ -391,10 +390,10 @@ export default function ExpensesPage() {
                       transition={spring.snappy}
                       className="flex-1 min-w-0 text-left"
                     >
-                      <p className="font-semibold text-gray-900 leading-tight truncate">
+                      <p className="font-semibold text-fg leading-tight truncate">
                         {item.name}
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+                      <p className="text-xs text-fg-faint mt-0.5 flex items-center gap-1.5">
                         <span
                           className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white shrink-0"
                           style={{ backgroundColor: cat.color }}
@@ -411,18 +410,18 @@ export default function ExpensesPage() {
                       <motion.button
                         onClick={() => setLineQty(activeList.id, line.itemId, line.qty - 1)}
                         whileTap={tap}
-                        className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center"
+                        className="w-7 h-7 rounded-full bg-surface-subtle text-fg-muted flex items-center justify-center"
                         aria-label="Less"
                       >
                         <Minus size={14} />
                       </motion.button>
-                      <span className="w-6 text-center text-sm font-medium text-gray-700">
+                      <span className="w-6 text-center text-sm font-medium text-fg">
                         ×{line.qty}
                       </span>
                       <motion.button
                         onClick={() => setLineQty(activeList.id, line.itemId, line.qty + 1)}
                         whileTap={tap}
-                        className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center"
+                        className="w-7 h-7 rounded-full bg-surface-subtle text-fg-muted flex items-center justify-center"
                         aria-label="More"
                       >
                         <Plus size={14} />
@@ -439,11 +438,11 @@ export default function ExpensesPage() {
       {/* ---------- This month's expenses ---------- */}
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between px-1">
-          <h2 className="text-base font-semibold text-gray-900">This month</h2>
+          <h2 className="text-base font-semibold text-fg">This month</h2>
           <motion.button
             onClick={() => setAddExpenseOpen(true)}
             whileTap={tap}
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-sm text-fg-muted"
           >
             <Plus size={15} />
             Add expense
@@ -451,7 +450,7 @@ export default function ExpensesPage() {
         </div>
 
         {monthExpenses.length === 0 ? (
-          <p className="text-sm text-gray-400 px-1">
+          <p className="text-sm text-fg-faint px-1">
             No expenses logged yet. Log a grocery trip above or add one here.
           </p>
         ) : (
@@ -464,7 +463,7 @@ export default function ExpensesPage() {
                 onClick={() => setEditExpense(expense)}
                 whileTap={press}
                 transition={spring.snappy}
-                className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-gray-50 text-left w-full"
+                className="flex items-center gap-3 p-3 pr-4 rounded-2xl bg-surface-alt text-left w-full"
               >
                 <div
                   className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
@@ -473,12 +472,12 @@ export default function ExpensesPage() {
                   <Icon size={16} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 leading-tight truncate">
+                  <p className="font-medium text-fg leading-tight truncate">
                     {expense.note}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">{cat.label}</p>
+                  <p className="text-xs text-fg-faint mt-0.5">{cat.label}</p>
                 </div>
-                <p className="font-semibold text-gray-900 shrink-0">
+                <p className="font-semibold text-fg shrink-0">
                   {money(expense.amount)}
                 </p>
               </motion.button>
@@ -516,7 +515,7 @@ export default function ExpensesPage() {
 
 function NutriChip({ label }: { label: string }) {
   return (
-    <span className="text-xs font-medium text-gray-600 bg-gray-100 rounded-full px-2.5 py-1">
+    <span className="text-xs font-medium text-fg-muted bg-surface-raised rounded-full px-2.5 py-1">
       {label}
     </span>
   )

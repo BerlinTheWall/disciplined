@@ -14,6 +14,8 @@ import {
 } from "../../lib/time";
 import { useLongPress } from "../../hooks/useLongPress";
 import { spring, tap } from "../../lib/motion";
+import { useThemeStore } from "../../store/themeStore";
+import { themeColors } from "../../lib/theme";
 
 export const MIN_ROW_HEIGHT = 72;
 
@@ -52,6 +54,9 @@ export default function ScheduleRow({
   const move = useDraggable({ id });
   const resize = useDraggable({ id: `resize-${id}` });
 
+  const theme = useThemeStore((s) => s.theme);
+  const colors = themeColors[theme];
+
   const liveOffsetMinutes = move.transform
     ? snapToGrid(pxToMinutes(move.transform.y))
     : 0;
@@ -89,10 +94,10 @@ export default function ScheduleRow({
         className="w-12 flex flex-col justify-between py-1 shrink-0"
         style={{ height: pillHeight }}
       >
-        <span className="leading-none text-xs text-gray-400 text-right whitespace-nowrap">
+        <span className="leading-none text-xs text-fg-faint text-right whitespace-nowrap">
           {formatTimeLabel(startMinutes + liveOffsetMinutes)}
         </span>
-        <span className="leading-none text-xs text-gray-400 text-right whitespace-nowrap">
+        <span className="leading-none text-xs text-fg-faint text-right whitespace-nowrap">
           {formatTimeLabel(endMinutes)}
         </span>
       </div>
@@ -123,13 +128,13 @@ export default function ScheduleRow({
               <motion.span
                 className="font-semibold inline-block"
                 initial={false}
-                animate={{ color: completed ? "#9ca3af" : "#111827" }}
+                animate={{ color: completed ? colors.fgFaint : colors.fg }}
                 transition={{ duration: 0.25 }}
               >
                 {title}
               </motion.span>
               <motion.span
-                className="pointer-events-none absolute left-0 h-[2px] w-full rounded-full bg-gray-400"
+                className="pointer-events-none absolute left-0 h-0.5 w-full rounded-full bg-fg-faint"
                 style={{ top: "50%", marginTop: -1, originX: 0 }}
                 initial={false}
                 animate={{ scaleX: completed ? 1 : 0 }}
@@ -143,7 +148,7 @@ export default function ScheduleRow({
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-fg-faint mt-0.5">
             {formatTimeRange(startMinutes, durationMinutes)}
           </p>
         </div>

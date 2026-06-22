@@ -112,20 +112,15 @@ export default function WeeklyTimeline() {
     return [...taskItems, ...habitItems].sort((a, b) => a.startMinutes - b.startMinutes)
   })
 
-  // Global start offset: earliest across all 7 days
-// Global start offset: the earliest item across all 7 days becomes the single
-  // start line for every column. Falls back to the default only when the week is empty.
   const allStartMinutes = dayItems.flat().map((i) => i.startMinutes)
   const startOffset =
     allStartMinutes.length > 0 ? Math.min(...allStartMinutes) : DEFAULT_START_MINUTES
 
-  // Container height: cover until latest end
   const latestEnd = dayItems.flat().reduce((max, item) => {
     return Math.max(max, item.startMinutes + item.durationMinutes)
   }, startOffset + 60 * 4)
   const containerHeight = Math.max(minutesToPx(latestEnd - startOffset) + 60, MIN_COL_HEIGHT)
 
-  // Time labels on the left axis (no lines, labels only)
   const firstHour = Math.floor(startOffset / 60)
   const lastHour = Math.ceil((latestEnd) / 60)
   const timeLabels: number[] = []
@@ -163,7 +158,7 @@ export default function WeeklyTimeline() {
           {timeLabels.map((mins) => (
             <div
               key={mins}
-              className="absolute right-0 text-[9px] text-gray-400 leading-none font-semibold"
+              className="absolute right-0 text-[9px] text-fg-faint leading-none font-semibold"
               style={{ top: minutesToPx(mins - startOffset) - 4 }}
             >
               {formatHourLabel(mins)}
@@ -186,7 +181,7 @@ export default function WeeklyTimeline() {
             >
               {/* Selected day highlight */}
               {isSelected && (
-                <div className="absolute inset-x-0.5 inset-y-0 rounded-xl bg-gray-50 pointer-events-none" />
+                <div className="absolute inset-x-0.5 inset-y-0 rounded-xl bg-surface-alt pointer-events-none" />
               )}
 
               {/* Gradient connector lines between pills */}

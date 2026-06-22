@@ -119,38 +119,38 @@ export default function AddMealSheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[90vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[90vh] overflow-y-auto"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={spring.snappy}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">
+              <h2 className="text-lg font-semibold text-fg">
                 {isEditing ? "Edit meal" : "Log a meal"}
               </h2>
               <motion.button
                 onClick={onClose}
                 whileTap={tap}
-                className="p-2 -m-2 text-gray-400"
+                className="p-2 -m-2 text-fg-faint"
               >
                 <X size={22} />
               </motion.button>
             </div>
 
             {/* Name */}
-            <label className="text-sm text-gray-500 mb-1 block">Name</label>
+            <label className="text-sm text-fg-muted mb-1 block">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Chicken and rice"
               autoFocus
-              className="w-full text-base border border-gray-200 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-gray-400"
+              className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
             />
 
             {/* Type */}
-            <label className="text-sm text-gray-500 mb-2 block">Meal</label>
+            <label className="text-sm text-fg-muted mb-2 block">Meal</label>
             <div className="flex gap-2 flex-wrap mb-4">
               {MEAL_TYPES.map(({ key, label }) => (
                 <motion.button
@@ -159,8 +159,8 @@ export default function AddMealSheet({
                   whileTap={tap}
                   className={`px-3.5 py-2 rounded-full text-sm font-medium ${
                     type === key
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-100 text-gray-600"
+                      ? "bg-surface-inverse text-fg-inverse"
+                      : "bg-surface-raised text-fg-muted"
                   }`}
                 >
                   {label}
@@ -169,20 +169,20 @@ export default function AddMealSheet({
             </div>
 
             {/* Date */}
-            <label className="text-sm text-gray-500 mb-1 block">Date</label>
+            <label className="text-sm text-fg-muted mb-1 block">Date</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full text-base border border-gray-200 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-gray-400"
+              className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
             />
 
             {/* Components from catalog */}
-            <label className="text-sm text-gray-500 mb-2 block">
+            <label className="text-sm text-fg-muted mb-2 block">
               What's in it
             </label>
             {groceryItems.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4">
+              <p className="text-sm text-fg-faint mb-4">
                 Add food items on the Expenses tab first — meals are built from
                 the same catalog.
               </p>
@@ -197,7 +197,7 @@ export default function AddMealSheet({
                     <div
                       key={item.id}
                       className={`flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${
-                        selected ? "bg-gray-900" : "bg-gray-50"
+                        selected ? "bg-surface-inverse" : "bg-surface-alt"
                       }`}
                     >
                       <motion.button
@@ -218,14 +218,14 @@ export default function AddMealSheet({
                         <span className="min-w-0">
                           <span
                             className={`block font-medium leading-tight truncate ${
-                              selected ? "text-white" : "text-gray-900"
+                              selected ? "text-fg-inverse" : "text-fg"
                             }`}
                           >
                             {item.name}
                           </span>
                           <span
                             className={`block text-xs mt-0.5 ${
-                              selected ? "text-gray-300" : "text-gray-400"
+                              selected ? "text-fg-muted-inverse" : "text-fg-faint"
                             }`}
                           >
                             {selected
@@ -240,18 +240,18 @@ export default function AddMealSheet({
                           <motion.button
                             onClick={() => bumpServings(item.id, -0.25)}
                             whileTap={tap}
-                            className="w-7 h-7 rounded-full bg-gray-700 text-gray-200 flex items-center justify-center"
+                            className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
                             aria-label="Less"
                           >
                             <Minus size={14} />
                           </motion.button>
-                          <span className="w-9 text-center text-sm font-medium text-white">
+                          <span className="w-9 text-center text-sm font-medium text-fg-inverse">
                             ×{servings}
                           </span>
                           <motion.button
                             onClick={() => bumpServings(item.id, 0.25)}
                             whileTap={tap}
-                            className="w-7 h-7 rounded-full bg-gray-700 text-gray-200 flex items-center justify-center"
+                            className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
                             aria-label="More"
                           >
                             <Plus size={14} />
@@ -278,7 +278,7 @@ export default function AddMealSheet({
               onClick={handleSubmit}
               whileTap={tap}
               disabled={!canSave}
-              className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-medium disabled:opacity-40"
+              className="w-full bg-surface-inverse text-fg-inverse rounded-xl py-3.5 font-medium disabled:opacity-40"
             >
               {isEditing ? "Save changes" : "Log meal"}
             </motion.button>
@@ -301,7 +301,7 @@ export default function AddMealSheet({
 
 function NutriChip({ label }: { label: string }) {
   return (
-    <span className="text-xs font-medium text-gray-600 bg-gray-100 rounded-full px-2.5 py-1">
+    <span className="text-xs font-medium text-fg-muted bg-surface-raised rounded-full px-2.5 py-1">
       {label}
     </span>
   );

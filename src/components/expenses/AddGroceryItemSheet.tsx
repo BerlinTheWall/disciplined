@@ -48,7 +48,6 @@ export default function AddGroceryItemSheet({
   const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition());
   const [auto, setAuto] = useState(true);
 
-  // Populate when opening for edit; reset when opening fresh
   useEffect(() => {
     if (editItem) {
       setName(editItem.name);
@@ -73,7 +72,6 @@ export default function AddGroceryItemSheet({
 
   const qtyNum = parseFloat(quantity);
 
-  // Re-estimate whenever inputs change, as long as auto-estimate is on
   useEffect(() => {
     if (!auto) return;
     setNutrition(estimateNutrition(name, category, qtyNum, unit));
@@ -95,11 +93,11 @@ export default function AddGroceryItemSheet({
   function setNutritionField(key: keyof Nutrition, raw: string) {
     const value = parseFloat(raw);
     setNutrition((prev) => ({ ...prev, [key]: isFinite(value) ? value : 0 }));
-    setAuto(false); // a manual edit means stop auto-overwriting
+    setAuto(false);
   }
 
   function reEstimate() {
-    setAuto(true); // the effect recomputes from current inputs
+    setAuto(true);
   }
 
   function handleSubmit() {
@@ -141,38 +139,38 @@ export default function AddGroceryItemSheet({
             onClick={onClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[88vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[88vh] overflow-y-auto"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={spring.snappy}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">
+              <h2 className="text-lg font-semibold text-fg">
                 {isEditing ? "Edit grocery item" : "New grocery item"}
               </h2>
               <motion.button
                 onClick={onClose}
                 whileTap={tap}
-                className="p-2 -m-2 text-gray-400"
+                className="p-2 -m-2 text-fg-faint"
               >
                 <X size={22} />
               </motion.button>
             </div>
 
             {/* Name */}
-            <label className="text-sm text-gray-500 mb-1 block">Item</label>
+            <label className="text-sm text-fg-muted mb-1 block">Item</label>
             <input
               type="text"
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="e.g. Chicken breast"
               autoFocus
-              className="w-full text-base border border-gray-200 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-gray-400"
+              className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
             />
 
             {/* Category */}
-            <label className="text-sm text-gray-500 mb-2 block">Category</label>
+            <label className="text-sm text-fg-muted mb-2 block">Category</label>
             <div className="flex gap-2 flex-wrap mb-4">
               {FOOD_CATEGORY_KEYS.map((key) => {
                 const { icon, label, color } = FOOD_CATEGORIES[key];
@@ -185,8 +183,8 @@ export default function AddGroceryItemSheet({
                     whileTap={tap}
                     className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium ${
                       selected
-                        ? "bg-gray-900 text-white"
-                        : "bg-gray-100 text-gray-600"
+                        ? "bg-surface-inverse text-fg-inverse"
+                        : "bg-surface-raised text-fg-muted"
                     }`}
                   >
                     <span
@@ -202,7 +200,7 @@ export default function AddGroceryItemSheet({
             </div>
 
             {/* Quantity + unit */}
-            <label className="text-sm text-gray-500 mb-1 block">Amount</label>
+            <label className="text-sm text-fg-muted mb-1 block">Amount</label>
             <div className="flex gap-2 mb-4">
               <input
                 type="number"
@@ -210,9 +208,9 @@ export default function AddGroceryItemSheet({
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="0"
-                className="flex-1 min-w-0 text-base border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-gray-400"
+                className="flex-1 min-w-0 text-base border border-border-input rounded-xl px-4 py-3 focus:outline-none focus:border-border-focus"
               />
-              <div className="flex bg-gray-100 rounded-xl p-1">
+              <div className="flex bg-surface-raised rounded-xl p-1">
                 {UNITS.map((u) => (
                   <button
                     key={u}
@@ -223,12 +221,12 @@ export default function AddGroceryItemSheet({
                       <motion.div
                         layoutId="unitToggle"
                         transition={spring.snappy}
-                        className="absolute inset-0 bg-white rounded-lg shadow-sm"
+                        className="absolute inset-0 bg-surface rounded-lg shadow-sm"
                       />
                     )}
                     <span
                       className={`relative z-10 ${
-                        unit === u ? "text-gray-900" : "text-gray-500"
+                        unit === u ? "text-fg" : "text-fg-muted"
                       }`}
                     >
                       {u}
@@ -239,9 +237,9 @@ export default function AddGroceryItemSheet({
             </div>
 
             {/* Price */}
-            <label className="text-sm text-gray-500 mb-1 block">Price</label>
+            <label className="text-sm text-fg-muted mb-1 block">Price</label>
             <div className="relative mb-5">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-gray-400">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-fg-faint">
                 $
               </span>
               <input
@@ -250,30 +248,30 @@ export default function AddGroceryItemSheet({
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00"
-                className="w-full text-base border border-gray-200 rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:border-gray-400"
+                className="w-full text-base border border-border-input rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:border-border-focus"
               />
             </div>
 
             {/* Nutrition */}
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm text-gray-500">
+              <label className="text-sm text-fg-muted">
                 Nutrition{" "}
-                <span className="text-gray-400">(for this amount)</span>
+                <span className="text-fg-faint">(for this amount)</span>
               </label>
               <motion.button
                 onClick={reEstimate}
                 whileTap={tap}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
                   auto
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-surface-inverse text-fg-inverse"
+                    : "bg-surface-raised text-fg-muted"
                 }`}
               >
                 <Wand2 size={12} />
                 {auto ? "Estimated" : "Re-estimate"}
               </motion.button>
             </div>
-            <p className="text-xs text-gray-400 mb-3">
+            <p className="text-xs text-fg-faint mb-3">
               {auto
                 ? "Auto-estimated from the item and amount. Edit any value to override."
                 : "Manually set. Tap Re-estimate to recalculate from the amount."}
@@ -281,7 +279,7 @@ export default function AddGroceryItemSheet({
             <div className="grid grid-cols-3 gap-2 mb-6">
               {NUTRITION_FIELDS.map(({ key, label, unit: u }) => (
                 <div key={key}>
-                  <label className="text-[11px] text-gray-400 mb-1 block">
+                  <label className="text-[11px] text-fg-faint mb-1 block">
                     {label}
                   </label>
                   <div className="relative">
@@ -290,9 +288,9 @@ export default function AddGroceryItemSheet({
                       inputMode="decimal"
                       value={nutrition[key]}
                       onChange={(e) => setNutritionField(key, e.target.value)}
-                      className="w-full text-sm border border-gray-200 rounded-lg pl-2.5 pr-7 py-2 focus:outline-none focus:border-gray-400"
+                      className="w-full text-sm border border-border-input rounded-lg pl-2.5 pr-7 py-2 focus:outline-none focus:border-border-focus"
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-fg-faint">
                       {u}
                     </span>
                   </div>
@@ -304,7 +302,7 @@ export default function AddGroceryItemSheet({
               onClick={handleSubmit}
               whileTap={tap}
               disabled={!canSave}
-              className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-medium disabled:opacity-40"
+              className="w-full bg-surface-inverse text-fg-inverse rounded-xl py-3.5 font-medium disabled:opacity-40"
             >
               {isEditing ? "Save changes" : "Add to list"}
             </motion.button>

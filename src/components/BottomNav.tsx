@@ -1,6 +1,8 @@
 import { UtensilsCrossed, Dumbbell, CalendarDays, Flame, Wallet } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { spring, tap } from '../lib/motion'
+import { useThemeStore } from '../store/themeStore'
+import { themeColors } from '../lib/theme'
 
 export type Page = 'meals' | 'workout' | 'schedule' | 'habits' | 'expenses'
 
@@ -18,11 +20,12 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({ active, onChange }: BottomNavProps) {
+  const theme = useThemeStore((s) => s.theme)
+  const colors = themeColors[theme]
+
   return (
     <nav
-      // z-30 keeps the bar below the modal overlay (z-40) and sheets (z-50), so
-      // an open bottom sheet covers it instead of being clipped behind it.
-      className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex items-center justify-around px-2 pb-safe z-30"
+      className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border flex items-center justify-around px-2 pb-safe z-30"
       style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
     >
       {TABS.map(({ id, icon: Icon, label }) => {
@@ -39,7 +42,7 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
                 <motion.div
                   layoutId="navPill"
                   transition={spring.snappy}
-                  className="absolute -inset-x-3 -inset-y-1.5 rounded-full bg-gray-100"
+                  className="absolute -inset-x-3 -inset-y-1.5 rounded-full bg-surface-raised"
                 />
               )}
               <motion.span
@@ -50,12 +53,12 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
                 <Icon
                   size={22}
                   strokeWidth={isActive ? 2.2 : 1.6}
-                  className={isActive ? 'text-gray-900' : 'text-gray-400'}
+                  className={isActive ? 'text-fg' : 'text-fg-faint'}
                 />
               </motion.span>
             </div>
             <motion.span
-              animate={{ color: isActive ? '#111827' : '#9ca3af' }}
+              animate={{ color: isActive ? colors.fg : colors.fgFaint }}
               transition={{ duration: 0.2 }}
               className="text-[10px] font-medium"
             >
