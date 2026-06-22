@@ -103,7 +103,7 @@ export default function ScheduleRow({
       </div>
 
       <div className="flex-1 flex items-center gap-3">
-        <div
+        <motion.div
           ref={move.setNodeRef}
           {...move.listeners}
           {...move.attributes}
@@ -113,9 +113,11 @@ export default function ScheduleRow({
             height: pillHeight,
             backgroundColor: color,
           }}
+          animate={{ opacity: completed ? 0.9 : 1, scale: completed ? 0.9 : 1 }}
+          transition={spring.snappy}
         >
           <IconComponent size={18} />
-        </div>
+        </motion.div>
 
         {/* Long-press zone: the text content area */}
         <div
@@ -124,9 +126,9 @@ export default function ScheduleRow({
           style={{ touchAction: "none" }}
         >
           <div className="flex items-center gap-2">
-            <span className="relative inline-block leading-tight">
+            <span className="relative block min-w-0 overflow-hidden leading-tight max-w-44">
               <motion.span
-                className="font-semibold inline-block"
+                className="font-semibold block truncate"
                 initial={false}
                 animate={{ color: completed ? colors.fgFaint : colors.fg }}
                 transition={{ duration: 0.25 }}

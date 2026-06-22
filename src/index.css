@@ -75,14 +75,16 @@ body {
   color: var(--fg);
 }
 
-input,
-textarea,
-select {
-  background-color: var(--surface);
-  color: var(--fg);
-}
+@layer base {
+  input,
+  textarea,
+  select {
+    background-color: var(--surface);
+    color: var(--fg);
+  }
 
-input::placeholder,
-textarea::placeholder {
-  color: var(--fg-faint);
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--fg-faint);
+  }
 }
