@@ -25,8 +25,8 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border flex items-center justify-around px-2 pb-safe z-30"
-      style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
+      className="fixed bottom-0 left-0 right-0 bg-surface border-t border-be-border-focus flex items-center justify-around px-2 pb-safe z-30 rounded-t-3xl"
+      style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}
     >
       {TABS.map(({ id, icon: Icon, label }) => {
         const isActive = active === id
@@ -35,19 +35,19 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
             key={id}
             onClick={() => onChange(id)}
             whileTap={tap}
-            className="relative flex flex-col items-center gap-1 flex-1 pt-3 pb-1"
+            className="relative flex flex-col items-center gap-1 flex-1 pt-3 pb-0"
           >
-            <div className="relative flex items-center justify-center">
-              {isActive && (
-                <motion.div
-                  layoutId="navPill"
-                  transition={spring.snappy}
-                  className="absolute -inset-x-3 -inset-y-1.5 rounded-full bg-surface-raised"
-                />
-              )}
+            {isActive && (
+              <motion.div
+                layoutId="navLine"
+                transition={spring.snappy}
+                className="absolute -bottom-2.5 left-3 right-3 h-0.5 rounded-full bg-fg"
+              />
+            )}
+            <div className="flex items-center justify-center">
               <motion.span
-                className="relative block"
-                animate={{ scale: isActive ? 1.12 : 1, y: isActive ? -1 : 0 }}
+                className="block"
+                animate={{ scale: isActive ? 1.08 : 1 }}
                 transition={spring.snappy}
               >
                 <Icon
