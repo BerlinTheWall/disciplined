@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, AlignLeft, LayoutGrid, Sun, Moon } from 'lucide-react'
+import { AlignLeft, LayoutGrid, Menu } from 'lucide-react'
 import Timeline from './components/timeline/Timeline'
 import AddItemSheet from './components/timeline/AddItemSheet'
 import AddGroceryItemSheet from './components/expenses/AddGroceryItemSheet'
 import WeekHeader from './components/timeline/WeekHeader'
 import BottomNav, { type Page } from './components/BottomNav'
+import SideMenu from './components/SideMenu'
 import MealsPage from './pages/MealsPage'
 import WorkoutPage from './pages/WorkoutPage'
 import HabitsPage from './pages/HabitsPage'
 import ExpensesPage from './pages/ExpensesPage'
 import { spring, tap } from './lib/motion'
-import { useThemeStore } from './store/themeStore'
 
 const PAGE_TITLES: Record<Page, string> = {
   meals: 'Meals',
@@ -25,9 +25,6 @@ export type ViewMode = 'daily' | 'weekly'
 
 const PAGE_ORDER: Page[] = ['meals', 'workout', 'schedule', 'habits', 'expenses']
 
-// Pages that have a floating "add" button
-const FAB_PAGES: Page[] = ['schedule', 'expenses']
-
 const pageVariants = {
   enter:  (d: number) => ({ x: d > 0 ? 28 : -28, opacity: 0 }),
   center: { x: 0, opacity: 1 },
@@ -40,8 +37,8 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false)
 
-  const { theme, toggleTheme } = useThemeStore()
 
   function go(p: Page) {
     if (p === activePage) return
@@ -54,7 +51,6 @@ function App() {
     else setIsAddOpen(true)
   }
 
-  const showFab = FAB_PAGES.includes(activePage)
   const fabOpen = activePage === 'expenses' ? isGroceryAddOpen : isAddOpen
 
   function renderPage() {
@@ -79,73 +75,74 @@ function App() {
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
+      <SideMenu isOpen={isSideMenuOpen} onClose={() => setIsSideMenuOpen(false)} />
+
       {/* Title row — stays mounted; its contents animate */}
       <div className="px-4 pt-4">
         <div className="flex items-center justify-between mb-6">
-          <div className="relative h-8 flex items-center overflow-hidden">
-            <AnimatePresence mode="popLayout" custom={dir} initial={false}>
-              <motion.h1
-                key={activePage}
-                custom={dir}
-                initial={{ y: dir > 0 ? 22 : -22, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: dir > 0 ? -22 : 22, opacity: 0 }}
-                transition={spring.snappy}
-                className="text-2xl font-bold whitespace-nowrap text-fg"
-              >
-                {PAGE_TITLES[activePage]}
-              </motion.h1>
-            </AnimatePresence>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Daily / Weekly toggle — only on schedule page */}
-            <AnimatePresence>
-              {activePage === 'schedule' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={spring.snappy}
-                  className="flex items-center bg-surface-raised rounded-lg p-0.5"
-                >
-                  {(['daily', 'weekly'] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setViewMode(m)}
-                      className="relative p-1.5 rounded-md"
-                      aria-label={`${m} view`}
-                    >
-                      {viewMode === m && (
-                        <motion.div
-                          layoutId="viewToggle"
-                          transition={spring.snappy}
-                          className="absolute inset-0 bg-surface rounded-md shadow-sm"
-                        />
-                      )}
-                      <span
-                        className={`relative z-10 block ${
-                          viewMode === m ? 'text-fg' : 'text-fg-faint'
-                        }`}
-                      >
-                        {m === 'daily' ? <AlignLeft size={15} /> : <LayoutGrid size={15} />}
-                      </span>
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Theme toggle */}
+          <div className="flex items-center gap-3">
+            {/* Hamburger */}
             <motion.button
-              onClick={toggleTheme}
+              onClick={() => setIsSideMenuOpen(true)}
               whileTap={tap}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-fg-faint"
-              aria-label="Toggle theme"
+              className="p-1 -ml-1 text-fg-faint"
             >
-              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+              <Menu size={22} />
             </motion.button>
+
+            <div className="relative h-8 flex items-center overflow-hidden">
+              <AnimatePresence mode="popLayout" custom={dir} initial={false}>
+                <motion.h1
+                  key={activePage}
+                  custom={dir}
+                  initial={{ y: dir > 0 ? 22 : -22, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: dir > 0 ? -22 : 22, opacity: 0 }}
+                  transition={spring.snappy}
+                  className="text-2xl font-bold whitespace-nowrap text-fg"
+                >
+                  {PAGE_TITLES[activePage]}
+                </motion.h1>
+              </AnimatePresence>
+            </div>
           </div>
+
+          {/* Daily / Weekly toggle — only on schedule page */}
+          <AnimatePresence>
+            {activePage === 'schedule' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={spring.snappy}
+                className="flex items-center bg-surface-raised rounded-lg p-0.5"
+              >
+                {(['daily', 'weekly'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setViewMode(m)}
+                    className="relative p-1.5 rounded-md"
+                    aria-label={`${m} view`}
+                  >
+                    {viewMode === m && (
+                      <motion.div
+                        layoutId="viewToggle"
+                        transition={spring.snappy}
+                        className="absolute inset-0 bg-surface rounded-md shadow-sm"
+                      />
+                    )}
+                    <span
+                      className={`relative z-10 block ${
+                        viewMode === m ? 'text-fg' : 'text-fg-faint'
+                      }`}
+                    >
+                      {m === 'daily' ? <AlignLeft size={15} /> : <LayoutGrid size={15} />}
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -167,30 +164,18 @@ function App() {
         </AnimatePresence>
       </div>
 
-      {/* FAB — shown on pages that support quick-add */}
-      <AnimatePresence>
-        {showFab && (
-          <motion.button
-            onClick={openFab}
-            whileTap={tap}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1, rotate: fabOpen ? 135 : 0 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={spring.snappy}
-            className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-surface-inverse text-fg-inverse flex items-center justify-center shadow-lg z-40"
-          >
-            <Plus size={26} />
-          </motion.button>
-        )}
-      </AnimatePresence>
-
       <AddItemSheet isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
       <AddGroceryItemSheet
         isOpen={isGroceryAddOpen}
         onClose={() => setIsGroceryAddOpen(false)}
       />
 
-      <BottomNav active={activePage} onChange={go} />
+      <BottomNav
+        active={activePage}
+        onChange={go}
+        onAdd={openFab}
+        fabOpen={fabOpen}
+      />
     </div>
   )
 }
