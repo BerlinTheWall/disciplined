@@ -146,6 +146,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
                 layout.topYById[item.id] + getPillHeight(item.durationMinutes);
               const nextTopEdge = layout.topYById[next.id];
               const labelY = (prevBottomEdge + nextTopEdge) / 2;
+              const gapGradientId = `gap-grad-${item.id}-${next.id}`;
 
               return (
                 <div
@@ -162,12 +163,22 @@ export default function Timeline({ viewMode }: TimelineProps) {
                     height={bottomY - topY}
                     style={{ overflow: "visible" }}
                   >
+                    <defs>
+                      <linearGradient
+                        id={gapGradientId}
+                        x1="0" y1="0" x2="0" y2={bottomY - topY}
+                        gradientUnits="userSpaceOnUse"
+                      >
+                        <stop offset="0%" stopColor={item.color} />
+                        <stop offset="100%" stopColor={next.color} />
+                      </linearGradient>
+                    </defs>
                     <line
                       x1="1"
                       y1="0"
                       x2="1"
                       y2={bottomY - topY}
-                      style={{ stroke: "var(--fg-faint)" }}
+                      stroke={`url(#${gapGradientId})`}
                       strokeWidth="2"
                       strokeDasharray="4 4"
                     />
