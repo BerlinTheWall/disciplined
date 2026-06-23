@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Trash2, Calendar, ChevronRight, Repeat, CheckCircle2, Check } from "lucide-react";
 import { useTaskStore } from "../../store/taskStore";
 import { useHabitStore } from "../../store/habitStore";
-import { ICONS } from "../../lib/icons";
+import { ICONS, guessIcon } from "../../lib/icons";
 import type { EditItem } from "./Timeline";
 import { spring, tap } from "../../lib/motion";
 
@@ -222,6 +222,7 @@ export default function AddItemSheet({
   const [customM, setCustomM] = useState("30");
   const [color, setColor] = useState(COLOR_OPTIONS[0]);
   const [icon, setIcon] = useState<keyof typeof ICONS>("alarm");
+  const [iconTouched, setIconTouched] = useState(false);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
 
   useEffect(() => {
@@ -244,6 +245,7 @@ export default function AddItemSheet({
       setCustomM(String(loadedDuration % 60));
       setColor(editItem.data.color);
       setIcon(editItem.data.icon);
+      setIconTouched(true);
       setDaysOfWeek(
         editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6],
       );
@@ -263,7 +265,19 @@ export default function AddItemSheet({
     setCustomM("30");
     setColor(COLOR_OPTIONS[0]);
     setIcon("alarm");
+    setIconTouched(false);
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
+  }
+
+  function handleTitleChange(value: string) {
+    setTitle(value)
+    if (value === '') {
+      setIconTouched(false)
+      setIcon('alarm')
+    } else if (!iconTouched) {
+      const guess = guessIcon(value)
+      if (guess) setIcon(guess)
+    }
   }
 
   function applyCustom(hStr: string, mStr: string) {
@@ -449,7 +463,7 @@ export default function AddItemSheet({
                   <input
                     type="text"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => handleTitleChange(e.target.value)}
                     placeholder={mode === "task" ? "Task title" : "Habit title"}
                     autoFocus
                     className={`w-full bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
@@ -526,7 +540,7 @@ export default function AddItemSheet({
                           return (
                             <motion.button
                               key={key}
-                              onClick={() => setIcon(key)}
+                              onClick={() => { setIcon(key); setIconTouched(true) }}
                               whileTap={tap}
                               className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                               style={{

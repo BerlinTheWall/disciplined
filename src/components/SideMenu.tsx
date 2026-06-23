@@ -1,14 +1,19 @@
-import { User, Sun, Moon, LogOut, X } from 'lucide-react'
+import { Settings, Palette, LogOut } from 'lucide-react'
+import logo from '../assets/logo.svg'
 import { motion, AnimatePresence } from 'framer-motion'
 import { tap } from '../lib/motion'
 import { useThemeStore } from '../store/themeStore'
+import type { Page } from './BottomNav'
+import { ALL_TABS } from '../lib/pages'
 
 interface SideMenuProps {
   isOpen: boolean
   onClose: () => void
+  activePage: Page
+  onNavigate: (page: Page) => void
 }
 
-export default function SideMenu({ isOpen, onClose }: SideMenuProps) {
+export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore()
 
   return (
@@ -17,7 +22,7 @@ export default function SideMenu({ isOpen, onClose }: SideMenuProps) {
         <>
           {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 bg-black/30 z-40"
+            className="fixed inset-0 bg-black/40 z-40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -32,38 +37,73 @@ export default function SideMenu({ isOpen, onClose }: SideMenuProps) {
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
-            {/* Close */}
-            <div className="flex justify-end p-4 pt-12 shrink-0">
-              <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-                <X size={20} />
-              </motion.button>
-            </div>
-
-            {/* User section */}
-            <div className="px-6 pb-5 border-b border-border">
-              <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center mb-3">
-                <User size={26} className="text-fg-muted" />
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-10 pb-8">
+              <div className="flex items-center gap-3">
+                <img src={logo} alt="logo" className="w-12 h-12 object-contain" />
+                <span className="text-2xl font-extrabold text-fg">Disciplined</span>
               </div>
-              <p className="font-semibold text-fg">My Account</p>
-              <p className="text-sm text-fg-faint mt-0.5">user@example.com</p>
             </div>
 
-            <div className="flex-1" />
+            {/* User card */}
+            <div className="px-5 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-fg flex items-center justify-center shrink-0">
+                  <span className="text-base font-bold text-fg-inverse">H</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-fg">Hooman</p>
+                  <p className="text-sm text-fg-faint">View profile</p>
+                </div>
+              </div>
+            </div>
 
-            {/* Theme + logout */}
-            <div className="px-3 py-4 border-t border-border">
+            {/* Nav items */}
+            <div className="px-3 flex-1">
+              {ALL_TABS.map(({ id, icon: Icon, label }) => {
+                const isActive = id === activePage
+                return (
+                  <motion.button
+                    key={id}
+                    whileTap={tap}
+                    onClick={() => { onNavigate(id); onClose() }}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 transition-colors ${
+                      isActive ? 'bg-fg/10' : 'hover:bg-fg/5'
+                    }`}
+                  >
+                    <Icon
+                      size={20}
+                      strokeWidth={isActive ? 2.2 : 1.8}
+                      className={isActive ? 'text-fg' : 'text-fg-muted'}
+                    />
+                    <span className={`font-medium ${isActive ? 'text-fg' : 'text-fg-muted'}`}>
+                      {label}
+                    </span>
+                  </motion.button>
+                )
+              })}
+            </div>
+
+            {/* Divider */}
+            <div className="mx-5 border-t border-border my-1" />
+
+            {/* Settings + Theme */}
+            <div className="px-3 py-2">
+              <motion.button
+                whileTap={tap}
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
+              >
+                <Settings size={20} className="text-fg-muted" strokeWidth={1.8} />
+                <span className="font-medium text-fg-muted">Settings</span>
+              </motion.button>
               <motion.button
                 onClick={toggleTheme}
                 whileTap={tap}
-                className="flex items-center justify-between w-full px-3 py-3 rounded-2xl hover:bg-surface-raised transition-colors"
+                className="flex items-center justify-between w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  {theme === 'light'
-                    ? <Moon size={18} className="text-fg-muted" />
-                    : <Sun size={18} className="text-fg-muted" />}
-                  <span className="font-medium text-fg">
-                    {theme === 'light' ? 'Dark mode' : 'Light mode'}
-                  </span>
+                  <Palette size={20} className="text-fg-muted" strokeWidth={1.8} />
+                  <span className="font-medium text-fg-muted">Theme</span>
                 </div>
                 <div className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 ${theme === 'dark' ? 'bg-fg' : 'bg-surface-subtle'}`}>
                   <motion.div
@@ -73,12 +113,15 @@ export default function SideMenu({ isOpen, onClose }: SideMenuProps) {
                   />
                 </div>
               </motion.button>
+            </div>
 
+            {/* Log out */}
+            <div className="px-3 pb-10">
               <motion.button
                 whileTap={tap}
-                className="flex items-center gap-3 w-full px-3 py-3 rounded-2xl text-red-500 hover:bg-red-50 transition-colors"
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-500/10 transition-colors"
               >
-                <LogOut size={18} />
+                <LogOut size={20} strokeWidth={1.8} />
                 <span className="font-medium">Log out</span>
               </motion.button>
             </div>

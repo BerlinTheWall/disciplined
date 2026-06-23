@@ -28,10 +28,10 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
   return (
     <div
       className="fixed left-4 right-4 flex items-center gap-3 z-30"
-      style={{ bottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+      style={{ bottom: 'calc(24px + env(safe-area-inset-bottom))' }}
     >
       {/* Pill */}
-      <nav className="flex-1 bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3">
+      <nav className="flex-1 bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3.5">
         {TABS.map(({ id, icon: Icon, label }) => {
           const isActive = active === id
           return (
@@ -42,14 +42,14 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
               className="flex flex-col items-center gap-1 flex-1"
             >
               <Icon
-                size={22}
+                size={26}
                 strokeWidth={isActive ? 2.3 : 1.6}
                 className={isActive ? 'text-fg' : 'text-fg-faint'}
               />
               <motion.span
                 animate={{ color: isActive ? colors.fg : colors.fgFaint }}
                 transition={{ duration: 0.15 }}
-                className={`text-[10px] ${isActive ? 'font-semibold' : 'font-medium'}`}
+                className={`text-[11px] ${isActive ? 'font-semibold' : 'font-medium'}`}
               >
                 {label}
               </motion.span>
@@ -64,9 +64,9 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
         whileTap={tap}
         animate={{ rotate: fabOpen ? 135 : 0 }}
         transition={spring.snappy}
-        className="w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl shrink-0"
+        className="w-16 h-16 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl shrink-0"
       >
-        <Plus size={22} strokeWidth={2.5} />
+        <Plus size={26} strokeWidth={2.5} />
       </motion.button>
     </div>
   )

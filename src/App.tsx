@@ -75,7 +75,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
-      <SideMenu isOpen={isSideMenuOpen} onClose={() => setIsSideMenuOpen(false)} />
+      <SideMenu
+        isOpen={isSideMenuOpen}
+        onClose={() => setIsSideMenuOpen(false)}
+        activePage={activePage}
+        onNavigate={go}
+      />
 
       {/* Title row — stays mounted; its contents animate */}
       <div className="px-4 pt-4">
