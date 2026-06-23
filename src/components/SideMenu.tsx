@@ -1,4 +1,4 @@
-import { Settings, Palette, LogOut } from 'lucide-react'
+import { Settings, Palette, LogOut, X } from 'lucide-react'
 import logo from '../assets/logo.svg'
 import { motion, AnimatePresence } from 'framer-motion'
 import { tap } from '../lib/motion'
@@ -44,6 +44,9 @@ export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: Si
                 <span className="text-2xl font-extrabold text-fg">Disciplined</span>
               </div>
             </div>
+              <motion.button onClick={onClose} whileTap={tap} className="absolute top-4 right-4 p-1 text-fg-faint">
+                <X size={18} />
+              </motion.button>
 
             {/* User card */}
             <div className="px-5 pb-5">
