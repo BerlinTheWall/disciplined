@@ -40,7 +40,7 @@ export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: Si
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-10 pb-8">
               <div className="flex items-center gap-3">
-                <img src={logo} alt="logo" className="w-12 h-12 object-contain" />
+                <img src={logo} alt="logo" className={`w-12 h-12 object-contain ${theme === 'light' ? 'brightness-0' : ''}`} />
                 <span className="text-2xl font-extrabold text-fg">Disciplined</span>
               </div>
             </div>
