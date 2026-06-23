@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlignLeft, LayoutGrid, Menu } from 'lucide-react'
+import { AlignLeft, LayoutGrid, Menu, CalendarPlus } from 'lucide-react'
 import Timeline from './components/timeline/Timeline'
 import AddItemSheet from './components/timeline/AddItemSheet'
+import PlanDaySheet from './components/timeline/PlanDaySheet'
 import AddGroceryItemSheet from './components/expenses/AddGroceryItemSheet'
 import WeekHeader from './components/timeline/WeekHeader'
 import BottomNav, { type Page } from './components/BottomNav'
@@ -35,6 +36,7 @@ function App() {
   // [page, direction] — direction drives the slide
   const [[activePage, dir], setPage] = useState<[Page, number]>(['schedule', 0])
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isPlanOpen, setIsPlanOpen] = useState(false)
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false)
@@ -112,7 +114,7 @@ function App() {
             </div>
           </div>
 
-          {/* Daily / Weekly toggle — only on schedule page */}
+          {/* Plan day + Daily/Weekly toggle — only on schedule page */}
           <AnimatePresence>
             {activePage === 'schedule' && (
               <motion.div
@@ -120,8 +122,17 @@ function App() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={spring.snappy}
-                className="flex items-center bg-surface-raised rounded-lg p-0.5"
+                className="flex items-center gap-2"
               >
+                <motion.button
+                  onClick={() => setIsPlanOpen(true)}
+                  whileTap={tap}
+                  className="flex items-center gap-1.5 bg-surface-raised rounded-lg px-2.5 py-1.5 text-sm font-medium text-fg"
+                >
+                  <CalendarPlus size={15} />
+                  Plan day
+                </motion.button>
+                <div className="flex items-center bg-surface-raised rounded-lg p-0.5">
                 {(['daily', 'weekly'] as const).map((m) => (
                   <button
                     key={m}
@@ -145,6 +156,7 @@ function App() {
                     </span>
                   </button>
                 ))}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -170,6 +182,7 @@ function App() {
       </div>
 
       <AddItemSheet isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
+      <PlanDaySheet isOpen={isPlanOpen} onClose={() => setIsPlanOpen(false)} />
       <AddGroceryItemSheet
         isOpen={isGroceryAddOpen}
         onClose={() => setIsGroceryAddOpen(false)}

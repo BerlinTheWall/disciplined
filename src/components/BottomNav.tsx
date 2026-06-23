@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from 'react'
 import { Plus, UtensilsCrossed, Dumbbell, CalendarDays, Flame, Wallet } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { spring, tap } from '../lib/motion'
 import { useThemeStore } from '../store/themeStore'
 import { themeColors } from '../lib/theme'
@@ -25,13 +26,47 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
   const theme = useThemeStore((s) => s.theme)
   const colors = themeColors[theme]
 
+  const [isScrolling, setIsScrolling] = useState(false)
+  const stopTimer = useRef<ReturnType<typeof setTimeout>>(null)
+
+  useEffect(() => {
+    const onScroll = () => {
+      setIsScrolling(true)
+      if (stopTimer.current) clearTimeout(stopTimer.current)
+      stopTimer.current = setTimeout(() => setIsScrolling(false), 200)
+    }
+    // capture phase catches scroll from nested scroll containers (scroll doesn't bubble)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      if (stopTimer.current) clearTimeout(stopTimer.current)
+    }
+  }, [])
+
   return (
     <div
-      className="fixed left-4 right-4 flex items-center gap-3 z-30"
+      className="fixed left-4 right-4 z-30"
       style={{ bottom: 'calc(24px + env(safe-area-inset-bottom))' }}
     >
+      {/* Plus circle — only on schedule, floats above the pill on the right */}
+      <AnimatePresence>
+        {active === 'schedule' && (
+          <motion.button
+            onClick={onAdd}
+            whileTap={tap}
+            initial={{ opacity: 0, scale: 0.6, y: 8 }}
+            animate={{ opacity: isScrolling ? 0.4 : 1, scale: 1, y: 0, rotate: fabOpen ? 135 : 0 }}
+            exit={{ opacity: 0, scale: 0.6, y: 8 }}
+            transition={spring.snappy}
+            className="absolute -top-17 right-1 w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl"
+          >
+            <Plus size={26} strokeWidth={2.5} />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* Pill */}
-      <nav className="flex-1 bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3.5">
+      <nav className="bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3.5">
         {TABS.map(({ id, icon: Icon, label }) => {
           const isActive = active === id
           return (
@@ -57,17 +92,6 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
           )
         })}
       </nav>
-
-      {/* Plus circle — always visible */}
-      <motion.button
-        onClick={onAdd}
-        whileTap={tap}
-        animate={{ rotate: fabOpen ? 135 : 0 }}
-        transition={spring.snappy}
-        className="w-16 h-16 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl shrink-0"
-      >
-        <Plus size={26} strokeWidth={2.5} />
-      </motion.button>
     </div>
   )
 }
