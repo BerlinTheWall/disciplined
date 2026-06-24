@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlignLeft, LayoutGrid, Menu, CalendarPlus } from 'lucide-react'
 import Timeline from './components/timeline/Timeline'
@@ -7,8 +7,12 @@ import PlanDaySheet from './components/timeline/PlanDaySheet'
 import AddGroceryItemSheet from './components/expenses/AddGroceryItemSheet'
 import WeekHeader from './components/timeline/WeekHeader'
 import BottomNav, { type Page } from './components/BottomNav'
+import { useWorkoutFocusStore } from './store/workoutFocusStore'
+import { useRecipeFocusStore } from './store/recipeFocusStore'
 import SideMenu from './components/SideMenu'
 import MealsPage from './pages/MealsPage'
+import RecipesPage from './pages/RecipesPage'
+import FoodPage from './pages/FoodPage'
 import WorkoutPage from './pages/WorkoutPage'
 import HabitsPage from './pages/HabitsPage'
 import ExpensesPage from './pages/ExpensesPage'
@@ -16,6 +20,8 @@ import { spring, tap } from './lib/motion'
 
 const PAGE_TITLES: Record<Page, string> = {
   meals: 'Meals',
+  recipes: 'Recipes',
+  food: 'Food & Products',
   workout: 'Workout',
   schedule: 'Today',
   habits: 'Habits',
@@ -24,7 +30,7 @@ const PAGE_TITLES: Record<Page, string> = {
 
 export type ViewMode = 'daily' | 'weekly'
 
-const PAGE_ORDER: Page[] = ['meals', 'workout', 'schedule', 'habits', 'expenses']
+const PAGE_ORDER: Page[] = ['meals', 'recipes', 'food', 'workout', 'schedule', 'habits', 'expenses']
 
 const pageVariants = {
   enter:  (d: number) => ({ x: d > 0 ? 28 : -28, opacity: 0 }),
@@ -48,6 +54,34 @@ function App() {
     setPage([p, PAGE_ORDER.indexOf(p) > from ? 1 : -1])
   }
 
+  // A linked task asked to open a workout — jump to the Workout page; the page
+  // itself consumes the pending id and opens that session's detail. Driven off
+  // the store subscription (an external event) so we don't setState during render.
+  useEffect(() => {
+    return useWorkoutFocusStore.subscribe((state, prev) => {
+      if (state.pendingSessionId && state.pendingSessionId !== prev.pendingSessionId) {
+        setPage(([curr]) => {
+          if (curr === 'workout') return [curr, 0]
+          const from = PAGE_ORDER.indexOf(curr)
+          return ['workout', PAGE_ORDER.indexOf('workout') > from ? 1 : -1]
+        })
+      }
+    })
+  }, [])
+
+  // Same pattern for a linked task asking to open a recipe.
+  useEffect(() => {
+    return useRecipeFocusStore.subscribe((state, prev) => {
+      if (state.pendingRecipeId && state.pendingRecipeId !== prev.pendingRecipeId) {
+        setPage(([curr]) => {
+          if (curr === 'recipes') return [curr, 0]
+          const from = PAGE_ORDER.indexOf(curr)
+          return ['recipes', PAGE_ORDER.indexOf('recipes') > from ? 1 : -1]
+        })
+      }
+    })
+  }, [])
+
   function openFab() {
     if (activePage === 'expenses') setIsGroceryAddOpen(true)
     else setIsAddOpen(true)
@@ -66,6 +100,10 @@ function App() {
         )
       case 'meals':
         return <MealsPage />
+      case 'recipes':
+        return <RecipesPage />
+      case 'food':
+        return <FoodPage />
       case 'workout':
         return <WorkoutPage />
       case 'habits':

@@ -5,7 +5,7 @@ import { spring, tap } from '../lib/motion'
 import { useThemeStore } from '../store/themeStore'
 import { themeColors } from '../lib/theme'
 
-export type Page = 'meals' | 'workout' | 'schedule' | 'habits' | 'expenses'
+export type Page = 'meals' | 'recipes' | 'food' | 'workout' | 'schedule' | 'habits' | 'expenses'
 
 const TABS: { id: Page; icon: React.ElementType; label: string }[] = [
   { id: 'meals',    icon: UtensilsCrossed, label: 'Meals' },

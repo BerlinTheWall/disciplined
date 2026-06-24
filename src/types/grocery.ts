@@ -18,4 +18,5 @@ export interface GroceryItem {
   unit: Unit
   nutrition: Nutrition // for the reference quantity (estimated or hand-edited)
   autoNutrition: boolean // re-estimate on edits until the user overrides a value
+  stock: number // how much you currently have on hand, in `unit` (inventory)
 }

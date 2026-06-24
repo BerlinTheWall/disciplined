@@ -85,7 +85,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
       )
     : 0;
 
-  function handleLongPress(id: string) {
+  function handleEdit(id: string) {
     const task = tasks.find((t) => t.id === id);
     if (task) {
       setEditItem({ type: "task", data: task });
@@ -234,7 +234,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
                 startOffset={startOffset}
                 virtualTop={layout.topYById[item.id]}
                 onToggle={handleToggle}
-                onLongPress={handleLongPress}
+                onEdit={handleEdit}
               />
             ))}
           </AnimatePresence>

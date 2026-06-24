@@ -16,8 +16,6 @@ const TYPE_LABELS: Record<MealType, string> = {
   snack: 'Snack',
 }
 
-const TYPE_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
-
 export default function MealsPage() {
   const meals = useMealStore((s) => s.meals)
   const groceryItems = useGroceryStore((s) => s.groceryItems)
@@ -28,9 +26,8 @@ export default function MealsPage() {
   const items = indexItems(groceryItems)
   const today = todayISODate()
 
-  const todaysMeals = meals
-    .filter((m) => m.date === today)
-    .sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type))
+  // Keep insertion order so the most recently logged meal sits at the bottom.
+  const todaysMeals = meals.filter((m) => m.date === today)
 
   const total = dayNutrition(todaysMeals, items)
 

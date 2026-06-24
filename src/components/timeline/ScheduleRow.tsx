@@ -12,7 +12,6 @@ import {
   getPillHeight,
   PILL_BASE_SIZE,
 } from "../../lib/time";
-import { useLongPress } from "../../hooks/useLongPress";
 import { spring, tap } from "../../lib/motion";
 import { useThemeStore } from "../../store/themeStore";
 import { themeColors } from "../../lib/theme";
@@ -33,7 +32,7 @@ export interface ScheduleRowData {
 
 interface ScheduleRowProps extends ScheduleRowData {
   onToggle: (id: string) => void;
-  onLongPress: (id: string) => void;
+  onEdit: (id: string) => void;
   virtualTop?: number; // compressed-layout position; falls back to real-time position when omitted
 }
 
@@ -49,7 +48,7 @@ export default function ScheduleRow({
   startOffset = 0,
   virtualTop,
   onToggle,
-  onLongPress,
+  onEdit,
 }: ScheduleRowProps) {
   const move = useDraggable({ id });
   const resize = useDraggable({ id: `resize-${id}` });
@@ -69,8 +68,6 @@ export default function ScheduleRow({
   const rowHeight = Math.max(minutesToPx(liveDuration), MIN_ROW_HEIGHT);
   const pillHeight = getPillHeight(liveDuration);
   const IconComponent = ICONS[icon] ?? ICONS.default;
-
-  const longPressHandlers = useLongPress(() => onLongPress(id));
 
   const endMinutes = startMinutes + liveOffsetMinutes + liveDuration;
 
@@ -107,7 +104,8 @@ export default function ScheduleRow({
           ref={move.setNodeRef}
           {...move.listeners}
           {...move.attributes}
-          className="rounded-full flex items-center justify-center text-white shrink-0 cursor-grab active:cursor-grabbing touch-none shadow-sm transition-[height] duration-150"
+          onClick={() => onEdit(id)}
+          className="rounded-full flex items-center justify-center text-white shrink-0 cursor-pointer shadow-sm transition-[height] duration-150"
           style={{
             width: PILL_BASE_SIZE,
             height: pillHeight,
@@ -119,11 +117,10 @@ export default function ScheduleRow({
           <IconComponent size={18} />
         </motion.div>
 
-        {/* Long-press zone: the text content area */}
+        {/* Tap zone: the text content area opens edit/delete */}
         <div
-          {...longPressHandlers}
-          className="flex-1 pt-1 min-w-0 select-none"
-          style={{ touchAction: "none" }}
+          onClick={() => onEdit(id)}
+          className="flex-1 pt-1 min-w-0 select-none cursor-pointer"
         >
           <div className="flex items-center gap-2">
             <span className="relative block min-w-0 overflow-hidden leading-tight max-w-44">

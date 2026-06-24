@@ -15,4 +15,5 @@ export interface Meal {
   type: MealType
   date: string // ISO date
   components: MealComponent[]
+  recipeId?: string // set when this meal was logged from a recipe
 }

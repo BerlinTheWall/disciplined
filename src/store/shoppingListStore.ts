@@ -26,26 +26,13 @@ interface ShoppingListStore {
   markDone: (listId: string, expenseId: string) => void;
 }
 
-const today = todayISODate();
-
-const initialLists: ShoppingList[] = [
-  {
-    id: "sl1",
-    title: "Weekly shop",
-    date: today,
-    status: "planned",
-    lines: [
-      { itemId: "g1", qty: 1, checked: false },
-      { itemId: "g3", qty: 1, checked: false },
-    ],
-  },
-];
+const initialLists: ShoppingList[] = [];
 
 export const useShoppingListStore = create<ShoppingListStore>()(
   persist(
     (set) => ({
       lists: initialLists,
-      activeListId: "sl1",
+      activeListId: null,
 
       createList: (init) => {
         const id = crypto.randomUUID();
@@ -137,6 +124,24 @@ export const useShoppingListStore = create<ShoppingListStore>()(
     }),
     {
       name: "disciplined-shopping", // localStorage key
+      version: 1,
+      // v1: drop the sample seed list (sl1) that referenced removed seed catalog items.
+      migrate: (persisted, version) => {
+        const state = persisted as
+          | { lists?: ShoppingList[]; activeListId?: string | null }
+          | undefined;
+        if (!state) return persisted as never;
+        if (version < 1) {
+          const lists = (state.lists ?? []).filter((l) => l.id !== "sl1");
+          return {
+            ...state,
+            lists,
+            activeListId:
+              state.activeListId === "sl1" ? (lists[0]?.id ?? null) : state.activeListId,
+          } as never;
+        }
+        return state as never;
+      },
     },
   ),
 );

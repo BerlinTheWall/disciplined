@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { GroceryItem } from "../types/grocery";
-import { estimateNutrition } from "../lib/nutritions";
 
 // The item catalog: the single source of truth for every food/product the user
 // has added. Shopping lists and meals both reference these items by id. This
@@ -16,40 +15,12 @@ interface GroceryStore {
     changes: Partial<Omit<GroceryItem, "id">>,
   ) => void;
   deleteGroceryItem: (id: string) => void;
+  // Change on-hand stock by a delta (negative to consume), clamped at 0.
+  adjustStock: (id: string, delta: number) => void;
 }
 
-const initialGroceryItems: GroceryItem[] = [
-  {
-    id: "g1",
-    name: "Chicken breast",
-    category: "protein",
-    price: 7.5,
-    quantity: 500,
-    unit: "g",
-    nutrition: estimateNutrition("Chicken breast", "protein", 500, "g"),
-    autoNutrition: true,
-  },
-  {
-    id: "g2",
-    name: "Bananas",
-    category: "fruit",
-    price: 2.0,
-    quantity: 6,
-    unit: "unit",
-    nutrition: estimateNutrition("Bananas", "fruit", 6, "unit"),
-    autoNutrition: true,
-  },
-  {
-    id: "g3",
-    name: "Milk",
-    category: "dairy",
-    price: 4.5,
-    quantity: 2,
-    unit: "l",
-    nutrition: estimateNutrition("Milk", "dairy", 2, "l"),
-    autoNutrition: true,
-  },
-];
+// The catalog starts empty — the user builds it up in the Food & Products section.
+const initialGroceryItems: GroceryItem[] = [];
 
 export const useGroceryStore = create<GroceryStore>()(
   persist(
@@ -75,9 +46,32 @@ export const useGroceryStore = create<GroceryStore>()(
         set((state) => ({
           groceryItems: state.groceryItems.filter((g) => g.id !== id),
         })),
+
+      adjustStock: (id, delta) =>
+        set((state) => ({
+          groceryItems: state.groceryItems.map((g) =>
+            g.id === id
+              ? { ...g, stock: Math.max(0, Math.round((g.stock + delta) * 100) / 100) }
+              : g,
+          ),
+        })),
     }),
     {
       name: "disciplined-grocery", // localStorage key
+      version: 1,
+      // v1: drop the sample seed items (g1/g2/g3) and add the `stock` field
+      // (defaulting to one reference amount on hand) to any existing items.
+      migrate: (persisted, version) => {
+        const state = persisted as { groceryItems?: GroceryItem[] } | undefined;
+        if (!state) return persisted as never;
+        if (version < 1) {
+          const items = (state.groceryItems ?? [])
+            .filter((it) => !["g1", "g2", "g3"].includes(it.id))
+            .map((it) => ({ ...it, stock: it.stock ?? it.quantity ?? 0 }));
+          return { ...state, groceryItems: items } as never;
+        }
+        return state as never;
+      },
     },
   ),
 );

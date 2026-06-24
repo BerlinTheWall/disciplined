@@ -44,6 +44,7 @@ export default function AddGroceryItemSheet({
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [quantity, setQuantity] = useState("100");
   const [unit, setUnit] = useState<Unit>("g");
+  const [stock, setStock] = useState("100");
   const [price, setPrice] = useState("");
   const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition());
   const [auto, setAuto] = useState(true);
@@ -55,6 +56,7 @@ export default function AddGroceryItemSheet({
       setCategoryTouched(true);
       setQuantity(String(editItem.quantity));
       setUnit(editItem.unit);
+      setStock(String(editItem.stock));
       setPrice(String(editItem.price));
       setNutrition(editItem.nutrition);
       setAuto(editItem.autoNutrition);
@@ -64,6 +66,7 @@ export default function AddGroceryItemSheet({
       setCategoryTouched(false);
       setQuantity("100");
       setUnit("g");
+      setStock("100");
       setPrice("");
       setNutrition(emptyNutrition());
       setAuto(true);
@@ -104,12 +107,15 @@ export default function AddGroceryItemSheet({
     if (!isFinite(qtyNum) || qtyNum <= 0) return;
     const priceNum = parseFloat(price);
 
+    const stockNum = parseFloat(stock);
+
     const payload = {
       name: name.trim() || FOOD_CATEGORIES[category].label,
       category,
       price: isFinite(priceNum) ? Math.round(priceNum * 100) / 100 : 0,
       quantity: qtyNum,
       unit,
+      stock: isFinite(stockNum) && stockNum > 0 ? stockNum : 0,
       nutrition,
       autoNutrition: auto,
     };
@@ -147,7 +153,7 @@ export default function AddGroceryItemSheet({
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-fg">
-                {isEditing ? "Edit grocery item" : "New grocery item"}
+                {isEditing ? "Edit item" : "New item"}
               </h2>
               <motion.button
                 onClick={onClose}
@@ -236,6 +242,24 @@ export default function AddGroceryItemSheet({
               </div>
             </div>
 
+            {/* In stock */}
+            <label className="text-sm text-fg-muted mb-1 block">
+              In stock <span className="text-fg-faint">(how much you have now)</span>
+            </label>
+            <div className="relative mb-4">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                placeholder="0"
+                className="w-full text-base border border-border-input rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-border-focus"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-fg-faint">
+                {unit}
+              </span>
+            </div>
+
             {/* Price */}
             <label className="text-sm text-fg-muted mb-1 block">Price</label>
             <div className="relative mb-5">
@@ -304,7 +328,7 @@ export default function AddGroceryItemSheet({
               disabled={!canSave}
               className="w-full bg-surface-inverse text-fg-inverse rounded-xl py-3.5 font-medium disabled:opacity-40"
             >
-              {isEditing ? "Save changes" : "Add to list"}
+              {isEditing ? "Save changes" : "Add item"}
             </motion.button>
 
             {isEditing && (
@@ -313,7 +337,7 @@ export default function AddGroceryItemSheet({
                 whileTap={tap}
                 className="w-full mt-3 py-3.5 rounded-xl text-red-500 font-medium bg-red-50"
               >
-                Remove from list
+                Remove item
               </motion.button>
             )}
           </motion.div>

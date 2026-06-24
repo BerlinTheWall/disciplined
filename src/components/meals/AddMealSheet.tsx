@@ -2,9 +2,10 @@
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Minus, Plus, X } from "lucide-react";
+import { Check, Minus, Plus, X, ChefHat } from "lucide-react";
 import { useGroceryStore } from "../../store/groceryStore";
 import { useMealStore } from "../../store/mealStore";
+import { useRecipeStore } from "../../store/recipeStore";
 import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from "../../lib/foodCategories";
 import {
   indexItems,
@@ -35,6 +36,7 @@ export default function AddMealSheet({
   editMeal,
 }: AddMealSheetProps) {
   const groceryItems = useGroceryStore((s) => s.groceryItems);
+  const recipes = useRecipeStore((s) => s.recipes);
   const addMeal = useMealStore((s) => s.addMeal);
   const updateMeal = useMealStore((s) => s.updateMeal);
   const deleteMeal = useMealStore((s) => s.deleteMeal);
@@ -46,6 +48,7 @@ export default function AddMealSheet({
   const [type, setType] = useState<MealType>("lunch");
   const [date, setDate] = useState(todayISODate());
   const [components, setComponents] = useState<MealComponent[]>([]);
+  const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (editMeal) {
@@ -53,13 +56,25 @@ export default function AddMealSheet({
       setType(editMeal.type);
       setDate(editMeal.date);
       setComponents(editMeal.components);
+      setRecipeId(editMeal.recipeId);
     } else {
       setName("");
       setType("lunch");
       setDate(todayISODate());
       setComponents([]);
+      setRecipeId(undefined);
     }
   }, [editMeal]);
+
+  // Picking a recipe fills the meal in: its name and ingredients become the
+  // meal's name and components, so nutrition rolls up automatically.
+  function applyRecipe(id: string) {
+    const recipe = recipes.find((r) => r.id === id);
+    if (!recipe) return;
+    setRecipeId(id);
+    setName(recipe.name);
+    setComponents(recipe.ingredients.map((i) => ({ ...i })));
+  }
 
   const chosen = new Map(components.map((c) => [c.itemId, c.servings]));
 
@@ -95,6 +110,7 @@ export default function AddMealSheet({
       type,
       date,
       components,
+      recipeId,
     };
     if (isEditing) updateMeal(editMeal!.id, payload);
     else addMeal(payload);
@@ -149,6 +165,36 @@ export default function AddMealSheet({
               className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
             />
 
+            {/* From a recipe */}
+            {recipes.length > 0 && (
+              <>
+                <label className="text-sm text-fg-muted mb-2 flex items-center gap-1.5">
+                  <ChefHat size={14} />
+                  From a recipe
+                </label>
+                <div className="flex gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: "none" }}>
+                  <motion.button
+                    onClick={() => setRecipeId(undefined)}
+                    whileTap={tap}
+                    className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${!recipeId ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
+                  >
+                    None
+                  </motion.button>
+                  {recipes.map((r) => (
+                    <motion.button
+                      key={r.id}
+                      onClick={() => applyRecipe(r.id)}
+                      whileTap={tap}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${recipeId === r.id ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
+                    >
+                      <ChefHat size={14} />
+                      {r.name}
+                    </motion.button>
+                  ))}
+                </div>
+              </>
+            )}
+
             {/* Type */}
             <label className="text-sm text-fg-muted mb-2 block">Meal</label>
             <div className="flex gap-2 flex-wrap mb-4">
@@ -183,8 +229,8 @@ export default function AddMealSheet({
             </label>
             {groceryItems.length === 0 ? (
               <p className="text-sm text-fg-faint mb-4">
-                Add food items on the Expenses tab first — meals are built from
-                the same catalog.
+                Add items in the Food &amp; Products section first — meals are built
+                from the same catalog.
               </p>
             ) : (
               <div className="flex flex-col gap-2 mb-4">

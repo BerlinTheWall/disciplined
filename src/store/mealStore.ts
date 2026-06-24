@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Meal } from "../types/meal";
-import { todayISODate } from "../lib/date";
 
 // Meals are dated log entries of what was eaten. Components reference catalog
 // items by id and scale them by servings. Daily diet totals roll up from here.
@@ -18,20 +17,7 @@ interface MealStore {
   removeComponent: (mealId: string, itemId: string) => void;
 }
 
-const today = todayISODate();
-
-const initialMeals: Meal[] = [
-  {
-    id: "m1",
-    name: "Post-workout lunch",
-    type: "lunch",
-    date: today,
-    components: [
-      { itemId: "g1", servings: 0.4 },
-      { itemId: "g2", servings: 0.33 },
-    ],
-  },
-];
+const initialMeals: Meal[] = [];
 
 export const useMealStore = create<MealStore>()(
   persist(
@@ -79,6 +65,16 @@ export const useMealStore = create<MealStore>()(
     }),
     {
       name: "disciplined-meals", // localStorage key
+      version: 1,
+      // v1: drop the sample seed meal that referenced the removed seed catalog items.
+      migrate: (persisted, version) => {
+        const state = persisted as { meals?: Meal[] } | undefined;
+        if (!state) return persisted as never;
+        if (version < 1) {
+          return { ...state, meals: (state.meals ?? []).filter((m) => m.id !== "m1") } as never;
+        }
+        return state as never;
+      },
     },
   ),
 );

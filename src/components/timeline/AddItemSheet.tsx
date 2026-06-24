@@ -4,8 +4,16 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Trash2, Calendar, ChevronRight, Repeat, CheckCircle2, Check } from "lucide-react";
+import { Dumbbell, ArrowUpRight, ChefHat } from "lucide-react";
 import { useTaskStore } from "../../store/taskStore";
 import { useHabitStore } from "../../store/habitStore";
+import { useWorkoutStore } from "../../store/workoutStore";
+import { useWorkoutFocusStore } from "../../store/workoutFocusStore";
+import { useRecipeStore } from "../../store/recipeStore";
+import { useRecipeFocusStore } from "../../store/recipeFocusStore";
+import { useGroceryStore } from "../../store/groceryStore";
+import { indexItems, formatAmount } from "../../lib/grocery";
+import { WORKOUT_TYPE_META, exerciseSummary } from "../../lib/workout";
 import { ICONS, guessIcon } from "../../lib/icons";
 import type { EditItem } from "./Timeline";
 import { spring, tap } from "../../lib/motion";
@@ -207,6 +215,12 @@ export default function AddItemSheet({
   const addHabit = useHabitStore((s) => s.addHabit);
   const updateHabit = useHabitStore((s) => s.updateHabit);
   const deleteHabit = useHabitStore((s) => s.deleteHabit);
+  const workoutSessions = useWorkoutStore((s) => s.sessions);
+  const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
+  const recipes = useRecipeStore((s) => s.recipes);
+  const openRecipe = useRecipeFocusStore((s) => s.openRecipe);
+  const groceryItems = useGroceryStore((s) => s.groceryItems);
+  const catalog = indexItems(groceryItems);
 
   const isEditing = !!editItem;
 
@@ -224,6 +238,8 @@ export default function AddItemSheet({
   const [icon, setIcon] = useState<keyof typeof ICONS>("alarm");
   const [iconTouched, setIconTouched] = useState(false);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
+  const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -249,6 +265,10 @@ export default function AddItemSheet({
       setDaysOfWeek(
         editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6],
       );
+      setWorkoutSessionId(
+        editItem.type === "task" ? editItem.data.workoutSessionId : undefined,
+      );
+      setRecipeId(editItem.type === "task" ? editItem.data.recipeId : undefined);
     } else {
       resetForm();
     }
@@ -267,6 +287,31 @@ export default function AddItemSheet({
     setIcon("alarm");
     setIconTouched(false);
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
+    setWorkoutSessionId(undefined);
+    setRecipeId(undefined);
+  }
+
+  function linkWorkout(sessionId: string | undefined) {
+    setWorkoutSessionId(sessionId);
+    if (!sessionId) return;
+    // A task is one thing — linking a workout clears any recipe link.
+    setRecipeId(undefined);
+    const session = workoutSessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    // Adopt the session's color and a dumbbell icon for a clear at-a-glance link,
+    // unless the user has already personalised the icon.
+    setColor(session.color);
+    if (!iconTouched) setIcon("workout");
+  }
+
+  function linkRecipe(id: string | undefined) {
+    setRecipeId(id);
+    if (!id) return;
+    setWorkoutSessionId(undefined);
+    const recipe = recipes.find((r) => r.id === id);
+    if (!recipe) return;
+    setColor(recipe.color);
+    if (!iconTouched) setIcon("meal");
   }
 
   function handleTitleChange(value: string) {
@@ -327,6 +372,8 @@ export default function AddItemSheet({
           color,
           icon,
           date,
+          workoutSessionId,
+          recipeId,
         });
       } else {
         if (daysOfWeek.length === 0) return;
@@ -348,6 +395,8 @@ export default function AddItemSheet({
           color,
           icon,
           date,
+          workoutSessionId,
+          recipeId,
         });
       } else {
         if (daysOfWeek.length === 0) return;
@@ -382,6 +431,8 @@ export default function AddItemSheet({
   const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : label24(endMin);
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
+  const linkedSession = workoutSessions.find((s) => s.id === workoutSessionId);
+  const linkedRecipe = recipes.find((r) => r.id === recipeId);
   const chipCls = (selected: boolean) =>
     `px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`;
 
@@ -423,21 +474,61 @@ export default function AddItemSheet({
                 >
                   <X size={20} />
                 </motion.button>
-                {isEditing && (
-                  <motion.button
-                    onClick={handleDelete}
-                    whileTap={tap}
-                    className="w-9 h-9 rounded-full flex items-center justify-center"
-                    style={{
-                      backgroundColor: isLightColor(color)
-                        ? "rgba(0,0,0,0.12)"
-                        : "rgba(0,0,0,0.25)",
-                      color: onColor,
-                    }}
-                  >
-                    <Trash2 size={18} />
-                  </motion.button>
-                )}
+                <div className="flex items-center gap-2">
+                  {isEditing && linkedSession && (
+                    <motion.button
+                      onClick={() => {
+                        openWorkoutSession(linkedSession.id);
+                        onClose();
+                      }}
+                      whileTap={tap}
+                      className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
+                      style={{
+                        backgroundColor: isLightColor(color)
+                          ? "rgba(0,0,0,0.12)"
+                          : "rgba(0,0,0,0.25)",
+                        color: onColor,
+                      }}
+                    >
+                      <Dumbbell size={15} />
+                      Workout
+                    </motion.button>
+                  )}
+                  {isEditing && linkedRecipe && (
+                    <motion.button
+                      onClick={() => {
+                        openRecipe(linkedRecipe.id);
+                        onClose();
+                      }}
+                      whileTap={tap}
+                      className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
+                      style={{
+                        backgroundColor: isLightColor(color)
+                          ? "rgba(0,0,0,0.12)"
+                          : "rgba(0,0,0,0.25)",
+                        color: onColor,
+                      }}
+                    >
+                      <ChefHat size={15} />
+                      Recipe
+                    </motion.button>
+                  )}
+                  {isEditing && (
+                    <motion.button
+                      onClick={handleDelete}
+                      whileTap={tap}
+                      className="w-9 h-9 rounded-full flex items-center justify-center"
+                      style={{
+                        backgroundColor: isLightColor(color)
+                          ? "rgba(0,0,0,0.12)"
+                          : "rgba(0,0,0,0.25)",
+                        color: onColor,
+                      }}
+                    >
+                      <Trash2 size={18} />
+                    </motion.button>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-4 mt-3">
@@ -778,6 +869,172 @@ export default function AddItemSheet({
                         );
                       })}
                     </div>
+
+                    {mode === "task" && workoutSessions.length > 0 && (
+                      <>
+                        <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
+                          <Dumbbell size={13} />
+                          Link a workout (optional)
+                        </label>
+                        <div
+                          className="wheel-col flex gap-2 overflow-x-auto pb-1"
+                          style={{ scrollbarWidth: "none" }}
+                        >
+                          <motion.button
+                            onClick={() => linkWorkout(undefined)}
+                            whileTap={tap}
+                            className={chipCls(!workoutSessionId)}
+                          >
+                            None
+                          </motion.button>
+                          {workoutSessions.map((s) => {
+                            const SIcon = WORKOUT_TYPE_META[s.type].icon;
+                            return (
+                              <motion.button
+                                key={s.id}
+                                onClick={() => linkWorkout(s.id)}
+                                whileTap={tap}
+                                className={`flex items-center gap-1.5 ${chipCls(workoutSessionId === s.id)}`}
+                              >
+                                <SIcon size={14} />
+                                {s.name}
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+
+                        {linkedSession && (
+                          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-medium text-fg-muted">
+                                What you'll do
+                              </p>
+                              <motion.button
+                                onClick={() => {
+                                  openWorkoutSession(linkedSession.id);
+                                  onClose();
+                                }}
+                                whileTap={tap}
+                                className="flex items-center gap-1 text-xs font-medium"
+                                style={{ color }}
+                              >
+                                Open in Workout
+                                <ArrowUpRight size={14} />
+                              </motion.button>
+                            </div>
+                            {linkedSession.exercises.length === 0 ? (
+                              <p className="text-sm text-fg-faint">
+                                No exercises added to this session yet.
+                              </p>
+                            ) : (
+                              <div className="flex flex-col gap-2">
+                                {linkedSession.exercises.map((ex, i) => (
+                                  <div key={ex.id} className="flex items-baseline gap-2">
+                                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
+                                      {i + 1}.
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-fg leading-tight">
+                                        {ex.name}
+                                      </p>
+                                      {exerciseSummary(ex, linkedSession.type) && (
+                                        <p className="text-xs text-fg-faint">
+                                          {exerciseSummary(ex, linkedSession.type)}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {mode === "task" && recipes.length > 0 && (
+                      <>
+                        <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
+                          <ChefHat size={13} />
+                          Link a recipe (optional)
+                        </label>
+                        <div
+                          className="wheel-col flex gap-2 overflow-x-auto pb-1"
+                          style={{ scrollbarWidth: "none" }}
+                        >
+                          <motion.button
+                            onClick={() => linkRecipe(undefined)}
+                            whileTap={tap}
+                            className={chipCls(!recipeId)}
+                          >
+                            None
+                          </motion.button>
+                          {recipes.map((r) => (
+                            <motion.button
+                              key={r.id}
+                              onClick={() => linkRecipe(r.id)}
+                              whileTap={tap}
+                              className={`flex items-center gap-1.5 ${chipCls(recipeId === r.id)}`}
+                            >
+                              <ChefHat size={14} />
+                              {r.name}
+                            </motion.button>
+                          ))}
+                        </div>
+
+                        {linkedRecipe && (
+                          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-medium text-fg-muted">
+                                What to make
+                              </p>
+                              <motion.button
+                                onClick={() => {
+                                  openRecipe(linkedRecipe.id);
+                                  onClose();
+                                }}
+                                whileTap={tap}
+                                className="flex items-center gap-1 text-xs font-medium"
+                                style={{ color }}
+                              >
+                                Open in Recipes
+                                <ArrowUpRight size={14} />
+                              </motion.button>
+                            </div>
+
+                            {linkedRecipe.ingredients.length > 0 && (
+                              <p className="text-sm text-fg mb-2">
+                                {linkedRecipe.ingredients
+                                  .map((ing) => {
+                                    const item = catalog[ing.itemId];
+                                    if (!item) return null;
+                                    return `${item.name} (${formatAmount(item, ing.servings)})`;
+                                  })
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </p>
+                            )}
+
+                            {linkedRecipe.steps.length === 0 ? (
+                              <p className="text-sm text-fg-faint">
+                                No steps added to this recipe yet.
+                              </p>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                {linkedRecipe.steps.map((step, i) => (
+                                  <div key={i} className="flex items-baseline gap-2">
+                                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
+                                      {i + 1}.
+                                    </span>
+                                    <p className="text-sm text-fg leading-snug">{step}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
 
                     {mode === "habit" && (
                       <>
