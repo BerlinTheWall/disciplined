@@ -3,7 +3,7 @@ export const SNAP_MINUTES = 15
 const PX_PER_MINUTE = HOUR_HEIGHT / 60
 
 
-export const PILL_BASE_SIZE = 40
+export const PILL_BASE_SIZE = 48
 
 const PILL_MAX_HEIGHT = 300
 const PILL_GROWTH_THRESHOLD = 30 // minutes — pill stays a perfect circle up to this duration
@@ -30,9 +30,7 @@ export function snapToGrid(minutes: number) {
 export function formatTimeLabel(totalMinutes: number) {
   const h = Math.floor(totalMinutes / 60) % 24
   const m = totalMinutes % 60
-  const period = h < 12 ? 'AM' : 'PM'
-  const displayHour = h % 12 === 0 ? 12 : h % 12
-  return `${displayHour}:${String(m).padStart(2, '0')} ${period}`
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 export function formatTimeRange(startMinutes: number, durationMinutes: number) {

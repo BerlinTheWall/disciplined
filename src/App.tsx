@@ -213,7 +213,7 @@ function App() {
             exit="exit"
             transition={spring.gentle}
             data-scroll-lock
-            className="absolute inset-0 overflow-y-auto px-4 pb-28"
+            className="absolute inset-0 overflow-y-auto px-4 pb-20"
           >
             {renderPage()}
           </motion.div>

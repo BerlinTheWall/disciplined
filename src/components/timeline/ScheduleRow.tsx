@@ -16,7 +16,7 @@ import { spring, tap } from "../../lib/motion";
 import { useThemeStore } from "../../store/themeStore";
 import { themeColors } from "../../lib/theme";
 
-export const MIN_ROW_HEIGHT = 72;
+export const MIN_ROW_HEIGHT = 84;
 
 export interface ScheduleRowData {
   id: string;
@@ -74,7 +74,7 @@ export default function ScheduleRow({
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: isActive ? 0.9 : 1, scale: 1 }}
+      animate={{ opacity: completed ? 0.5 : isActive ? 0.9 : 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.92 }}
       transition={spring.pop}
       className="absolute left-0 right-0 flex items-start gap-3 pr-2"
@@ -88,13 +88,13 @@ export default function ScheduleRow({
     >
       {/* Time column: start at top, end at bottom — sized to pill height only */}
       <div
-        className="w-12 flex flex-col justify-between py-1 shrink-0"
+        className="w-8 flex flex-col justify-between py-1 shrink-0"
         style={{ height: pillHeight }}
       >
-        <span className="leading-none text-xs text-fg-faint text-right whitespace-nowrap">
+        <span className="leading-none text-sm text-fg-faint text-right whitespace-nowrap tabular-nums">
           {formatTimeLabel(startMinutes + liveOffsetMinutes)}
         </span>
-        <span className="leading-none text-xs text-fg-faint text-right whitespace-nowrap">
+        <span className="leading-none text-sm text-fg-faint text-right whitespace-nowrap tabular-nums">
           {formatTimeLabel(endMinutes)}
         </span>
       </div>
@@ -114,7 +114,7 @@ export default function ScheduleRow({
           animate={{ opacity: completed ? 0.9 : 1, scale: completed ? 0.9 : 1 }}
           transition={spring.snappy}
         >
-          <IconComponent size={18} />
+          <IconComponent size={22} />
         </motion.div>
 
         {/* Tap zone: the text content area opens edit/delete */}
@@ -125,7 +125,7 @@ export default function ScheduleRow({
           <div className="flex items-center gap-2">
             <span className="relative block min-w-0 overflow-hidden leading-tight max-w-44">
               <motion.span
-                className="font-semibold block truncate"
+                className="font-semibold text-lg block truncate"
                 initial={false}
                 animate={{ color: completed ? colors.fgFaint : colors.fg }}
                 transition={{ duration: 0.25 }}
@@ -147,7 +147,7 @@ export default function ScheduleRow({
               </span>
             )}
           </div>
-          <p className="text-xs text-fg-faint mt-0.5">
+          <p className="text-sm text-fg-faint mt-0.5">
             {formatTimeRange(startMinutes, durationMinutes)}
           </p>
         </div>

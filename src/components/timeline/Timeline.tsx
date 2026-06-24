@@ -23,8 +23,34 @@ import type { Task } from "../../types/task";
 import type { Habit } from "../../types/habits";
 import type { ViewMode } from "../../App";
 
-const ICON_CENTER_X = 80;
+const ICON_CENTER_X = 68;
 const DEFAULT_START_MINUTES = 6 * 60;
+
+// Extra empty space below the last item so the daily view can scroll a bit past
+// the end of the schedule.
+const BOTTOM_SCROLL_SPACE = 75;
+
+// Opacity of the connector end that belongs to a completed task.
+const DONE_LINE_OPACITY = 0.3;
+
+// Linear blend between two hex colors at position t (0 = a, 1 = b). Used to pick
+// the exact color at the gradient's transition stops so the color ramp stays
+// perfectly linear while we fade the opacity across the middle.
+function lerpHex(a: string, b: string, t: number) {
+  const parse = (h: string) => {
+    const c = h.replace("#", "");
+    return [
+      parseInt(c.slice(0, 2), 16),
+      parseInt(c.slice(2, 4), 16),
+      parseInt(c.slice(4, 6), 16),
+    ];
+  };
+  const [r1, g1, b1] = parse(a);
+  const [r2, g2, b2] = parse(b);
+  const mix = (x: number, y: number) => Math.round(x + (y - x) * t);
+  const toHex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${toHex(mix(r1, r2))}${toHex(mix(g1, g2))}${toHex(mix(b1, b2))}`;
+}
 
 export type EditItem =
   | { type: "task"; data: Task }
@@ -119,7 +145,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
           </p>
         </div>
       ) : (
-        <div className="relative" style={{ height: containerHeight }}>
+        <div className="relative" style={{ height: containerHeight + BOTTOM_SCROLL_SPACE }}>
           {/* Gradient connector lines between items */}
           {items.slice(0, -1).map((item, i) => {
             const next = items[i + 1];
@@ -135,12 +161,25 @@ export default function Timeline({ viewMode }: TimelineProps) {
               getPillHeight(next.durationMinutes) / 2;
             const gradientId = `grad-${item.id}-${next.id}`;
 
+            // Fade the connector end that touches a completed task, ramping the
+            // opacity gradually across the middle (stops at 25%/75% keep the
+            // color ramp exact while softening the transition).
+            const fadeTop = item.completed ? DONE_LINE_OPACITY : 1;
+            const fadeBottom = next.completed ? DONE_LINE_OPACITY : 1;
+            const color25 = lerpHex(item.color, next.color, 0.25);
+            const color75 = lerpHex(item.color, next.color, 0.75);
+
             if (gap) {
-              const hours = gap.realMinutes / 60;
+              const gapH = Math.floor(gap.realMinutes / 60);
+              const gapM = Math.round(gap.realMinutes % 60);
+              const hLabel = `${gapH} hour${gapH === 1 ? "" : "s"}`;
+              const mLabel = `${gapM} minute${gapM === 1 ? "" : "s"}`;
               const label =
-                hours % 1 === 0
-                  ? `${hours} hour break`
-                  : `${hours.toFixed(1)} hour break`;
+                gapM === 0
+                  ? `${hLabel} break`
+                  : gapH === 0
+                    ? `${mLabel} break`
+                    : `${hLabel} and ${mLabel} break`;
 
               const prevBottomEdge =
                 layout.topYById[item.id] + getPillHeight(item.durationMinutes);
@@ -169,8 +208,10 @@ export default function Timeline({ viewMode }: TimelineProps) {
                         x1="0" y1="0" x2="0" y2={bottomY - topY}
                         gradientUnits="userSpaceOnUse"
                       >
-                        <stop offset="0%" stopColor={item.color} />
-                        <stop offset="100%" stopColor={next.color} />
+                        <stop offset="0%" stopColor={item.color} stopOpacity={fadeTop} />
+                        <stop offset="25%" stopColor={color25} stopOpacity={fadeTop} />
+                        <stop offset="75%" stopColor={color75} stopOpacity={fadeBottom} />
+                        <stop offset="100%" stopColor={next.color} stopOpacity={fadeBottom} />
                       </linearGradient>
                     </defs>
                     <line
@@ -211,8 +252,10 @@ export default function Timeline({ viewMode }: TimelineProps) {
               >
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={item.color} />
-                    <stop offset="100%" stopColor={next.color} />
+                    <stop offset="0%" stopColor={item.color} stopOpacity={fadeTop} />
+                    <stop offset="25%" stopColor={color25} stopOpacity={fadeTop} />
+                    <stop offset="75%" stopColor={color75} stopOpacity={fadeBottom} />
+                    <stop offset="100%" stopColor={next.color} stopOpacity={fadeBottom} />
                   </linearGradient>
                 </defs>
                 <rect
