@@ -20,6 +20,7 @@ import {
   type Unit,
 } from "../../lib/nutritions";
 import { spring, tap } from "../../lib/motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 import type { GroceryItem } from "../../types/grocery";
 
 interface AddGroceryItemSheetProps {
@@ -38,6 +39,7 @@ export default function AddGroceryItemSheet({
   const deleteGroceryItem = useGroceryStore((s) => s.deleteGroceryItem);
 
   const isEditing = !!editItem;
+  useScrollLock(isOpen);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<FoodCategoryKey>("protein");

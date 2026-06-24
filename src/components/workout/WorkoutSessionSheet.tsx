@@ -11,6 +11,7 @@ import {
 import type { WorkoutExercise, WorkoutSession, WorkoutType } from '../../types/workout'
 import type { WorkoutFieldKey } from '../../lib/workout'
 import { spring, tap } from '../../lib/motion'
+import { useScrollLock } from '../../hooks/useScrollLock'
 
 const COLOR_OPTIONS = [
   '#fb7185', '#34d399', '#60a5fa', '#22d3ee', '#a78bfa',
@@ -41,6 +42,7 @@ export default function WorkoutSessionSheet({
   const deleteSession = useWorkoutStore((s) => s.deleteSession)
 
   const isEditing = !!editSession
+  useScrollLock(isOpen)
 
   const [name, setName] = useState('')
   const [type, setType] = useState<WorkoutType>('gym')

@@ -15,6 +15,7 @@ import {
 import { addNutrition, emptyNutrition } from "../../lib/nutritions";
 import { todayISODate } from "../../lib/date";
 import { spring, tap } from "../../lib/motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 import type { Meal, MealComponent, MealType } from "../../types/meal";
 
 const MEAL_TYPES: { key: MealType; label: string }[] = [
@@ -42,6 +43,7 @@ export default function AddMealSheet({
   const deleteMeal = useMealStore((s) => s.deleteMeal);
 
   const isEditing = !!editMeal;
+  useScrollLock(isOpen);
   const items = indexItems(groceryItems);
 
   const [name, setName] = useState("");

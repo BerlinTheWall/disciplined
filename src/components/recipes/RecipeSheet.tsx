@@ -8,6 +8,7 @@ import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from '../../lib/foodCategories'
 import { indexItems, lineNutrition, formatAmount } from '../../lib/grocery'
 import { addNutrition, emptyNutrition } from '../../lib/nutritions'
 import { spring, tap } from '../../lib/motion'
+import { useScrollLock } from '../../hooks/useScrollLock'
 import type { Recipe, RecipeIngredient } from '../../types/recipe'
 
 const COLOR_OPTIONS = [
@@ -36,6 +37,7 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
   const deleteRecipe = useRecipeStore((s) => s.deleteRecipe)
 
   const isEditing = !!editRecipe
+  useScrollLock(isOpen)
   const items = indexItems(groceryItems)
 
   const [name, setName] = useState('')

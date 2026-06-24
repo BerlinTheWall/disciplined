@@ -212,6 +212,7 @@ function App() {
             animate="center"
             exit="exit"
             transition={spring.gentle}
+            data-scroll-lock
             className="absolute inset-0 overflow-y-auto px-4 pb-28"
           >
             {renderPage()}

@@ -1,10 +1,12 @@
 /* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Clock, Plus } from "lucide-react";
 import { useTaskStore } from "../../store/taskStore";
 import { ICONS, guessIcon } from "../../lib/icons";
 import { spring, tap } from "../../lib/motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -77,6 +79,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const addTask = useTaskStore((s) => s.addTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const selectedDate = useTaskStore((s) => s.selectedDate);
+  useScrollLock(isOpen);
 
   const [title, setTitle] = useState("");
   const [time, setTime] = useState(minutesToTimeString(DEFAULT_START));

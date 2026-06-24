@@ -5,6 +5,7 @@ import { useShoppingListStore } from "../../store/shoppingListStore";
 import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from "../../lib/foodCategories";
 import { formatUnit } from "../../lib/grocery";
 import { spring, tap } from "../../lib/motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 
 function money(n: number) {
   return `$${n.toFixed(2)}`;
@@ -27,6 +28,7 @@ export default function CatalogPickerSheet({
   const lists = useShoppingListStore((s) => s.lists);
   const addLine = useShoppingListStore((s) => s.addLine);
   const removeLine = useShoppingListStore((s) => s.removeLine);
+  useScrollLock(isOpen);
 
   const list = lists.find((l) => l.id === listId) ?? null;
   const inList = new Set(list?.lines.map((l) => l.itemId));

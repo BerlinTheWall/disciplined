@@ -2,6 +2,7 @@ import { Settings, Palette, LogOut, X } from 'lucide-react'
 import logo from '../assets/logo.svg'
 import { motion, AnimatePresence } from 'framer-motion'
 import { tap } from '../lib/motion'
+import { useScrollLock } from '../hooks/useScrollLock'
 import { useThemeStore } from '../store/themeStore'
 import type { Page } from './BottomNav'
 import { ALL_TABS } from '../lib/pages'
@@ -15,6 +16,7 @@ interface SideMenuProps {
 
 export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore()
+  useScrollLock(isOpen)
 
   return (
     <AnimatePresence>

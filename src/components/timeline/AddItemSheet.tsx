@@ -17,6 +17,7 @@ import { WORKOUT_TYPE_META, exerciseSummary } from "../../lib/workout";
 import { ICONS, guessIcon } from "../../lib/icons";
 import type { EditItem } from "./Timeline";
 import { spring, tap } from "../../lib/motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -223,6 +224,7 @@ export default function AddItemSheet({
   const catalog = indexItems(groceryItems);
 
   const isEditing = !!editItem;
+  useScrollLock(isOpen);
 
   const [step, setStep] = useState(1);
   const [dir, setDir] = useState(1);

@@ -3,6 +3,7 @@ import { X, Pencil } from 'lucide-react'
 import { WORKOUT_TYPE_META, exerciseMetrics, sessionSummary } from '../../lib/workout'
 import type { WorkoutSession } from '../../types/workout'
 import { spring, tap } from '../../lib/motion'
+import { useScrollLock } from '../../hooks/useScrollLock'
 
 function isLightColor(hex: string) {
   const c = hex.replace('#', '')
@@ -24,6 +25,7 @@ export default function WorkoutSessionDetailSheet({
   onEdit,
 }: WorkoutSessionDetailSheetProps) {
   const isOpen = !!session
+  useScrollLock(isOpen)
   const meta = session ? WORKOUT_TYPE_META[session.type] : null
   const HeaderIcon = meta?.icon
   const color = session?.color ?? '#000'

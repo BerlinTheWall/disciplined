@@ -5,6 +5,7 @@ import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from '../../lib/foodCategories'
 import { indexItems } from '../../lib/grocery'
 import { perServingNutrition, recipeAvailability, requiredAmount } from '../../lib/recipe'
 import { spring, tap } from '../../lib/motion'
+import { useScrollLock } from '../../hooks/useScrollLock'
 import type { Recipe } from '../../types/recipe'
 
 function isLightColor(hex: string) {
@@ -25,6 +26,8 @@ export default function RecipeDetailSheet({ recipe, onClose, onEdit }: RecipeDet
   const groceryItems = useGroceryStore((s) => s.groceryItems)
   const adjustStock = useGroceryStore((s) => s.adjustStock)
   const items = indexItems(groceryItems)
+
+  useScrollLock(!!recipe)
 
   const availability = recipe ? recipeAvailability(recipe, items) : null
 

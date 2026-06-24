@@ -7,6 +7,7 @@ import { useExpenseStore } from "../../store/expenseStore";
 import { CATEGORIES, CATEGORY_KEYS, type CategoryKey } from "../../lib/categories";
 import { todayISODate } from "../../lib/date";
 import { spring, tap } from "../../lib/motion";
+import { useScrollLock } from "../../hooks/useScrollLock";
 import type { Expense } from "../../types/expense";
 
 interface AddExpenseSheetProps {
@@ -25,6 +26,7 @@ export default function AddExpenseSheet({
   const deleteExpense = useExpenseStore((s) => s.deleteExpense);
 
   const isEditing = !!editExpense;
+  useScrollLock(isOpen);
 
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
