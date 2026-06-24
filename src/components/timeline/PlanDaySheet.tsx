@@ -7,6 +7,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { ICONS, guessIcon } from "../../lib/icons";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -86,6 +87,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  useAutoFocus(inputRef, isOpen);
 
   // Tasks already on this day, sorted — the live plan.
   const dayTasks = tasks
@@ -106,7 +108,6 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     setDuration(30);
     setColorIndex(0);
     setTime(minutesToTimeString(nextStartMinutes()));
-    requestAnimationFrame(() => inputRef.current?.focus());
   }, [isOpen, selectedDate]);
 
   const startMin = timeStringToMinutes(time);

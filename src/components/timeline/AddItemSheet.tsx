@@ -18,6 +18,7 @@ import { ICONS, guessIcon } from "../../lib/icons";
 import type { EditItem } from "./Timeline";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -225,6 +226,8 @@ export default function AddItemSheet({
 
   const isEditing = !!editItem;
   useScrollLock(isOpen);
+  const titleRef = useRef<HTMLInputElement>(null);
+  useAutoFocus(titleRef, isOpen);
 
   const [step, setStep] = useState(1);
   const [dir, setDir] = useState(1);
@@ -554,11 +557,11 @@ export default function AddItemSheet({
                     </p>
                   )}
                   <input
+                    ref={titleRef}
                     type="text"
                     value={title}
                     onChange={(e) => handleTitleChange(e.target.value)}
                     placeholder={mode === "task" ? "Task title" : "Habit title"}
-                    autoFocus
                     className={`w-full bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
                     style={{
                       color: onColor,

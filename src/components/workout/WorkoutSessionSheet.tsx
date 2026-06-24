@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Trash2, Plus } from 'lucide-react'
 import { useWorkoutStore, blankExercise } from '../../store/workoutStore'
@@ -12,6 +12,7 @@ import type { WorkoutExercise, WorkoutSession, WorkoutType } from '../../types/w
 import type { WorkoutFieldKey } from '../../lib/workout'
 import { spring, tap } from '../../lib/motion'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useAutoFocus } from '../../hooks/useAutoFocus'
 
 const COLOR_OPTIONS = [
   '#fb7185', '#34d399', '#60a5fa', '#22d3ee', '#a78bfa',
@@ -43,6 +44,8 @@ export default function WorkoutSessionSheet({
 
   const isEditing = !!editSession
   useScrollLock(isOpen)
+  const nameRef = useRef<HTMLInputElement>(null)
+  useAutoFocus(nameRef, isOpen && !isEditing)
 
   const [name, setName] = useState('')
   const [type, setType] = useState<WorkoutType>('gym')
@@ -163,11 +166,11 @@ export default function WorkoutSessionSheet({
                   <HeaderIcon size={28} style={{ color }} />
                 </div>
                 <input
+                  ref={nameRef}
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Session name"
-                  autoFocus={!isEditing}
                   className={`flex-1 min-w-0 bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? 'placeholder-black/40' : 'placeholder-white/50'}`}
                   style={{
                     color: onColor,

@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Wand2 } from "lucide-react";
 import { useGroceryStore } from "../../store/groceryStore";
@@ -21,6 +21,7 @@ import {
 } from "../../lib/nutritions";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
 import type { GroceryItem } from "../../types/grocery";
 
 interface AddGroceryItemSheetProps {
@@ -40,6 +41,8 @@ export default function AddGroceryItemSheet({
 
   const isEditing = !!editItem;
   useScrollLock(isOpen);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useAutoFocus(nameRef, isOpen);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<FoodCategoryKey>("protein");
@@ -169,11 +172,11 @@ export default function AddGroceryItemSheet({
             {/* Name */}
             <label className="text-sm text-fg-muted mb-1 block">Item</label>
             <input
+              ref={nameRef}
               type="text"
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="e.g. Chicken breast"
-              autoFocus
               className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
             />
 

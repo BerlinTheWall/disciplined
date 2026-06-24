@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useExpenseStore } from "../../store/expenseStore";
@@ -8,6 +8,7 @@ import { CATEGORIES, CATEGORY_KEYS, type CategoryKey } from "../../lib/categorie
 import { todayISODate } from "../../lib/date";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
 import type { Expense } from "../../types/expense";
 
 interface AddExpenseSheetProps {
@@ -27,6 +28,8 @@ export default function AddExpenseSheet({
 
   const isEditing = !!editExpense;
   useScrollLock(isOpen);
+  const amountRef = useRef<HTMLInputElement>(null);
+  useAutoFocus(amountRef, isOpen);
 
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -116,12 +119,12 @@ export default function AddExpenseSheet({
                 $
               </span>
               <input
+                ref={amountRef}
                 type="number"
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                autoFocus
                 className="w-full text-base border border-border-input rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:border-border-focus"
               />
             </div>

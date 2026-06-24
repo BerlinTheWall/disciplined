@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Trash2, Plus, Minus, Check, ChefHat } from 'lucide-react'
 import { useGroceryStore } from '../../store/groceryStore'
@@ -9,6 +9,7 @@ import { indexItems, lineNutrition, formatAmount } from '../../lib/grocery'
 import { addNutrition, emptyNutrition } from '../../lib/nutritions'
 import { spring, tap } from '../../lib/motion'
 import { useScrollLock } from '../../hooks/useScrollLock'
+import { useAutoFocus } from '../../hooks/useAutoFocus'
 import type { Recipe, RecipeIngredient } from '../../types/recipe'
 
 const COLOR_OPTIONS = [
@@ -38,6 +39,8 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
 
   const isEditing = !!editRecipe
   useScrollLock(isOpen)
+  const nameRef = useRef<HTMLInputElement>(null)
+  useAutoFocus(nameRef, isOpen && !isEditing)
   const items = indexItems(groceryItems)
 
   const [name, setName] = useState('')
@@ -163,11 +166,11 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
                   <ChefHat size={28} style={{ color }} />
                 </div>
                 <input
+                  ref={nameRef}
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Recipe name"
-                  autoFocus={!isEditing}
                   className={`flex-1 min-w-0 bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? 'placeholder-black/40' : 'placeholder-white/50'}`}
                   style={{
                     color: onColor,

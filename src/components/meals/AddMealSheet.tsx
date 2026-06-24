@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Minus, Plus, X, ChefHat } from "lucide-react";
 import { useGroceryStore } from "../../store/groceryStore";
@@ -16,6 +16,7 @@ import { addNutrition, emptyNutrition } from "../../lib/nutritions";
 import { todayISODate } from "../../lib/date";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
+import { useAutoFocus } from "../../hooks/useAutoFocus";
 import type { Meal, MealComponent, MealType } from "../../types/meal";
 
 const MEAL_TYPES: { key: MealType; label: string }[] = [
@@ -44,6 +45,8 @@ export default function AddMealSheet({
 
   const isEditing = !!editMeal;
   useScrollLock(isOpen);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useAutoFocus(nameRef, isOpen);
   const items = indexItems(groceryItems);
 
   const [name, setName] = useState("");
@@ -159,11 +162,11 @@ export default function AddMealSheet({
             {/* Name */}
             <label className="text-sm text-fg-muted mb-1 block">Name</label>
             <input
+              ref={nameRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Chicken and rice"
-              autoFocus
               className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
             />
 
