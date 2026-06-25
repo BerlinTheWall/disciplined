@@ -8,6 +8,7 @@ import { ICONS, guessIcon } from "../../lib/icons";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -87,6 +88,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const addTask = useTaskStore((s) => s.addTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const copyTasksToDate = useTaskStore((s) => s.copyTasksToDate);
+  const confirm = useConfirm();
   const selectedDate = useTaskStore((s) => s.selectedDate);
   useScrollLock(isOpen);
 
@@ -319,7 +321,15 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                             </p>
                           </div>
                           <motion.button
-                            onClick={() => deleteTask(t.id)}
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: "Delete task?",
+                                message: `"${t.title}" will be permanently removed.`,
+                                confirmLabel: "Delete",
+                                destructive: true,
+                              });
+                              if (ok) deleteTask(t.id);
+                            }}
                             whileTap={tap}
                             className="w-7 h-7 rounded-full text-fg-faint hover:text-fg flex items-center justify-center shrink-0"
                             aria-label="Remove task"

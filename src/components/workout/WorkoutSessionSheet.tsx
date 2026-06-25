@@ -13,6 +13,7 @@ import type { WorkoutFieldKey } from '../../lib/workout'
 import { spring, tap } from '../../lib/motion'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useAutoFocus } from '../../hooks/useAutoFocus'
+import { useConfirm } from '../ConfirmDialog'
 
 const COLOR_OPTIONS = [
   '#fb7185', '#34d399', '#60a5fa', '#22d3ee', '#a78bfa',
@@ -25,6 +26,25 @@ function isLightColor(hex: string) {
   const g = parseInt(c.slice(2, 4), 16)
   const b = parseInt(c.slice(4, 6), 16)
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62
+}
+
+// True if the user has entered anything into this exercise — a name, any metric,
+// or notes. Untouched blank rows return false so they can be dropped on save,
+// while a metrics-only exercise (no name) is still considered real and kept.
+function exerciseHasContent(e: WorkoutExercise) {
+  if (e.name.trim() !== '') return true
+  const { sets, reps, weight, restSec, distance, durationMin, pace, incline, notes } = e
+  return (
+    sets != null ||
+    reps != null ||
+    weight != null ||
+    restSec != null ||
+    distance != null ||
+    durationMin != null ||
+    incline != null ||
+    (pace?.trim() ?? '') !== '' ||
+    (notes?.trim() ?? '') !== ''
+  )
 }
 
 interface WorkoutSessionSheetProps {
@@ -41,6 +61,7 @@ export default function WorkoutSessionSheet({
   const addSession = useWorkoutStore((s) => s.addSession)
   const updateSession = useWorkoutStore((s) => s.updateSession)
   const deleteSession = useWorkoutStore((s) => s.deleteSession)
+  const confirm = useConfirm()
 
   const isEditing = !!editSession
   useScrollLock(isOpen)
@@ -88,12 +109,20 @@ export default function WorkoutSessionSheet({
     setExercises((prev) => prev.filter((e) => e.id !== id))
   }
 
-  function handleSave() {
+  async function handleSave() {
     const cleanName = name.trim()
     if (!cleanName) return
-    // Drop exercises with no name; keep their metric fields as-is.
-    const cleanExercises = exercises.filter((e) => e.name.trim() !== '')
+    // Drop only rows the user never touched (e.g. the default blank exercise).
+    // An exercise with any metric filled in is kept even if it has no name, so
+    // entered data is never silently discarded on save.
+    const cleanExercises = exercises.filter(exerciseHasContent)
     if (isEditing) {
+      const ok = await confirm({
+        title: 'Save changes?',
+        message: `Update "${cleanName}" with your edits.`,
+        confirmLabel: 'Save',
+      })
+      if (!ok) return
       updateSession(editSession!.id, { name: cleanName, type, color, exercises: cleanExercises })
     } else {
       addSession({ name: cleanName, type, color, exercises: cleanExercises })
@@ -101,8 +130,16 @@ export default function WorkoutSessionSheet({
     onClose()
   }
 
-  function handleDelete() {
-    if (editSession) deleteSession(editSession.id)
+  async function handleDelete() {
+    if (!editSession) return
+    const ok = await confirm({
+      title: 'Delete session?',
+      message: `"${editSession.name}" will be permanently removed.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
+    deleteSession(editSession.id)
     onClose()
   }
 

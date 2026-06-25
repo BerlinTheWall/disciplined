@@ -10,6 +10,7 @@ import { addNutrition, emptyNutrition } from '../../lib/nutritions'
 import { spring, tap } from '../../lib/motion'
 import { useScrollLock } from '../../hooks/useScrollLock'
 import { useAutoFocus } from '../../hooks/useAutoFocus'
+import { useConfirm } from '../ConfirmDialog'
 import type { Recipe, RecipeIngredient } from '../../types/recipe'
 
 const COLOR_OPTIONS = [
@@ -36,6 +37,7 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
   const addRecipe = useRecipeStore((s) => s.addRecipe)
   const updateRecipe = useRecipeStore((s) => s.updateRecipe)
   const deleteRecipe = useRecipeStore((s) => s.deleteRecipe)
+  const confirm = useConfirm()
 
   const isEditing = !!editRecipe
   useScrollLock(isOpen)
@@ -105,7 +107,7 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
 
   const canSave = name.trim().length > 0
 
-  function handleSave() {
+  async function handleSave() {
     if (!canSave) return
     const payload = {
       name: name.trim(),
@@ -115,13 +117,30 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
       ingredients,
       steps: steps.map((s) => s.trim()).filter(Boolean),
     }
-    if (isEditing) updateRecipe(editRecipe!.id, payload)
-    else addRecipe(payload)
+    if (isEditing) {
+      const ok = await confirm({
+        title: 'Save changes?',
+        message: `Update "${payload.name}" with your edits.`,
+        confirmLabel: 'Save',
+      })
+      if (!ok) return
+      updateRecipe(editRecipe!.id, payload)
+    } else {
+      addRecipe(payload)
+    }
     onClose()
   }
 
-  function handleDelete() {
-    if (editRecipe) deleteRecipe(editRecipe.id)
+  async function handleDelete() {
+    if (!editRecipe) return
+    const ok = await confirm({
+      title: 'Delete recipe?',
+      message: `"${editRecipe.name}" will be permanently removed.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
+    deleteRecipe(editRecipe.id)
     onClose()
   }
 

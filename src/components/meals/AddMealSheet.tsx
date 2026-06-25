@@ -17,6 +17,7 @@ import { todayISODate } from "../../lib/date";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useConfirm } from "../ConfirmDialog";
 import type { Meal, MealComponent, MealType } from "../../types/meal";
 
 const MEAL_TYPES: { key: MealType; label: string }[] = [
@@ -42,6 +43,7 @@ export default function AddMealSheet({
   const addMeal = useMealStore((s) => s.addMeal);
   const updateMeal = useMealStore((s) => s.updateMeal);
   const deleteMeal = useMealStore((s) => s.deleteMeal);
+  const confirm = useConfirm();
 
   const isEditing = !!editMeal;
   useScrollLock(isOpen);
@@ -108,7 +110,7 @@ export default function AddMealSheet({
 
   const canSave = name.trim().length > 0 && components.length > 0;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!canSave) return;
     const payload = {
       name: name.trim(),
@@ -117,13 +119,29 @@ export default function AddMealSheet({
       components,
       recipeId,
     };
-    if (isEditing) updateMeal(editMeal!.id, payload);
-    else addMeal(payload);
+    if (isEditing) {
+      const ok = await confirm({
+        title: "Save changes?",
+        message: `Update "${payload.name}" with your edits.`,
+        confirmLabel: "Save",
+      });
+      if (!ok) return;
+      updateMeal(editMeal!.id, payload);
+    } else {
+      addMeal(payload);
+    }
     onClose();
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editMeal) return;
+    const ok = await confirm({
+      title: "Delete meal?",
+      message: `"${editMeal.name}" will be permanently removed.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     deleteMeal(editMeal.id);
     onClose();
   }

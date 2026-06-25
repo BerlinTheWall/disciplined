@@ -9,6 +9,7 @@ import { todayISODate } from "../../lib/date";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useConfirm } from "../ConfirmDialog";
 import type { Expense } from "../../types/expense";
 
 interface AddExpenseSheetProps {
@@ -25,6 +26,7 @@ export default function AddExpenseSheet({
   const addExpense = useExpenseStore((s) => s.addExpense);
   const updateExpense = useExpenseStore((s) => s.updateExpense);
   const deleteExpense = useExpenseStore((s) => s.deleteExpense);
+  const confirm = useConfirm();
 
   const isEditing = !!editExpense;
   useScrollLock(isOpen);
@@ -54,7 +56,7 @@ export default function AddExpenseSheet({
     setDate(todayISODate());
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const value = parseFloat(amount);
     if (!isFinite(value) || value <= 0) return;
 
@@ -66,6 +68,12 @@ export default function AddExpenseSheet({
     };
 
     if (isEditing) {
+      const ok = await confirm({
+        title: "Save changes?",
+        message: "Update this expense with your edits.",
+        confirmLabel: "Save",
+      });
+      if (!ok) return;
       updateExpense(editExpense!.id, payload);
     } else {
       addExpense(payload);
@@ -73,8 +81,15 @@ export default function AddExpenseSheet({
     onClose();
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editExpense) return;
+    const ok = await confirm({
+      title: "Delete expense?",
+      message: `"${editExpense.note}" will be permanently removed.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     deleteExpense(editExpense.id);
     onClose();
   }

@@ -22,6 +22,7 @@ import {
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useConfirm } from "../ConfirmDialog";
 import type { GroceryItem } from "../../types/grocery";
 
 interface AddGroceryItemSheetProps {
@@ -38,6 +39,7 @@ export default function AddGroceryItemSheet({
   const addGroceryItem = useGroceryStore((s) => s.addGroceryItem);
   const updateGroceryItem = useGroceryStore((s) => s.updateGroceryItem);
   const deleteGroceryItem = useGroceryStore((s) => s.deleteGroceryItem);
+  const confirm = useConfirm();
 
   const isEditing = !!editItem;
   useScrollLock(isOpen);
@@ -108,7 +110,7 @@ export default function AddGroceryItemSheet({
     setAuto(true);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!isFinite(qtyNum) || qtyNum <= 0) return;
     const priceNum = parseFloat(price);
 
@@ -125,13 +127,29 @@ export default function AddGroceryItemSheet({
       autoNutrition: auto,
     };
 
-    if (isEditing) updateGroceryItem(editItem!.id, payload);
-    else addGroceryItem(payload);
+    if (isEditing) {
+      const ok = await confirm({
+        title: "Save changes?",
+        message: `Update "${payload.name}" with your edits.`,
+        confirmLabel: "Save",
+      });
+      if (!ok) return;
+      updateGroceryItem(editItem!.id, payload);
+    } else {
+      addGroceryItem(payload);
+    }
     onClose();
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editItem) return;
+    const ok = await confirm({
+      title: "Delete item?",
+      message: `"${editItem.name}" will be permanently removed.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     deleteGroceryItem(editItem.id);
     onClose();
   }

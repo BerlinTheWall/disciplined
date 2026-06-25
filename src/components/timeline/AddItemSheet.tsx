@@ -19,6 +19,7 @@ import type { EditItem } from "./Timeline";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -223,6 +224,7 @@ export default function AddItemSheet({
   const openRecipe = useRecipeFocusStore((s) => s.openRecipe);
   const groceryItems = useGroceryStore((s) => s.groceryItems);
   const catalog = indexItems(groceryItems);
+  const confirm = useConfirm();
 
   const isEditing = !!editItem;
   useScrollLock(isOpen);
@@ -363,12 +365,20 @@ export default function AddItemSheet({
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!title.trim() || duration < 5) return;
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
 
     if (isEditing) {
+      // Validate before asking, so we don't pop a confirm on invalid input.
+      if (editItem!.type === "habit" && daysOfWeek.length === 0) return;
+      const ok = await confirm({
+        title: "Save changes?",
+        message: `Update "${title.trim()}" with your edits.`,
+        confirmLabel: "Save",
+      });
+      if (!ok) return;
       if (editItem!.type === "task") {
         updateTask(editItem!.data.id, {
           title: title.trim(),
@@ -381,7 +391,6 @@ export default function AddItemSheet({
           recipeId,
         });
       } else {
-        if (daysOfWeek.length === 0) return;
         updateHabit(editItem!.data.id, {
           title: title.trim(),
           startMinutes,
@@ -418,8 +427,16 @@ export default function AddItemSheet({
     onClose();
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editItem) return;
+    const label = editItem.type === "task" ? "task" : "habit";
+    const ok = await confirm({
+      title: `Delete ${label}?`,
+      message: `"${editItem.data.title}" will be permanently removed.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     if (editItem.type === "task") deleteTask(editItem.data.id);
     else deleteHabit(editItem.data.id);
     onClose();
