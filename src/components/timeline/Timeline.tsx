@@ -18,6 +18,7 @@ import ScheduleRow, {
 } from "./ScheduleRow";
 import WeeklyTimeline from "./WeeklyTimeline";
 import AddItemSheet from "./AddItemSheet";
+import DoneTray from "./DoneTray";
 import { Plus } from "lucide-react";
 import type { Task } from "../../types/task";
 import type { Habit } from "../../types/habits";
@@ -47,7 +48,7 @@ const DONE_LINE_OPACITY = 0.3;
 
 // Extra empty space below the last item so the daily view can scroll a bit past
 // the end of the schedule.
-const BOTTOM_SCROLL_SPACE = 75;
+const BOTTOM_SCROLL_SPACE = 90;
 
 // Where the focused "now" item lands in the viewport on open: a fraction of the
 // way down from the top (slightly above center so upcoming items stay visible).
@@ -220,7 +221,12 @@ export default function Timeline({ viewMode }: TimelineProps) {
     (a, b) => a.startMinutes - b.startMinutes,
   );
 
-  const layout = computeCompressedLayout(items, (item) =>
+  // Completed items leave the timeline and collapse into the Done tray below, so
+  // the schedule only lays out (and draws connectors between) what's still to do.
+  const activeItems = items.filter((i) => !i.completed);
+  const doneItems = items.filter((i) => i.completed);
+
+  const layout = computeCompressedLayout(activeItems, (item) =>
     Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
   );
 
@@ -240,17 +246,17 @@ export default function Timeline({ viewMode }: TimelineProps) {
   }, []);
   const currentItemId =
     selectedDate === localDateString(now)
-      ? findActiveItemId(items, now.getHours() * 60 + now.getMinutes())
+      ? findActiveItemId(activeItems, now.getHours() * 60 + now.getMinutes())
       : null;
 
-  const earliestItem = items[0];
+  const earliestItem = activeItems[0];
   const startOffset = earliestItem
     ? earliestItem.startMinutes
     : DEFAULT_START_MINUTES;
 
-  const containerHeight = items.length
+  const containerHeight = activeItems.length
     ? Math.max(
-        ...items.map(
+        ...activeItems.map(
           (item) =>
             layout.topYById[item.id] +
             Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
@@ -267,7 +273,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
     const now = new Date();
     if (selectedDate !== localDateString(now)) return;
 
-    const focusId = findCurrentItemId(items, now.getHours() * 60 + now.getMinutes());
+    const focusId = findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes());
     const root = containerRef.current;
     if (!focusId || !root) return;
 
@@ -321,10 +327,13 @@ export default function Timeline({ viewMode }: TimelineProps) {
           </p>
         </div>
       ) : (
-        <div ref={containerRef} className="relative" style={{ height: containerHeight + BOTTOM_SCROLL_SPACE }}>
-          {/* Gradient connector lines between items */}
-          {items.slice(0, -1).map((item, i) => {
-            const next = items[i + 1];
+        <>
+          {/* Always mounted (even when empty) so the last task's exit animation
+              still plays — unmounting AnimatePresence would skip it. */}
+          <div ref={containerRef} className="relative" style={{ height: containerHeight }}>
+              {/* Gradient connector lines between items */}
+              {activeItems.slice(0, -1).map((item, i) => {
+                const next = activeItems[i + 1];
             const gap = layout.gaps.find(
               (g) => g.afterId === item.id && g.beforeId === next.id,
             );
@@ -553,21 +562,34 @@ export default function Timeline({ viewMode }: TimelineProps) {
             );
           })}
 
-          <AnimatePresence>
-            {items.map((item) => (
-              <ScheduleRow
-                key={item.id}
-                {...item}
-                startOffset={startOffset}
-                virtualTop={layout.topYById[item.id]}
-                overlapping={overlapIds.has(item.id)}
-                isCurrent={item.id === currentItemId}
-                onToggle={handleToggle}
-                onEdit={handleEdit}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+              <AnimatePresence>
+                {activeItems.map((item) => (
+                  <ScheduleRow
+                    key={item.id}
+                    {...item}
+                    startOffset={startOffset}
+                    virtualTop={layout.topYById[item.id]}
+                    overlapping={overlapIds.has(item.id)}
+                    isCurrent={item.id === currentItemId}
+                    onToggle={handleToggle}
+                    onEdit={handleEdit}
+                  />
+                ))}
+              </AnimatePresence>
+          </div>
+
+          {activeItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <p className="text-base font-medium text-fg">All done for today 🎉</p>
+              <p className="text-sm text-fg-faint">Every task is complete.</p>
+            </div>
+          )}
+
+          <DoneTray items={doneItems} onToggle={handleToggle} onEdit={handleEdit} />
+
+          {/* Slack below everything so the day can scroll a bit past its end. */}
+          <div style={{ height: BOTTOM_SCROLL_SPACE }} />
+        </>
       )}
 
       <AddItemSheet

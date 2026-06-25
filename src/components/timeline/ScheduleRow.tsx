@@ -85,21 +85,37 @@ export default function ScheduleRow({
 
   const endMinutes = startMinutes + liveOffsetMinutes + liveDuration;
 
+  const targetTop = isActive
+    ? minutesToPx(startMinutes + liveOffsetMinutes - startOffset)
+    : virtualTop ?? minutesToPx(startMinutes + liveOffsetMinutes - startOffset);
+
   return (
     <motion.div
       data-item-id={id}
       initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: completed ? 0.5 : isActive ? 0.9 : 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.92 }}
-      transition={spring.pop}
-      className="absolute left-0 right-0 flex items-start gap-3 pr-2"
-       style={{
-        top: isActive
-          ? minutesToPx(startMinutes + liveOffsetMinutes - startOffset)
-          : virtualTop ?? minutesToPx(startMinutes + liveOffsetMinutes - startOffset),
+      // top/height are animated so that when an item is checked off and leaves,
+      // the rows below glide up to fill the gap instead of snapping.
+      animate={{
+        opacity: completed ? 0.5 : isActive ? 0.9 : 1,
+        scale: 1,
+        top: targetTop,
         height: rowHeight,
-        zIndex: isActive ? 10 : 1,
       }}
+      // On check, the row leaves the timeline by smoothly shrinking and fading
+      // out (no overshoot) on its way to the Done tray.
+      exit={{
+        opacity: 0,
+        scale: 0.8,
+        transition: { duration: 0.25, ease: "easeOut" },
+      }}
+      transition={{
+        default: spring.pop,
+        // Follow the finger instantly while dragging; glide smoothly otherwise.
+        top: isActive ? { duration: 0 } : { duration: 0.3, ease: "easeOut" },
+        height: isActive ? { duration: 0 } : { duration: 0.3, ease: "easeOut" },
+      }}
+      className="absolute left-0 right-0 flex items-start gap-3 pr-2"
+      style={{ zIndex: isActive ? 10 : 1 }}
     >
       {/* "Happening now" cue: a fill in the task's color behind the whole row
           that gently breathes (pulsing opacity). Sits behind the content but
