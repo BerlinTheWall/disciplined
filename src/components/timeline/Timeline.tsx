@@ -173,6 +173,14 @@ export default function Timeline({ viewMode }: TimelineProps) {
   const layout = computeCompressedLayout(items, (item) =>
     Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
   );
+
+  // Items that take part in any overlap — used to tint their time labels.
+  const overlapIds = new Set<string>();
+  for (const o of layout.overlaps) {
+    overlapIds.add(o.afterId);
+    overlapIds.add(o.beforeId);
+  }
+
   const earliestItem = items[0];
   const startOffset = earliestItem
     ? earliestItem.startMinutes
@@ -229,6 +237,9 @@ export default function Timeline({ viewMode }: TimelineProps) {
             const gap = layout.gaps.find(
               (g) => g.afterId === item.id && g.beforeId === next.id,
             );
+            const overlap = layout.overlaps.find(
+              (o) => o.afterId === item.id && o.beforeId === next.id,
+            );
 
             const topY =
               layout.topYById[item.id] +
@@ -258,6 +269,90 @@ export default function Timeline({ viewMode }: TimelineProps) {
               item.completed,
               next.completed,
             );
+
+            if (overlap) {
+              const overlapH = Math.floor(overlap.overlapMinutes / 60);
+              const overlapM = Math.round(overlap.overlapMinutes % 60);
+              const hLabel = `${overlapH} hour${overlapH === 1 ? "" : "s"}`;
+              const mLabel = `${overlapM} minute${overlapM === 1 ? "" : "s"}`;
+              const overlapLabel =
+                overlapM === 0
+                  ? `overlaps by ${hLabel}`
+                  : overlapH === 0
+                    ? `overlaps by ${mLabel}`
+                    : `overlaps by ${hLabel} and ${mLabel}`;
+
+              const prevBottomEdge =
+                layout.topYById[item.id] + getPillHeight(item.durationMinutes);
+              const nextTopEdge = layout.topYById[next.id];
+              const labelY = (prevBottomEdge + nextTopEdge) / 2;
+              const overlapGradientId = `overlap-grad-${item.id}-${next.id}`;
+
+              return (
+                <div
+                  key={`line-${item.id}`}
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: ICON_CENTER_X - 1,
+                    top: topY,
+                    height: bottomY - topY,
+                  }}
+                >
+                  <svg
+                    width="6"
+                    height={bottomY - topY}
+                    style={{ overflow: "visible" }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id={overlapGradientId}
+                        x1="0" y1="0" x2="0" y2={bottomY - topY}
+                        gradientUnits="userSpaceOnUse"
+                      >
+                        {lineStops.map((s, idx) => (
+                          <stop
+                            key={idx}
+                            offset={s.offset}
+                            stopColor={s.color}
+                            stopOpacity={s.opacity}
+                          />
+                        ))}
+                      </linearGradient>
+                    </defs>
+                    {/* Doubled, offset segment to signal the overlap — same
+                        gradient as a normal connector. */}
+                    <line
+                      x1="-1"
+                      y1="0"
+                      x2="-1"
+                      y2={bottomY - topY}
+                      stroke={`url(#${overlapGradientId})`}
+                      strokeWidth="2"
+                    />
+                    <line
+                      x1="3"
+                      y1="0"
+                      x2="3"
+                      y2={bottomY - topY}
+                      stroke={`url(#${overlapGradientId})`}
+                      strokeWidth="2"
+                    />
+                  </svg>
+                  <span
+                    className="absolute text-[11px] whitespace-nowrap"
+                    style={{
+                      left: 12,
+                      top: labelY - topY,
+                      transform: "translateY(-50%)",
+                      color:
+                           "rgba(245, 158, 11, 0.6)"
+                    }}
+                  >
+                    ({overlapLabel})
+                  </span>
+                </div>
+              );
+            }
 
             if (gap) {
               const gapH = Math.floor(gap.realMinutes / 60);
@@ -374,6 +469,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
                 {...item}
                 startOffset={startOffset}
                 virtualTop={layout.topYById[item.id]}
+                overlapping={overlapIds.has(item.id)}
                 onToggle={handleToggle}
                 onEdit={handleEdit}
               />

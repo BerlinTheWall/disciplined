@@ -34,6 +34,7 @@ interface ScheduleRowProps extends ScheduleRowData {
   onToggle: (id: string) => void;
   onEdit: (id: string) => void;
   virtualTop?: number; // compressed-layout position; falls back to real-time position when omitted
+  overlapping?: boolean; // item shares time with another — tints its time labels
 }
 
 export default function ScheduleRow({
@@ -47,6 +48,7 @@ export default function ScheduleRow({
   streak,
   startOffset = 0,
   virtualTop,
+  overlapping = false,
   onToggle,
   onEdit,
 }: ScheduleRowProps) {
@@ -91,10 +93,18 @@ export default function ScheduleRow({
         className="w-8 flex flex-col justify-between py-1 shrink-0"
         style={{ height: pillHeight }}
       >
-        <span className="leading-none text-sm text-fg-faint text-right whitespace-nowrap tabular-nums">
+        <span
+          className={`leading-none text-sm text-right whitespace-nowrap tabular-nums ${
+            overlapping ? "text-amber-500" : "text-fg-faint"
+          }`}
+        >
           {formatTimeLabel(startMinutes + liveOffsetMinutes)}
         </span>
-        <span className="leading-none text-sm text-fg-faint text-right whitespace-nowrap tabular-nums">
+        <span
+          className={`leading-none text-sm text-right whitespace-nowrap tabular-nums ${
+            overlapping ? "text-amber-500" : "text-fg-faint"
+          }`}
+        >
           {formatTimeLabel(endMinutes)}
         </span>
       </div>

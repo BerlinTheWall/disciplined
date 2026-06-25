@@ -43,7 +43,29 @@ export function formatTimeRange(startMinutes: number, durationMinutes: number) {
 }
 
 export const GAP_COMPRESS_THRESHOLD_MIN = 89 // 1.5 hours
-export const COMPRESSED_GAP_PX = 24
+
+// Gaps no longer scale with their real duration — every gap snaps to one of
+// three fixed heights based on which bucket its minutes fall in.
+export const GAP_SHORT_PX = 0 // gaps under 30 min
+export const GAP_MEDIUM_PX = 0 // gaps from 30 up to 60 min
+export const GAP_LONG_PX = 30 // gaps of 60 min and up
+
+export function gapHeightPx(gapMinutes: number) {
+  if (gapMinutes < 30) return GAP_SHORT_PX
+  if (gapMinutes < 60) return GAP_MEDIUM_PX
+  return GAP_LONG_PX
+}
+
+// Reserved vertical space inserted at a junction where two items overlap in
+// time. Like the gap heights, it's fixed: it gives the overlap marker room and
+// stops the two pills from sitting flush against each other.
+export const OVERLAP_ZONE_PX = 60
+
+// Extra slack allowed past the cluster bottom when stacking *chained* overlaps
+// (a contained item, then another contained item). Those get capped at the
+// cluster bottom, which squeezes them together; this lets them spread out a bit
+// without affecting the first, uncapped overlap gap (governed by OVERLAP_ZONE_PX).
+export const OVERLAP_STACK_SLACK_PX = 20
 
 export interface LayoutItem {
   id: string
@@ -55,54 +77,102 @@ export interface GapInfo {
   afterId: string
   beforeId: string
   realMinutes: number
-  topY: number // px, top of the compressed gap segment
-  heightPx: number // always COMPRESSED_GAP_PX when compressed
+  topY: number // px, top of the gap segment
+  heightPx: number // the bucketed fixed height (see gapHeightPx)
+}
+
+export interface OverlapInfo {
+  afterId: string
+  beforeId: string
+  overlapMinutes: number
+  topY: number // px, top of the reserved overlap zone
+  heightPx: number // always OVERLAP_ZONE_PX
+  // 'contained' = the later item fits entirely inside what's already scheduled
+  // (often intentional); 'partial' = it spills past, the clearer mistake signal.
+  kind: 'partial' | 'contained'
 }
 
 export interface ComputedLayout {
   topYById: Record<string, number> // virtual top position per item, in px
   gaps: GapInfo[] // only the gaps that were compressed
+  overlaps: OverlapInfo[] // junctions where an item overlaps what came before
 }
 
 // Walks items in start-time order and builds virtual top positions.
-// Any gap between one item's bottom and the next item's top that exceeds
-// GAP_COMPRESS_THRESHOLD_MIN is rendered as a fixed COMPRESSED_GAP_PX gap
-// instead of its real (proportional) pixel height.
+// Gaps between items don't scale with their duration: each gap snaps to one of
+// three fixed heights (see gapHeightPx). Gaps longer than
+// GAP_COMPRESS_THRESHOLD_MIN are additionally annotated with a break label.
 export function computeCompressedLayout(
   items: LayoutItem[],
   getBottomPadding: (item: LayoutItem) => number, // extra px below pill (e.g. row height vs pill height)
 ): ComputedLayout {
   const topYById: Record<string, number> = {}
   const gaps: GapInfo[] = []
+  const overlaps: OverlapInfo[] = []
 
   let cursorY = 0
   let prev: LayoutItem | null = null
+  // Furthest end time reached so far. We measure each gap/overlap against this
+  // rather than just prev.end so a long task spanning several short ones is
+  // flagged as overlapping at every junction (item i+2 can overlap i, not i+1).
+  let clusterEndMinutes = -Infinity
 
   for (const item of items) {
-    if (prev) {
-      const prevEndMinutes = prev.startMinutes + prev.durationMinutes
-      const realGapMinutes = item.startMinutes - prevEndMinutes
-      const realGapPx = minutesToPx(Math.max(0, realGapMinutes))
-      const prevBottomY = cursorY // cursorY already sits at prev's bottom (set below)
+    const itemBlock = Math.max(minutesToPx(item.durationMinutes), getBottomPadding(item))
+    let topY = cursorY
 
-      if (realGapMinutes > GAP_COMPRESS_THRESHOLD_MIN) {
-        gaps.push({
+    if (prev) {
+      const realGapMinutes = item.startMinutes - clusterEndMinutes
+      const prevBottomY = cursorY // cursorY already sits at prev's bottom
+
+      if (realGapMinutes < 0) {
+        const itemEndMinutes = item.startMinutes + item.durationMinutes
+        // Place the overlapping item just below the previous item's PILL, not
+        // below its full reserved block. A long task reserves vertical space
+        // proportional to its duration, so a short task contained inside it
+        // would otherwise be stacked far below, opening a huge connector. Capped
+        // at prevBottomY so it never lands past its normal stacked position.
+        topY = Math.min(
+          topYById[prev.id] + getPillHeight(prev.durationMinutes) + OVERLAP_ZONE_PX,
+          prevBottomY + OVERLAP_STACK_SLACK_PX - 5,
+        )
+        overlaps.push({
           afterId: prev.id,
           beforeId: item.id,
-          realMinutes: realGapMinutes,
-          topY: prevBottomY,
-          heightPx: COMPRESSED_GAP_PX,
+          overlapMinutes: -realGapMinutes,
+          topY,
+          heightPx: OVERLAP_ZONE_PX,
+          // start-sorted, so item.start >= prev.start always; the only question
+          // is whether it also ends within what's already scheduled.
+          kind: itemEndMinutes <= clusterEndMinutes ? 'contained' : 'partial',
         })
-        cursorY = prevBottomY + COMPRESSED_GAP_PX
+        // Keep the cursor at the furthest bottom so later items clear both.
+        cursorY = Math.max(prevBottomY, topY + itemBlock)
       } else {
-        cursorY = prevBottomY + realGapPx
+        const gapPx = gapHeightPx(realGapMinutes)
+        if (realGapMinutes > GAP_COMPRESS_THRESHOLD_MIN) {
+          gaps.push({
+            afterId: prev.id,
+            beforeId: item.id,
+            realMinutes: realGapMinutes,
+            topY: prevBottomY,
+            heightPx: gapPx,
+          })
+        }
+        topY = prevBottomY + gapPx
+        cursorY = topY + itemBlock
       }
+    } else {
+      cursorY = topY + itemBlock
     }
 
-    topYById[item.id] = cursorY
-    cursorY += Math.max(minutesToPx(item.durationMinutes), getBottomPadding(item))
+    topYById[item.id] = topY
+    clusterEndMinutes = Math.max(
+      clusterEndMinutes,
+      item.startMinutes + item.durationMinutes,
+    )
     prev = item
   }
 
-  return { topYById, gaps }
+  return { topYById, gaps, overlaps }
 }
