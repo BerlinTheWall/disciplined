@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Clock, Plus } from "lucide-react";
+import { X, Clock, Plus, Copy, ChevronLeft, CalendarDays } from "lucide-react";
 import { useTaskStore } from "../../store/taskStore";
 import { ICONS, guessIcon } from "../../lib/icons";
 import { spring, tap } from "../../lib/motion";
@@ -58,6 +58,13 @@ function formatDuration(d: number) {
 function isoToDate(iso: string) {
   return new Date(iso + "T00:00:00");
 }
+function fullDateLabel(iso: string) {
+  return isoToDate(iso).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
 function relativeDayLabel(iso: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -79,6 +86,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const addTask = useTaskStore((s) => s.addTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const copyTasksToDate = useTaskStore((s) => s.copyTasksToDate);
   const selectedDate = useTaskStore((s) => s.selectedDate);
   useScrollLock(isOpen);
 
@@ -86,13 +94,34 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [time, setTime] = useState(minutesToTimeString(DEFAULT_START));
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
+  const [showCopyPicker, setShowCopyPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(inputRef, isOpen);
+  useAutoFocus(inputRef, isOpen && !showCopyPicker);
 
   // Tasks already on this day, sorted — the live plan.
   const dayTasks = tasks
     .filter((t) => t.date === selectedDate)
     .sort((a, b) => a.startMinutes - b.startMinutes);
+
+  // Other days that have tasks, newest first — sources to copy a plan from.
+  const otherDays = Array.from(new Set(tasks.map((t) => t.date)))
+    .filter((d) => d !== selectedDate)
+    .map((d) => {
+      const items = tasks
+        .filter((t) => t.date === d)
+        .sort((a, b) => a.startMinutes - b.startMinutes);
+      return {
+        date: d,
+        count: items.length,
+        preview: items.map((t) => t.title).join(" · "),
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  function handleCopyFrom(fromDate: string) {
+    copyTasksToDate(fromDate, selectedDate);
+    setShowCopyPicker(false);
+  }
 
   // Next free start = end of the latest task on this day (rounded), else default.
   function nextStartMinutes() {
@@ -107,6 +136,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     setTitle("");
     setDuration(30);
     setColorIndex(0);
+    setShowCopyPicker(false);
     setTime(minutesToTimeString(nextStartMinutes()));
   }, [isOpen, selectedDate]);
 
@@ -160,22 +190,94 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 pt-4 pb-3">
-              <div>
-                <h2 className="text-xl font-bold text-fg">Plan your day</h2>
-                <p className="text-sm text-fg-faint capitalize">
-                  {relativeDayLabel(selectedDate)} · {dayTasks.length}{" "}
-                  {dayTasks.length === 1 ? "task" : "tasks"}
-                </p>
+              <div className="flex items-center gap-2 min-w-0">
+                {showCopyPicker && (
+                  <motion.button
+                    onClick={() => setShowCopyPicker(false)}
+                    whileTap={tap}
+                    className="w-9 h-9 -ml-1.5 rounded-full text-fg-muted flex items-center justify-center shrink-0"
+                    aria-label="Back"
+                  >
+                    <ChevronLeft size={22} />
+                  </motion.button>
+                )}
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-fg">
+                    {showCopyPicker ? "Copy from a day" : "Plan your day"}
+                  </h2>
+                  {showCopyPicker ? (
+                    <p className="text-sm text-fg-faint">
+                      {dayTasks.length > 0
+                        ? "Replaces this day's tasks"
+                        : "Pick a day to copy its tasks"}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-fg-faint">
+                      <span className="capitalize">
+                        {relativeDayLabel(selectedDate)}
+                      </span>{" "}
+                      · {dayTasks.length}{" "}
+                      {dayTasks.length === 1 ? "task" : "tasks"}
+                    </p>
+                  )}
+                </div>
               </div>
-              <motion.button
-                onClick={onClose}
-                whileTap={tap}
-                className="w-9 h-9 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-              >
-                <X size={20} />
-              </motion.button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {!showCopyPicker && otherDays.length > 0 && (
+                  <motion.button
+                    onClick={() => setShowCopyPicker(true)}
+                    whileTap={tap}
+                    className="h-9 px-3 rounded-full bg-surface-raised text-fg-muted flex items-center gap-1.5 text-sm font-medium"
+                  >
+                    <Copy size={15} /> Copy day
+                  </motion.button>
+                )}
+                <motion.button
+                  onClick={onClose}
+                  whileTap={tap}
+                  className="w-9 h-9 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+                >
+                  <X size={20} />
+                </motion.button>
+              </div>
             </div>
 
+            {showCopyPicker ? (
+              /* Day picker */
+              <div className="flex-1 overflow-y-auto px-4 py-1">
+                <div className="flex flex-col gap-2 py-1">
+                  {otherDays.map((day) => (
+                    <motion.button
+                      key={day.date}
+                      onClick={() => handleCopyFrom(day.date)}
+                      whileTap={tap}
+                      className="w-full flex items-center gap-3 bg-surface-raised rounded-2xl px-3 py-3 text-left"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-surface flex items-center justify-center shrink-0">
+                        <CalendarDays size={17} className="text-fg-muted" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-fg truncate">
+                          <span className="capitalize">
+                            {relativeDayLabel(day.date)}
+                          </span>
+                          <span className="text-fg-faint font-normal">
+                            {" "}
+                            · {fullDateLabel(day.date)}
+                          </span>
+                        </p>
+                        <p className="text-xs text-fg-faint truncate">
+                          {day.count} {day.count === 1 ? "task" : "tasks"}
+                          {day.preview ? ` · ${day.preview}` : ""}
+                        </p>
+                      </div>
+                      <Copy size={16} className="text-fg-faint shrink-0" />
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Running plan list */}
             <div className="flex-1 overflow-y-auto px-4 min-h-[80px]">
               {dayTasks.length === 0 ? (
@@ -296,6 +398,8 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                 })}
               </div>
             </div>
+              </>
+            )}
           </motion.div>
         </>
       )}

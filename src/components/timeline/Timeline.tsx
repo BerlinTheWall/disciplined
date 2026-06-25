@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
-import { useState } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
 // import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { useTaskStore } from "../../store/taskStore";
@@ -48,6 +48,56 @@ const DONE_LINE_OPACITY = 0.3;
 // Extra empty space below the last item so the daily view can scroll a bit past
 // the end of the schedule.
 const BOTTOM_SCROLL_SPACE = 75;
+
+// Where the focused "now" item lands in the viewport on open: a fraction of the
+// way down from the top (slightly above center so upcoming items stay visible).
+const FOCUS_VIEWPORT_RATIO = 0.3;
+
+// Local YYYY-MM-DD for the given date (matches how selectedDate is stored).
+function localDateString(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Picks the item the user should be on "right now": the one whose time span
+// contains nowMinutes (most recently started wins when several overlap, so a
+// short task nested in a long one takes precedence); otherwise the next upcoming
+// item; otherwise the last item of the day.
+function findCurrentItemId(
+  items: ScheduleRowData[],
+  nowMinutes: number,
+): string | null {
+  if (!items.length) return null;
+
+  let current: ScheduleRowData | null = null;
+  let upcoming: ScheduleRowData | null = null;
+  for (const item of items) {
+    const end = item.startMinutes + item.durationMinutes;
+    if (nowMinutes >= item.startMinutes && nowMinutes < end) {
+      // items are start-sorted, so the last match has the latest start.
+      current = item;
+    } else if (item.startMinutes > nowMinutes && !upcoming) {
+      upcoming = item;
+    }
+  }
+
+  return (current ?? upcoming ?? items[items.length - 1]).id;
+}
+
+// The item whose span strictly contains nowMinutes (latest start wins when
+// several overlap), or null if now falls in a gap. Used for the "happening now"
+// row highlight — unlike findCurrentItemId, it has no upcoming/last fallback.
+function findActiveItemId(
+  items: ScheduleRowData[],
+  nowMinutes: number,
+): string | null {
+  let active: ScheduleRowData | null = null;
+  for (const item of items) {
+    const end = item.startMinutes + item.durationMinutes;
+    if (nowMinutes >= item.startMinutes && nowMinutes < end) active = item;
+  }
+  return active?.id ?? null;
+}
 
 // Linear blend between two hex colors at position t (0 = a, 1 = b). Used to pick
 // the exact color at the gradient's transition stops so the color ramp stays
@@ -181,6 +231,18 @@ export default function Timeline({ viewMode }: TimelineProps) {
     overlapIds.add(o.beforeId);
   }
 
+  // Live clock so the "happening now" highlight follows real time and hops to
+  // the next task as the day progresses (only matters when viewing today).
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const currentItemId =
+    selectedDate === localDateString(now)
+      ? findActiveItemId(items, now.getHours() * 60 + now.getMinutes())
+      : null;
+
   const earliestItem = items[0];
   const startOffset = earliestItem
     ? earliestItem.startMinutes
@@ -195,6 +257,35 @@ export default function Timeline({ viewMode }: TimelineProps) {
         ),
       )
     : 0;
+
+  // On open, scroll the schedule so the task happening right now (per the real
+  // clock) is in view. Only when today is the selected day; other days stay at
+  // the top. Runs on mount and whenever the selected day changes — Timeline
+  // remounts each time the schedule page is opened, so that covers "on open".
+  const containerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const now = new Date();
+    if (selectedDate !== localDateString(now)) return;
+
+    const focusId = findCurrentItemId(items, now.getHours() * 60 + now.getMinutes());
+    const root = containerRef.current;
+    if (!focusId || !root) return;
+
+    const scroller = root.closest("[data-scroll-lock]") as HTMLElement | null;
+    const target = root.querySelector(
+      `[data-item-id="${focusId}"]`,
+    ) as HTMLElement | null;
+    if (!scroller || !target) return;
+
+    const targetRect = target.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+    const delta =
+      targetRect.top -
+      scrollerRect.top -
+      scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
+    scroller.scrollTop += delta; // scrollTop self-clamps to the valid range
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   function handleEdit(id: string) {
     const task = tasks.find((t) => t.id === id);
@@ -230,7 +321,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
           </p>
         </div>
       ) : (
-        <div className="relative" style={{ height: containerHeight + BOTTOM_SCROLL_SPACE }}>
+        <div ref={containerRef} className="relative" style={{ height: containerHeight + BOTTOM_SCROLL_SPACE }}>
           {/* Gradient connector lines between items */}
           {items.slice(0, -1).map((item, i) => {
             const next = items[i + 1];
@@ -470,6 +561,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
                 startOffset={startOffset}
                 virtualTop={layout.topYById[item.id]}
                 overlapping={overlapIds.has(item.id)}
+                isCurrent={item.id === currentItemId}
                 onToggle={handleToggle}
                 onEdit={handleEdit}
               />

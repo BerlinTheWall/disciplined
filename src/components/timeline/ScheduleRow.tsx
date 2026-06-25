@@ -18,6 +18,16 @@ import { themeColors } from "../../lib/theme";
 
 export const MIN_ROW_HEIGHT = 84;
 
+// hex (#rrggbb) → rgba string at the given alpha. Used to tint the current
+// task's highlight card with a faint wash of its own color.
+function hexToRgba(hex: string, alpha: number) {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export interface ScheduleRowData {
   id: string;
   title: string;
@@ -35,6 +45,7 @@ interface ScheduleRowProps extends ScheduleRowData {
   onEdit: (id: string) => void;
   virtualTop?: number; // compressed-layout position; falls back to real-time position when omitted
   overlapping?: boolean; // item shares time with another — tints its time labels
+  isCurrent?: boolean; // task happening right now — gets a pulsing border
 }
 
 export default function ScheduleRow({
@@ -49,6 +60,7 @@ export default function ScheduleRow({
   startOffset = 0,
   virtualTop,
   overlapping = false,
+  isCurrent = false,
   onToggle,
   onEdit,
 }: ScheduleRowProps) {
@@ -75,6 +87,7 @@ export default function ScheduleRow({
 
   return (
     <motion.div
+      data-item-id={id}
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{ opacity: completed ? 0.5 : isActive ? 0.9 : 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.92 }}
@@ -88,6 +101,22 @@ export default function ScheduleRow({
         zIndex: isActive ? 10 : 1,
       }}
     >
+      {/* "Happening now" cue: a fill in the task's color behind the whole row
+          that gently breathes (pulsing opacity). Sits behind the content but
+          above the connector lines. */}
+      {isCurrent && (
+        <motion.div
+          className="absolute -z-10 rounded-2xl"
+          // Height tracks the pill (which scales with duration) so the highlight
+          // grows with the task block instead of the fixed-slot row height.
+          style={{ backgroundColor: color, top: -10, height: pillHeight + 26, left: -10, right: -10 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0.1, 0.2, 0.1] }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 3, ease: "easeInOut", repeat: Infinity }}
+        />
+      )}
+
       {/* Time column: start at top, end at bottom — sized to pill height only */}
       <div
         className="w-8 flex flex-col justify-between py-1 shrink-0"
@@ -121,8 +150,24 @@ export default function ScheduleRow({
             height: pillHeight,
             backgroundColor: color,
           }}
-          animate={{ opacity: completed ? 0.9 : 1, scale: completed ? 0.9 : 1 }}
-          transition={spring.snappy}
+          animate={{
+            opacity: completed ? 0.9 : 1,
+            scale: completed ? 0.9 : 1,
+            // "Happening now" cue: an expanding ring of the task's color that
+            // radiates out of the pill and fades, pulsing gently.
+            boxShadow: isCurrent
+              ? [
+                  `0 1px 2px 0 rgba(0,0,0,0.05), 0 0 0 0 ${hexToRgba(color, 0.5)}`,
+                  `0 1px 2px 0 rgba(0,0,0,0.05), 0 0 0 12px ${hexToRgba(color, 0)}`,
+                ]
+              : "0 1px 2px 0 rgba(0,0,0,0.05)",
+          }}
+          transition={{
+            default: spring.snappy,
+            boxShadow: isCurrent
+              ? { duration: 1.8, ease: "easeOut", repeat: Infinity }
+              : { duration: 0.3 },
+          }}
         >
           <IconComponent size={22} />
         </motion.div>

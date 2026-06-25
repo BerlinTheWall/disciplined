@@ -14,6 +14,10 @@ interface TaskStore {
   toggleTaskCompleted: (id: string) => void;
   deleteTask: (id: string) => void;
   updateTask: (id: string, changes: Partial<Omit<Task, "id">>) => void;
+  // Replaces the target day's tasks with clones of the source day's tasks (same
+  // titles/times/durations), as fresh, uncompleted tasks. Returns how many were
+  // copied.
+  copyTasksToDate: (fromDate: string, toDate: string) => number;
 }
 
 const today = todayISODate();
@@ -98,6 +102,31 @@ export const useTaskStore = create<TaskStore>()(
             t.id === id ? { ...t, ...changes } : t,
           ),
         })),
+
+      copyTasksToDate: (fromDate, toDate) => {
+        const source = useTaskStore
+          .getState()
+          .tasks.filter((t) => t.date === fromDate);
+        if (source.length === 0) return 0;
+        // Copy only the plan itself — drop completion and any instance-specific
+        // links (shopping list, workout session, recipe) so the two days don't
+        // share state.
+        const clones: Task[] = source.map((t) => ({
+          id: crypto.randomUUID(),
+          title: t.title,
+          startMinutes: t.startMinutes,
+          durationMinutes: t.durationMinutes,
+          color: t.color,
+          icon: t.icon,
+          completed: false,
+          date: toDate,
+        }));
+        // Override the target day: clear whatever was there, then drop in the copy.
+        set((state) => ({
+          tasks: [...state.tasks.filter((t) => t.date !== toDate), ...clones],
+        }));
+        return clones.length;
+      },
     }),
 
     {
