@@ -26,12 +26,28 @@ import type { ViewMode } from "../../App";
 const ICON_CENTER_X = 68;
 const DEFAULT_START_MINUTES = 6 * 60;
 
+// Scale applied to a completed task's icon (must match ScheduleRow's animation).
+// Used to clip connectors at the icon's actual, scaled-down edge.
+const COMPLETED_ICON_SCALE = 0.9;
+
+// Approximate height of a row's text block (title + time). A pill is centered in
+// a flex row whose height is max(pillHeight, this), so a pill shorter than the
+// text gets pushed down by half the difference — that's where its true center
+// sits. Taller (oval) pills define the row height themselves and aren't shifted.
+const PILL_CONTENT_HEIGHT = 54;
+
+// Vertical offset of a pill's true center from layout.topYById, caused by the
+// flex row centering the pill against the (possibly taller) text block.
+const pillCenterShift = (durationMinutes: number) =>
+  Math.max(0, (PILL_CONTENT_HEIGHT - getPillHeight(durationMinutes)) / 2);
+
+// Opacity the connector fades to at a completed task's end (it ramps back to
+// full toward the other, incomplete end).
+const DONE_LINE_OPACITY = 0.3;
+
 // Extra empty space below the last item so the daily view can scroll a bit past
 // the end of the schedule.
 const BOTTOM_SCROLL_SPACE = 75;
-
-// Opacity of the connector end that belongs to a completed task.
-const DONE_LINE_OPACITY = 0.3;
 
 // Linear blend between two hex colors at position t (0 = a, 1 = b). Used to pick
 // the exact color at the gradient's transition stops so the color ramp stays
@@ -50,6 +66,67 @@ function lerpHex(a: string, b: string, t: number) {
   const mix = (x: number, y: number) => Math.round(x + (y - x) * t);
   const toHex = (n: number) => n.toString(16).padStart(2, "0");
   return `#${toHex(mix(r1, r2))}${toHex(mix(g1, g2))}${toHex(mix(b1, b2))}`;
+}
+
+interface LineStop {
+  offset: number; // 0..1 along the connector
+  color: string;
+  opacity: number;
+}
+
+// Builds the gradient stops for a connector between two icon centers.
+// The connector runs center-to-center, so each end passes under its icon's
+// pill. The stretch under each icon is always clipped away with a hard cut so
+// the line stops exactly at the icon's edge — even for incomplete items, where
+// the opaque icon would cover it anyway. Clipping unconditionally avoids a flash
+// of the under-icon line while an icon animates back to full size on uncheck.
+// On top of the cut, a completed end emerges at a faded opacity that ramps back
+// to full toward the other (incomplete) end.
+function buildLineStops(
+  lineH: number,
+  rTop: number,
+  rBottom: number,
+  topColor: string,
+  bottomColor: string,
+  topDone: boolean,
+  bottomDone: boolean,
+): LineStop[] {
+  const topEdge = Math.min(Math.max(rTop, 0), lineH);
+  const bottomEdge = Math.max(Math.min(lineH - rBottom, lineH), 0);
+  const topEdgeT = lineH ? topEdge / lineH : 0;
+  const bottomEdgeT = lineH ? bottomEdge / lineH : 1;
+
+  // Opacity ramp along the line: faded at a completed end, full elsewhere, with
+  // the transition spread across the middle (25%–75%) so it stays gentle.
+  const fadeTop = topDone ? DONE_LINE_OPACITY : 1;
+  const fadeBottom = bottomDone ? DONE_LINE_OPACITY : 1;
+  const fadeAt = (t: number) => {
+    if (t <= 0.25) return fadeTop;
+    if (t >= 0.75) return fadeBottom;
+    return fadeTop + (fadeBottom - fadeTop) * ((t - 0.25) / 0.5);
+  };
+
+  const stops: LineStop[] = [];
+  const push = (t: number, opacity: number) =>
+    stops.push({ offset: t, color: lerpHex(topColor, bottomColor, t), opacity });
+
+  // Top end: always clip to invisible under the icon, then jump to the (possibly
+  // faded) value at the icon's edge.
+  push(0, 0);
+  push(topEdgeT, 0);
+  push(topEdgeT, fadeAt(topEdgeT));
+
+  // Middle ramp anchors, only where they fall within the visible stretch.
+  for (const m of [0.25, 0.75]) {
+    if (m > topEdgeT && m < bottomEdgeT) push(m, fadeAt(m));
+  }
+
+  // Bottom end: ramp into the value at the icon's edge, then hard cut to invisible.
+  push(bottomEdgeT, fadeAt(bottomEdgeT));
+  push(bottomEdgeT, 0);
+  push(1, 0);
+
+  return stops;
 }
 
 export type EditItem =
@@ -155,19 +232,32 @@ export default function Timeline({ viewMode }: TimelineProps) {
 
             const topY =
               layout.topYById[item.id] +
-              getPillHeight(item.durationMinutes) / 2;
+              getPillHeight(item.durationMinutes) / 2 +
+              pillCenterShift(item.durationMinutes);
             const bottomY =
               layout.topYById[next.id] +
-              getPillHeight(next.durationMinutes) / 2;
+              getPillHeight(next.durationMinutes) / 2 +
+              pillCenterShift(next.durationMinutes);
             const gradientId = `grad-${item.id}-${next.id}`;
 
-            // Fade the connector end that touches a completed task, ramping the
-            // opacity gradually across the middle (stops at 25%/75% keep the
-            // color ramp exact while softening the transition).
-            const fadeTop = item.completed ? DONE_LINE_OPACITY : 1;
-            const fadeBottom = next.completed ? DONE_LINE_OPACITY : 1;
-            const color25 = lerpHex(item.color, next.color, 0.25);
-            const color75 = lerpHex(item.color, next.color, 0.75);
+            // Clip the connector at the edge of each icon so the line stops
+            // exactly where the icon ends. topY/bottomY already sit at the icons'
+            // true centers, so the clip radius is just the pill radius scaled by
+            // the completed-icon scale (the smallest the icon ever gets).
+            const lineH = bottomY - topY;
+            const rTop =
+              (getPillHeight(item.durationMinutes) / 2) * COMPLETED_ICON_SCALE;
+            const rBottom =
+              (getPillHeight(next.durationMinutes) / 2) * COMPLETED_ICON_SCALE;
+            const lineStops = buildLineStops(
+              lineH,
+              rTop,
+              rBottom,
+              item.color,
+              next.color,
+              item.completed,
+              next.completed,
+            );
 
             if (gap) {
               const gapH = Math.floor(gap.realMinutes / 60);
@@ -208,10 +298,14 @@ export default function Timeline({ viewMode }: TimelineProps) {
                         x1="0" y1="0" x2="0" y2={bottomY - topY}
                         gradientUnits="userSpaceOnUse"
                       >
-                        <stop offset="0%" stopColor={item.color} stopOpacity={fadeTop} />
-                        <stop offset="25%" stopColor={color25} stopOpacity={fadeTop} />
-                        <stop offset="75%" stopColor={color75} stopOpacity={fadeBottom} />
-                        <stop offset="100%" stopColor={next.color} stopOpacity={fadeBottom} />
+                        {lineStops.map((s, idx) => (
+                          <stop
+                            key={idx}
+                            offset={s.offset}
+                            stopColor={s.color}
+                            stopOpacity={s.opacity}
+                          />
+                        ))}
                       </linearGradient>
                     </defs>
                     <line
@@ -252,10 +346,14 @@ export default function Timeline({ viewMode }: TimelineProps) {
               >
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={item.color} stopOpacity={fadeTop} />
-                    <stop offset="25%" stopColor={color25} stopOpacity={fadeTop} />
-                    <stop offset="75%" stopColor={color75} stopOpacity={fadeBottom} />
-                    <stop offset="100%" stopColor={next.color} stopOpacity={fadeBottom} />
+                    {lineStops.map((s, idx) => (
+                      <stop
+                        key={idx}
+                        offset={s.offset}
+                        stopColor={s.color}
+                        stopOpacity={s.opacity}
+                      />
+                    ))}
                   </linearGradient>
                 </defs>
                 <rect
