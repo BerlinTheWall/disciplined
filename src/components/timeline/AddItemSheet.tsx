@@ -19,7 +19,7 @@ import type { EditItem } from "./Timeline";
 import { spring, tap } from "../../lib/motion";
 import { useScrollLock } from "../../hooks/useScrollLock";
 import { useAutoFocus } from "../../hooks/useAutoFocus";
-import { useConfirm } from "../ConfirmDialog";
+import { useConfirm, useChoose } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -218,6 +218,7 @@ export default function AddItemSheet({
   const addHabit = useHabitStore((s) => s.addHabit);
   const updateHabit = useHabitStore((s) => s.updateHabit);
   const deleteHabit = useHabitStore((s) => s.deleteHabit);
+  const skipHabitOccurrence = useHabitStore((s) => s.skipHabitOccurrence);
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);
@@ -225,6 +226,7 @@ export default function AddItemSheet({
   const groceryItems = useGroceryStore((s) => s.groceryItems);
   const catalog = indexItems(groceryItems);
   const confirm = useConfirm();
+  const choose = useChoose();
 
   const isEditing = !!editItem;
   useScrollLock(isOpen);
@@ -429,16 +431,36 @@ export default function AddItemSheet({
 
   async function handleDelete() {
     if (!editItem) return;
-    const label = editItem.type === "task" ? "task" : "habit";
+
+    // A recurring task (habit): let the user remove just this day's occurrence
+    // or the whole habit.
+    if (editItem.type === "habit") {
+      const choice = await choose({
+        title: "Delete recurring task?",
+        message: `"${editItem.data.title}" repeats on a schedule.`,
+        options: [
+          { label: "Delete only this day", value: "occurrence" },
+          { label: "Delete entire habit", value: "habit", destructive: true },
+        ],
+      });
+      if (!choice) return;
+      if (choice === "occurrence") {
+        skipHabitOccurrence(editItem.data.id, date);
+      } else {
+        deleteHabit(editItem.data.id);
+      }
+      onClose();
+      return;
+    }
+
     const ok = await confirm({
-      title: `Delete ${label}?`,
+      title: "Delete task?",
       message: `"${editItem.data.title}" will be permanently removed.`,
       confirmLabel: "Delete",
       destructive: true,
     });
     if (!ok) return;
-    if (editItem.type === "task") deleteTask(editItem.data.id);
-    else deleteHabit(editItem.data.id);
+    deleteTask(editItem.data.id);
     onClose();
   }
 

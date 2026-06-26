@@ -10,6 +10,7 @@ import BottomNav, { type Page } from './components/BottomNav'
 import { useWorkoutFocusStore } from './store/workoutFocusStore'
 import { useRecipeFocusStore } from './store/recipeFocusStore'
 import SideMenu from './components/SideMenu'
+import ProfileSheet from './components/ProfileSheet'
 import MealsPage from './pages/MealsPage'
 import RecipesPage from './pages/RecipesPage'
 import FoodPage from './pages/FoodPage'
@@ -46,6 +47,7 @@ function App() {
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false)
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
 
 
   function go(p: Page) {
@@ -120,6 +122,12 @@ function App() {
         onClose={() => setIsSideMenuOpen(false)}
         activePage={activePage}
         onNavigate={go}
+        onOpenProfile={() => setIsProfileOpen(true)}
+      />
+
+      <ProfileSheet
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
       />
 
       {/* Title row — stays mounted; its contents animate */}

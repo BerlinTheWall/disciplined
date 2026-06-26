@@ -9,6 +9,7 @@ interface HabitStore {
   updateHabitTime: (id: string, startMinutes: number) => void;
   updateHabitDuration: (id: string, durationMinutes: number) => void;
   deleteHabit: (id: string) => void;
+  skipHabitOccurrence: (id: string, date: string) => void;
   updateHabit: (id: string, changes: Partial<Omit<Habit, "id">>) => void;
 }
 
@@ -70,6 +71,17 @@ export const useHabitStore = create<HabitStore>()(
 
       deleteHabit: (id) =>
         set((state) => ({ habits: state.habits.filter((h) => h.id !== id) })),
+
+      // Remove a single day's occurrence of a recurring habit without deleting
+      // the habit itself (the day is hidden via isHabitActiveOnDate).
+      skipHabitOccurrence: (id, date) =>
+        set((state) => ({
+          habits: state.habits.map((h) =>
+            h.id === id && !(h.skippedDates ?? []).includes(date)
+              ? { ...h, skippedDates: [...(h.skippedDates ?? []), date] }
+              : h,
+          ),
+        })),
 
       updateHabit: (id, changes) =>
         set((state) => ({

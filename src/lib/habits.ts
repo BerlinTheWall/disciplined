@@ -2,7 +2,10 @@ import { addDays, toISODate } from './date'
 import type { Habit } from '../types/habits'
 
 export function isHabitActiveOnDate(habit: Habit, date: Date) {
-  return habit.daysOfWeek.includes(date.getDay())
+  if (!habit.daysOfWeek.includes(date.getDay())) return false
+  // A single occurrence the user deleted for just that day is no longer active.
+  if (habit.skippedDates?.includes(toISODate(date))) return false
+  return true
 }
 
 export function getHabitStreak(habit: Habit, referenceDate: Date = new Date()) {

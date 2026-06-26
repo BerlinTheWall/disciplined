@@ -18,54 +18,93 @@ export interface ConfirmOptions {
   destructive?: boolean // styles the confirm button as a red, irreversible action
 }
 
-type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>
+export interface ChoiceOption {
+  label: string
+  value: string
+  destructive?: boolean // styles this choice as a red, irreversible action
+}
 
-const ConfirmContext = createContext<ConfirmFn | null>(null)
+export interface ChooseOptions {
+  title: string
+  message?: string
+  options: ChoiceOption[] // rendered as a vertical stack of buttons
+  cancelLabel?: string
+}
 
-// Returns a function that opens the confirm dialog and resolves to true (user
-// confirmed) or false (cancelled/dismissed). Lets callers guard an action with a
-// single line: `if (!(await confirm({ ... }))) return`.
-export function useConfirm(): ConfirmFn {
+interface ConfirmApi {
+  confirm: (options: ConfirmOptions) => Promise<boolean>
+  choose: (options: ChooseOptions) => Promise<string | null>
+}
+
+const ConfirmContext = createContext<ConfirmApi | null>(null)
+
+// Two-button yes/no prompt. Resolves true (confirmed) or false (cancelled).
+// Guard an action in one line: `if (!(await confirm({ ... }))) return`.
+export function useConfirm() {
   const ctx = useContext(ConfirmContext)
   if (!ctx) throw new Error('useConfirm must be used within a ConfirmProvider')
-  return ctx
+  return ctx.confirm
 }
 
-interface Pending {
-  options: ConfirmOptions
-  resolve: (value: boolean) => void
+// Multi-option prompt. Resolves the chosen option's `value`, or null if cancelled.
+export function useChoose() {
+  const ctx = useContext(ConfirmContext)
+  if (!ctx) throw new Error('useChoose must be used within a ConfirmProvider')
+  return ctx.choose
 }
+
+type Pending =
+  | { kind: 'confirm'; options: ConfirmOptions; resolve: (v: boolean) => void }
+  | { kind: 'choose'; options: ChooseOptions; resolve: (v: string | null) => void }
+
+const PRIMARY_BTN = 'w-full rounded-xl py-2.5 font-medium bg-surface-inverse text-fg-inverse'
+const DESTRUCTIVE_BTN = 'w-full rounded-xl py-2.5 font-medium bg-red-500 text-white'
+const CANCEL_BTN = 'w-full rounded-xl py-2.5 font-medium bg-surface-raised text-fg'
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null)
 
-  const confirm = useCallback<ConfirmFn>(
-    (options) => new Promise<boolean>((resolve) => setPending({ options, resolve })),
+  const confirm = useCallback<ConfirmApi['confirm']>(
+    (options) =>
+      new Promise<boolean>((resolve) =>
+        setPending({ kind: 'confirm', options, resolve }),
+      ),
     [],
   )
 
-  function close(result: boolean) {
+  const choose = useCallback<ConfirmApi['choose']>(
+    (options) =>
+      new Promise<string | null>((resolve) =>
+        setPending({ kind: 'choose', options, resolve }),
+      ),
+    [],
+  )
+
+  // Resolve the open prompt and close it. `result` matches the pending kind:
+  // boolean for confirm, string|null for choose.
+  function close(result: boolean | string | null) {
     setPending((curr) => {
-      curr?.resolve(result)
+      if (curr) (curr.resolve as (v: boolean | string | null) => void)(result)
       return null
     })
   }
 
-  const opts = pending?.options
+  // The value a dismissal (overlay tap / cancel) resolves to for each kind.
+  const dismissValue = pending?.kind === 'choose' ? null : false
 
   return (
-    <ConfirmContext.Provider value={confirm}>
+    <ConfirmContext.Provider value={{ confirm, choose }}>
       {children}
       {createPortal(
         <AnimatePresence>
-          {opts && (
+          {pending && (
             <>
               <motion.div
                 className="fixed inset-0 bg-black/40 z-60"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => close(false)}
+                onClick={() => close(dismissValue)}
               />
               <div className="fixed inset-0 z-70 flex items-center justify-center p-6 pointer-events-none">
                 <motion.div
@@ -76,32 +115,55 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   exit={{ opacity: 0, scale: 0.95, y: 8 }}
                   transition={spring.snappy}
                 >
-                  <h3 className="text-lg font-semibold text-fg">{opts.title}</h3>
-                  {opts.message && (
+                  <h3 className="text-lg font-semibold text-fg">
+                    {pending.options.title}
+                  </h3>
+                  {pending.options.message && (
                     <p className="text-sm text-fg-muted mt-1.5 leading-snug">
-                      {opts.message}
+                      {pending.options.message}
                     </p>
                   )}
-                  <div className="flex gap-2 mt-5">
-                    <motion.button
-                      onClick={() => close(false)}
-                      whileTap={tap}
-                      className="flex-1 rounded-xl py-2.5 font-medium bg-surface-raised text-fg"
-                    >
-                      {opts.cancelLabel ?? 'Cancel'}
-                    </motion.button>
-                    <motion.button
-                      onClick={() => close(true)}
-                      whileTap={tap}
-                      className={`flex-1 rounded-xl py-2.5 font-medium ${
-                        opts.destructive
-                          ? 'bg-red-500 text-white'
-                          : 'bg-surface-inverse text-fg-inverse'
-                      }`}
-                    >
-                      {opts.confirmLabel ?? 'Confirm'}
-                    </motion.button>
-                  </div>
+
+                  {pending.kind === 'confirm' ? (
+                    <div className="flex gap-2 mt-5">
+                      <motion.button
+                        onClick={() => close(false)}
+                        whileTap={tap}
+                        className={CANCEL_BTN}
+                      >
+                        {pending.options.cancelLabel ?? 'Cancel'}
+                      </motion.button>
+                      <motion.button
+                        onClick={() => close(true)}
+                        whileTap={tap}
+                        className={
+                          pending.options.destructive ? DESTRUCTIVE_BTN : PRIMARY_BTN
+                        }
+                      >
+                        {pending.options.confirmLabel ?? 'Confirm'}
+                      </motion.button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 mt-5">
+                      {pending.options.options.map((opt) => (
+                        <motion.button
+                          key={opt.value}
+                          onClick={() => close(opt.value)}
+                          whileTap={tap}
+                          className={opt.destructive ? DESTRUCTIVE_BTN : PRIMARY_BTN}
+                        >
+                          {opt.label}
+                        </motion.button>
+                      ))}
+                      <motion.button
+                        onClick={() => close(null)}
+                        whileTap={tap}
+                        className={CANCEL_BTN}
+                      >
+                        {pending.options.cancelLabel ?? 'Cancel'}
+                      </motion.button>
+                    </div>
+                  )}
                 </motion.div>
               </div>
             </>
