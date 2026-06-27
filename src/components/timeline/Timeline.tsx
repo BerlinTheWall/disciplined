@@ -20,6 +20,8 @@ import WeeklyTimeline from "./WeeklyTimeline";
 import AddItemSheet from "./AddItemSheet";
 import QuickAddBar from "./QuickAddBar";
 import DoneTray from "./DoneTray";
+import SwipeArea from "./SwipeArea";
+import { addDays, toISODate } from "../../lib/date";
 import { Plus } from "lucide-react";
 import type { Task } from "../../types/task";
 import type { Habit } from "../../types/habits";
@@ -192,6 +194,7 @@ interface TimelineProps {
 export default function Timeline({ viewMode }: TimelineProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const selectedDate = useTaskStore((s) => s.selectedDate);
+  const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
 
   const habits = useHabitStore((s) => s.habits);
@@ -309,14 +312,28 @@ export default function Timeline({ viewMode }: TimelineProps) {
     else toggleHabitCompleted(id, selectedDate);
   }
 
+  function shiftSelectedDate(deltaDays: number) {
+    setSelectedDate(
+      toISODate(addDays(new Date(selectedDate + "T00:00:00"), deltaDays)),
+      deltaDays > 0 ? 1 : -1,
+    );
+  }
+
   if (viewMode === "weekly") {
-    return <WeeklyTimeline />;
+    // Swipe the week grid to move a whole week at a time.
+    return (
+      <SwipeArea onPrev={() => shiftSelectedDate(-7)} onNext={() => shiftSelectedDate(7)}>
+        <WeeklyTimeline />
+      </SwipeArea>
+    );
   }
 
   return (
     <>
       <QuickAddBar onEditDetails={setEditItem} />
 
+      {/* Swipe the day's schedule to move one day at a time. */}
+      <SwipeArea onPrev={() => shiftSelectedDate(-1)} onNext={() => shiftSelectedDate(1)}>
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
           <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
@@ -594,6 +611,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
           <div style={{ height: BOTTOM_SCROLL_SPACE }} />
         </>
       )}
+      </SwipeArea>
 
       <AddItemSheet
         isOpen={!!editItem}

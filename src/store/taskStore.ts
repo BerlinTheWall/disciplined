@@ -6,7 +6,10 @@ import { todayISODate } from "../lib/date";
 interface TaskStore {
   tasks: Task[];
   selectedDate: string;
-  setSelectedDate: (date: string) => void;
+  // Direction of the last date navigation (1 = forward, -1 = back). Drives the
+  // week strip's slide animation; set by prev/next style navigations.
+  navDir: number;
+  setSelectedDate: (date: string, dir?: number) => void;
   updateTaskTime: (id: string, startMinutes: number) => void;
   updateTaskDuration: (id: string, durationMinutes: number) => void;
   // Returns the new task's id so callers can link it (e.g. to a shopping list).
@@ -60,7 +63,9 @@ export const useTaskStore = create<TaskStore>()(
     (set) => ({
       tasks: initialTasks,
       selectedDate: today,
-      setSelectedDate: (date) => set({ selectedDate: date }),
+      navDir: 1,
+      setSelectedDate: (date, dir) =>
+        set(dir === undefined ? { selectedDate: date } : { selectedDate: date, navDir: dir }),
 
       updateTaskTime: (id, startMinutes) =>
         set((state) => ({
