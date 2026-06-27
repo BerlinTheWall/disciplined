@@ -367,20 +367,13 @@ export default function AddItemSheet({
     );
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!title.trim() || duration < 5) return;
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
 
     if (isEditing) {
-      // Validate before asking, so we don't pop a confirm on invalid input.
       if (editItem!.type === "habit" && daysOfWeek.length === 0) return;
-      const ok = await confirm({
-        title: "Save changes?",
-        message: `Update "${title.trim()}" with your edits.`,
-        confirmLabel: "Save",
-      });
-      if (!ok) return;
       if (editItem!.type === "task") {
         updateTask(editItem!.data.id, {
           title: title.trim(),
@@ -479,6 +472,415 @@ export default function AddItemSheet({
   const linkedRecipe = recipes.find((r) => r.id === recipeId);
   const chipCls = (selected: boolean) =>
     `px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`;
+
+  /* ---- field sections — shared by the wizard (create) and the single
+     scrollable form (edit) ----------------------------------------- */
+
+  const detailsBody = (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        Color
+      </label>
+      <div
+        className="wheel-col flex gap-3 overflow-x-auto bg-surface-raised rounded-full p-1.5 mb-5"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {COLOR_OPTIONS.map((c) => (
+          <motion.button
+            key={c}
+            onClick={() => setColor(c)}
+            whileTap={tap}
+            className="w-8 h-8 rounded-full shrink-0"
+            style={{
+              backgroundColor: c,
+              outline: color === c ? "2px solid var(--fg)" : "none",
+              outlineOffset: 2,
+            }}
+          />
+        ))}
+      </div>
+
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        Icon
+      </label>
+      <div
+        className="wheel-col flex gap-2 overflow-x-auto pb-1"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {(Object.keys(ICONS) as Array<keyof typeof ICONS>)
+          .filter((key) => key !== "default")
+          .map((key) => {
+            const IconComp = ICONS[key];
+            const selected = icon === key;
+            return (
+              <motion.button
+                key={key}
+                onClick={() => { setIcon(key); setIconTouched(true) }}
+                whileTap={tap}
+                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: selected ? color : "var(--surface-raised)",
+                  color: selected ? onColor : "var(--fg-muted)",
+                }}
+              >
+                <IconComp size={18} />
+              </motion.button>
+            );
+          })}
+      </div>
+    </div>
+  );
+
+  const scheduleBody = (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        Date
+      </label>
+      <div className="relative mb-5">
+        <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3">
+          <span className="flex items-center gap-2 text-fg font-medium">
+            <Calendar size={18} className="text-fg-faint" />
+            {formatFullDate(date)}
+          </span>
+          <span className="flex items-center gap-1 text-fg-faint text-sm">
+            {relativeDayLabel(date)}
+            <ChevronRight size={16} />
+          </span>
+        </div>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => e.target.value && setDate(e.target.value)}
+          className="absolute inset-0 opacity-0 w-full h-full"
+        />
+      </div>
+
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        Start time
+      </label>
+      <div className="mb-5">
+        <TimeWheel
+          value={time}
+          durationMinutes={duration}
+          color={color}
+          onChange={handleTimeChange}
+        />
+      </div>
+
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        Duration
+      </label>
+      <div
+        className="wheel-col flex gap-2 overflow-x-auto pb-1"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {DURATION_OPTIONS.map((d) => {
+          const tooLong = d > maxDuration;
+          return (
+            <motion.button
+              key={d}
+              onClick={() => {
+                if (tooLong) return;
+                setCustomMode(false);
+                setDuration(d);
+              }}
+              whileTap={tooLong ? undefined : tap}
+              disabled={tooLong}
+              className={`${chipCls(!customMode && duration === d)} disabled:opacity-30`}
+            >
+              {formatDuration(d)}
+            </motion.button>
+          );
+        })}
+        <motion.button
+          onClick={() => {
+            setCustomMode(true);
+            setCustomH(String(Math.floor(duration / 60)));
+            setCustomM(String(duration % 60));
+          }}
+          whileTap={tap}
+          className={chipCls(customMode)}
+        >
+          Custom
+        </motion.button>
+      </div>
+
+      {customMode && (
+        <div className="flex items-center gap-2 mt-3 bg-surface-raised rounded-2xl px-4 py-3">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={customH}
+            onChange={(e) => applyCustom(e.target.value, customM)}
+            placeholder="0"
+            className="w-12 bg-surface rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
+          />
+          <span className="text-fg-muted text-sm">hours</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={59}
+            value={customM}
+            onChange={(e) => applyCustom(customH, e.target.value)}
+            placeholder="0"
+            className="w-12 bg-surface rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
+          />
+          <span className="text-fg-muted text-sm">mins</span>
+          <span className="ml-auto text-sm text-fg-faint tabular-nums">
+            {formatDuration(duration)}
+          </span>
+        </div>
+      )}
+
+      <p className="text-xs text-fg-faint mt-3">
+        Ends at <span className="tabular-nums">{endLabel}</span>
+        {duration >= maxDuration && " — capped to stay on the same day"}
+      </p>
+    </div>
+  );
+
+  const typeLinksBody = (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        This is a…
+      </label>
+      <div className="flex flex-col gap-2">
+        {(["task", "habit"] as const).map((m) => {
+          const selected = mode === m;
+          const locked = isEditing && editItem!.type !== m;
+          return (
+            <motion.button
+              key={m}
+              onClick={() => !isEditing && setMode(m)}
+              whileTap={isEditing ? undefined : tap}
+              disabled={locked}
+              className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-surface-inverse bg-surface-alt" : "border-border-strong"} ${locked ? "opacity-40" : ""}`}
+            >
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: selected ? color : "var(--surface-raised)",
+                  color: selected ? onColor : "var(--fg-muted)",
+                }}
+              >
+                {m === "task" ? (
+                  <CheckCircle2 size={18} />
+                ) : (
+                  <Repeat size={18} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-fg">
+                  {m === "task" ? "One-time task" : "Repeating habit"}
+                </p>
+                <p className="text-xs text-fg-faint">
+                  {m === "task"
+                    ? "Happens once on the chosen date"
+                    : "Repeats on the days you pick"}
+                </p>
+              </div>
+              {selected && (
+                <Check size={18} className="text-fg shrink-0" />
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {mode === "task" && workoutSessions.length > 0 && (
+        <>
+          <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
+            <Dumbbell size={13} />
+            Link a workout (optional)
+          </label>
+          <div
+            className="wheel-col flex gap-2 overflow-x-auto pb-1"
+            style={{ scrollbarWidth: "none" }}
+          >
+            <motion.button
+              onClick={() => linkWorkout(undefined)}
+              whileTap={tap}
+              className={chipCls(!workoutSessionId)}
+            >
+              None
+            </motion.button>
+            {workoutSessions.map((s) => {
+              const SIcon = WORKOUT_TYPE_META[s.type].icon;
+              return (
+                <motion.button
+                  key={s.id}
+                  onClick={() => linkWorkout(s.id)}
+                  whileTap={tap}
+                  className={`flex items-center gap-1.5 ${chipCls(workoutSessionId === s.id)}`}
+                >
+                  <SIcon size={14} />
+                  {s.name}
+                </motion.button>
+              );
+            })}
+          </div>
+
+          {linkedSession && (
+            <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-fg-muted">
+                  What you'll do
+                </p>
+                <motion.button
+                  onClick={() => {
+                    openWorkoutSession(linkedSession.id);
+                    onClose();
+                  }}
+                  whileTap={tap}
+                  className="flex items-center gap-1 text-xs font-medium"
+                  style={{ color }}
+                >
+                  Open in Workout
+                  <ArrowUpRight size={14} />
+                </motion.button>
+              </div>
+              {linkedSession.exercises.length === 0 ? (
+                <p className="text-sm text-fg-faint">
+                  No exercises added to this session yet.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {linkedSession.exercises.map((ex, i) => (
+                    <div key={ex.id} className="flex items-baseline gap-2">
+                      <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
+                        {i + 1}.
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-fg leading-tight">
+                          {ex.name}
+                        </p>
+                        {exerciseSummary(ex, linkedSession.type) && (
+                          <p className="text-xs text-fg-faint">
+                            {exerciseSummary(ex, linkedSession.type)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {mode === "task" && recipes.length > 0 && (
+        <>
+          <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
+            <ChefHat size={13} />
+            Link a recipe (optional)
+          </label>
+          <div
+            className="wheel-col flex gap-2 overflow-x-auto pb-1"
+            style={{ scrollbarWidth: "none" }}
+          >
+            <motion.button
+              onClick={() => linkRecipe(undefined)}
+              whileTap={tap}
+              className={chipCls(!recipeId)}
+            >
+              None
+            </motion.button>
+            {recipes.map((r) => (
+              <motion.button
+                key={r.id}
+                onClick={() => linkRecipe(r.id)}
+                whileTap={tap}
+                className={`flex items-center gap-1.5 ${chipCls(recipeId === r.id)}`}
+              >
+                <ChefHat size={14} />
+                {r.name}
+              </motion.button>
+            ))}
+          </div>
+
+          {linkedRecipe && (
+            <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-fg-muted">
+                  What to make
+                </p>
+                <motion.button
+                  onClick={() => {
+                    openRecipe(linkedRecipe.id);
+                    onClose();
+                  }}
+                  whileTap={tap}
+                  className="flex items-center gap-1 text-xs font-medium"
+                  style={{ color }}
+                >
+                  Open in Recipes
+                  <ArrowUpRight size={14} />
+                </motion.button>
+              </div>
+
+              {linkedRecipe.ingredients.length > 0 && (
+                <p className="text-sm text-fg mb-2">
+                  {linkedRecipe.ingredients
+                    .map((ing) => {
+                      const item = catalog[ing.itemId];
+                      if (!item) return null;
+                      return `${item.name} (${formatAmount(item, ing.servings)})`;
+                    })
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              )}
+
+              {linkedRecipe.steps.length === 0 ? (
+                <p className="text-sm text-fg-faint">
+                  No steps added to this recipe yet.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {linkedRecipe.steps.map((step, i) => (
+                    <div key={i} className="flex items-baseline gap-2">
+                      <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
+                        {i + 1}.
+                      </span>
+                      <p className="text-sm text-fg leading-snug">{step}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {mode === "habit" && (
+        <>
+          <label className="text-xs font-medium text-fg-muted mb-2 block mt-4">
+            Repeat on
+          </label>
+          <div className="flex gap-2">
+            {DAY_OPTIONS.map(({ label, value }) => (
+              <motion.button
+                key={value}
+                onClick={() => toggleDay(value)}
+                whileTap={tap}
+                className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
+              >
+                {label}
+              </motion.button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const saveDisabled =
+    !title.trim() ||
+    duration < 5 ||
+    (mode === "habit" && daysOfWeek.length === 0);
 
   return (
     <AnimatePresence>
@@ -583,7 +985,7 @@ export default function AddItemSheet({
                   <HeaderIcon size={28} style={{ color }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  {step > 1 && (
+                  {(isEditing || step > 1) && (
                     <p
                       className="text-sm mb-0.5 truncate"
                       style={{
@@ -616,519 +1018,149 @@ export default function AddItemSheet({
 
             {/* Sheet body */}
             <div className="p-4 pb-6">
-              {/* Step dots */}
-              <div className="flex gap-1.5 justify-center mb-4">
-                {[1, 2, 3].map((s) => (
-                  <span
-                    key={s}
-                    className={`h-1 rounded-full transition-all ${step === s ? "w-5 bg-surface-inverse" : "w-2 bg-surface-subtle"}`}
-                  />
-                ))}
-              </div>
-
-              <AnimatePresence mode="wait" custom={dir} initial={false}>
-                {/* ---------------- STEP 1 — DETAILS ---------------- */}
-                {step === 1 && (
-                  <motion.div
-                    key="step1"
-                    custom={dir}
-                    variants={stepVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ duration: 0.18 }}
+              {isEditing ? (
+                /* ---- EDIT — one scrollable form, no steps, no confirm ---- */
+                <div className="flex flex-col gap-6">
+                  {detailsBody}
+                  {scheduleBody}
+                  {typeLinksBody}
+                  <motion.button
+                    onClick={handleSubmit}
+                    whileTap={tap}
+                    disabled={saveDisabled}
+                    className="w-full rounded-2xl py-3.5 font-medium disabled:opacity-40"
+                    style={{ backgroundColor: color, color: onColor }}
                   >
-                    <label className="text-xs font-medium text-fg-muted mb-2 block">
-                      Color
-                    </label>
-                    <div
-                      className="wheel-col flex gap-3 overflow-x-auto bg-surface-raised rounded-full p-1.5 mb-5"
-                      style={{ scrollbarWidth: "none" }}
-                    >
-                      {COLOR_OPTIONS.map((c) => (
+                    Save changes
+                  </motion.button>
+                </div>
+              ) : (
+                /* ---- CREATE — guided 3-step wizard ---- */
+                <>
+                  {/* Step dots */}
+                  <div className="flex gap-1.5 justify-center mb-4">
+                    {[1, 2, 3].map((s) => (
+                      <span
+                        key={s}
+                        className={`h-1 rounded-full transition-all ${step === s ? "w-5 bg-surface-inverse" : "w-2 bg-surface-subtle"}`}
+                      />
+                    ))}
+                  </div>
+
+                  <AnimatePresence mode="wait" custom={dir} initial={false}>
+                    {/* ---------------- STEP 1 — DETAILS ---------------- */}
+                    {step === 1 && (
+                      <motion.div
+                        key="step1"
+                        custom={dir}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.18 }}
+                      >
+                        {detailsBody}
+
                         <motion.button
-                          key={c}
-                          onClick={() => setColor(c)}
+                          onClick={() => goTo(2)}
                           whileTap={tap}
-                          className="w-8 h-8 rounded-full shrink-0"
-                          style={{
-                            backgroundColor: c,
-                            outline: color === c ? "2px solid var(--fg)" : "none",
-                            outlineOffset: 2,
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    <label className="text-xs font-medium text-fg-muted mb-2 block">
-                      Icon
-                    </label>
-                    <div
-                      className="wheel-col flex gap-2 overflow-x-auto pb-1 mb-6"
-                      style={{ scrollbarWidth: "none" }}
-                    >
-                      {(Object.keys(ICONS) as Array<keyof typeof ICONS>)
-                        .filter((key) => key !== "default")
-                        .map((key) => {
-                          const IconComp = ICONS[key];
-                          const selected = icon === key;
-                          return (
-                            <motion.button
-                              key={key}
-                              onClick={() => { setIcon(key); setIconTouched(true) }}
-                              whileTap={tap}
-                              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                              style={{
-                                backgroundColor: selected ? color : "var(--surface-raised)",
-                                color: selected ? onColor : "var(--fg-muted)",
-                              }}
-                            >
-                              <IconComp size={18} />
-                            </motion.button>
-                          );
-                        })}
-                    </div>
-
-                    <motion.button
-                      onClick={() => goTo(2)}
-                      whileTap={tap}
-                      disabled={!title.trim()}
-                      className="w-full rounded-2xl py-3.5 font-medium disabled:opacity-40"
-                      style={{ backgroundColor: color, color: onColor }}
-                    >
-                      Continue
-                    </motion.button>
-                  </motion.div>
-                )}
-
-                {/* ---------------- STEP 2 — SCHEDULE ---------------- */}
-                {step === 2 && (
-                  <motion.div
-                    key="step2"
-                    custom={dir}
-                    variants={stepVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ duration: 0.18 }}
-                  >
-                    <label className="text-xs font-medium text-fg-muted mb-2 block">
-                      Date
-                    </label>
-                    <div className="relative mb-5">
-                      <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3">
-                        <span className="flex items-center gap-2 text-fg font-medium">
-                          <Calendar size={18} className="text-fg-faint" />
-                          {formatFullDate(date)}
-                        </span>
-                        <span className="flex items-center gap-1 text-fg-faint text-sm">
-                          {relativeDayLabel(date)}
-                          <ChevronRight size={16} />
-                        </span>
-                      </div>
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => e.target.value && setDate(e.target.value)}
-                        className="absolute inset-0 opacity-0 w-full h-full"
-                      />
-                    </div>
-
-                    <label className="text-xs font-medium text-fg-muted mb-2 block">
-                      Start time
-                    </label>
-                    <div className="mb-5">
-                      <TimeWheel
-                        value={time}
-                        durationMinutes={duration}
-                        color={color}
-                        onChange={handleTimeChange}
-                      />
-                    </div>
-
-                    <label className="text-xs font-medium text-fg-muted mb-2 block">
-                      Duration
-                    </label>
-                    <div
-                      className="wheel-col flex gap-2 overflow-x-auto pb-1"
-                      style={{ scrollbarWidth: "none" }}
-                    >
-                      {DURATION_OPTIONS.map((d) => {
-                        const tooLong = d > maxDuration;
-                        return (
-                          <motion.button
-                            key={d}
-                            onClick={() => {
-                              if (tooLong) return;
-                              setCustomMode(false);
-                              setDuration(d);
-                            }}
-                            whileTap={tooLong ? undefined : tap}
-                            disabled={tooLong}
-                            className={`${chipCls(!customMode && duration === d)} disabled:opacity-30`}
-                          >
-                            {formatDuration(d)}
-                          </motion.button>
-                        );
-                      })}
-                      <motion.button
-                        onClick={() => {
-                          setCustomMode(true);
-                          setCustomH(String(Math.floor(duration / 60)));
-                          setCustomM(String(duration % 60));
-                        }}
-                        whileTap={tap}
-                        className={chipCls(customMode)}
-                      >
-                        Custom
-                      </motion.button>
-                    </div>
-
-                    {customMode && (
-                      <div className="flex items-center gap-2 mt-3 bg-surface-raised rounded-2xl px-4 py-3">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          value={customH}
-                          onChange={(e) => applyCustom(e.target.value, customM)}
-                          placeholder="0"
-                          className="w-12 bg-surface rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
-                        />
-                        <span className="text-fg-muted text-sm">hours</span>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={59}
-                          value={customM}
-                          onChange={(e) => applyCustom(customH, e.target.value)}
-                          placeholder="0"
-                          className="w-12 bg-surface rounded-lg px-2 py-1.5 text-lg font-semibold text-center focus:outline-none"
-                        />
-                        <span className="text-fg-muted text-sm">mins</span>
-                        <span className="ml-auto text-sm text-fg-faint tabular-nums">
-                          {formatDuration(duration)}
-                        </span>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-fg-faint mt-3">
-                      Ends at <span className="tabular-nums">{endLabel}</span>
-                      {duration >= maxDuration && " — capped to stay on the same day"}
-                    </p>
-
-                    <div className="flex gap-2 mt-6">
-                      <motion.button
-                        onClick={() => goTo(1)}
-                        whileTap={tap}
-                        className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
-                      >
-                        Back
-                      </motion.button>
-                      <motion.button
-                        onClick={() => goTo(3)}
-                        whileTap={tap}
-                        disabled={duration < 5 || startMin + duration > MINUTES_PER_DAY}
-                        className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
-                        style={{ backgroundColor: color, color: onColor }}
-                      >
-                        Continue
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* ---------------- STEP 3 — CONFIRM ---------------- */}
-                {step === 3 && (
-                  <motion.div
-                    key="step3"
-                    custom={dir}
-                    variants={stepVariants}
-                    initial="enter"
-                    animate="center"
-                    exit="exit"
-                    transition={{ duration: 0.18 }}
-                  >
-                    {/* Summary preview */}
-                    <div className="flex items-center gap-3 bg-surface-alt rounded-2xl p-3 mb-5">
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: color, color: onColor }}
-                      >
-                        <HeaderIcon size={18} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs text-fg-faint">
-                          {rangeLabel(startMin, duration)} · {relativeDayLabel(date)}
-                        </p>
-                        <p className="font-semibold text-fg truncate">
-                          {title.trim() || "Untitled"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <label className="text-xs font-medium text-fg-muted mb-2 block">
-                      This is a…
-                    </label>
-                    <div className="flex flex-col gap-2">
-                      {(["task", "habit"] as const).map((m) => {
-                        const selected = mode === m;
-                        const locked = isEditing && editItem!.type !== m;
-                        return (
-                          <motion.button
-                            key={m}
-                            onClick={() => !isEditing && setMode(m)}
-                            whileTap={isEditing ? undefined : tap}
-                            disabled={locked}
-                            className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-surface-inverse bg-surface-alt" : "border-border-strong"} ${locked ? "opacity-40" : ""}`}
-                          >
-                            <div
-                              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                              style={{
-                                backgroundColor: selected ? color : "var(--surface-raised)",
-                                color: selected ? onColor : "var(--fg-muted)",
-                              }}
-                            >
-                              {m === "task" ? (
-                                <CheckCircle2 size={18} />
-                              ) : (
-                                <Repeat size={18} />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-fg">
-                                {m === "task" ? "One-time task" : "Repeating habit"}
-                              </p>
-                              <p className="text-xs text-fg-faint">
-                                {m === "task"
-                                  ? "Happens once on the chosen date"
-                                  : "Repeats on the days you pick"}
-                              </p>
-                            </div>
-                            {selected && (
-                              <Check size={18} className="text-fg shrink-0" />
-                            )}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-
-                    {mode === "task" && workoutSessions.length > 0 && (
-                      <>
-                        <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
-                          <Dumbbell size={13} />
-                          Link a workout (optional)
-                        </label>
-                        <div
-                          className="wheel-col flex gap-2 overflow-x-auto pb-1"
-                          style={{ scrollbarWidth: "none" }}
+                          disabled={!title.trim()}
+                          className="w-full rounded-2xl py-3.5 mt-6 font-medium disabled:opacity-40"
+                          style={{ backgroundColor: color, color: onColor }}
                         >
-                          <motion.button
-                            onClick={() => linkWorkout(undefined)}
-                            whileTap={tap}
-                            className={chipCls(!workoutSessionId)}
-                          >
-                            None
-                          </motion.button>
-                          {workoutSessions.map((s) => {
-                            const SIcon = WORKOUT_TYPE_META[s.type].icon;
-                            return (
-                              <motion.button
-                                key={s.id}
-                                onClick={() => linkWorkout(s.id)}
-                                whileTap={tap}
-                                className={`flex items-center gap-1.5 ${chipCls(workoutSessionId === s.id)}`}
-                              >
-                                <SIcon size={14} />
-                                {s.name}
-                              </motion.button>
-                            );
-                          })}
-                        </div>
-
-                        {linkedSession && (
-                          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs font-medium text-fg-muted">
-                                What you'll do
-                              </p>
-                              <motion.button
-                                onClick={() => {
-                                  openWorkoutSession(linkedSession.id);
-                                  onClose();
-                                }}
-                                whileTap={tap}
-                                className="flex items-center gap-1 text-xs font-medium"
-                                style={{ color }}
-                              >
-                                Open in Workout
-                                <ArrowUpRight size={14} />
-                              </motion.button>
-                            </div>
-                            {linkedSession.exercises.length === 0 ? (
-                              <p className="text-sm text-fg-faint">
-                                No exercises added to this session yet.
-                              </p>
-                            ) : (
-                              <div className="flex flex-col gap-2">
-                                {linkedSession.exercises.map((ex, i) => (
-                                  <div key={ex.id} className="flex items-baseline gap-2">
-                                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
-                                      {i + 1}.
-                                    </span>
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-fg leading-tight">
-                                        {ex.name}
-                                      </p>
-                                      {exerciseSummary(ex, linkedSession.type) && (
-                                        <p className="text-xs text-fg-faint">
-                                          {exerciseSummary(ex, linkedSession.type)}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
+                          Continue
+                        </motion.button>
+                      </motion.div>
                     )}
 
-                    {mode === "task" && recipes.length > 0 && (
-                      <>
-                        <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
-                          <ChefHat size={13} />
-                          Link a recipe (optional)
-                        </label>
-                        <div
-                          className="wheel-col flex gap-2 overflow-x-auto pb-1"
-                          style={{ scrollbarWidth: "none" }}
-                        >
-                          <motion.button
-                            onClick={() => linkRecipe(undefined)}
-                            whileTap={tap}
-                            className={chipCls(!recipeId)}
-                          >
-                            None
-                          </motion.button>
-                          {recipes.map((r) => (
-                            <motion.button
-                              key={r.id}
-                              onClick={() => linkRecipe(r.id)}
-                              whileTap={tap}
-                              className={`flex items-center gap-1.5 ${chipCls(recipeId === r.id)}`}
-                            >
-                              <ChefHat size={14} />
-                              {r.name}
-                            </motion.button>
-                          ))}
-                        </div>
-
-                        {linkedRecipe && (
-                          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs font-medium text-fg-muted">
-                                What to make
-                              </p>
-                              <motion.button
-                                onClick={() => {
-                                  openRecipe(linkedRecipe.id);
-                                  onClose();
-                                }}
-                                whileTap={tap}
-                                className="flex items-center gap-1 text-xs font-medium"
-                                style={{ color }}
-                              >
-                                Open in Recipes
-                                <ArrowUpRight size={14} />
-                              </motion.button>
-                            </div>
-
-                            {linkedRecipe.ingredients.length > 0 && (
-                              <p className="text-sm text-fg mb-2">
-                                {linkedRecipe.ingredients
-                                  .map((ing) => {
-                                    const item = catalog[ing.itemId];
-                                    if (!item) return null;
-                                    return `${item.name} (${formatAmount(item, ing.servings)})`;
-                                  })
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </p>
-                            )}
-
-                            {linkedRecipe.steps.length === 0 ? (
-                              <p className="text-sm text-fg-faint">
-                                No steps added to this recipe yet.
-                              </p>
-                            ) : (
-                              <div className="flex flex-col gap-1.5">
-                                {linkedRecipe.steps.map((step, i) => (
-                                  <div key={i} className="flex items-baseline gap-2">
-                                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
-                                      {i + 1}.
-                                    </span>
-                                    <p className="text-sm text-fg leading-snug">{step}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {mode === "habit" && (
-                      <>
-                        <label className="text-xs font-medium text-fg-muted mb-2 block mt-4">
-                          Repeat on
-                        </label>
-                        <div className="flex gap-2">
-                          {DAY_OPTIONS.map(({ label, value }) => (
-                            <motion.button
-                              key={value}
-                              onClick={() => toggleDay(value)}
-                              whileTap={tap}
-                              className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
-                            >
-                              {label}
-                            </motion.button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    <div className="flex gap-2 mt-6">
-                      <motion.button
-                        onClick={() => goTo(2)}
-                        whileTap={tap}
-                        className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
+                    {/* ---------------- STEP 2 — SCHEDULE ---------------- */}
+                    {step === 2 && (
+                      <motion.div
+                        key="step2"
+                        custom={dir}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.18 }}
                       >
-                        Back
-                      </motion.button>
-                      <motion.button
-                        onClick={handleSubmit}
-                        whileTap={tap}
-                        disabled={
-                          !title.trim() ||
-                          duration < 5 ||
-                          (mode === "habit" && daysOfWeek.length === 0)
-                        }
-                        className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
-                        style={{ backgroundColor: color, color: onColor }}
+                        {scheduleBody}
+
+                        <div className="flex gap-2 mt-6">
+                          <motion.button
+                            onClick={() => goTo(1)}
+                            whileTap={tap}
+                            className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
+                          >
+                            Back
+                          </motion.button>
+                          <motion.button
+                            onClick={() => goTo(3)}
+                            whileTap={tap}
+                            disabled={duration < 5 || startMin + duration > MINUTES_PER_DAY}
+                            className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
+                            style={{ backgroundColor: color, color: onColor }}
+                          >
+                            Continue
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* ---------------- STEP 3 — CONFIRM ---------------- */}
+                    {step === 3 && (
+                      <motion.div
+                        key="step3"
+                        custom={dir}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.18 }}
                       >
-                        {isEditing
-                          ? "Save changes"
-                          : mode === "task"
-                            ? "Add task"
-                            : "Add habit"}
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                        {/* Summary preview */}
+                        <div className="flex items-center gap-3 bg-surface-alt rounded-2xl p-3 mb-5">
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: color, color: onColor }}
+                          >
+                            <HeaderIcon size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs text-fg-faint">
+                              {rangeLabel(startMin, duration)} · {relativeDayLabel(date)}
+                            </p>
+                            <p className="font-semibold text-fg truncate">
+                              {title.trim() || "Untitled"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {typeLinksBody}
+
+                        <div className="flex gap-2 mt-6">
+                          <motion.button
+                            onClick={() => goTo(2)}
+                            whileTap={tap}
+                            className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
+                          >
+                            Back
+                          </motion.button>
+                          <motion.button
+                            onClick={handleSubmit}
+                            whileTap={tap}
+                            disabled={saveDisabled}
+                            className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
+                            style={{ backgroundColor: color, color: onColor }}
+                          >
+                            {mode === "task" ? "Add task" : "Add habit"}
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
             </div>
           </motion.div>
         </>

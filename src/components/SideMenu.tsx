@@ -16,10 +16,9 @@ interface SideMenuProps {
   onClose: () => void
   activePage: Page
   onNavigate: (page: Page) => void
-  onOpenProfile: () => void
 }
 
-export default function SideMenu({ isOpen, onClose, activePage, onNavigate, onOpenProfile }: SideMenuProps) {
+export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore()
   const name = useProfileStore((s) => s.name)
   useScrollLock(isOpen)
@@ -61,7 +60,6 @@ export default function SideMenu({ isOpen, onClose, activePage, onNavigate, onOp
             {/* User card */}
             <div className="px-5 pb-5">
               <motion.button
-                onClick={() => { onClose(); onOpenProfile() }}
                 whileTap={tap}
                 className="flex items-center gap-3 w-full text-left"
               >
