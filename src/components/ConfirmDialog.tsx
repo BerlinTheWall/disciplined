@@ -31,9 +31,20 @@ export interface ChooseOptions {
   cancelLabel?: string
 }
 
+export interface PromptOptions {
+  title: string
+  message?: string
+  placeholder?: string
+  defaultValue?: string
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
 interface ConfirmApi {
   confirm: (options: ConfirmOptions) => Promise<boolean>
   choose: (options: ChooseOptions) => Promise<string | null>
+  // Resolves the typed text (trimmed), or null if cancelled / dismissed.
+  prompt: (options: PromptOptions) => Promise<string | null>
 }
 
 const ConfirmContext = createContext<ConfirmApi | null>(null)
@@ -53,9 +64,17 @@ export function useChoose() {
   return ctx.choose
 }
 
+// Single text-input prompt. Resolves the typed string, or null if cancelled.
+export function usePrompt() {
+  const ctx = useContext(ConfirmContext)
+  if (!ctx) throw new Error('usePrompt must be used within a ConfirmProvider')
+  return ctx.prompt
+}
+
 type Pending =
   | { kind: 'confirm'; options: ConfirmOptions; resolve: (v: boolean) => void }
   | { kind: 'choose'; options: ChooseOptions; resolve: (v: string | null) => void }
+  | { kind: 'prompt'; options: PromptOptions; resolve: (v: string | null) => void }
 
 const PRIMARY_BTN = 'w-full rounded-xl py-2.5 font-medium bg-surface-inverse text-fg-inverse'
 const DESTRUCTIVE_BTN = 'w-full rounded-xl py-2.5 font-medium bg-red-500 text-white'
@@ -63,6 +82,7 @@ const CANCEL_BTN = 'w-full rounded-xl py-2.5 font-medium bg-surface-raised text-
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null)
+  const [promptText, setPromptText] = useState('')
 
   const confirm = useCallback<ConfirmApi['confirm']>(
     (options) =>
@@ -80,6 +100,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const prompt = useCallback<ConfirmApi['prompt']>(
+    (options) =>
+      new Promise<string | null>((resolve) => {
+        setPromptText(options.defaultValue ?? '')
+        setPending({ kind: 'prompt', options, resolve })
+      }),
+    [],
+  )
+
   // Resolve the open prompt and close it. `result` matches the pending kind:
   // boolean for confirm, string|null for choose.
   function close(result: boolean | string | null) {
@@ -90,10 +119,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   }
 
   // The value a dismissal (overlay tap / cancel) resolves to for each kind.
-  const dismissValue = pending?.kind === 'choose' ? null : false
+  const dismissValue = pending?.kind === 'confirm' ? false : null
 
   return (
-    <ConfirmContext.Provider value={{ confirm, choose }}>
+    <ConfirmContext.Provider value={{ confirm, choose, prompt }}>
       {children}
       {createPortal(
         <AnimatePresence>
@@ -124,7 +153,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                     </p>
                   )}
 
-                  {pending.kind === 'confirm' ? (
+                  {pending.kind === 'confirm' && (
                     <div className="flex gap-2 mt-5">
                       <motion.button
                         onClick={() => close(false)}
@@ -143,7 +172,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                         {pending.options.confirmLabel ?? 'Confirm'}
                       </motion.button>
                     </div>
-                  ) : (
+                  )}
+
+                  {pending.kind === 'choose' && (
                     <div className="flex flex-col gap-2 mt-5">
                       {pending.options.options.map((opt) => (
                         <motion.button
@@ -163,6 +194,37 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                         {pending.options.cancelLabel ?? 'Cancel'}
                       </motion.button>
                     </div>
+                  )}
+
+                  {pending.kind === 'prompt' && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        close(promptText.trim())
+                      }}
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        value={promptText}
+                        onChange={(e) => setPromptText(e.target.value)}
+                        placeholder={pending.options.placeholder}
+                        className="w-full mt-4 bg-surface-raised rounded-xl px-3.5 py-2.5 text-fg placeholder-fg-faint focus:outline-none"
+                      />
+                      <div className="flex gap-2 mt-4">
+                        <motion.button
+                          type="button"
+                          onClick={() => close(null)}
+                          whileTap={tap}
+                          className={CANCEL_BTN}
+                        >
+                          {pending.options.cancelLabel ?? 'Cancel'}
+                        </motion.button>
+                        <motion.button type="submit" whileTap={tap} className={PRIMARY_BTN}>
+                          {pending.options.confirmLabel ?? 'OK'}
+                        </motion.button>
+                      </div>
+                    </form>
                   )}
                 </motion.div>
               </div>

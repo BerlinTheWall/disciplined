@@ -4,7 +4,8 @@ import { persist } from "zustand/middleware";
 
 interface HabitStore {
   habits: Habit[];
-  addHabit: (habit: Omit<Habit, "id" | "completedDates">) => void;
+  // Returns the new habit's id so callers can link it (e.g. open it for editing).
+  addHabit: (habit: Omit<Habit, "id" | "completedDates">) => string;
   toggleHabitCompleted: (id: string, date: string) => void;
   updateHabitTime: (id: string, startMinutes: number) => void;
   updateHabitDuration: (id: string, durationMinutes: number) => void;
@@ -31,13 +32,13 @@ export const useHabitStore = create<HabitStore>()(
     (set) => ({
       habits: initialHabits,
 
-      addHabit: (habit) =>
+      addHabit: (habit) => {
+        const id = crypto.randomUUID();
         set((state) => ({
-          habits: [
-            ...state.habits,
-            { ...habit, id: crypto.randomUUID(), completedDates: [] },
-          ],
-        })),
+          habits: [...state.habits, { ...habit, id, completedDates: [] }],
+        }));
+        return id;
+      },
 
       toggleHabitCompleted: (id, date) =>
         set((state) => ({

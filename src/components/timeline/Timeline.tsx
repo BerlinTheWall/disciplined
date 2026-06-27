@@ -18,6 +18,7 @@ import ScheduleRow, {
 } from "./ScheduleRow";
 import WeeklyTimeline from "./WeeklyTimeline";
 import AddItemSheet from "./AddItemSheet";
+import QuickAddBar from "./QuickAddBar";
 import DoneTray from "./DoneTray";
 import { Plus } from "lucide-react";
 import type { Task } from "../../types/task";
@@ -314,6 +315,8 @@ export default function Timeline({ viewMode }: TimelineProps) {
 
   return (
     <>
+      <QuickAddBar onEditDetails={setEditItem} />
+
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
           <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
