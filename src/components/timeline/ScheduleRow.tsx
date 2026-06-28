@@ -46,6 +46,7 @@ interface ScheduleRowProps extends ScheduleRowData {
   virtualTop?: number; // compressed-layout position; falls back to real-time position when omitted
   overlapping?: boolean; // item shares time with another — tints its time labels
   isCurrent?: boolean; // task happening right now — gets a pulsing border
+  entrance?: boolean; // play the mount-in animation (off for off-screen pager panels)
 }
 
 export default function ScheduleRow({
@@ -61,6 +62,7 @@ export default function ScheduleRow({
   virtualTop,
   overlapping = false,
   isCurrent = false,
+  entrance = true,
   onToggle,
   onEdit,
 }: ScheduleRowProps) {
@@ -92,7 +94,7 @@ export default function ScheduleRow({
   return (
     <motion.div
       data-item-id={id}
-      initial={{ opacity: 0, scale: 0.92 }}
+      initial={entrance ? { opacity: 0, scale: 0.92 } : false}
       // top/height are animated so that when an item is checked off and leaves,
       // the rows below glide up to fill the gap instead of snapping.
       animate={{

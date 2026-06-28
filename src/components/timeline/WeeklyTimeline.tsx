@@ -173,7 +173,13 @@ function WeeklyPill({
   )
 }
 
-export default function WeeklyTimeline() {
+interface WeeklyTimelineProps {
+  // Which week to show — defaults to the week of the selected date. The pager
+  // passes neighbouring weeks for its off-screen panels.
+  anchorDate?: Date
+}
+
+export default function WeeklyTimeline({ anchorDate }: WeeklyTimelineProps) {
   const tasks = useTaskStore((s) => s.tasks)
   const selectedDate = useTaskStore((s) => s.selectedDate)
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate)
@@ -184,8 +190,7 @@ export default function WeeklyTimeline() {
 
   const [editItem, setEditItem] = useState<EditItem | null>(null)
 
-  const selectedDateObj = new Date(selectedDate + 'T00:00:00')
-  const weekDates = getWeekDates(selectedDateObj)
+  const weekDates = getWeekDates(anchorDate ?? new Date(selectedDate + 'T00:00:00'))
 
   type DayItem = {
     id: string
@@ -313,7 +318,7 @@ export default function WeeklyTimeline() {
       {/* gap-1 + a 32px axis match the WeekHeader's gutter and column gaps, so
           each day column lines up under its weekday label. pt-2 gives the top
           hour label room (it's nudged up to center on the hour line). */}
-      <div className="flex overflow-x-hidden gap-1 pt-2">
+      <div className="flex overflow-x-clip gap-1 pt-2">
         {/* Time axis — labels only, no lines */}
         <div className="w-8 shrink-0 relative" style={{ height: containerHeight }}>
           {timeLabels.map((mins) => (

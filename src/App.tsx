@@ -6,7 +6,10 @@ import AddItemSheet from './components/timeline/AddItemSheet'
 import PlanDaySheet from './components/timeline/PlanDaySheet'
 import AddGroceryItemSheet from './components/expenses/AddGroceryItemSheet'
 import WeekHeader from './components/timeline/WeekHeader'
+import { WeekSwipeContext, useSwipeController } from './components/timeline/swipeController'
 import BottomNav, { type Page } from './components/BottomNav'
+import { useTaskStore } from './store/taskStore'
+import { addDays, toISODate } from './lib/date'
 import { useWorkoutFocusStore } from './store/workoutFocusStore'
 import { useRecipeFocusStore } from './store/recipeFocusStore'
 import SideMenu from './components/SideMenu'
@@ -47,6 +50,15 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false)
 
+  // In weekly view the week strip and the weekly grid share one drag controller
+  // so swiping either moves both together. Reads the date at commit time via
+  // getState so the handlers never go stale.
+  const swipeToDate = useTaskStore((s) => s.swipeToDate)
+  const shiftWeek = (delta: number) => {
+    const cur = new Date(useTaskStore.getState().selectedDate + 'T00:00:00')
+    swipeToDate(toISODate(addDays(cur, delta * 7)))
+  }
+  const weekController = useSwipeController(() => shiftWeek(-1), () => shiftWeek(1))
 
   function go(p: Page) {
     if (p === activePage) return
@@ -93,10 +105,12 @@ function App() {
     switch (activePage) {
       case 'schedule':
         return (
-          <>
+          // Only weekly view shares the controller (strip + grid both move by
+          // week); daily keeps them independent (strip = weeks, content = days).
+          <WeekSwipeContext.Provider value={viewMode === 'weekly' ? weekController : null}>
             <WeekHeader leftGutter={viewMode === 'weekly' ? 32 : 0} />
             <Timeline viewMode={viewMode} />
-          </>
+          </WeekSwipeContext.Provider>
         )
       case 'meals':
         return <MealsPage />
