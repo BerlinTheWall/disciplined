@@ -146,19 +146,19 @@ function App() {
               whileTap={tap}
               className="p-1 -ml-1 text-fg-faint"
             >
-              <Menu size={22} />
+              <Menu size={26} />
             </motion.button>
 
-            <div className="relative h-8 flex items-center overflow-hidden">
+            <div className="relative h-10 flex items-center overflow-hidden">
               <AnimatePresence mode="popLayout" custom={dir} initial={false}>
                 <motion.h1
                   key={activePage}
                   custom={dir}
-                  initial={{ y: dir > 0 ? 22 : -22, opacity: 0 }}
+                  initial={{ y: dir > 0 ? 24 : -24, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: dir > 0 ? -22 : 22, opacity: 0 }}
+                  exit={{ y: dir > 0 ? -24 : 24, opacity: 0 }}
                   transition={spring.snappy}
-                  className="text-2xl font-bold whitespace-nowrap text-fg"
+                  className="text-3xl font-bold whitespace-nowrap text-fg"
                 >
                   {PAGE_TITLES[activePage]}
                 </motion.h1>
@@ -179,9 +179,9 @@ function App() {
                 <motion.button
                   onClick={() => setIsPlanOpen(true)}
                   whileTap={tap}
-                  className="flex items-center gap-1.5 bg-surface-raised rounded-lg px-2.5 py-1.5 text-sm font-medium text-fg"
+                  className="flex items-center gap-1.5 bg-surface-raised rounded-lg px-3 py-2 text-base font-medium text-fg"
                 >
-                  <CalendarPlus size={15} />
+                  <CalendarPlus size={17} />
                   Plan day
                 </motion.button>
                 <div className="flex items-center bg-surface-raised rounded-lg p-0.5">
@@ -204,7 +204,7 @@ function App() {
                         viewMode === m ? 'text-fg' : 'text-fg-faint'
                       }`}
                     >
-                      {m === 'daily' ? <AlignLeft size={15} /> : <LayoutGrid size={15} />}
+                      {m === 'daily' ? <AlignLeft size={17} /> : <LayoutGrid size={17} />}
                     </span>
                   </button>
                 ))}

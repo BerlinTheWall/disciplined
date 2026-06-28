@@ -49,13 +49,13 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
               onClick={() => setSelectedDate(iso)}
               className="flex flex-col items-center gap-1 flex-1 py-1"
             >
-              <span className={`text-[9px] font-medium uppercase tracking-wide ${
+              <span className={`text-[11px] font-medium uppercase tracking-wide ${
                 isSelected ? 'text-fg' : 'text-fg-faint'
               }`}>
                 {getDayLabel(date)}
               </span>
 
-              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${
+              <span className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-medium ${
                 isSelected
                   ? 'bg-fg text-fg-inverse'
                   : isToday
@@ -83,22 +83,22 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
           whileTap={tap}
           className="p-2 -m-2 text-fg-faint"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={18} />
         </motion.button>
         <motion.button
           onClick={() => setPickerOpen(true)}
           whileTap={tap}
-          className="flex items-center gap-1 text-[11px] font-medium text-fg-faint uppercase tracking-widest"
+          className="flex items-center gap-1 text-sm font-medium text-fg-faint uppercase tracking-widest"
         >
           {formatMonthYear(selectedDateObj)}
-          <ChevronDown size={13} />
+          <ChevronDown size={15} />
         </motion.button>
         <motion.button
           onClick={() => shiftWeek(1)}
           whileTap={tap}
           className="p-2 -m-2 text-fg-faint"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={18} />
         </motion.button>
       </div>
 

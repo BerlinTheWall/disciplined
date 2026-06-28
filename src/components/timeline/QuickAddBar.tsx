@@ -513,15 +513,15 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
     <div className="mb-4">
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-2 bg-surface-raised rounded-full pl-4 pr-1.5 py-1.5"
+        className="flex items-center gap-2 bg-surface-raised rounded-full pl-4 pr-1.5 py-2"
       >
-        <Plus size={18} className="text-fg-faint shrink-0" />
+        <Plus size={20} className="text-fg-faint shrink-0" />
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={PLACEHOLDER}
-          className="flex-1 min-w-0 bg-transparent text-sm text-fg placeholder-fg-faint focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
         />
         <AnimatePresence>
           {text.trim() && (
@@ -533,9 +533,9 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
               transition={spring.snappy}
               whileTap={tap}
               aria-label="Submit"
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-surface-inverse text-fg-inverse"
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-inverse text-fg-inverse"
             >
-              <ArrowRight size={16} />
+              <ArrowRight size={18} />
             </motion.button>
           )}
         </AnimatePresence>
