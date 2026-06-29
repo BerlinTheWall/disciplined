@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, Check } from "lucide-react";
-import { ICONS } from "../../lib/icons";
-import { formatTimeLabel } from "../../lib/time";
-import { spring, tap } from "../../lib/motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, ChevronRight } from "lucide-react";
+
 import type { ScheduleRowData } from "./ScheduleRow";
+import { ICONS } from "@/lib/icons";
+import { spring, tap } from "@/lib/motion";
+import { formatTimeLabel } from "@/lib/time";
 
 interface DoneTrayProps {
   items: ScheduleRowData[];
@@ -35,9 +36,7 @@ export default function DoneTray({ items, onToggle, onEdit }: DoneTrayProps) {
         >
           <ChevronRight size={18} />
         </motion.span>
-        <span className="text-sm font-medium text-fg-muted">
-          Completed ({items.length})
-        </span>
+        <span className="text-sm font-medium text-fg-muted">Completed ({items.length})</span>
       </button>
 
       <AnimatePresence initial={false}>
@@ -70,10 +69,7 @@ export default function DoneTray({ items, onToggle, onEdit }: DoneTrayProps) {
                       <IconComponent size={16} />
                     </div>
 
-                    <div
-                      onClick={() => onEdit(item.id)}
-                      className="flex-1 min-w-0 cursor-pointer"
-                    >
+                    <div onClick={() => onEdit(item.id)} className="flex-1 min-w-0 cursor-pointer">
                       <span className="block truncate text-base text-fg-faint line-through">
                         {item.title}
                       </span>

@@ -2,18 +2,18 @@
 // (by id) scaled by servings. Diet totals roll up from meals — what you
 // consumed — which is deliberately distinct from what a shopping trip brought
 // into the house. Both read the same catalog; meals read its nutrition column.
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
 export interface MealComponent {
-  itemId: string
-  servings: number // multiples of the catalog item's reference amount
+  itemId: string;
+  servings: number; // multiples of the catalog item's reference amount
 }
 
 export interface Meal {
-  id: string
-  name: string
-  type: MealType
-  date: string // ISO date
-  components: MealComponent[]
-  recipeId?: string // set when this meal was logged from a recipe
+  id: string;
+  name: string;
+  type: MealType;
+  date: string; // ISO date
+  components: MealComponent[];
+  recipeId?: string; // set when this meal was logged from a recipe
 }

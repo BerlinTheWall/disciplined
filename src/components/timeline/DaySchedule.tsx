@@ -1,20 +1,14 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { useTaskStore } from "../../store/taskStore";
-import { useHabitStore } from "../../store/habitStore";
-import { isHabitActiveOnDate, getHabitStreak } from "../../lib/habits";
-import {
-  minutesToPx,
-  getPillHeight,
-  computeCompressedLayout,
-} from "../../lib/time";
-import ScheduleRow, {
-  MIN_ROW_HEIGHT,
-  type ScheduleRowData,
-} from "./ScheduleRow";
-import DoneTray from "./DoneTray";
 import { Plus } from "lucide-react";
+
+import DoneTray from "./DoneTray";
+import ScheduleRow, { MIN_ROW_HEIGHT, type ScheduleRowData } from "./ScheduleRow";
 import type { EditItem } from "./Timeline";
+import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
+import { computeCompressedLayout, getPillHeight, minutesToPx } from "@/lib/time";
+import { useHabitStore } from "@/store/habitStore";
+import { useTaskStore } from "@/store/taskStore";
 
 const ICON_CENTER_X = 68;
 const DEFAULT_START_MINUTES = 6 * 60;
@@ -56,10 +50,7 @@ function localDateString(d: Date) {
 // contains nowMinutes (most recently started wins when several overlap, so a
 // short task nested in a long one takes precedence); otherwise the next upcoming
 // item; otherwise the last item of the day.
-function findCurrentItemId(
-  items: ScheduleRowData[],
-  nowMinutes: number,
-): string | null {
+function findCurrentItemId(items: ScheduleRowData[], nowMinutes: number): string | null {
   if (!items.length) return null;
 
   let current: ScheduleRowData | null = null;
@@ -80,10 +71,7 @@ function findCurrentItemId(
 // The item whose span strictly contains nowMinutes (latest start wins when
 // several overlap), or null if now falls in a gap. Used for the "happening now"
 // row highlight — unlike findCurrentItemId, it has no upcoming/last fallback.
-function findActiveItemId(
-  items: ScheduleRowData[],
-  nowMinutes: number,
-): string | null {
+function findActiveItemId(items: ScheduleRowData[], nowMinutes: number): string | null {
   let active: ScheduleRowData | null = null;
   for (const item of items) {
     const end = item.startMinutes + item.durationMinutes;
@@ -98,11 +86,7 @@ function findActiveItemId(
 function lerpHex(a: string, b: string, t: number) {
   const parse = (h: string) => {
     const c = h.replace("#", "");
-    return [
-      parseInt(c.slice(0, 2), 16),
-      parseInt(c.slice(2, 4), 16),
-      parseInt(c.slice(4, 6), 16),
-    ];
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
   };
   const [r1, g1, b1] = parse(a);
   const [r2, g2, b2] = parse(b);
@@ -132,7 +116,7 @@ function buildLineStops(
   topColor: string,
   bottomColor: string,
   topDone: boolean,
-  bottomDone: boolean,
+  bottomDone: boolean
 ): LineStop[] {
   const topEdge = Math.min(Math.max(rTop, 0), lineH);
   const bottomEdge = Math.max(Math.min(lineH - rBottom, lineH), 0);
@@ -202,9 +186,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
       streak: getHabitStreak(h, dateObj),
     }));
 
-  const items = [...taskItems, ...habitItems].sort(
-    (a, b) => a.startMinutes - b.startMinutes,
-  );
+  const items = [...taskItems, ...habitItems].sort((a, b) => a.startMinutes - b.startMinutes);
 
   // Completed items leave the timeline and collapse into the Done tray below, so
   // the schedule only lays out (and draws connectors between) what's still to do.
@@ -212,7 +194,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
   const doneItems = items.filter((i) => i.completed);
 
   const layout = computeCompressedLayout(activeItems, (item) =>
-    Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
+    Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT)
   );
 
   // Items that take part in any overlap — used to tint their time labels.
@@ -235,17 +217,14 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
       : null;
 
   const earliestItem = activeItems[0];
-  const startOffset = earliestItem
-    ? earliestItem.startMinutes
-    : DEFAULT_START_MINUTES;
+  const startOffset = earliestItem ? earliestItem.startMinutes : DEFAULT_START_MINUTES;
 
   const containerHeight = activeItems.length
     ? Math.max(
         ...activeItems.map(
           (item) =>
-            layout.topYById[item.id] +
-            Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT),
-        ),
+            layout.topYById[item.id] + Math.max(minutesToPx(item.durationMinutes), MIN_ROW_HEIGHT)
+        )
       )
     : 0;
 
@@ -263,17 +242,12 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
     if (!focusId || !root) return;
 
     const scroller = root.closest("[data-scroll-lock]") as HTMLElement | null;
-    const target = root.querySelector(
-      `[data-item-id="${focusId}"]`,
-    ) as HTMLElement | null;
+    const target = root.querySelector(`[data-item-id="${focusId}"]`) as HTMLElement | null;
     if (!scroller || !target) return;
 
     const targetRect = target.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
-    const delta =
-      targetRect.top -
-      scrollerRect.top -
-      scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
+    const delta = targetRect.top - scrollerRect.top - scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
     scroller.scrollTop += delta; // scrollTop self-clamps to the valid range
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, active]);
@@ -315,11 +289,9 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
         {/* Gradient connector lines between items */}
         {activeItems.slice(0, -1).map((item, i) => {
           const next = activeItems[i + 1];
-          const gap = layout.gaps.find(
-            (g) => g.afterId === item.id && g.beforeId === next.id,
-          );
+          const gap = layout.gaps.find((g) => g.afterId === item.id && g.beforeId === next.id);
           const overlap = layout.overlaps.find(
-            (o) => o.afterId === item.id && o.beforeId === next.id,
+            (o) => o.afterId === item.id && o.beforeId === next.id
           );
 
           const topY =
@@ -337,10 +309,8 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
           // true centers, so the clip radius is just the pill radius scaled by
           // the completed-icon scale (the smallest the icon ever gets).
           const lineH = bottomY - topY;
-          const rTop =
-            (getPillHeight(item.durationMinutes) / 2) * COMPLETED_ICON_SCALE;
-          const rBottom =
-            (getPillHeight(next.durationMinutes) / 2) * COMPLETED_ICON_SCALE;
+          const rTop = (getPillHeight(item.durationMinutes) / 2) * COMPLETED_ICON_SCALE;
+          const rBottom = (getPillHeight(next.durationMinutes) / 2) * COMPLETED_ICON_SCALE;
           const lineStops = buildLineStops(
             lineH,
             rTop,
@@ -348,7 +318,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
             item.color,
             next.color,
             item.completed,
-            next.completed,
+            next.completed
           );
 
           if (overlap) {
@@ -363,8 +333,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
                   ? `overlaps by ${mLabel}`
                   : `overlaps by ${hLabel} and ${mLabel}`;
 
-            const prevBottomEdge =
-              layout.topYById[item.id] + getPillHeight(item.durationMinutes);
+            const prevBottomEdge = layout.topYById[item.id] + getPillHeight(item.durationMinutes);
             const nextTopEdge = layout.topYById[next.id];
             const labelY = (prevBottomEdge + nextTopEdge) / 2;
             const overlapGradientId = `overlap-grad-${item.id}-${next.id}`;
@@ -379,15 +348,14 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
                   height: bottomY - topY,
                 }}
               >
-                <svg
-                  width="6"
-                  height={bottomY - topY}
-                  style={{ overflow: "visible" }}
-                >
+                <svg width="6" height={bottomY - topY} style={{ overflow: "visible" }}>
                   <defs>
                     <linearGradient
                       id={overlapGradientId}
-                      x1="0" y1="0" x2="0" y2={bottomY - topY}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2={bottomY - topY}
                       gradientUnits="userSpaceOnUse"
                     >
                       {lineStops.map((s, idx) => (
@@ -446,8 +414,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
                   ? `${mLabel} break`
                   : `${hLabel} and ${mLabel} break`;
 
-            const prevBottomEdge =
-              layout.topYById[item.id] + getPillHeight(item.durationMinutes);
+            const prevBottomEdge = layout.topYById[item.id] + getPillHeight(item.durationMinutes);
             const nextTopEdge = layout.topYById[next.id];
             const labelY = (prevBottomEdge + nextTopEdge) / 2;
             const gapGradientId = `gap-grad-${item.id}-${next.id}`;
@@ -462,15 +429,14 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
                   height: bottomY - topY,
                 }}
               >
-                <svg
-                  width="2"
-                  height={bottomY - topY}
-                  style={{ overflow: "visible" }}
-                >
+                <svg width="2" height={bottomY - topY} style={{ overflow: "visible" }}>
                   <defs>
                     <linearGradient
                       id={gapGradientId}
-                      x1="0" y1="0" x2="0" y2={bottomY - topY}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2={bottomY - topY}
                       gradientUnits="userSpaceOnUse"
                     >
                       {lineStops.map((s, idx) => (
@@ -522,22 +488,11 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   {lineStops.map((s, idx) => (
-                    <stop
-                      key={idx}
-                      offset={s.offset}
-                      stopColor={s.color}
-                      stopOpacity={s.opacity}
-                    />
+                    <stop key={idx} offset={s.offset} stopColor={s.color} stopOpacity={s.opacity} />
                   ))}
                 </linearGradient>
               </defs>
-              <rect
-                x="0"
-                y="0"
-                width="2"
-                height={bottomY - topY}
-                fill={`url(#${gradientId})`}
-              />
+              <rect x="0" y="0" width="2" height={bottomY - topY} fill={`url(#${gradientId})`} />
             </svg>
           );
         })}

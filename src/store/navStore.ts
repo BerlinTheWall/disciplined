@@ -1,12 +1,13 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { type Page, PAGE_ORDER } from '../lib/pages'
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-const DEFAULT_NAVBAR: Page[] = ['schedule', 'meals', 'workout', 'habits']
+import { PAGE_ORDER, type Page } from "@/lib/pages";
+
+const DEFAULT_NAVBAR: Page[] = ["schedule", "meals", "workout", "habits"];
 
 interface NavStore {
-  navbarPages: Page[]
-  toggleNavbar: (page: Page) => void
+  navbarPages: Page[];
+  toggleNavbar: (page: Page) => void;
 }
 
 export const useNavStore = create<NavStore>()(
@@ -14,17 +15,17 @@ export const useNavStore = create<NavStore>()(
     (set, get) => ({
       navbarPages: DEFAULT_NAVBAR,
       toggleNavbar: (page: Page) => {
-        if (page === 'schedule') return
-        const current = get().navbarPages
-        const inNav = current.includes(page)
+        if (page === "schedule") return;
+        const current = get().navbarPages;
+        const inNav = current.includes(page);
         if (inNav) {
-          set({ navbarPages: current.filter((p) => p !== page) })
+          set({ navbarPages: current.filter((p) => p !== page) });
         } else if (current.length < 4) {
-          const next = PAGE_ORDER.filter((p) => [...current, page].includes(p))
-          set({ navbarPages: next })
+          const next = PAGE_ORDER.filter((p) => [...current, page].includes(p));
+          set({ navbarPages: next });
         }
       },
     }),
-    { name: 'nav-config' },
-  ),
-)
+    { name: "nav-config" }
+  )
+);

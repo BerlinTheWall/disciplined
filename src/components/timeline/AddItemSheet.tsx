@@ -1,25 +1,36 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Trash2, Calendar, ChevronRight, Repeat, CheckCircle2, Check } from "lucide-react";
-import { Dumbbell, ArrowUpRight, ChefHat } from "lucide-react";
-import { useTaskStore } from "../../store/taskStore";
-import { useHabitStore } from "../../store/habitStore";
-import { useWorkoutStore } from "../../store/workoutStore";
-import { useWorkoutFocusStore } from "../../store/workoutFocusStore";
-import { useRecipeStore } from "../../store/recipeStore";
-import { useRecipeFocusStore } from "../../store/recipeFocusStore";
-import { useGroceryStore } from "../../store/groceryStore";
-import { indexItems, formatAmount } from "../../lib/grocery";
-import { WORKOUT_TYPE_META, exerciseSummary } from "../../lib/workout";
-import { ICONS, guessIcon } from "../../lib/icons";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowUpRight,
+  Calendar,
+  Check,
+  CheckCircle2,
+  ChefHat,
+  ChevronRight,
+  Dumbbell,
+  Repeat,
+  Trash2,
+  X,
+} from "lucide-react";
+
 import type { EditItem } from "./Timeline";
-import { spring, tap } from "../../lib/motion";
-import { useScrollLock } from "../../hooks/useScrollLock";
-import { useAutoFocus } from "../../hooks/useAutoFocus";
-import { useConfirm, useChoose } from "../ConfirmDialog";
+import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { formatAmount, indexItems } from "@/lib/grocery";
+import { guessIcon, ICONS } from "@/lib/icons";
+import { spring, tap } from "@/lib/motion";
+import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
+import { useGroceryStore } from "@/store/groceryStore";
+import { useHabitStore } from "@/store/habitStore";
+import { useRecipeFocusStore } from "@/store/recipeFocusStore";
+import { useRecipeStore } from "@/store/recipeStore";
+import { useTaskStore } from "@/store/taskStore";
+import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
+import { useWorkoutStore } from "@/store/workoutStore";
+import { useChoose, useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
   "#34d399",
@@ -133,7 +144,7 @@ function TimeWheel({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedIndex = Math.max(
     0,
-    Math.min(TIME_STEPS.length - 1, snap15(timeStringToMinutes(value)) / STEP),
+    Math.min(TIME_STEPS.length - 1, snap15(timeStringToMinutes(value)) / STEP)
   );
   const [active, setActive] = useState(selectedIndex);
 
@@ -148,7 +159,7 @@ function TimeWheel({
     if (!el) return;
     const idx = Math.max(
       0,
-      Math.min(TIME_STEPS.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_H)),
+      Math.min(TIME_STEPS.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_H))
     );
     setActive(idx);
     if (timer.current) clearTimeout(timer.current);
@@ -180,9 +191,7 @@ function TimeWheel({
                 {rangeLabel(min, durationMinutes)}
               </span>
             ) : (
-              <span className="text-base tabular-nums text-fg-disabled">
-                {label24(min)}
-              </span>
+              <span className="text-base tabular-nums text-fg-disabled">{label24(min)}</span>
             )}
           </div>
         ))}
@@ -206,11 +215,7 @@ interface AddItemSheetProps {
   editItem?: EditItem | null;
 }
 
-export default function AddItemSheet({
-  isOpen,
-  onClose,
-  editItem,
-}: AddItemSheetProps) {
+export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheetProps) {
   const addTask = useTaskStore((s) => s.addTask);
   const updateTask = useTaskStore((s) => s.updateTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
@@ -261,7 +266,7 @@ export default function AddItemSheet({
       setTime(minutesToTimeString(editItem.data.startMinutes));
       const loadedDuration = Math.min(
         editItem.data.durationMinutes,
-        MINUTES_PER_DAY - editItem.data.startMinutes,
+        MINUTES_PER_DAY - editItem.data.startMinutes
       );
       setDuration(loadedDuration);
       const custom = !DURATION_OPTIONS.includes(loadedDuration);
@@ -271,12 +276,8 @@ export default function AddItemSheet({
       setColor(editItem.data.color);
       setIcon(editItem.data.icon);
       setIconTouched(true);
-      setDaysOfWeek(
-        editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6],
-      );
-      setWorkoutSessionId(
-        editItem.type === "task" ? editItem.data.workoutSessionId : undefined,
-      );
+      setDaysOfWeek(editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6]);
+      setWorkoutSessionId(editItem.type === "task" ? editItem.data.workoutSessionId : undefined);
       setRecipeId(editItem.type === "task" ? editItem.data.recipeId : undefined);
     } else {
       resetForm();
@@ -324,13 +325,13 @@ export default function AddItemSheet({
   }
 
   function handleTitleChange(value: string) {
-    setTitle(value)
-    if (value === '') {
-      setIconTouched(false)
-      setIcon('alarm')
+    setTitle(value);
+    if (value === "") {
+      setIconTouched(false);
+      setIcon("alarm");
     } else if (!iconTouched) {
-      const guess = guessIcon(value)
-      if (guess) setIcon(guess)
+      const guess = guessIcon(value);
+      if (guess) setIcon(guess);
     }
   }
 
@@ -338,8 +339,7 @@ export default function AddItemSheet({
     const cleanH = hStr.replace(/\D/g, "").slice(0, 2);
     const cleanM = mStr.replace(/\D/g, "").slice(0, 2);
     const maxDur = MINUTES_PER_DAY - timeStringToMinutes(time);
-    const raw =
-      Math.min(23, Number(cleanH || 0)) * 60 + Math.min(59, Number(cleanM || 0));
+    const raw = Math.min(23, Number(cleanH || 0)) * 60 + Math.min(59, Number(cleanM || 0));
     const clamped = Math.min(raw, maxDur);
     if (clamped !== raw) {
       setCustomH(String(Math.floor(clamped / 60)));
@@ -363,7 +363,7 @@ export default function AddItemSheet({
 
   function toggleDay(value: number) {
     setDaysOfWeek((prev) =>
-      prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value],
+      prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value]
     );
   }
 
@@ -478,9 +478,7 @@ export default function AddItemSheet({
 
   const detailsBody = (
     <div>
-      <label className="text-xs font-medium text-fg-muted mb-2 block">
-        Color
-      </label>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">Color</label>
       <div
         className="wheel-col flex gap-3 overflow-x-auto bg-surface-raised rounded-full p-1.5 mb-5"
         style={{ scrollbarWidth: "none" }}
@@ -500,13 +498,8 @@ export default function AddItemSheet({
         ))}
       </div>
 
-      <label className="text-xs font-medium text-fg-muted mb-2 block">
-        Icon
-      </label>
-      <div
-        className="wheel-col flex gap-2 overflow-x-auto pb-1"
-        style={{ scrollbarWidth: "none" }}
-      >
+      <label className="text-xs font-medium text-fg-muted mb-2 block">Icon</label>
+      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {(Object.keys(ICONS) as Array<keyof typeof ICONS>)
           .filter((key) => key !== "default")
           .map((key) => {
@@ -515,7 +508,10 @@ export default function AddItemSheet({
             return (
               <motion.button
                 key={key}
-                onClick={() => { setIcon(key); setIconTouched(true) }}
+                onClick={() => {
+                  setIcon(key);
+                  setIconTouched(true);
+                }}
                 whileTap={tap}
                 className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                 style={{
@@ -533,9 +529,7 @@ export default function AddItemSheet({
 
   const scheduleBody = (
     <div>
-      <label className="text-xs font-medium text-fg-muted mb-2 block">
-        Date
-      </label>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">Date</label>
       <div className="relative mb-5">
         <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3">
           <span className="flex items-center gap-2 text-fg font-medium">
@@ -555,9 +549,7 @@ export default function AddItemSheet({
         />
       </div>
 
-      <label className="text-xs font-medium text-fg-muted mb-2 block">
-        Start time
-      </label>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">Start time</label>
       <div className="mb-5">
         <TimeWheel
           value={time}
@@ -567,13 +559,8 @@ export default function AddItemSheet({
         />
       </div>
 
-      <label className="text-xs font-medium text-fg-muted mb-2 block">
-        Duration
-      </label>
-      <div
-        className="wheel-col flex gap-2 overflow-x-auto pb-1"
-        style={{ scrollbarWidth: "none" }}
-      >
+      <label className="text-xs font-medium text-fg-muted mb-2 block">Duration</label>
+      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {DURATION_OPTIONS.map((d) => {
           const tooLong = d > maxDuration;
           return (
@@ -643,9 +630,7 @@ export default function AddItemSheet({
 
   const typeLinksBody = (
     <div>
-      <label className="text-xs font-medium text-fg-muted mb-2 block">
-        This is a…
-      </label>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">This is a…</label>
       <div className="flex flex-col gap-2">
         {(["task", "habit"] as const).map((m) => {
           const selected = mode === m;
@@ -665,11 +650,7 @@ export default function AddItemSheet({
                   color: selected ? onColor : "var(--fg-muted)",
                 }}
               >
-                {m === "task" ? (
-                  <CheckCircle2 size={18} />
-                ) : (
-                  <Repeat size={18} />
-                )}
+                {m === "task" ? <CheckCircle2 size={18} /> : <Repeat size={18} />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-fg">
@@ -681,9 +662,7 @@ export default function AddItemSheet({
                     : "Repeats on the days you pick"}
                 </p>
               </div>
-              {selected && (
-                <Check size={18} className="text-fg shrink-0" />
-              )}
+              {selected && <Check size={18} className="text-fg shrink-0" />}
             </motion.button>
           );
         })}
@@ -725,9 +704,7 @@ export default function AddItemSheet({
           {linkedSession && (
             <div className="mt-3 rounded-2xl bg-surface-alt p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-fg-muted">
-                  What you'll do
-                </p>
+                <p className="text-xs font-medium text-fg-muted">What you'll do</p>
                 <motion.button
                   onClick={() => {
                     openWorkoutSession(linkedSession.id);
@@ -742,9 +719,7 @@ export default function AddItemSheet({
                 </motion.button>
               </div>
               {linkedSession.exercises.length === 0 ? (
-                <p className="text-sm text-fg-faint">
-                  No exercises added to this session yet.
-                </p>
+                <p className="text-sm text-fg-faint">No exercises added to this session yet.</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {linkedSession.exercises.map((ex, i) => (
@@ -753,9 +728,7 @@ export default function AddItemSheet({
                         {i + 1}.
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-fg leading-tight">
-                          {ex.name}
-                        </p>
+                        <p className="text-sm font-medium text-fg leading-tight">{ex.name}</p>
                         {exerciseSummary(ex, linkedSession.type) && (
                           <p className="text-xs text-fg-faint">
                             {exerciseSummary(ex, linkedSession.type)}
@@ -804,9 +777,7 @@ export default function AddItemSheet({
           {linkedRecipe && (
             <div className="mt-3 rounded-2xl bg-surface-alt p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-fg-muted">
-                  What to make
-                </p>
+                <p className="text-xs font-medium text-fg-muted">What to make</p>
                 <motion.button
                   onClick={() => {
                     openRecipe(linkedRecipe.id);
@@ -835,9 +806,7 @@ export default function AddItemSheet({
               )}
 
               {linkedRecipe.steps.length === 0 ? (
-                <p className="text-sm text-fg-faint">
-                  No steps added to this recipe yet.
-                </p>
+                <p className="text-sm text-fg-faint">No steps added to this recipe yet.</p>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {linkedRecipe.steps.map((step, i) => (
@@ -857,9 +826,7 @@ export default function AddItemSheet({
 
       {mode === "habit" && (
         <>
-          <label className="text-xs font-medium text-fg-muted mb-2 block mt-4">
-            Repeat on
-          </label>
+          <label className="text-xs font-medium text-fg-muted mb-2 block mt-4">Repeat on</label>
           <div className="flex gap-2">
             {DAY_OPTIONS.map(({ label, value }) => (
               <motion.button
@@ -878,9 +845,7 @@ export default function AddItemSheet({
   );
 
   const saveDisabled =
-    !title.trim() ||
-    duration < 5 ||
-    (mode === "habit" && daysOfWeek.length === 0);
+    !title.trim() || duration < 5 || (mode === "habit" && daysOfWeek.length === 0);
 
   return (
     <AnimatePresence>
@@ -902,19 +867,14 @@ export default function AddItemSheet({
             transition={spring.snappy}
           >
             {/* Colored header — persists across steps */}
-            <div
-              className="px-4 pt-3 pb-5 rounded-t-2xl"
-              style={{ backgroundColor: color }}
-            >
+            <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
               <div className="flex items-center justify-between">
                 <motion.button
                   onClick={onClose}
                   whileTap={tap}
                   className="w-9 h-9 rounded-full flex items-center justify-center"
                   style={{
-                    backgroundColor: isLightColor(color)
-                      ? "rgba(0,0,0,0.12)"
-                      : "rgba(0,0,0,0.25)",
+                    backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
                     color: onColor,
                   }}
                 >

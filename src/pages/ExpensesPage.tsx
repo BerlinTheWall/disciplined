@@ -1,134 +1,124 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  CalendarPlus,
-  Check,
-  Minus,
-  Pencil,
-  Plus,
-  ShoppingCart,
-  X,
-} from 'lucide-react'
-import { useExpenseStore } from '../store/expenseStore'
-import { useGroceryStore } from '../store/groceryStore'
-import { useShoppingListStore } from '../store/shoppingListStore'
-import { useTaskStore } from '../store/taskStore'
-import { CATEGORIES } from '../lib/categories'
-import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from '../lib/foodCategories'
-import {
-  indexItems,
-  listTotals,
-  lineCost,
-  formatAmount,
-} from '../lib/grocery'
-import { todayISODate } from '../lib/date'
-import { spring, tap, press } from '../lib/motion'
-import AddGroceryItemSheet from '../components/expenses/AddGroceryItemSheet'
-import AddExpenseSheet from '../components/expenses/AddExpenseSheet'
-import CatalogPickerSheet from '../components/expenses/CatalogPickerSheet'
-import type { GroceryItem } from '../types/grocery'
-import type { Expense } from '../types/expense'
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CalendarPlus, Check, Minus, Pencil, Plus, ShoppingCart, X } from "lucide-react";
+
+import AddExpenseSheet from "@/components/expenses/AddExpenseSheet";
+import AddGroceryItemSheet from "@/components/expenses/AddGroceryItemSheet";
+import CatalogPickerSheet from "@/components/expenses/CatalogPickerSheet";
+import { CATEGORIES } from "@/lib/categories";
+import { todayISODate } from "@/lib/date";
+import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
+import { formatAmount, indexItems, lineCost, listTotals } from "@/lib/grocery";
+import { press, spring, tap } from "@/lib/motion";
+import { useExpenseStore } from "@/store/expenseStore";
+import { useGroceryStore } from "@/store/groceryStore";
+import { useShoppingListStore } from "@/store/shoppingListStore";
+import { useTaskStore } from "@/store/taskStore";
+import type { Expense } from "@/types/expense";
+import type { GroceryItem } from "@/types/grocery";
 
 function money(n: number) {
-  return `$${n.toFixed(2)}`
+  return `$${n.toFixed(2)}`;
 }
 
 export default function ExpensesPage() {
-  const expenses = useExpenseStore((s) => s.expenses)
-  const monthlyBudget = useExpenseStore((s) => s.monthlyBudget)
-  const setMonthlyBudget = useExpenseStore((s) => s.setMonthlyBudget)
-  const addExpense = useExpenseStore((s) => s.addExpense)
+  const expenses = useExpenseStore((s) => s.expenses);
+  const monthlyBudget = useExpenseStore((s) => s.monthlyBudget);
+  const setMonthlyBudget = useExpenseStore((s) => s.setMonthlyBudget);
+  const addExpense = useExpenseStore((s) => s.addExpense);
 
-  const groceryItems = useGroceryStore((s) => s.groceryItems)
+  const groceryItems = useGroceryStore((s) => s.groceryItems);
 
-  const lists = useShoppingListStore((s) => s.lists)
-  const activeListId = useShoppingListStore((s) => s.activeListId)
-  const createList = useShoppingListStore((s) => s.createList)
-  const setLineQty = useShoppingListStore((s) => s.setLineQty)
-  const removeLine = useShoppingListStore((s) => s.removeLine)
-  const toggleLine = useShoppingListStore((s) => s.toggleLine)
-  const setListTask = useShoppingListStore((s) => s.setListTask)
-  const markDone = useShoppingListStore((s) => s.markDone)
+  const lists = useShoppingListStore((s) => s.lists);
+  const activeListId = useShoppingListStore((s) => s.activeListId);
+  const createList = useShoppingListStore((s) => s.createList);
+  const setLineQty = useShoppingListStore((s) => s.setLineQty);
+  const removeLine = useShoppingListStore((s) => s.removeLine);
+  const toggleLine = useShoppingListStore((s) => s.toggleLine);
+  const setListTask = useShoppingListStore((s) => s.setListTask);
+  const markDone = useShoppingListStore((s) => s.markDone);
 
-  const addTask = useTaskStore((s) => s.addTask)
+  const addTask = useTaskStore((s) => s.addTask);
 
-  const [editGrocery, setEditGrocery] = useState<GroceryItem | null>(null)
-  const [addItemOpen, setAddItemOpen] = useState(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [editExpense, setEditExpense] = useState<Expense | null>(null)
-  const [addExpenseOpen, setAddExpenseOpen] = useState(false)
-  const [editingBudget, setEditingBudget] = useState(false)
-  const [budgetDraft, setBudgetDraft] = useState('')
+  const [editGrocery, setEditGrocery] = useState<GroceryItem | null>(null);
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetDraft, setBudgetDraft] = useState("");
 
-  const items = indexItems(groceryItems)
-  const activeList = lists.find((l) => l.id === activeListId) ?? null
+  const items = indexItems(groceryItems);
+  const activeList = lists.find((l) => l.id === activeListId) ?? null;
 
   // ---- Budget + spend (this month) ----
-  const now = new Date()
-  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const now = new Date();
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const monthExpenses = expenses
     .filter((e) => e.date.startsWith(monthPrefix))
-    .sort((a, b) => b.date.localeCompare(a.date))
-  const spent = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const spent = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-  const hasBudget = monthlyBudget > 0
-  const ratio = hasBudget ? spent / monthlyBudget : 0
+  const hasBudget = monthlyBudget > 0;
+  const ratio = hasBudget ? spent / monthlyBudget : 0;
   const barColor = !hasBudget
-    ? '#4b5563'
+    ? "#4b5563"
     : ratio < 0.75
-      ? '#34d399'
+      ? "#34d399"
       : ratio < 1
-        ? '#fbbf24'
-        : '#f87171'
+        ? "#fbbf24"
+        : "#f87171";
 
   // ---- Active shopping list (the current trip) ----
   const allTotals = activeList
     ? listTotals(activeList, items)
-    : { count: 0, cost: 0, nutrition: { calories: 0, protein: 0, fat: 0, carbs: 0, sugar: 0, fiber: 0 } }
-  const checkedTotals = activeList
-    ? listTotals(activeList, items, true)
-    : allTotals
-  const checkedCount = activeList ? activeList.lines.filter((l) => l.checked).length : 0
+    : {
+        count: 0,
+        cost: 0,
+        nutrition: { calories: 0, protein: 0, fat: 0, carbs: 0, sugar: 0, fiber: 0 },
+      };
+  const checkedTotals = activeList ? listTotals(activeList, items, true) : allTotals;
+  const checkedCount = activeList ? activeList.lines.filter((l) => l.checked).length : 0;
 
   function startEditBudget() {
-    setBudgetDraft(monthlyBudget ? String(monthlyBudget) : '')
-    setEditingBudget(true)
+    setBudgetDraft(monthlyBudget ? String(monthlyBudget) : "");
+    setEditingBudget(true);
   }
 
   function saveBudget() {
-    const value = parseFloat(budgetDraft)
-    setMonthlyBudget(isFinite(value) ? value : 0)
-    setEditingBudget(false)
+    const value = parseFloat(budgetDraft);
+    setMonthlyBudget(isFinite(value) ? value : 0);
+    setEditingBudget(false);
   }
 
   function startList() {
-    createList({ title: 'Shopping list', date: todayISODate() })
+    createList({ title: "Shopping list", date: todayISODate() });
   }
 
   function scheduleRun() {
-    if (!activeList || activeList.taskId) return
+    if (!activeList || activeList.taskId) return;
     const taskId = addTask({
-      title: activeList.title || 'Grocery run',
+      title: activeList.title || "Grocery run",
       startMinutes: 17 * 60,
       durationMinutes: 30,
-      color: '#fbbf24',
-      icon: 'shopping',
+      color: "#fbbf24",
+      icon: "shopping",
       date: activeList.date,
       shoppingListId: activeList.id,
-    })
-    setListTask(activeList.id, taskId)
+    });
+    setListTask(activeList.id, taskId);
   }
 
   function logTrip() {
-    if (!activeList || checkedCount === 0) return
+    if (!activeList || checkedCount === 0) return;
     const expenseId = addExpense({
       amount: checkedTotals.cost,
-      note: `Groceries (${checkedCount} item${checkedCount > 1 ? 's' : ''})`,
-      category: 'food',
+      note: `Groceries (${checkedCount} item${checkedCount > 1 ? "s" : ""})`,
+      category: "food",
       date: todayISODate(),
-    })
-    markDone(activeList.id, expenseId)
-    createList({ title: 'Shopping list', date: todayISODate() })
+    });
+    markDone(activeList.id, expenseId);
+    createList({ title: "Shopping list", date: todayISODate() });
   }
 
   return (
@@ -153,14 +143,10 @@ export default function ExpensesPage() {
 
         {editingBudget ? (
           <div className="mt-3">
-            <label className="text-xs text-gray-400 mb-1 block">
-              Monthly budget
-            </label>
+            <label className="text-xs text-gray-400 mb-1 block">Monthly budget</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  $
-                </span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -193,7 +179,7 @@ export default function ExpensesPage() {
               {money(spent)}
               {hasBudget && (
                 <span className="text-base font-medium text-gray-500">
-                  {' '}
+                  {" "}
                   / {money(monthlyBudget)}
                 </span>
               )}
@@ -233,12 +219,11 @@ export default function ExpensesPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between px-1">
           <h2 className="text-base font-semibold text-fg">
-            {activeList ? activeList.title : 'Shopping list'}
+            {activeList ? activeList.title : "Shopping list"}
           </h2>
           {activeList && (
             <span className="text-sm text-fg-faint">
-              {allTotals.count} item{allTotals.count === 1 ? '' : 's'} ·{' '}
-              {money(allTotals.cost)}
+              {allTotals.count} item{allTotals.count === 1 ? "" : "s"} · {money(allTotals.cost)}
             </span>
           )}
         </div>
@@ -298,10 +283,8 @@ export default function ExpensesPage() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-sm text-fg-muted">
-                      {checkedCount} in cart ·{' '}
-                      <span className="font-semibold text-fg">
-                        {money(checkedTotals.cost)}
-                      </span>
+                      {checkedCount} in cart ·{" "}
+                      <span className="font-semibold text-fg">{money(checkedTotals.cost)}</span>
                     </p>
                     <motion.button
                       onClick={logTrip}
@@ -325,12 +308,11 @@ export default function ExpensesPage() {
 
             {activeList.lines.length === 0 ? (
               <p className="text-sm text-fg-faint px-1 py-6 text-center">
-                Empty list. Tap "Add items" to pull from the food and products
-                you've saved.
+                Empty list. Tap "Add items" to pull from the food and products you've saved.
               </p>
             ) : (
               activeList.lines.map((line) => {
-                const item = items[line.itemId]
+                const item = items[line.itemId];
                 if (!item) {
                   return (
                     <div
@@ -348,10 +330,10 @@ export default function ExpensesPage() {
                         <X size={16} />
                       </motion.button>
                     </div>
-                  )
+                  );
                 }
-                const cat = FOOD_CATEGORIES[item.category]
-                const Icon = cat.icon ?? FALLBACK_FOOD_ICON
+                const cat = FOOD_CATEGORIES[item.category];
+                const Icon = cat.icon ?? FALLBACK_FOOD_ICON;
                 return (
                   <div
                     key={line.itemId}
@@ -363,10 +345,10 @@ export default function ExpensesPage() {
                       whileTap={tap}
                       className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors"
                       style={{
-                        backgroundColor: line.checked ? cat.color : 'transparent',
-                        borderColor: line.checked ? cat.color : 'var(--border-input)',
+                        backgroundColor: line.checked ? cat.color : "transparent",
+                        borderColor: line.checked ? cat.color : "var(--border-input)",
                       }}
-                      aria-label={line.checked ? 'Uncheck' : 'Check'}
+                      aria-label={line.checked ? "Uncheck" : "Check"}
                     >
                       <AnimatePresence>
                         {line.checked && (
@@ -390,9 +372,7 @@ export default function ExpensesPage() {
                       transition={spring.snappy}
                       className="flex-1 min-w-0 text-left"
                     >
-                      <p className="font-semibold text-fg leading-tight truncate">
-                        {item.name}
-                      </p>
+                      <p className="font-semibold text-fg leading-tight truncate">{item.name}</p>
                       <p className="text-xs text-fg-faint mt-0.5 flex items-center gap-1.5">
                         <span
                           className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white shrink-0"
@@ -400,8 +380,7 @@ export default function ExpensesPage() {
                         >
                           <Icon size={9} />
                         </span>
-                        {formatAmount(item, line.qty)} ·{' '}
-                        {money(lineCost(item, line.qty))}
+                        {formatAmount(item, line.qty)} · {money(lineCost(item, line.qty))}
                       </p>
                     </motion.button>
 
@@ -428,7 +407,7 @@ export default function ExpensesPage() {
                       </motion.button>
                     </div>
                   </div>
-                )
+                );
               })
             )}
           </>
@@ -455,8 +434,8 @@ export default function ExpensesPage() {
           </p>
         ) : (
           monthExpenses.map((expense) => {
-            const cat = CATEGORIES[expense.category]
-            const Icon = cat.icon
+            const cat = CATEGORIES[expense.category];
+            const Icon = cat.icon;
             return (
               <motion.button
                 key={expense.id}
@@ -472,16 +451,12 @@ export default function ExpensesPage() {
                   <Icon size={16} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-fg leading-tight truncate">
-                    {expense.note}
-                  </p>
+                  <p className="font-medium text-fg leading-tight truncate">{expense.note}</p>
                   <p className="text-xs text-fg-faint mt-0.5">{cat.label}</p>
                 </div>
-                <p className="font-semibold text-fg shrink-0">
-                  {money(expense.amount)}
-                </p>
+                <p className="font-semibold text-fg shrink-0">{money(expense.amount)}</p>
               </motion.button>
-            )
+            );
           })
         )}
       </div>
@@ -497,20 +472,20 @@ export default function ExpensesPage() {
         isOpen={addItemOpen || !!editGrocery}
         editItem={editGrocery}
         onClose={() => {
-          setAddItemOpen(false)
-          setEditGrocery(null)
+          setAddItemOpen(false);
+          setEditGrocery(null);
         }}
       />
       <AddExpenseSheet
         isOpen={addExpenseOpen || !!editExpense}
         editExpense={editExpense}
         onClose={() => {
-          setAddExpenseOpen(false)
-          setEditExpense(null)
+          setAddExpenseOpen(false);
+          setEditExpense(null);
         }}
       />
     </div>
-  )
+  );
 }
 
 function NutriChip({ label }: { label: string }) {
@@ -518,5 +493,5 @@ function NutriChip({ label }: { label: string }) {
     <span className="text-xs font-medium text-fg-muted bg-surface-raised rounded-full px-2.5 py-1">
       {label}
     </span>
-  )
+  );
 }

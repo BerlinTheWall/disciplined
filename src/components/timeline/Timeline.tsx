@@ -1,19 +1,18 @@
 import { useContext, useState } from "react";
-import { useTaskStore } from "../../store/taskStore";
-import WeeklyTimeline from "./WeeklyTimeline";
-import DaySchedule from "./DaySchedule";
-import AddItemSheet from "./AddItemSheet";
-import QuickAddBar from "./QuickAddBar";
-import SwipePager from "./SwipePager";
-import { WeekSwipeContext } from "./swipeController";
-import { addDays, toISODate } from "../../lib/date";
-import type { Task } from "../../types/task";
-import type { Habit } from "../../types/habits";
-import type { ViewMode } from "../../App";
 
-export type EditItem =
-  | { type: "task"; data: Task }
-  | { type: "habit"; data: Habit };
+import AddItemSheet from "./AddItemSheet";
+import DaySchedule from "./DaySchedule";
+import QuickAddBar from "./QuickAddBar";
+import { WeekSwipeContext } from "./swipeController";
+import SwipePager from "./SwipePager";
+import WeeklyTimeline from "./WeeklyTimeline";
+import type { ViewMode } from "@/App";
+import { addDays, toISODate } from "@/lib/date";
+import { useTaskStore } from "@/store/taskStore";
+import type { Habit } from "@/types/habits";
+import type { Task } from "@/types/task";
+
+export type EditItem = { type: "task"; data: Task } | { type: "habit"; data: Habit };
 
 interface TimelineProps {
   viewMode: ViewMode;
@@ -72,11 +71,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
         )}
       />
 
-      <AddItemSheet
-        isOpen={!!editItem}
-        onClose={() => setEditItem(null)}
-        editItem={editItem}
-      />
+      <AddItemSheet isOpen={!!editItem} onClose={() => setEditItem(null)} editItem={editItem} />
     </>
   );
 }

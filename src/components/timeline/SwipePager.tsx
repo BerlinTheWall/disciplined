@@ -1,28 +1,29 @@
-import { useRef } from 'react'
-import { motion, type PanInfo } from 'framer-motion'
-import type { ReactNode } from 'react'
-import { useSwipeController, type SwipeController } from './swipeController'
+import { useRef } from "react";
+import type { ReactNode } from "react";
+import { motion, type PanInfo } from "framer-motion";
 
-const COMMIT_RATIO = 0.3 // fraction of the width dragged to commit
-const COMMIT_MAX = 140 // …but never require more than this many px
-const SWIPE_VELOCITY = 500 // …or a fast flick commits regardless of distance
+import { useSwipeController, type SwipeController } from "./swipeController";
 
-const noop = () => {}
+const COMMIT_RATIO = 0.3; // fraction of the width dragged to commit
+const COMMIT_MAX = 140; // …but never require more than this many px
+const SWIPE_VELOCITY = 500; // …or a fast flick commits regardless of distance
+
+const noop = () => {};
 
 interface SwipePagerProps {
   // Renders the page at the given offset from the current one: -1 = previous,
   // 0 = current, +1 = next.
-  renderPage: (offset: -1 | 0 | 1) => ReactNode
+  renderPage: (offset: -1 | 0 | 1) => ReactNode;
   // Used only when this pager manages its own drag (no shared controller).
-  onPrev?: () => void
-  onNext?: () => void
+  onPrev?: () => void;
+  onNext?: () => void;
   // A stable identity per page (e.g. its date). When provided, React reuses the
   // already-rendered neighbour as the new current page after a commit instead of
   // remounting it — so its contents don't replay their entrance animation.
-  pageKey?: (offset: -1 | 0 | 1) => string
+  pageKey?: (offset: -1 | 0 | 1) => string;
   // When set, this pager shares drag state with others using the same
   // controller, so they move and commit together.
-  controller?: SwipeController | null
+  controller?: SwipeController | null;
 }
 
 // A horizontally swipeable pager: the current page sits in normal flow (and
@@ -36,19 +37,19 @@ export default function SwipePager({
   pageKey,
   controller,
 }: SwipePagerProps) {
-  const internal = useSwipeController(onPrev ?? noop, onNext ?? noop)
-  const ctrl = controller ?? internal
-  const viewportRef = useRef<HTMLDivElement>(null)
+  const internal = useSwipeController(onPrev ?? noop, onNext ?? noop);
+  const ctrl = controller ?? internal;
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   function onDragEnd(_: unknown, info: PanInfo) {
-    const w = viewportRef.current?.offsetWidth ?? 0
-    const threshold = Math.min(w * COMMIT_RATIO, COMMIT_MAX)
+    const w = viewportRef.current?.offsetWidth ?? 0;
+    const threshold = Math.min(w * COMMIT_RATIO, COMMIT_MAX);
     if (info.offset.x <= -threshold || info.velocity.x <= -SWIPE_VELOCITY) {
-      ctrl.settle(-w, ctrl.onNext)
+      ctrl.settle(-w, ctrl.onNext);
     } else if (info.offset.x >= threshold || info.velocity.x >= SWIPE_VELOCITY) {
-      ctrl.settle(w, ctrl.onPrev)
+      ctrl.settle(w, ctrl.onPrev);
     } else {
-      ctrl.settle(0)
+      ctrl.settle(0);
     }
   }
 
@@ -65,10 +66,14 @@ export default function SwipePager({
         {/* Current page — normal flow, defines the height. */}
         <div key={pageKey?.(0)}>{renderPage(0)}</div>
         {/* Previous page — parked just off the left edge. */}
-        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full">{renderPage(-1)}</div>
+        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full">
+          {renderPage(-1)}
+        </div>
         {/* Next page — parked just off the right edge. */}
-        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full">{renderPage(1)}</div>
+        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full">
+          {renderPage(1)}
+        </div>
       </motion.div>
     </div>
-  )
+  );
 }

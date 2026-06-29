@@ -1,29 +1,30 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Wand2 } from "lucide-react";
-import { useGroceryStore } from "../../store/groceryStore";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Wand2, X } from "lucide-react";
+
+import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import {
+  FALLBACK_FOOD_ICON,
   FOOD_CATEGORIES,
   FOOD_CATEGORY_KEYS,
-  FALLBACK_FOOD_ICON,
   type FoodCategoryKey,
-} from "../../lib/foodCategories";
+} from "@/lib/foodCategories";
+import { spring, tap } from "@/lib/motion";
 import {
-  estimateNutrition,
-  suggestCategory,
   emptyNutrition,
+  estimateNutrition,
   NUTRITION_FIELDS,
+  suggestCategory,
   UNITS,
   type Nutrition,
   type Unit,
-} from "../../lib/nutritions";
-import { spring, tap } from "../../lib/motion";
-import { useScrollLock } from "../../hooks/useScrollLock";
-import { useAutoFocus } from "../../hooks/useAutoFocus";
+} from "@/lib/nutritions";
+import { useGroceryStore } from "@/store/groceryStore";
+import type { GroceryItem } from "@/types/grocery";
 import { useConfirm } from "../ConfirmDialog";
-import type { GroceryItem } from "../../types/grocery";
 
 interface AddGroceryItemSheetProps {
   isOpen: boolean;
@@ -178,11 +179,7 @@ export default function AddGroceryItemSheet({
               <h2 className="text-lg font-semibold text-fg">
                 {isEditing ? "Edit item" : "New item"}
               </h2>
-              <motion.button
-                onClick={onClose}
-                whileTap={tap}
-                className="p-2 -m-2 text-fg-faint"
-              >
+              <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
                 <X size={22} />
               </motion.button>
             </div>
@@ -253,11 +250,7 @@ export default function AddGroceryItemSheet({
                         className="absolute inset-0 bg-surface rounded-lg shadow-sm"
                       />
                     )}
-                    <span
-                      className={`relative z-10 ${
-                        unit === u ? "text-fg" : "text-fg-muted"
-                      }`}
-                    >
+                    <span className={`relative z-10 ${unit === u ? "text-fg" : "text-fg-muted"}`}>
                       {u}
                     </span>
                   </button>
@@ -302,16 +295,13 @@ export default function AddGroceryItemSheet({
             {/* Nutrition */}
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm text-fg-muted">
-                Nutrition{" "}
-                <span className="text-fg-faint">(for this amount)</span>
+                Nutrition <span className="text-fg-faint">(for this amount)</span>
               </label>
               <motion.button
                 onClick={reEstimate}
                 whileTap={tap}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                  auto
-                    ? "bg-surface-inverse text-fg-inverse"
-                    : "bg-surface-raised text-fg-muted"
+                  auto ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"
                 }`}
               >
                 <Wand2 size={12} />
@@ -326,9 +316,7 @@ export default function AddGroceryItemSheet({
             <div className="grid grid-cols-3 gap-2 mb-6">
               {NUTRITION_FIELDS.map(({ key, label, unit: u }) => (
                 <div key={key}>
-                  <label className="text-[11px] text-fg-faint mb-1 block">
-                    {label}
-                  </label>
+                  <label className="text-[11px] text-fg-faint mb-1 block">{label}</label>
                   <div className="relative">
                     <input
                       type="number"
