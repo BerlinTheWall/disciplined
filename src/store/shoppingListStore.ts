@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 import { todayISODate } from "@/lib/date";
 import type { ShoppingList } from "@/types/shopping";
@@ -8,10 +9,18 @@ import type { ShoppingList } from "@/types/shopping";
 // with a quantity multiplier and a per-trip checked flag. Completing a trip is
 // done from the Expenses page: it sums the checked lines into an Expense and
 // calls markDone with that expense's id.
-interface ShoppingListStore {
+
+interface State {
   lists: ShoppingList[];
   activeListId: string | null;
+}
 
+const initialState: State = {
+  lists: [],
+  activeListId: null,
+};
+
+interface Actions {
   createList: (init?: Partial<Pick<ShoppingList, "title" | "date" | "taskId">>) => string;
   deleteList: (id: string) => void;
   setActiveList: (id: string | null) => void;
@@ -25,13 +34,10 @@ interface ShoppingListStore {
   markDone: (listId: string, expenseId: string) => void;
 }
 
-const initialLists: ShoppingList[] = [];
-
-export const useShoppingListStore = create<ShoppingListStore>()(
+export const useShoppingListStore = create<State & Actions>()(
   persist(
-    (set) => ({
-      lists: initialLists,
-      activeListId: null,
+    immer((set) => ({
+      ...initialState,
 
       createList: (init) => {
         const id = crypto.randomUUID();
@@ -43,83 +49,75 @@ export const useShoppingListStore = create<ShoppingListStore>()(
           lines: [],
           taskId: init?.taskId,
         };
-        set((state) => ({ lists: [...state.lists, list], activeListId: id }));
+        set((state) => {
+          state.lists.push(list);
+          state.activeListId = id;
+        });
         return id;
       },
 
       deleteList: (id) =>
         set((state) => {
-          const lists = state.lists.filter((l) => l.id !== id);
-          return {
-            lists,
-            activeListId: state.activeListId === id ? (lists[0]?.id ?? null) : state.activeListId,
-          };
+          const index = state.lists.findIndex((l) => l.id === id);
+          if (index === -1) return;
+          state.lists.splice(index, 1);
+          if (state.activeListId === id) state.activeListId = state.lists[0]?.id ?? null;
         }),
 
-      setActiveList: (id) => set({ activeListId: id }),
+      setActiveList: (id) =>
+        set((state) => {
+          state.activeListId = id;
+        }),
 
       setListTask: (id, taskId) =>
-        set((state) => ({
-          lists: state.lists.map((l) => (l.id === id ? { ...l, taskId } : l)),
-        })),
+        set((state) => {
+          const list = state.lists.find((l) => l.id === id);
+          if (list) list.taskId = taskId;
+        }),
 
       addLine: (listId, itemId, qty = 1) =>
-        set((state) => ({
-          lists: state.lists.map((l) => {
-            if (l.id !== listId) return l;
-            if (l.lines.some((line) => line.itemId === itemId)) return l;
-            return { ...l, lines: [...l.lines, { itemId, qty, checked: false }] };
-          }),
-        })),
+        set((state) => {
+          const list = state.lists.find((l) => l.id === listId);
+          if (!list) return;
+          if (list.lines.some((line) => line.itemId === itemId)) return;
+          list.lines.push({ itemId, qty, checked: false });
+        }),
 
       removeLine: (listId, itemId) =>
-        set((state) => ({
-          lists: state.lists.map((l) =>
-            l.id === listId ? { ...l, lines: l.lines.filter((line) => line.itemId !== itemId) } : l
-          ),
-        })),
+        set((state) => {
+          const list = state.lists.find((l) => l.id === listId);
+          if (!list) return;
+          const index = list.lines.findIndex((line) => line.itemId === itemId);
+          if (index !== -1) list.lines.splice(index, 1);
+        }),
 
       setLineQty: (listId, itemId, qty) =>
-        set((state) => ({
-          lists: state.lists.map((l) =>
-            l.id === listId
-              ? {
-                  ...l,
-                  lines: l.lines.map((line) =>
-                    line.itemId === itemId
-                      ? { ...line, qty: Math.max(0.25, Math.round(qty * 100) / 100) }
-                      : line
-                  ),
-                }
-              : l
-          ),
-        })),
+        set((state) => {
+          const list = state.lists.find((l) => l.id === listId);
+          if (!list) return;
+          const line = list.lines.find((line) => line.itemId === itemId);
+          if (line) line.qty = Math.max(0.25, Math.round(qty * 100) / 100);
+        }),
 
       toggleLine: (listId, itemId) =>
-        set((state) => ({
-          lists: state.lists.map((l) =>
-            l.id === listId
-              ? {
-                  ...l,
-                  lines: l.lines.map((line) =>
-                    line.itemId === itemId ? { ...line, checked: !line.checked } : line
-                  ),
-                }
-              : l
-          ),
-        })),
+        set((state) => {
+          const list = state.lists.find((l) => l.id === listId);
+          if (!list) return;
+          const line = list.lines.find((line) => line.itemId === itemId);
+          if (line) line.checked = !line.checked;
+        }),
 
       markDone: (listId, expenseId) =>
-        set((state) => ({
-          lists: state.lists.map((l) =>
-            l.id === listId ? { ...l, status: "done", expenseId } : l
-          ),
-        })),
-    }),
+        set((state) => {
+          const list = state.lists.find((l) => l.id === listId);
+          if (!list) return;
+          list.status = "done";
+          list.expenseId = expenseId;
+        }),
+    })),
     {
-      name: "disciplined-shopping", // localStorage key
+      name: "disciplined-shopping",
       version: 1,
-      // v1: drop the sample seed list (sl1) that referenced removed seed catalog items.
       migrate: (persisted, version) => {
         const state = persisted as
           { lists?: ShoppingList[]; activeListId?: string | null } | undefined;

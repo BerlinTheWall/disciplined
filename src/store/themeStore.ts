@@ -1,12 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 import type { Theme } from "@/lib/theme";
-
-interface ThemeStore {
-  theme: Theme;
-  toggleTheme: () => void;
-}
 
 function applyTheme(theme: Theme) {
   if (theme === "dark") {
@@ -16,16 +12,30 @@ function applyTheme(theme: Theme) {
   }
 }
 
-export const useThemeStore = create<ThemeStore>()(
+interface State {
+  theme: Theme;
+}
+
+const initialState: State = {
+  theme: "light",
+};
+
+interface Actions {
+  toggleTheme: () => void;
+}
+
+export const useThemeStore = create<State & Actions>()(
   persist(
-    (set, get) => ({
-      theme: "light",
+    immer((set, get) => ({
+      ...initialState,
       toggleTheme: () => {
         const next: Theme = get().theme === "light" ? "dark" : "light";
         applyTheme(next);
-        set({ theme: next });
+        set((state) => {
+          state.theme = next;
+        });
       },
-    }),
+    })),
     {
       name: "app-theme",
       onRehydrateStorage: () => (state) => {

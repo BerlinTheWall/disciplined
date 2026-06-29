@@ -1,11 +1,29 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 import type { Habit } from "@/types/habits";
 
-interface HabitStore {
+interface State {
   habits: Habit[];
-  // Returns the new habit's id so callers can link it (e.g. open it for editing).
+}
+
+const initialState: State = {
+  habits: [
+    {
+      id: "h1",
+      title: "Drink water",
+      startMinutes: 8 * 60,
+      durationMinutes: 15,
+      color: "#38bdf8",
+      icon: "health",
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      completedDates: [],
+    },
+  ],
+};
+
+interface Actions {
   addHabit: (habit: Omit<Habit, "id" | "completedDates">) => string;
   toggleHabitCompleted: (id: string, date: string) => void;
   updateHabitTime: (id: string, startMinutes: number) => void;
@@ -15,78 +33,60 @@ interface HabitStore {
   updateHabit: (id: string, changes: Partial<Omit<Habit, "id">>) => void;
 }
 
-const initialHabits: Habit[] = [
-  {
-    id: "h1",
-    title: "Drink water",
-    startMinutes: 8 * 60,
-    durationMinutes: 15,
-    color: "#38bdf8",
-    icon: "health",
-    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-    completedDates: [],
-  },
-];
-
-export const useHabitStore = create<HabitStore>()(
+export const useHabitStore = create<State & Actions>()(
   persist(
-    (set) => ({
-      habits: initialHabits,
+    immer((set) => ({
+      ...initialState,
 
       addHabit: (habit) => {
         const id = crypto.randomUUID();
-        set((state) => ({
-          habits: [...state.habits, { ...habit, id, completedDates: [] }],
-        }));
+        set((state) => {
+          state.habits.push({ ...habit, id, completedDates: [] });
+        });
         return id;
       },
 
       toggleHabitCompleted: (id, date) =>
-        set((state) => ({
-          habits: state.habits.map((h) =>
-            h.id === id
-              ? {
-                  ...h,
-                  completedDates: h.completedDates.includes(date)
-                    ? h.completedDates.filter((d: string) => d !== date)
-                    : [...h.completedDates, date],
-                }
-              : h
-          ),
-        })),
+        set((state) => {
+          const habit = state.habits.find((h) => h.id === id);
+          if (!habit) return;
+          const idx = habit.completedDates.indexOf(date);
+          if (idx === -1) habit.completedDates.push(date);
+          else habit.completedDates.splice(idx, 1);
+        }),
 
       updateHabitTime: (id, startMinutes) =>
-        set((state) => ({
-          habits: state.habits.map((h) =>
-            h.id === id ? { ...h, startMinutes: Math.max(0, startMinutes) } : h
-          ),
-        })),
+        set((state) => {
+          const habit = state.habits.find((h) => h.id === id);
+          if (habit) habit.startMinutes = Math.max(0, startMinutes);
+        }),
 
       updateHabitDuration: (id, durationMinutes) =>
-        set((state) => ({
-          habits: state.habits.map((h) =>
-            h.id === id ? { ...h, durationMinutes: Math.max(15, durationMinutes) } : h
-          ),
-        })),
+        set((state) => {
+          const habit = state.habits.find((h) => h.id === id);
+          if (habit) habit.durationMinutes = Math.max(15, durationMinutes);
+        }),
 
-      deleteHabit: (id) => set((state) => ({ habits: state.habits.filter((h) => h.id !== id) })),
+      deleteHabit: (id) =>
+        set((state) => {
+          const index = state.habits.findIndex((h) => h.id === id);
+          if (index !== -1) state.habits.splice(index, 1);
+        }),
 
-      // Remove a single day's occurrence of a recurring habit without deleting
-      // the habit itself (the day is hidden via isHabitActiveOnDate).
       skipHabitOccurrence: (id, date) =>
-        set((state) => ({
-          habits: state.habits.map((h) =>
-            h.id === id && !(h.skippedDates ?? []).includes(date)
-              ? { ...h, skippedDates: [...(h.skippedDates ?? []), date] }
-              : h
-          ),
-        })),
+        set((state) => {
+          const habit = state.habits.find((h) => h.id === id);
+          if (!habit) return;
+          habit.skippedDates ??= [];
+          if (!habit.skippedDates.includes(date)) habit.skippedDates.push(date);
+        }),
 
       updateHabit: (id, changes) =>
-        set((state) => ({
-          habits: state.habits.map((h) => (h.id === id ? { ...h, ...changes } : h)),
-        })),
-    }),
+        set((state) => {
+          const habit = state.habits.find((h) => h.id === id);
+          if (habit) Object.assign(habit, changes);
+        }),
+    })),
     {
       name: "disciplined-habits",
     }
