@@ -1,15 +1,16 @@
-import { Flame, Repeat } from 'lucide-react'
-import { useHabitStore } from '../store/habitStore'
-import { ICONS } from '../lib/icons'
-import { todayISODate } from '../lib/date'
-import { getHabitStreak, isHabitActiveOnDate } from '../lib/habits'
+import { Flame, Repeat } from "lucide-react";
 
-const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+import { todayISODate } from "@/lib/date";
+import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
+import { ICONS } from "@/lib/icons";
+import { useHabitStore } from "@/store/habitStore";
+
+const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 export default function HabitsPage() {
-  const habits = useHabitStore((s) => s.habits)
-  const today = new Date()
-  const todayISO = todayISODate()
+  const habits = useHabitStore((s) => s.habits);
+  const today = new Date();
+  const todayISO = todayISODate();
 
   if (habits.length === 0) {
     return (
@@ -22,22 +23,19 @@ export default function HabitsPage() {
           Go to the Schedule tab and tap + to add a repeating habit.
         </p>
       </div>
-    )
+    );
   }
 
   return (
     <div className="flex flex-col gap-3">
       {habits.map((habit) => {
-        const IconComponent = ICONS[habit.icon] ?? ICONS.default
-        const streak = getHabitStreak(habit, today)
-        const isActiveToday = isHabitActiveOnDate(habit, today)
-        const completedToday = habit.completedDates.includes(todayISO)
+        const IconComponent = ICONS[habit.icon] ?? ICONS.default;
+        const streak = getHabitStreak(habit, today);
+        const isActiveToday = isHabitActiveOnDate(habit, today);
+        const completedToday = habit.completedDates.includes(todayISO);
 
         return (
-          <div
-            key={habit.id}
-            className="flex items-center gap-4 p-4 rounded-2xl bg-surface-alt"
-          >
+          <div key={habit.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-alt">
             {/* Colored icon pill */}
             <div
               className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
@@ -57,8 +55,8 @@ export default function HabitsPage() {
                     key={i}
                     className={`w-5 h-5 rounded-full text-[9px] font-medium flex items-center justify-center ${
                       habit.daysOfWeek.includes(i)
-                        ? 'bg-surface-inverse text-fg-inverse'
-                        : 'bg-surface-subtle text-fg-faint'
+                        ? "bg-surface-inverse text-fg-inverse"
+                        : "bg-surface-subtle text-fg-faint"
                     }`}
                   >
                     {label}
@@ -76,21 +74,21 @@ export default function HabitsPage() {
                 </span>
               )}
               {isActiveToday && (
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  completedToday
-                    ? 'bg-green-100 text-green-600'
-                    : 'bg-surface-raised text-fg-faint'
-                }`}>
-                  {completedToday ? 'Done' : 'Pending'}
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    completedToday
+                      ? "bg-green-100 text-green-600"
+                      : "bg-surface-raised text-fg-faint"
+                  }`}
+                >
+                  {completedToday ? "Done" : "Pending"}
                 </span>
               )}
-              {!isActiveToday && (
-                <span className="text-xs text-fg-disabled">Off today</span>
-              )}
+              {!isActiveToday && <span className="text-xs text-fg-disabled">Off today</span>}
             </div>
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }

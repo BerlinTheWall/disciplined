@@ -1,16 +1,17 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useExpenseStore } from "../../store/expenseStore";
-import { CATEGORIES, CATEGORY_KEYS, type CategoryKey } from "../../lib/categories";
-import { todayISODate } from "../../lib/date";
-import { spring, tap } from "../../lib/motion";
-import { useScrollLock } from "../../hooks/useScrollLock";
-import { useAutoFocus } from "../../hooks/useAutoFocus";
+
+import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { CATEGORIES, CATEGORY_KEYS, type CategoryKey } from "@/lib/categories";
+import { todayISODate } from "@/lib/date";
+import { spring, tap } from "@/lib/motion";
+import { useExpenseStore } from "@/store/expenseStore";
+import type { Expense } from "@/types/expense";
 import { useConfirm } from "../ConfirmDialog";
-import type { Expense } from "../../types/expense";
 
 interface AddExpenseSheetProps {
   isOpen: boolean;
@@ -18,11 +19,7 @@ interface AddExpenseSheetProps {
   editExpense?: Expense | null;
 }
 
-export default function AddExpenseSheet({
-  isOpen,
-  onClose,
-  editExpense,
-}: AddExpenseSheetProps) {
+export default function AddExpenseSheet({ isOpen, onClose, editExpense }: AddExpenseSheetProps) {
   const addExpense = useExpenseStore((s) => s.addExpense);
   const updateExpense = useExpenseStore((s) => s.updateExpense);
   const deleteExpense = useExpenseStore((s) => s.deleteExpense);
@@ -118,11 +115,7 @@ export default function AddExpenseSheet({
               <h2 className="text-lg font-semibold text-fg">
                 {isEditing ? "Edit expense" : "New expense"}
               </h2>
-              <motion.button
-                onClick={onClose}
-                whileTap={tap}
-                className="p-2 -m-2 text-fg-faint"
-              >
+              <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
                 <X size={22} />
               </motion.button>
             </div>

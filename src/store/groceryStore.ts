@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { GroceryItem } from "../types/grocery";
+
+import type { GroceryItem } from "@/types/grocery";
 
 // The item catalog: the single source of truth for every food/product the user
 // has added. Shopping lists and meals both reference these items by id. This
@@ -10,10 +11,7 @@ interface GroceryStore {
   groceryItems: GroceryItem[];
   // Returns the new item's id so callers (e.g. a picker) can immediately use it.
   addGroceryItem: (item: Omit<GroceryItem, "id">) => string;
-  updateGroceryItem: (
-    id: string,
-    changes: Partial<Omit<GroceryItem, "id">>,
-  ) => void;
+  updateGroceryItem: (id: string, changes: Partial<Omit<GroceryItem, "id">>) => void;
   deleteGroceryItem: (id: string) => void;
   // Change on-hand stock by a delta (negative to consume), clamped at 0.
   adjustStock: (id: string, delta: number) => void;
@@ -37,9 +35,7 @@ export const useGroceryStore = create<GroceryStore>()(
 
       updateGroceryItem: (id, changes) =>
         set((state) => ({
-          groceryItems: state.groceryItems.map((g) =>
-            g.id === id ? { ...g, ...changes } : g,
-          ),
+          groceryItems: state.groceryItems.map((g) => (g.id === id ? { ...g, ...changes } : g)),
         })),
 
       deleteGroceryItem: (id) =>
@@ -52,7 +48,7 @@ export const useGroceryStore = create<GroceryStore>()(
           groceryItems: state.groceryItems.map((g) =>
             g.id === id
               ? { ...g, stock: Math.max(0, Math.round((g.stock + delta) * 100) / 100) }
-              : g,
+              : g
           ),
         })),
     }),
@@ -72,6 +68,6 @@ export const useGroceryStore = create<GroceryStore>()(
         }
         return state as never;
       },
-    },
-  ),
+    }
+  )
 );

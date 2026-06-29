@@ -1,24 +1,21 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Check, Minus, Plus, X, ChefHat } from "lucide-react";
-import { useGroceryStore } from "../../store/groceryStore";
-import { useMealStore } from "../../store/mealStore";
-import { useRecipeStore } from "../../store/recipeStore";
-import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from "../../lib/foodCategories";
-import {
-  indexItems,
-  lineNutrition,
-  formatAmount,
-} from "../../lib/grocery";
-import { addNutrition, emptyNutrition } from "../../lib/nutritions";
-import { todayISODate } from "../../lib/date";
-import { spring, tap } from "../../lib/motion";
-import { useScrollLock } from "../../hooks/useScrollLock";
-import { useAutoFocus } from "../../hooks/useAutoFocus";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, ChefHat, Minus, Plus, X } from "lucide-react";
+
+import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { todayISODate } from "@/lib/date";
+import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
+import { formatAmount, indexItems, lineNutrition } from "@/lib/grocery";
+import { spring, tap } from "@/lib/motion";
+import { addNutrition, emptyNutrition } from "@/lib/nutritions";
+import { useGroceryStore } from "@/store/groceryStore";
+import { useMealStore } from "@/store/mealStore";
+import { useRecipeStore } from "@/store/recipeStore";
+import type { Meal, MealComponent, MealType } from "@/types/meal";
 import { useConfirm } from "../ConfirmDialog";
-import type { Meal, MealComponent, MealType } from "../../types/meal";
 
 const MEAL_TYPES: { key: MealType; label: string }[] = [
   { key: "breakfast", label: "Breakfast" },
@@ -33,11 +30,7 @@ interface AddMealSheetProps {
   editMeal?: Meal | null;
 }
 
-export default function AddMealSheet({
-  isOpen,
-  onClose,
-  editMeal,
-}: AddMealSheetProps) {
+export default function AddMealSheet({ isOpen, onClose, editMeal }: AddMealSheetProps) {
   const groceryItems = useGroceryStore((s) => s.groceryItems);
   const recipes = useRecipeStore((s) => s.recipes);
   const addMeal = useMealStore((s) => s.addMeal);
@@ -89,7 +82,7 @@ export default function AddMealSheet({
     setComponents((prev) =>
       prev.some((c) => c.itemId === itemId)
         ? prev.filter((c) => c.itemId !== itemId)
-        : [...prev, { itemId, servings: 1 }],
+        : [...prev, { itemId, servings: 1 }]
     );
   }
 
@@ -98,14 +91,14 @@ export default function AddMealSheet({
       prev.map((c) =>
         c.itemId === itemId
           ? { ...c, servings: Math.max(0.25, Math.round((c.servings + delta) * 100) / 100) }
-          : c,
-      ),
+          : c
+      )
     );
   }
 
   const total = components.reduce(
     (acc, c) => addNutrition(acc, lineNutrition(items[c.itemId], c.servings)),
-    emptyNutrition(),
+    emptyNutrition()
   );
 
   const canSave = name.trim().length > 0 && components.length > 0;
@@ -168,11 +161,7 @@ export default function AddMealSheet({
               <h2 className="text-lg font-semibold text-fg">
                 {isEditing ? "Edit meal" : "Log a meal"}
               </h2>
-              <motion.button
-                onClick={onClose}
-                whileTap={tap}
-                className="p-2 -m-2 text-fg-faint"
-              >
+              <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
                 <X size={22} />
               </motion.button>
             </div>
@@ -195,7 +184,10 @@ export default function AddMealSheet({
                   <ChefHat size={14} />
                   From a recipe
                 </label>
-                <div className="flex gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: "none" }}>
+                <div
+                  className="flex gap-2 overflow-x-auto pb-1 mb-4"
+                  style={{ scrollbarWidth: "none" }}
+                >
                   <motion.button
                     onClick={() => setRecipeId(undefined)}
                     whileTap={tap}
@@ -247,13 +239,11 @@ export default function AddMealSheet({
             />
 
             {/* Components from catalog */}
-            <label className="text-sm text-fg-muted mb-2 block">
-              What's in it
-            </label>
+            <label className="text-sm text-fg-muted mb-2 block">What's in it</label>
             {groceryItems.length === 0 ? (
               <p className="text-sm text-fg-faint mb-4">
-                Add items in the Food &amp; Products section first — meals are built
-                from the same catalog.
+                Add items in the Food &amp; Products section first — meals are built from the same
+                catalog.
               </p>
             ) : (
               <div className="flex flex-col gap-2 mb-4">
@@ -278,11 +268,7 @@ export default function AddMealSheet({
                           className="w-7 h-7 rounded-full flex items-center justify-center text-white shrink-0"
                           style={{ backgroundColor: cat.color }}
                         >
-                          {selected ? (
-                            <Check size={15} strokeWidth={3} />
-                          ) : (
-                            <Icon size={14} />
-                          )}
+                          {selected ? <Check size={15} strokeWidth={3} /> : <Icon size={14} />}
                         </span>
                         <span className="min-w-0">
                           <span

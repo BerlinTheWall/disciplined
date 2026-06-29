@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect } from "react";
 
 // Prevents the page behind a modal/sheet from scrolling while it's open.
 //
@@ -8,37 +8,37 @@ import { useEffect } from 'react'
 // opens an editor) share one lock — scrolling is only restored when the last one
 // closes.
 
-let lockCount = 0
-let lockedTarget: HTMLElement | null = null
-let prevBodyOverflow = ''
-let prevTargetOverflow = ''
+let lockCount = 0;
+let lockedTarget: HTMLElement | null = null;
+let prevBodyOverflow = "";
+let prevTargetOverflow = "";
 
 function applyLock() {
-  prevBodyOverflow = document.body.style.overflow
-  document.body.style.overflow = 'hidden'
-  lockedTarget = document.querySelector<HTMLElement>('[data-scroll-lock]')
+  prevBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  lockedTarget = document.querySelector<HTMLElement>("[data-scroll-lock]");
   if (lockedTarget) {
-    prevTargetOverflow = lockedTarget.style.overflow
-    lockedTarget.style.overflow = 'hidden'
+    prevTargetOverflow = lockedTarget.style.overflow;
+    lockedTarget.style.overflow = "hidden";
   }
 }
 
 function releaseLock() {
-  document.body.style.overflow = prevBodyOverflow
+  document.body.style.overflow = prevBodyOverflow;
   if (lockedTarget) {
-    lockedTarget.style.overflow = prevTargetOverflow
-    lockedTarget = null
+    lockedTarget.style.overflow = prevTargetOverflow;
+    lockedTarget = null;
   }
 }
 
 export function useScrollLock(active: boolean) {
   useEffect(() => {
-    if (!active) return
-    lockCount += 1
-    if (lockCount === 1) applyLock()
+    if (!active) return;
+    lockCount += 1;
+    if (lockCount === 1) applyLock();
     return () => {
-      lockCount -= 1
-      if (lockCount === 0) releaseLock()
-    }
-  }, [active])
+      lockCount -= 1;
+      if (lockCount === 0) releaseLock();
+    };
+  }, [active]);
 }

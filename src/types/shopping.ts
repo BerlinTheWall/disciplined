@@ -7,19 +7,19 @@
 // its id here for provenance. A list may also belong to a scheduled grocery
 // task via `taskId`.
 export interface ShoppingListLine {
-  itemId: string
-  qty: number // multiples of the catalog item's reference amount
-  checked: boolean // ticked off during the trip
+  itemId: string;
+  qty: number; // multiples of the catalog item's reference amount
+  checked: boolean; // ticked off during the trip
 }
 
-export type ShoppingListStatus = 'planned' | 'done'
+export type ShoppingListStatus = "planned" | "done";
 
 export interface ShoppingList {
-  id: string
-  title: string
-  date: string // ISO date the trip is planned/created
-  status: ShoppingListStatus
-  lines: ShoppingListLine[]
-  taskId?: string // the scheduled grocery task this list belongs to
-  expenseId?: string // the expense created when the trip was logged
+  id: string;
+  title: string;
+  date: string; // ISO date the trip is planned/created
+  status: ShoppingListStatus;
+  lines: ShoppingListLine[];
+  taskId?: string; // the scheduled grocery task this list belongs to
+  expenseId?: string; // the expense created when the trip was logged
 }

@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, type RefObject } from "react";
 
 // Focuses an input when a sheet/modal opens — but only AFTER the open animation
 // has settled, and crucially with `{ preventScroll: true }`.
@@ -12,13 +12,13 @@ import { useEffect, type RefObject } from 'react'
 export function useAutoFocus<T extends HTMLElement>(
   ref: RefObject<T | null>,
   active: boolean,
-  delay = 250,
+  delay = 250
 ) {
   useEffect(() => {
-    if (!active) return
+    if (!active) return;
     const id = window.setTimeout(() => {
-      ref.current?.focus({ preventScroll: true })
-    }, delay)
-    return () => window.clearTimeout(id)
-  }, [active, delay, ref])
+      ref.current?.focus({ preventScroll: true });
+    }, delay);
+    return () => window.clearTimeout(id);
+  }, [active, delay, ref]);
 }

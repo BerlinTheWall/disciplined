@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Expense } from "../types/expense";
-import { todayISODate } from "../lib/date";
+
+import { todayISODate } from "@/lib/date";
+import type { Expense } from "@/types/expense";
 
 interface ExpenseStore {
   expenses: Expense[];
@@ -48,9 +49,7 @@ export const useExpenseStore = create<ExpenseStore>()(
 
       updateExpense: (id, changes) =>
         set((state) => ({
-          expenses: state.expenses.map((e) =>
-            e.id === id ? { ...e, ...changes } : e,
-          ),
+          expenses: state.expenses.map((e) => (e.id === id ? { ...e, ...changes } : e)),
         })),
 
       deleteExpense: (id) =>
@@ -58,11 +57,10 @@ export const useExpenseStore = create<ExpenseStore>()(
           expenses: state.expenses.filter((e) => e.id !== id),
         })),
 
-      setMonthlyBudget: (amount) =>
-        set({ monthlyBudget: Math.max(0, amount) }),
+      setMonthlyBudget: (amount) => set({ monthlyBudget: Math.max(0, amount) }),
     }),
     {
       name: "disciplined-expenses", // localStorage key
-    },
-  ),
+    }
+  )
 );

@@ -1,39 +1,40 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, Dumbbell, ChevronRight } from 'lucide-react'
-import { useWorkoutStore } from '../store/workoutStore'
-import { useWorkoutFocusStore } from '../store/workoutFocusStore'
-import { WORKOUT_TYPE_META, sessionSummary } from '../lib/workout'
-import { spring, tap, press } from '../lib/motion'
-import WorkoutSessionSheet from '../components/workout/WorkoutSessionSheet'
-import WorkoutSessionDetailSheet from '../components/workout/WorkoutSessionDetailSheet'
-import type { WorkoutSession } from '../types/workout'
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { ChevronRight, Dumbbell, Plus } from "lucide-react";
+
+import WorkoutSessionDetailSheet from "@/components/workout/WorkoutSessionDetailSheet";
+import WorkoutSessionSheet from "@/components/workout/WorkoutSessionSheet";
+import { press, spring, tap } from "@/lib/motion";
+import { sessionSummary, WORKOUT_TYPE_META } from "@/lib/workout";
+import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
+import { useWorkoutStore } from "@/store/workoutStore";
+import type { WorkoutSession } from "@/types/workout";
 
 function isLightColor(hex: string) {
-  const c = hex.replace('#', '')
-  const r = parseInt(c.slice(0, 2), 16)
-  const g = parseInt(c.slice(2, 4), 16)
-  const b = parseInt(c.slice(4, 6), 16)
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62
+  const c = hex.replace("#", "");
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
 }
 
 export default function WorkoutPage() {
-  const sessions = useWorkoutStore((s) => s.sessions)
+  const sessions = useWorkoutStore((s) => s.sessions);
 
-  const [detailSession, setDetailSession] = useState<WorkoutSession | null>(null)
-  const [editSession, setEditSession] = useState<WorkoutSession | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
+  const [detailSession, setDetailSession] = useState<WorkoutSession | null>(null);
+  const [editSession, setEditSession] = useState<WorkoutSession | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   // Consume a "jump to this workout" intent from a linked task: open its detail.
-  const pendingSessionId = useWorkoutFocusStore((s) => s.pendingSessionId)
-  const clearWorkoutFocus = useWorkoutFocusStore((s) => s.clear)
+  const pendingSessionId = useWorkoutFocusStore((s) => s.pendingSessionId);
+  const clearWorkoutFocus = useWorkoutFocusStore((s) => s.clear);
   useEffect(() => {
-    if (!pendingSessionId) return
-    const target = sessions.find((s) => s.id === pendingSessionId)
-    if (target) setDetailSession(target)
-    clearWorkoutFocus()
-  }, [pendingSessionId, sessions, clearWorkoutFocus])
+    if (!pendingSessionId) return;
+    const target = sessions.find((s) => s.id === pendingSessionId);
+    if (target) setDetailSession(target);
+    clearWorkoutFocus();
+  }, [pendingSessionId, sessions, clearWorkoutFocus]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -56,14 +57,13 @@ export default function WorkoutPage() {
           </div>
           <p className="text-base font-medium text-fg">No workouts yet</p>
           <p className="text-sm text-fg-faint text-center">
-            Create a gym, run, ride or swim session, then link it to a task in your
-            schedule.
+            Create a gym, run, ride or swim session, then link it to a task in your schedule.
           </p>
         </div>
       ) : (
         sessions.map((session) => {
-          const meta = WORKOUT_TYPE_META[session.type]
-          const Icon = meta.icon
+          const meta = WORKOUT_TYPE_META[session.type];
+          const Icon = meta.icon;
           return (
             <motion.button
               key={session.id}
@@ -76,27 +76,23 @@ export default function WorkoutPage() {
                 className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
                 style={{
                   backgroundColor: session.color,
-                  color: isLightColor(session.color) ? '#111827' : '#fff',
+                  color: isLightColor(session.color) ? "#111827" : "#fff",
                 }}
               >
                 <Icon size={20} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-fg leading-tight truncate">
-                    {session.name}
-                  </p>
+                  <p className="font-semibold text-fg leading-tight truncate">{session.name}</p>
                   <span className="text-[11px] font-medium text-fg-muted bg-surface-subtle rounded-full px-2 py-0.5 shrink-0">
                     {meta.label}
                   </span>
                 </div>
-                <p className="text-xs text-fg-faint mt-1 truncate">
-                  {sessionSummary(session)}
-                </p>
+                <p className="text-xs text-fg-faint mt-1 truncate">{sessionSummary(session)}</p>
               </div>
               <ChevronRight size={18} className="text-fg-faint shrink-0" />
             </motion.button>
-          )
+          );
         })
       )}
 
@@ -104,8 +100,8 @@ export default function WorkoutPage() {
         session={detailSession}
         onClose={() => setDetailSession(null)}
         onEdit={(session) => {
-          setDetailSession(null)
-          setEditSession(session)
+          setDetailSession(null);
+          setEditSession(session);
         }}
       />
 
@@ -113,10 +109,10 @@ export default function WorkoutPage() {
         isOpen={addOpen || !!editSession}
         editSession={editSession}
         onClose={() => {
-          setAddOpen(false)
-          setEditSession(null)
+          setAddOpen(false);
+          setEditSession(null);
         }}
       />
     </div>
-  )
+  );
 }
