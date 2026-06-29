@@ -1,40 +1,53 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 import type { Recipe } from "@/types/recipe";
 
 // Recipes are reusable plans for what to make. Tasks and meals link to them by id.
-interface RecipeStore {
+
+interface State {
   recipes: Recipe[];
+}
+
+const initialState: State = {
+  recipes: [],
+};
+
+interface Actions {
   addRecipe: (recipe: Omit<Recipe, "id">) => string;
   updateRecipe: (id: string, changes: Partial<Omit<Recipe, "id">>) => void;
   deleteRecipe: (id: string) => void;
 }
 
-const initialRecipes: Recipe[] = [];
-
-export const useRecipeStore = create<RecipeStore>()(
+export const useRecipeStore = create<State & Actions>()(
   persist(
-    (set) => ({
-      recipes: initialRecipes,
+    immer((set) => ({
+      ...initialState,
 
       addRecipe: (recipe) => {
         const id = crypto.randomUUID();
-        set((state) => ({ recipes: [...state.recipes, { ...recipe, id }] }));
+        set((state) => {
+          state.recipes.push({ ...recipe, id });
+        });
         return id;
       },
 
       updateRecipe: (id, changes) =>
-        set((state) => ({
-          recipes: state.recipes.map((r) => (r.id === id ? { ...r, ...changes } : r)),
-        })),
+        set((state) => {
+          const recipe = state.recipes.find((r) => r.id === id);
+          if (recipe) Object.assign(recipe, changes);
+        }),
 
-      deleteRecipe: (id) => set((state) => ({ recipes: state.recipes.filter((r) => r.id !== id) })),
-    }),
+      deleteRecipe: (id) =>
+        set((state) => {
+          const index = state.recipes.findIndex((r) => r.id === id);
+          if (index !== -1) state.recipes.splice(index, 1);
+        }),
+    })),
     {
-      name: "disciplined-recipes", // localStorage key
+      name: "disciplined-recipes",
       version: 1,
-      // v1: drop the sample seed recipes that referenced the removed seed catalog items.
       migrate: (persisted, version) => {
         const state = persisted as { recipes?: Recipe[] } | undefined;
         if (!state) return persisted as never;

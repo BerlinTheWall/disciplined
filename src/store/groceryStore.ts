@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 import type { GroceryItem } from "@/types/grocery";
 
@@ -7,8 +8,16 @@ import type { GroceryItem } from "@/types/grocery";
 // has added. Shopping lists and meals both reference these items by id. This
 // store holds DEFINITIONS only — per-trip state (what's ticked) lives on the
 // shopping list, and what's eaten lives on meals.
-interface GroceryStore {
+
+interface State {
   groceryItems: GroceryItem[];
+}
+
+const initialState: State = {
+  groceryItems: [],
+};
+
+interface Actions {
   // Returns the new item's id so callers (e.g. a picker) can immediately use it.
   addGroceryItem: (item: Omit<GroceryItem, "id">) => string;
   updateGroceryItem: (id: string, changes: Partial<Omit<GroceryItem, "id">>) => void;
@@ -17,46 +26,40 @@ interface GroceryStore {
   adjustStock: (id: string, delta: number) => void;
 }
 
-// The catalog starts empty — the user builds it up in the Food & Products section.
-const initialGroceryItems: GroceryItem[] = [];
-
-export const useGroceryStore = create<GroceryStore>()(
+export const useGroceryStore = create<State & Actions>()(
   persist(
-    (set) => ({
-      groceryItems: initialGroceryItems,
+    immer((set) => ({
+      ...initialState,
 
       addGroceryItem: (item) => {
         const id = crypto.randomUUID();
-        set((state) => ({
-          groceryItems: [...state.groceryItems, { ...item, id }],
-        }));
+        set((state) => {
+          state.groceryItems.push({ ...item, id });
+        });
         return id;
       },
 
       updateGroceryItem: (id, changes) =>
-        set((state) => ({
-          groceryItems: state.groceryItems.map((g) => (g.id === id ? { ...g, ...changes } : g)),
-        })),
+        set((state) => {
+          const item = state.groceryItems.find((g) => g.id === id);
+          if (item) Object.assign(item, changes);
+        }),
 
       deleteGroceryItem: (id) =>
-        set((state) => ({
-          groceryItems: state.groceryItems.filter((g) => g.id !== id),
-        })),
+        set((state) => {
+          const index = state.groceryItems.findIndex((g) => g.id === id);
+          if (index !== -1) state.groceryItems.splice(index, 1);
+        }),
 
       adjustStock: (id, delta) =>
-        set((state) => ({
-          groceryItems: state.groceryItems.map((g) =>
-            g.id === id
-              ? { ...g, stock: Math.max(0, Math.round((g.stock + delta) * 100) / 100) }
-              : g
-          ),
-        })),
-    }),
+        set((state) => {
+          const item = state.groceryItems.find((g) => g.id === id);
+          if (item) item.stock = Math.max(0, Math.round((item.stock + delta) * 100) / 100);
+        }),
+    })),
     {
-      name: "disciplined-grocery", // localStorage key
+      name: "disciplined-grocery",
       version: 1,
-      // v1: drop the sample seed items (g1/g2/g3) and add the `stock` field
-      // (defaulting to one reference amount on hand) to any existing items.
       migrate: (persisted, version) => {
         const state = persisted as { groceryItems?: GroceryItem[] } | undefined;
         if (!state) return persisted as never;

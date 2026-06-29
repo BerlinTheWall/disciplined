@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:check": "npm run format && npm run lint && npm run build",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
@@ -15,6 +16,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@tailwindcss/vite": "^4.3.1",
     "framer-motion": "^12.40.0",
+    "immer": "^11.1.8",
     "lucide-react": "^1.20.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
