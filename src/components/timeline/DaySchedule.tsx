@@ -16,7 +16,7 @@ import DoneTray from "./DoneTray";
 import { Plus } from "lucide-react";
 import type { EditItem } from "./Timeline";
 
-const ICON_CENTER_X = 68;
+const ICON_CENTER_X = 84;
 const DEFAULT_START_MINUTES = 6 * 60;
 
 // Scale applied to a completed task's icon (must match ScheduleRow's animation).

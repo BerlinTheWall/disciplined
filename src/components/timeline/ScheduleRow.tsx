@@ -127,7 +127,7 @@ export default function ScheduleRow({
           className="absolute -z-10 rounded-2xl"
           // Height tracks the pill (which scales with duration) so the highlight
           // grows with the task block instead of the fixed-slot row height.
-          style={{ backgroundColor: color, top: -10, height: pillHeight + 26, left: -10, right: -10 }}
+          style={{ backgroundColor: color, top: -12, height: pillHeight + 26, left: 0, right: 0 }}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0.1, 0.2, 0.1] }}
           exit={{ opacity: 0 }}
@@ -137,7 +137,7 @@ export default function ScheduleRow({
 
       {/* Time column: start at top, end at bottom — sized to pill height only */}
       <div
-        className="w-8 flex flex-col justify-between py-1 shrink-0"
+        className="w-8 flex flex-col justify-between py-1 shrink-0 px-2"
         style={{ height: pillHeight }}
       >
         <span
@@ -156,7 +156,7 @@ export default function ScheduleRow({
         </span>
       </div>
 
-      <div className="flex-1 flex items-center gap-3">
+      <div className="flex-1 flex items-center gap-3 pl-4">
         <motion.div
           ref={move.setNodeRef}
           {...move.listeners}
