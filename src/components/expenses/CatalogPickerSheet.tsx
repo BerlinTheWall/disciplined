@@ -1,11 +1,12 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, X } from "lucide-react";
-import { useGroceryStore } from "../../store/groceryStore";
-import { useShoppingListStore } from "../../store/shoppingListStore";
-import { FOOD_CATEGORIES, FALLBACK_FOOD_ICON } from "../../lib/foodCategories";
-import { formatUnit } from "../../lib/grocery";
-import { spring, tap } from "../../lib/motion";
-import { useScrollLock } from "../../hooks/useScrollLock";
+
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
+import { formatUnit } from "@/lib/grocery";
+import { spring, tap } from "@/lib/motion";
+import { useGroceryStore } from "@/store/groceryStore";
+import { useShoppingListStore } from "@/store/shoppingListStore";
 
 function money(n: number) {
   return `$${n.toFixed(2)}`;
@@ -59,11 +60,7 @@ export default function CatalogPickerSheet({
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-fg">Add from your items</h2>
-              <motion.button
-                onClick={onClose}
-                whileTap={tap}
-                className="p-2 -m-2 text-fg-faint"
-              >
+              <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
                 <X size={22} />
               </motion.button>
             </div>
@@ -100,11 +97,7 @@ export default function CatalogPickerSheet({
                         className="w-7 h-7 rounded-full flex items-center justify-center text-white shrink-0"
                         style={{ backgroundColor: cat.color }}
                       >
-                        {selected ? (
-                          <Check size={15} strokeWidth={3} />
-                        ) : (
-                          <Icon size={14} />
-                        )}
+                        {selected ? <Check size={15} strokeWidth={3} /> : <Icon size={14} />}
                       </span>
                       <div className="flex-1 min-w-0">
                         <p
@@ -119,8 +112,7 @@ export default function CatalogPickerSheet({
                             selected ? "text-fg-muted-inverse" : "text-fg-faint"
                           }`}
                         >
-                          {formatUnit(item.quantity, item.unit)} ·{" "}
-                          {item.nutrition.calories} kcal
+                          {formatUnit(item.quantity, item.unit)} · {item.nutrition.calories} kcal
                         </p>
                       </div>
                       <span

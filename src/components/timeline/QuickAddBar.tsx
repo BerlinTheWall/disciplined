@@ -1,47 +1,48 @@
-import { useRef, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Plus, ArrowRight, Pencil } from "lucide-react"
-import { useTaskStore } from "../../store/taskStore"
-import { useHabitStore } from "../../store/habitStore"
-import { useWorkoutStore } from "../../store/workoutStore"
-import { useRecipeStore } from "../../store/recipeStore"
-import { useConfirm, useChoose, usePrompt, type ConfirmOptions } from "../ConfirmDialog"
-import { parseQuickAdd } from "../../lib/quickAdd"
+import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Pencil, Plus } from "lucide-react";
+
+import type { EditItem } from "./Timeline";
 import {
   parseCommand,
-  resolveTarget,
-  resolveByName,
-  parseTimeInput,
   parseDateInput,
+  parseTimeInput,
+  resolveByName,
+  resolveTarget,
   type Command,
   type CommandItem,
-} from "../../lib/command"
-import { formatTimeRange, formatTimeLabel } from "../../lib/time"
-import { ICONS, type IconKey } from "../../lib/icons"
-import { tap, spring } from "../../lib/motion"
-import type { EditItem } from "./Timeline"
+} from "@/lib/command";
+import { ICONS, type IconKey } from "@/lib/icons";
+import { spring, tap } from "@/lib/motion";
+import { parseQuickAdd } from "@/lib/quickAdd";
+import { formatTimeLabel, formatTimeRange } from "@/lib/time";
+import { useHabitStore } from "@/store/habitStore";
+import { useRecipeStore } from "@/store/recipeStore";
+import { useTaskStore } from "@/store/taskStore";
+import { useWorkoutStore } from "@/store/workoutStore";
+import { useChoose, useConfirm, usePrompt, type ConfirmOptions } from "../ConfirmDialog";
 
 // Color a quick-added item gets until the user opens "edit details" to pick one.
-const DEFAULT_COLOR = "#34d399"
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const PLACEHOLDER = 'Add or command — "gym mon 6am", "move lunch to 1pm", "delete standup"'
+const DEFAULT_COLOR = "#34d399";
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const PLACEHOLDER = 'Add or command — "gym mon 6am", "move lunch to 1pm", "delete standup"';
 
 function fmtDur(d: number) {
-  if (d < 60) return `${d}m`
-  const h = Math.floor(d / 60)
-  const m = d % 60
-  return m ? `${h}h ${m}m` : `${h}h`
+  if (d < 60) return `${d}m`;
+  const h = Math.floor(d / 60);
+  const m = d % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 function relativeDayLabel(iso: string) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const d = new Date(iso + "T00:00:00")
-  const diff = Math.round((d.getTime() - today.getTime()) / 86400000)
-  if (diff === 0) return "Today"
-  if (diff === 1) return "Tomorrow"
-  if (diff === -1) return "Yesterday"
-  return d.toLocaleDateString(undefined, { weekday: "long" })
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(iso + "T00:00:00");
+  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "long" });
 }
 
 // Verb used in the "couldn't find …" message for each action.
@@ -57,58 +58,58 @@ const ACTION_VERB: Record<Command["action"], string> = {
   linkRecipe: "link",
   toHabit: "convert",
   toTask: "convert",
-}
+};
 
 interface QuickAddBarProps {
-  onEditDetails: (item: EditItem) => void
+  onEditDetails: (item: EditItem) => void;
 }
 
 interface Confirmation {
-  icon: IconKey
-  color: string
-  title: string
-  context: string
-  item?: EditItem // present only for newly created items → shows "Edit details"
+  icon: IconKey;
+  color: string;
+  title: string;
+  context: string;
+  item?: EditItem; // present only for newly created items → shows "Edit details"
 }
 
 // The outcome of planning a command: an error to show, or a confirm prompt plus
 // the function that actually applies it (deferred until the user says yes).
 interface Plan {
-  error?: string
-  confirm?: ConfirmOptions
-  run?: () => Confirmation
+  error?: string;
+  confirm?: ConfirmOptions;
+  run?: () => Confirmation;
 }
 
 export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
-  const tasks = useTaskStore((s) => s.tasks)
-  const addTask = useTaskStore((s) => s.addTask)
-  const updateTask = useTaskStore((s) => s.updateTask)
-  const deleteTask = useTaskStore((s) => s.deleteTask)
-  const selectedDate = useTaskStore((s) => s.selectedDate)
-  const habits = useHabitStore((s) => s.habits)
-  const addHabit = useHabitStore((s) => s.addHabit)
-  const updateHabit = useHabitStore((s) => s.updateHabit)
-  const deleteHabit = useHabitStore((s) => s.deleteHabit)
-  const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted)
-  const sessions = useWorkoutStore((s) => s.sessions)
-  const recipes = useRecipeStore((s) => s.recipes)
-  const confirm = useConfirm()
-  const choose = useChoose()
-  const prompt = usePrompt()
+  const tasks = useTaskStore((s) => s.tasks);
+  const addTask = useTaskStore((s) => s.addTask);
+  const updateTask = useTaskStore((s) => s.updateTask);
+  const deleteTask = useTaskStore((s) => s.deleteTask);
+  const selectedDate = useTaskStore((s) => s.selectedDate);
+  const habits = useHabitStore((s) => s.habits);
+  const addHabit = useHabitStore((s) => s.addHabit);
+  const updateHabit = useHabitStore((s) => s.updateHabit);
+  const deleteHabit = useHabitStore((s) => s.deleteHabit);
+  const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
+  const sessions = useWorkoutStore((s) => s.sessions);
+  const recipes = useRecipeStore((s) => s.recipes);
+  const confirm = useConfirm();
+  const choose = useChoose();
+  const prompt = usePrompt();
 
-  const [text, setText] = useState("")
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [text, setText] = useState("");
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function flash(next: Confirmation | null, err: string | null = null) {
-    setConfirmation(next)
-    setError(err)
-    if (hideTimer.current) clearTimeout(hideTimer.current)
+    setConfirmation(next);
+    setError(err);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
-      setConfirmation(null)
-      setError(null)
-    }, 6000)
+      setConfirmation(null);
+      setError(null);
+    }, 6000);
   }
 
   function commandItems(): CommandItem[] {
@@ -133,58 +134,71 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         color: h.color,
         daysOfWeek: h.daysOfWeek,
       })),
-    ]
+    ];
   }
 
   function itemLabel(item: CommandItem) {
-    const time = formatTimeLabel(item.startMinutes)
-    if (item.kind === "habit") return `${item.title} · ${time} · repeats`
-    const day = item.date === selectedDate ? "" : ` · ${relativeDayLabel(item.date!)}`
-    return `${item.title} · ${time}${day}`
+    const time = formatTimeLabel(item.startMinutes);
+    if (item.kind === "habit") return `${item.title} · ${time} · repeats`;
+    const day = item.date === selectedDate ? "" : ` · ${relativeDayLabel(item.date!)}`;
+    return `${item.title} · ${time}${day}`;
   }
 
   // Builds the confirm prompt + deferred apply for a command on a resolved item.
   // May prompt (choose) to resolve a workout/recipe reference.
   async function planCommand(cmd: Command, item: CommandItem): Promise<Plan> {
-    const isTask = item.kind === "task"
-    const ok = (c: ConfirmOptions, run: () => Confirmation): Plan => ({ confirm: c, run })
+    const isTask = item.kind === "task";
+    const ok = (c: ConfirmOptions, run: () => Confirmation): Plan => ({ confirm: c, run });
 
     switch (cmd.action) {
       case "reschedule": {
         if (cmd.newDate && !isTask)
-          return { error: "Habits repeat — change their days instead of a date." }
-        const parts: string[] = []
-        if (cmd.newStartMinutes != null) parts.push(`to ${formatTimeLabel(cmd.newStartMinutes)}`)
-        if (cmd.newDate) parts.push(`to ${relativeDayLabel(cmd.newDate)}`)
+          return { error: "Habits repeat — change their days instead of a date." };
+        const parts: string[] = [];
+        if (cmd.newStartMinutes != null) parts.push(`to ${formatTimeLabel(cmd.newStartMinutes)}`);
+        if (cmd.newDate) parts.push(`to ${relativeDayLabel(cmd.newDate)}`);
         return ok(
-          { title: "Move it?", message: `Move "${item.title}" ${parts.join(" ")}.`, confirmLabel: "Move" },
+          {
+            title: "Move it?",
+            message: `Move "${item.title}" ${parts.join(" ")}.`,
+            confirmLabel: "Move",
+          },
           () => {
-            const changes: Record<string, unknown> = {}
-            if (cmd.newStartMinutes != null) changes.startMinutes = cmd.newStartMinutes
-            if (cmd.newDate && isTask) changes.date = cmd.newDate
-            if (isTask) updateTask(item.id, changes)
-            else updateHabit(item.id, changes)
+            const changes: Record<string, unknown> = {};
+            if (cmd.newStartMinutes != null) changes.startMinutes = cmd.newStartMinutes;
+            if (cmd.newDate && isTask) changes.date = cmd.newDate;
+            if (isTask) updateTask(item.id, changes);
+            else updateHabit(item.id, changes);
             return {
               icon: item.icon,
               color: item.color,
               title: `Moved ${item.title}`,
               context: parts.join(" ").replace(/to /g, "→ "),
-            }
-          },
-        )
+            };
+          }
+        );
       }
 
       case "duration": {
         const next =
-          cmd.durationMinutes ?? Math.max(5, item.durationMinutes + (cmd.deltaMinutes ?? 0))
+          cmd.durationMinutes ?? Math.max(5, item.durationMinutes + (cmd.deltaMinutes ?? 0));
         return ok(
-          { title: "Resize it?", message: `Set "${item.title}" to ${fmtDur(next)}.`, confirmLabel: "Set" },
-          () => {
-            if (isTask) updateTask(item.id, { durationMinutes: next })
-            else updateHabit(item.id, { durationMinutes: next })
-            return { icon: item.icon, color: item.color, title: `Resized ${item.title}`, context: fmtDur(next) }
+          {
+            title: "Resize it?",
+            message: `Set "${item.title}" to ${fmtDur(next)}.`,
+            confirmLabel: "Set",
           },
-        )
+          () => {
+            if (isTask) updateTask(item.id, { durationMinutes: next });
+            else updateHabit(item.id, { durationMinutes: next });
+            return {
+              icon: item.icon,
+              color: item.color,
+              title: `Resized ${item.title}`,
+              context: fmtDur(next),
+            };
+          }
+        );
       }
 
       case "delete":
@@ -199,88 +213,159 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             destructive: true,
           },
           () => {
-            if (isTask) deleteTask(item.id)
-            else deleteHabit(item.id)
-            return { icon: item.icon, color: item.color, title: `Deleted ${item.title}`, context: itemLabel(item) }
-          },
-        )
+            if (isTask) deleteTask(item.id);
+            else deleteHabit(item.id);
+            return {
+              icon: item.icon,
+              color: item.color,
+              title: `Deleted ${item.title}`,
+              context: itemLabel(item),
+            };
+          }
+        );
 
       case "rename":
         return ok(
-          { title: "Rename it?", message: `Rename "${item.title}" to "${cmd.newTitle}".`, confirmLabel: "Rename" },
-          () => {
-            if (isTask) updateTask(item.id, { title: cmd.newTitle })
-            else updateHabit(item.id, { title: cmd.newTitle })
-            return { icon: item.icon, color: item.color, title: `Renamed to ${cmd.newTitle}`, context: `was "${item.title}"` }
+          {
+            title: "Rename it?",
+            message: `Rename "${item.title}" to "${cmd.newTitle}".`,
+            confirmLabel: "Rename",
           },
-        )
+          () => {
+            if (isTask) updateTask(item.id, { title: cmd.newTitle });
+            else updateHabit(item.id, { title: cmd.newTitle });
+            return {
+              icon: item.icon,
+              color: item.color,
+              title: `Renamed to ${cmd.newTitle}`,
+              context: `was "${item.title}"`,
+            };
+          }
+        );
 
       case "recolor":
         return ok(
-          { title: "Change color?", message: `Change "${item.title}" to ${cmd.colorName}.`, confirmLabel: "Change" },
-          () => {
-            if (isTask) updateTask(item.id, { color: cmd.color })
-            else updateHabit(item.id, { color: cmd.color })
-            return { icon: item.icon, color: cmd.color, title: `Recolored ${item.title}`, context: cmd.colorName }
+          {
+            title: "Change color?",
+            message: `Change "${item.title}" to ${cmd.colorName}.`,
+            confirmLabel: "Change",
           },
-        )
+          () => {
+            if (isTask) updateTask(item.id, { color: cmd.color });
+            else updateHabit(item.id, { color: cmd.color });
+            return {
+              icon: item.icon,
+              color: cmd.color,
+              title: `Recolored ${item.title}`,
+              context: cmd.colorName,
+            };
+          }
+        );
 
       case "icon":
         return ok(
-          { title: "Change icon?", message: `Change "${item.title}" icon to ${cmd.icon}.`, confirmLabel: "Change" },
-          () => {
-            if (isTask) updateTask(item.id, { icon: cmd.icon })
-            else updateHabit(item.id, { icon: cmd.icon })
-            return { icon: cmd.icon, color: item.color, title: `Changed ${item.title} icon`, context: cmd.icon }
+          {
+            title: "Change icon?",
+            message: `Change "${item.title}" icon to ${cmd.icon}.`,
+            confirmLabel: "Change",
           },
-        )
+          () => {
+            if (isTask) updateTask(item.id, { icon: cmd.icon });
+            else updateHabit(item.id, { icon: cmd.icon });
+            return {
+              icon: cmd.icon,
+              color: item.color,
+              title: `Changed ${item.title} icon`,
+              context: cmd.icon,
+            };
+          }
+        );
 
       case "complete": {
-        const verb = cmd.completed ? "done" : "not done"
+        const verb = cmd.completed ? "done" : "not done";
         return ok(
-          { title: "Update status?", message: `Mark "${item.title}" as ${verb}.`, confirmLabel: "Mark" },
-          () => {
-            if (isTask) updateTask(item.id, { completed: cmd.completed })
-            else {
-              const h = habits.find((x) => x.id === item.id)
-              const already = h?.completedDates.includes(selectedDate) ?? false
-              if (already !== cmd.completed) toggleHabitCompleted(item.id, selectedDate)
-            }
-            return { icon: item.icon, color: item.color, title: `Marked ${item.title}`, context: verb }
+          {
+            title: "Update status?",
+            message: `Mark "${item.title}" as ${verb}.`,
+            confirmLabel: "Mark",
           },
-        )
+          () => {
+            if (isTask) updateTask(item.id, { completed: cmd.completed });
+            else {
+              const h = habits.find((x) => x.id === item.id);
+              const already = h?.completedDates.includes(selectedDate) ?? false;
+              if (already !== cmd.completed) toggleHabitCompleted(item.id, selectedDate);
+            }
+            return {
+              icon: item.icon,
+              color: item.color,
+              title: `Marked ${item.title}`,
+              context: verb,
+            };
+          }
+        );
       }
 
       case "linkWorkout": {
-        if (!isTask) return { error: "Only tasks can link to a workout." }
-        const session = await pickByName(cmd.query, sessions, "workout")
-        if (!session) return { error: `No workout matching "${cmd.query}".` }
+        if (!isTask) return { error: "Only tasks can link to a workout." };
+        const session = await pickByName(cmd.query, sessions, "workout");
+        if (!session) return { error: `No workout matching "${cmd.query}".` };
         return ok(
-          { title: "Link workout?", message: `Link "${item.title}" to the "${session.name}" workout.`, confirmLabel: "Link" },
-          () => {
-            updateTask(item.id, { workoutSessionId: session.id, recipeId: undefined, color: session.color, icon: "workout" })
-            return { icon: "workout", color: session.color, title: `Linked ${item.title}`, context: `→ ${session.name}` }
+          {
+            title: "Link workout?",
+            message: `Link "${item.title}" to the "${session.name}" workout.`,
+            confirmLabel: "Link",
           },
-        )
+          () => {
+            updateTask(item.id, {
+              workoutSessionId: session.id,
+              recipeId: undefined,
+              color: session.color,
+              icon: "workout",
+            });
+            return {
+              icon: "workout",
+              color: session.color,
+              title: `Linked ${item.title}`,
+              context: `→ ${session.name}`,
+            };
+          }
+        );
       }
 
       case "linkRecipe": {
-        if (!isTask) return { error: "Only tasks can link to a recipe." }
-        const recipe = await pickByName(cmd.query, recipes, "recipe")
-        if (!recipe) return { error: `No recipe matching "${cmd.query}".` }
+        if (!isTask) return { error: "Only tasks can link to a recipe." };
+        const recipe = await pickByName(cmd.query, recipes, "recipe");
+        if (!recipe) return { error: `No recipe matching "${cmd.query}".` };
         return ok(
-          { title: "Link recipe?", message: `Link "${item.title}" to the "${recipe.name}" recipe.`, confirmLabel: "Link" },
-          () => {
-            updateTask(item.id, { recipeId: recipe.id, workoutSessionId: undefined, color: recipe.color, icon: "meal" })
-            return { icon: "meal", color: recipe.color, title: `Linked ${item.title}`, context: `→ ${recipe.name}` }
+          {
+            title: "Link recipe?",
+            message: `Link "${item.title}" to the "${recipe.name}" recipe.`,
+            confirmLabel: "Link",
           },
-        )
+          () => {
+            updateTask(item.id, {
+              recipeId: recipe.id,
+              workoutSessionId: undefined,
+              color: recipe.color,
+              icon: "meal",
+            });
+            return {
+              icon: "meal",
+              color: recipe.color,
+              title: `Linked ${item.title}`,
+              context: `→ ${recipe.name}`,
+            };
+          }
+        );
       }
 
       case "toHabit": {
-        if (!isTask) return { error: `"${item.title}" is already a habit.` }
+        if (!isTask) return { error: `"${item.title}" is already a habit.` };
         const daysLabel =
-          cmd.daysOfWeek.length === 7 ? "every day" : cmd.daysOfWeek.map((d) => DAY_NAMES[d]).join(" ")
+          cmd.daysOfWeek.length === 7
+            ? "every day"
+            : cmd.daysOfWeek.map((d) => DAY_NAMES[d]).join(" ");
         return ok(
           {
             title: "Make it a habit?",
@@ -288,7 +373,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             confirmLabel: "Make habit",
           },
           () => {
-            deleteTask(item.id)
+            deleteTask(item.id);
             addHabit({
               title: item.title,
               startMinutes: item.startMinutes,
@@ -296,15 +381,20 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
               color: item.color,
               icon: item.icon,
               daysOfWeek: cmd.daysOfWeek,
-            })
-            return { icon: item.icon, color: item.color, title: `${item.title} is now a habit`, context: daysLabel }
-          },
-        )
+            });
+            return {
+              icon: item.icon,
+              color: item.color,
+              title: `${item.title} is now a habit`,
+              context: daysLabel,
+            };
+          }
+        );
       }
 
       case "toTask": {
-        if (isTask) return { error: `"${item.title}" is already a one-time task.` }
-        const date = cmd.date ?? selectedDate
+        if (isTask) return { error: `"${item.title}" is already a one-time task.` };
+        const date = cmd.date ?? selectedDate;
         return ok(
           {
             title: "Make it one-time?",
@@ -312,7 +402,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             confirmLabel: "Make task",
           },
           () => {
-            deleteHabit(item.id)
+            deleteHabit(item.id);
             addTask({
               title: item.title,
               startMinutes: item.startMinutes,
@@ -320,10 +410,15 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
               color: item.color,
               icon: item.icon,
               date,
-            })
-            return { icon: item.icon, color: item.color, title: `${item.title} is now one-time`, context: relativeDayLabel(date) }
-          },
-        )
+            });
+            return {
+              icon: item.icon,
+              color: item.color,
+              title: `${item.title} is now one-time`,
+              context: relativeDayLabel(date),
+            };
+          }
+        );
       }
     }
   }
@@ -332,61 +427,61 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   async function pickByName<T extends { id: string; name: string }>(
     query: string,
     options: T[],
-    kind: string,
+    kind: string
   ): Promise<T | null> {
-    const matches = resolveByName(query, options)
-    if (matches.length === 0) return null
-    if (matches.length === 1) return matches[0]
+    const matches = resolveByName(query, options);
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
     const id = await choose({
       title: `Which ${kind}?`,
       options: matches.slice(0, 4).map((m) => ({ label: m.name, value: m.id })),
-    })
-    return matches.find((m) => m.id === id) ?? null
+    });
+    return matches.find((m) => m.id === id) ?? null;
   }
 
   // Returns true if the input was handled as a command (resolved or not).
   async function tryCommand(raw: string, now: Date) {
-    const cmd = parseCommand(raw, now)
-    if (!cmd) return false
+    const cmd = parseCommand(raw, now);
+    if (!cmd) return false;
 
-    const matches = resolveTarget(cmd.target, commandItems(), selectedDate)
+    const matches = resolveTarget(cmd.target, commandItems(), selectedDate);
     if (matches.length === 0) {
-      const what = cmd.target.titleWords.join(" ") || "that item"
-      flash(null, `Couldn't find "${what}" to ${ACTION_VERB[cmd.action]}.`)
-      return true
+      const what = cmd.target.titleWords.join(" ") || "that item";
+      flash(null, `Couldn't find "${what}" to ${ACTION_VERB[cmd.action]}.`);
+      return true;
     }
 
-    let item = matches[0]
+    let item = matches[0];
     if (matches.length > 1) {
       const picked = await choose({
         title: "Which one?",
         message: "More than one matches — pick the one you meant.",
         options: matches.slice(0, 4).map((m) => ({ label: itemLabel(m), value: m.id })),
-      })
-      if (!picked) return true
-      item = matches.find((m) => m.id === picked)!
+      });
+      if (!picked) return true;
+      item = matches.find((m) => m.id === picked)!;
     }
 
-    const plan = await planCommand(cmd, item)
+    const plan = await planCommand(cmd, item);
     if (plan.error) {
-      flash(null, plan.error)
-      return true
+      flash(null, plan.error);
+      return true;
     }
-    const okd = await confirm(plan.confirm!)
-    if (!okd) return true
-    flash(plan.run!())
-    return true
+    const okd = await confirm(plan.confirm!);
+    if (!okd) return true;
+    flash(plan.run!());
+    return true;
   }
 
   // Creating always confirms first, and fills in anything the text left vague:
   // when no day was named it asks which day, and unless an exact clock time was
   // given it asks for a time — so nothing is silently guessed.
   async function create(raw: string) {
-    const parsed = parseQuickAdd(raw)
-    if (!parsed) return
-    const now = new Date()
-    let startMinutes = parsed.startMinutes
-    let date = parsed.date
+    const parsed = parseQuickAdd(raw);
+    if (!parsed) return;
+    const now = new Date();
+    let startMinutes = parsed.startMinutes;
+    let date = parsed.date;
 
     if (parsed.kind === "task" && !parsed.dateGiven) {
       const ans = await prompt({
@@ -395,10 +490,10 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         placeholder: "today, tomorrow, mon, 2026-07-01",
         defaultValue: "today",
         confirmLabel: "Next",
-      })
-      if (ans === null) return
-      const d = ans ? parseDateInput(ans, now) : null
-      if (d) date = d
+      });
+      if (ans === null) return;
+      const d = ans ? parseDateInput(ans, now) : null;
+      if (d) date = d;
     }
 
     if (parsed.timeGiven !== "exact") {
@@ -408,27 +503,28 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         placeholder: "6am, 14:30, morning",
         defaultValue: parsed.timeGiven === "vague" ? formatTimeLabel(startMinutes) : "",
         confirmLabel: "Next",
-      })
-      if (ans === null) return
-      const t = ans ? parseTimeInput(ans) : null
-      if (t != null) startMinutes = t
+      });
+      if (ans === null) return;
+      const t = ans ? parseTimeInput(ans) : null;
+      if (t != null) startMinutes = t;
     }
 
-    const durationMinutes = Math.max(5, Math.min(parsed.durationMinutes, 1440 - startMinutes))
-    const range = formatTimeRange(startMinutes, durationMinutes)
+    const durationMinutes = Math.max(5, Math.min(parsed.durationMinutes, 1440 - startMinutes));
+    const range = formatTimeRange(startMinutes, durationMinutes);
     const daysLabel = parsed.daysOfWeek
       ? parsed.daysOfWeek.length === 7
         ? "Every day"
         : parsed.daysOfWeek.map((d) => DAY_NAMES[d]).join(" ")
-      : ""
-    const summary = parsed.kind === "task" ? `${relativeDayLabel(date!)} · ${range}` : `${daysLabel} · ${range}`
+      : "";
+    const summary =
+      parsed.kind === "task" ? `${relativeDayLabel(date!)} · ${range}` : `${daysLabel} · ${range}`;
 
     const okd = await confirm({
       title: parsed.kind === "task" ? "Add task?" : "Add habit?",
       message: `Add "${parsed.title}" — ${summary}.`,
       confirmLabel: "Add",
-    })
-    if (!okd) return
+    });
+    if (!okd) return;
 
     if (parsed.kind === "task") {
       const id = addTask({
@@ -438,7 +534,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         color: DEFAULT_COLOR,
         icon: parsed.icon,
         date: date!,
-      })
+      });
       flash({
         icon: parsed.icon,
         color: DEFAULT_COLOR,
@@ -457,9 +553,9 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             date: date!,
           },
         },
-      })
+      });
     } else {
-      const days = parsed.daysOfWeek!
+      const days = parsed.daysOfWeek!;
       const id = addHabit({
         title: parsed.title,
         startMinutes,
@@ -467,7 +563,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         color: DEFAULT_COLOR,
         icon: parsed.icon,
         daysOfWeek: days,
-      })
+      });
       flash({
         icon: parsed.icon,
         color: DEFAULT_COLOR,
@@ -486,28 +582,28 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             completedDates: [],
           },
         },
-      })
+      });
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const raw = text.trim()
-    if (!raw) return
-    setText("")
-    const handled = await tryCommand(raw, new Date())
-    if (!handled) await create(raw)
+    e.preventDefault();
+    const raw = text.trim();
+    if (!raw) return;
+    setText("");
+    const handled = await tryCommand(raw, new Date());
+    if (!handled) await create(raw);
   }
 
   function handleEditDetails() {
-    if (!confirmation?.item) return
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    const item = confirmation.item
-    setConfirmation(null)
-    onEditDetails(item)
+    if (!confirmation?.item) return;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    const item = confirmation.item;
+    setConfirmation(null);
+    onEditDetails(item);
   }
 
-  const ConfirmIcon = confirmation ? ICONS[confirmation.icon] ?? ICONS.default : null
+  const ConfirmIcon = confirmation ? (ICONS[confirmation.icon] ?? ICONS.default) : null;
 
   return (
     <div className="mb-4">
@@ -588,5 +684,5 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 }

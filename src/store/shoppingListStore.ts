@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ShoppingList } from "../types/shopping";
-import { todayISODate } from "../lib/date";
+
+import { todayISODate } from "@/lib/date";
+import type { ShoppingList } from "@/types/shopping";
 
 // Shopping lists are the "trip" events. A line references a catalog item by id
 // with a quantity multiplier and a per-trip checked flag. Completing a trip is
@@ -11,9 +12,7 @@ interface ShoppingListStore {
   lists: ShoppingList[];
   activeListId: string | null;
 
-  createList: (
-    init?: Partial<Pick<ShoppingList, "title" | "date" | "taskId">>,
-  ) => string;
+  createList: (init?: Partial<Pick<ShoppingList, "title" | "date" | "taskId">>) => string;
   deleteList: (id: string) => void;
   setActiveList: (id: string | null) => void;
   setListTask: (id: string, taskId: string) => void;
@@ -53,8 +52,7 @@ export const useShoppingListStore = create<ShoppingListStore>()(
           const lists = state.lists.filter((l) => l.id !== id);
           return {
             lists,
-            activeListId:
-              state.activeListId === id ? (lists[0]?.id ?? null) : state.activeListId,
+            activeListId: state.activeListId === id ? (lists[0]?.id ?? null) : state.activeListId,
           };
         }),
 
@@ -77,9 +75,7 @@ export const useShoppingListStore = create<ShoppingListStore>()(
       removeLine: (listId, itemId) =>
         set((state) => ({
           lists: state.lists.map((l) =>
-            l.id === listId
-              ? { ...l, lines: l.lines.filter((line) => line.itemId !== itemId) }
-              : l,
+            l.id === listId ? { ...l, lines: l.lines.filter((line) => line.itemId !== itemId) } : l
           ),
         })),
 
@@ -92,10 +88,10 @@ export const useShoppingListStore = create<ShoppingListStore>()(
                   lines: l.lines.map((line) =>
                     line.itemId === itemId
                       ? { ...line, qty: Math.max(0.25, Math.round(qty * 100) / 100) }
-                      : line,
+                      : line
                   ),
                 }
-              : l,
+              : l
           ),
         })),
 
@@ -106,19 +102,17 @@ export const useShoppingListStore = create<ShoppingListStore>()(
               ? {
                   ...l,
                   lines: l.lines.map((line) =>
-                    line.itemId === itemId
-                      ? { ...line, checked: !line.checked }
-                      : line,
+                    line.itemId === itemId ? { ...line, checked: !line.checked } : line
                   ),
                 }
-              : l,
+              : l
           ),
         })),
 
       markDone: (listId, expenseId) =>
         set((state) => ({
           lists: state.lists.map((l) =>
-            l.id === listId ? { ...l, status: "done", expenseId } : l,
+            l.id === listId ? { ...l, status: "done", expenseId } : l
           ),
         })),
     }),
@@ -128,8 +122,7 @@ export const useShoppingListStore = create<ShoppingListStore>()(
       // v1: drop the sample seed list (sl1) that referenced removed seed catalog items.
       migrate: (persisted, version) => {
         const state = persisted as
-          | { lists?: ShoppingList[]; activeListId?: string | null }
-          | undefined;
+          { lists?: ShoppingList[]; activeListId?: string | null } | undefined;
         if (!state) return persisted as never;
         if (version < 1) {
           const lists = (state.lists ?? []).filter((l) => l.id !== "sl1");
@@ -142,6 +135,6 @@ export const useShoppingListStore = create<ShoppingListStore>()(
         }
         return state as never;
       },
-    },
-  ),
+    }
+  )
 );

@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Task } from "../types/task";
-import { todayISODate } from "../lib/date";
+
+import { todayISODate } from "@/lib/date";
+import type { Task } from "@/types/task";
 
 interface TaskStore {
   tasks: Task[];
@@ -66,23 +67,20 @@ export const useTaskStore = create<TaskStore>()(
       tasks: initialTasks,
       selectedDate: today,
       navNonce: 0,
-      setSelectedDate: (date) =>
-        set((s) => ({ selectedDate: date, navNonce: s.navNonce + 1 })),
+      setSelectedDate: (date) => set((s) => ({ selectedDate: date, navNonce: s.navNonce + 1 })),
       swipeToDate: (date) => set({ selectedDate: date }),
 
       updateTaskTime: (id, startMinutes) =>
         set((state) => ({
           tasks: state.tasks.map((t) =>
-            t.id === id ? { ...t, startMinutes: Math.max(0, startMinutes) } : t,
+            t.id === id ? { ...t, startMinutes: Math.max(0, startMinutes) } : t
           ),
         })),
 
       updateTaskDuration: (id, durationMinutes) =>
         set((state) => ({
           tasks: state.tasks.map((t) =>
-            t.id === id
-              ? { ...t, durationMinutes: Math.max(15, durationMinutes) }
-              : t,
+            t.id === id ? { ...t, durationMinutes: Math.max(15, durationMinutes) } : t
           ),
         })),
 
@@ -96,25 +94,18 @@ export const useTaskStore = create<TaskStore>()(
 
       toggleTaskCompleted: (id) =>
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === id ? { ...t, completed: !t.completed } : t,
-          ),
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
         })),
 
-      deleteTask: (id) =>
-        set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
+      deleteTask: (id) => set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
 
       updateTask: (id, changes) =>
         set((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === id ? { ...t, ...changes } : t,
-          ),
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...changes } : t)),
         })),
 
       copyTasksToDate: (fromDate, toDate) => {
-        const source = useTaskStore
-          .getState()
-          .tasks.filter((t) => t.date === fromDate);
+        const source = useTaskStore.getState().tasks.filter((t) => t.date === fromDate);
         if (source.length === 0) return 0;
         // Copy only the plan itself — drop completion and any instance-specific
         // links (shopping list, workout session, recipe) so the two days don't
@@ -139,6 +130,6 @@ export const useTaskStore = create<TaskStore>()(
 
     {
       name: "disciplined-tasks", // localStorage key
-    },
-  ),
+    }
+  )
 );

@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Meal } from "../types/meal";
-import { todayISODate } from "../lib/date";
+
+import { todayISODate } from "@/lib/date";
+import type { Meal } from "@/types/meal";
 
 // Meals are dated log entries of what was eaten. Components reference catalog
 // items by id and scale them by servings. Daily diet totals roll up from here.
@@ -10,11 +11,7 @@ interface MealStore {
   addMeal: (meal: Omit<Meal, "id">) => string;
   updateMeal: (id: string, changes: Partial<Omit<Meal, "id">>) => void;
   deleteMeal: (id: string) => void;
-  setComponentServings: (
-    mealId: string,
-    itemId: string,
-    servings: number,
-  ) => void;
+  setComponentServings: (mealId: string, itemId: string, servings: number) => void;
   removeComponent: (mealId: string, itemId: string) => void;
 }
 
@@ -49,8 +46,7 @@ export const useMealStore = create<MealStore>()(
           meals: state.meals.map((m) => (m.id === id ? { ...m, ...changes } : m)),
         })),
 
-      deleteMeal: (id) =>
-        set((state) => ({ meals: state.meals.filter((m) => m.id !== id) })),
+      deleteMeal: (id) => set((state) => ({ meals: state.meals.filter((m) => m.id !== id) })),
 
       setComponentServings: (mealId, itemId, servings) =>
         set((state) => ({
@@ -61,10 +57,10 @@ export const useMealStore = create<MealStore>()(
                   components: m.components.map((c) =>
                     c.itemId === itemId
                       ? { ...c, servings: Math.max(0, Math.round(servings * 100) / 100) }
-                      : c,
+                      : c
                   ),
                 }
-              : m,
+              : m
           ),
         })),
 
@@ -73,12 +69,12 @@ export const useMealStore = create<MealStore>()(
           meals: state.meals.map((m) =>
             m.id === mealId
               ? { ...m, components: m.components.filter((c) => c.itemId !== itemId) }
-              : m,
+              : m
           ),
         })),
     }),
     {
       name: "disciplined-meals", // localStorage key
-    },
-  ),
+    }
+  )
 );

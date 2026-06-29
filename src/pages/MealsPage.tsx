@@ -1,43 +1,42 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, UtensilsCrossed } from 'lucide-react'
-import { useMealStore } from '../store/mealStore'
-import { useGroceryStore } from '../store/groceryStore'
-import { indexItems, mealNutrition, dayNutrition } from '../lib/grocery'
-import { todayISODate } from '../lib/date'
-import { spring, tap, press } from '../lib/motion'
-import AddMealSheet from '../components/meals/AddMealSheet'
-import type { Meal, MealType } from '../types/meal'
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Plus, UtensilsCrossed } from "lucide-react";
+
+import AddMealSheet from "@/components/meals/AddMealSheet";
+import { todayISODate } from "@/lib/date";
+import { dayNutrition, indexItems, mealNutrition } from "@/lib/grocery";
+import { press, spring, tap } from "@/lib/motion";
+import { useGroceryStore } from "@/store/groceryStore";
+import { useMealStore } from "@/store/mealStore";
+import type { Meal, MealType } from "@/types/meal";
 
 const TYPE_LABELS: Record<MealType, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
-}
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snack",
+};
 
 export default function MealsPage() {
-  const meals = useMealStore((s) => s.meals)
-  const groceryItems = useGroceryStore((s) => s.groceryItems)
+  const meals = useMealStore((s) => s.meals);
+  const groceryItems = useGroceryStore((s) => s.groceryItems);
 
-  const [editMeal, setEditMeal] = useState<Meal | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
+  const [editMeal, setEditMeal] = useState<Meal | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const items = indexItems(groceryItems)
-  const today = todayISODate()
+  const items = indexItems(groceryItems);
+  const today = todayISODate();
 
   // Keep insertion order so the most recently logged meal sits at the bottom.
-  const todaysMeals = meals.filter((m) => m.date === today)
+  const todaysMeals = meals.filter((m) => m.date === today);
 
-  const total = dayNutrition(todaysMeals, items)
+  const total = dayNutrition(todaysMeals, items);
 
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- Today's diet ---------- */}
       <div className="rounded-2xl bg-surface-feature text-white p-5">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-          Eaten today
-        </p>
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Eaten today</p>
         <p className="text-3xl font-bold mt-1">
           {total.calories}
           <span className="text-base font-medium text-gray-500"> kcal</span>
@@ -68,20 +67,18 @@ export default function MealsPage() {
             <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
               <UtensilsCrossed size={24} className="text-fg-faint" />
             </div>
-            <p className="text-base font-medium text-fg">
-              Nothing logged today
-            </p>
+            <p className="text-base font-medium text-fg">Nothing logged today</p>
             <p className="text-sm text-fg-faint text-center">
               Build a meal from the food you've saved to track your diet.
             </p>
           </div>
         ) : (
           todaysMeals.map((meal) => {
-            const n = mealNutrition(meal, items)
+            const n = mealNutrition(meal, items);
             const parts = meal.components
               .map((c) => items[c.itemId]?.name)
               .filter(Boolean)
-              .join(', ')
+              .join(", ");
             return (
               <motion.button
                 key={meal.id}
@@ -92,16 +89,12 @@ export default function MealsPage() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold text-fg leading-tight truncate">
-                      {meal.name}
-                    </p>
+                    <p className="font-semibold text-fg leading-tight truncate">{meal.name}</p>
                     <span className="text-[11px] font-medium text-fg-muted bg-surface-subtle rounded-full px-2 py-0.5 shrink-0">
                       {TYPE_LABELS[meal.type]}
                     </span>
                   </div>
-                  {parts && (
-                    <p className="text-xs text-fg-faint mt-1 truncate">{parts}</p>
-                  )}
+                  {parts && <p className="text-xs text-fg-faint mt-1 truncate">{parts}</p>}
                   <p className="text-xs text-fg-muted mt-1.5">
                     {n.protein}g protein · {n.fat}g fat · {n.carbs}g carbs
                   </p>
@@ -111,7 +104,7 @@ export default function MealsPage() {
                   <span className="text-xs font-medium text-fg-faint"> kcal</span>
                 </p>
               </motion.button>
-            )
+            );
           })
         )}
       </div>
@@ -120,12 +113,12 @@ export default function MealsPage() {
         isOpen={addOpen || !!editMeal}
         editMeal={editMeal}
         onClose={() => {
-          setAddOpen(false)
-          setEditMeal(null)
+          setAddOpen(false);
+          setEditMeal(null);
         }}
       />
     </div>
-  )
+  );
 }
 
 function Macro({ label, value }: { label: string; value: string }) {
@@ -134,5 +127,5 @@ function Macro({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] text-gray-400">{label}</p>
       <p className="text-sm font-semibold mt-0.5 text-white">{value}</p>
     </div>
-  )
+  );
 }

@@ -1,20 +1,21 @@
 /* eslint-disable react-hooks/refs */
-import { Flame } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useDraggable } from "@dnd-kit/core";
-import { ICONS } from "../../lib/icons";
+import { AnimatePresence, motion } from "framer-motion";
+import { Flame } from "lucide-react";
+
+import { ICONS } from "@/lib/icons";
+import { spring, tap } from "@/lib/motion";
+import { themeColors } from "@/lib/theme";
 import {
-  minutesToPx,
-  pxToMinutes,
-  snapToGrid,
   formatTimeLabel,
   formatTimeRange,
   getPillHeight,
+  minutesToPx,
   PILL_BASE_SIZE,
-} from "../../lib/time";
-import { spring, tap } from "../../lib/motion";
-import { useThemeStore } from "../../store/themeStore";
-import { themeColors } from "../../lib/theme";
+  pxToMinutes,
+  snapToGrid,
+} from "@/lib/time";
+import { useThemeStore } from "@/store/themeStore";
 
 export const MIN_ROW_HEIGHT = 84;
 
@@ -72,12 +73,8 @@ export default function ScheduleRow({
   const theme = useThemeStore((s) => s.theme);
   const colors = themeColors[theme];
 
-  const liveOffsetMinutes = move.transform
-    ? snapToGrid(pxToMinutes(move.transform.y))
-    : 0;
-  const liveDurationDelta = resize.transform
-    ? snapToGrid(pxToMinutes(resize.transform.y))
-    : 0;
+  const liveOffsetMinutes = move.transform ? snapToGrid(pxToMinutes(move.transform.y)) : 0;
+  const liveDurationDelta = resize.transform ? snapToGrid(pxToMinutes(resize.transform.y)) : 0;
   const isActive = move.isDragging || resize.isDragging;
 
   const liveDuration = durationMinutes + liveDurationDelta;
@@ -89,7 +86,7 @@ export default function ScheduleRow({
 
   const targetTop = isActive
     ? minutesToPx(startMinutes + liveOffsetMinutes - startOffset)
-    : virtualTop ?? minutesToPx(startMinutes + liveOffsetMinutes - startOffset);
+    : (virtualTop ?? minutesToPx(startMinutes + liveOffsetMinutes - startOffset));
 
   return (
     <motion.div
@@ -127,7 +124,13 @@ export default function ScheduleRow({
           className="absolute -z-10 rounded-2xl"
           // Height tracks the pill (which scales with duration) so the highlight
           // grows with the task block instead of the fixed-slot row height.
-          style={{ backgroundColor: color, top: -10, height: pillHeight + 26, left: -10, right: -10 }}
+          style={{
+            backgroundColor: color,
+            top: -10,
+            height: pillHeight + 26,
+            left: -10,
+            right: -10,
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0.1, 0.2, 0.1] }}
           exit={{ opacity: 0 }}
@@ -191,10 +194,7 @@ export default function ScheduleRow({
         </motion.div>
 
         {/* Tap zone: the text content area opens edit/delete */}
-        <div
-          onClick={() => onEdit(id)}
-          className="flex-1 pt-1 min-w-0 select-none cursor-pointer"
-        >
+        <div onClick={() => onEdit(id)} className="flex-1 pt-1 min-w-0 select-none cursor-pointer">
           <div className="flex items-center gap-2">
             <span className="relative block min-w-0 overflow-hidden leading-tight max-w-44">
               <motion.span

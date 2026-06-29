@@ -1,39 +1,45 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { spring, tap } from '../../lib/motion'
-import { useScrollLock } from '../../hooks/useScrollLock'
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { spring, tap } from "@/lib/motion";
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 interface MonthYearPickerProps {
-  isOpen: boolean
-  onClose: () => void
-  value: Date // currently selected date
-  onSelect: (date: Date) => void
+  isOpen: boolean;
+  onClose: () => void;
+  value: Date; // currently selected date
+  onSelect: (date: Date) => void;
 }
 
-export default function MonthYearPicker({ isOpen, onClose, value, onSelect }: MonthYearPickerProps) {
-  useScrollLock(isOpen)
-  const [year, setYear] = useState(value.getFullYear())
+export default function MonthYearPicker({
+  isOpen,
+  onClose,
+  value,
+  onSelect,
+}: MonthYearPickerProps) {
+  useScrollLock(isOpen);
+  const [year, setYear] = useState(value.getFullYear());
 
   // Re-sync the displayed year to the selection each time the picker opens.
   useEffect(() => {
-    if (isOpen) setYear(value.getFullYear())
-  }, [isOpen])
+    if (isOpen) setYear(value.getFullYear());
+  }, [isOpen]);
 
-  const today = new Date()
+  const today = new Date();
 
   function pick(monthIndex: number) {
     // Picking the current month lands on today; any other month lands on its 1st.
     const landing =
       year === today.getFullYear() && monthIndex === today.getMonth()
         ? new Date(today.getFullYear(), today.getMonth(), today.getDate())
-        : new Date(year, monthIndex, 1)
-    onSelect(landing)
-    onClose()
+        : new Date(year, monthIndex, 1);
+    onSelect(landing);
+    onClose();
   }
 
   return (
@@ -77,8 +83,8 @@ export default function MonthYearPicker({ isOpen, onClose, value, onSelect }: Mo
               {/* Month grid */}
               <div className="grid grid-cols-3 gap-2">
                 {MONTHS.map((label, i) => {
-                  const isSelected = year === value.getFullYear() && i === value.getMonth()
-                  const isThisMonth = year === today.getFullYear() && i === today.getMonth()
+                  const isSelected = year === value.getFullYear() && i === value.getMonth();
+                  const isThisMonth = year === today.getFullYear() && i === today.getMonth();
                   return (
                     <motion.button
                       key={label}
@@ -86,23 +92,23 @@ export default function MonthYearPicker({ isOpen, onClose, value, onSelect }: Mo
                       whileTap={tap}
                       className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
                         isSelected
-                          ? 'bg-surface-inverse text-fg-inverse'
+                          ? "bg-surface-inverse text-fg-inverse"
                           : isThisMonth
-                            ? 'bg-surface-alt text-fg'
-                            : 'bg-surface-raised text-fg-muted'
+                            ? "bg-surface-alt text-fg"
+                            : "bg-surface-raised text-fg-muted"
                       }`}
                     >
                       {label}
                     </motion.button>
-                  )
+                  );
                 })}
               </div>
 
               {/* Today shortcut */}
               <motion.button
                 onClick={() => {
-                  onSelect(new Date(today.getFullYear(), today.getMonth(), today.getDate()))
-                  onClose()
+                  onSelect(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+                  onClose();
                 }}
                 whileTap={tap}
                 className="w-full mt-4 py-2.5 rounded-xl text-sm font-medium bg-surface-raised text-fg"
@@ -114,5 +120,5 @@ export default function MonthYearPicker({ isOpen, onClose, value, onSelect }: Mo
         </>
       )}
     </AnimatePresence>
-  )
+  );
 }
