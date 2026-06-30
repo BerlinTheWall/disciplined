@@ -19,6 +19,7 @@ const TYPE_LABELS: Record<MealType, string> = {
 
 export default function MealsPage() {
   const meals = useMealStore((s) => s.meals);
+  const addMeal = useMealStore((s) => s.addMeal);
   const groceryItems = useGroceryStore((s) => s.groceryItems);
 
   const [editMeal, setEditMeal] = useState<Meal | null>(null);
@@ -31,6 +32,31 @@ export default function MealsPage() {
   const todaysMeals = meals.filter((m) => m.date === today);
 
   const total = dayNutrition(todaysMeals, items);
+
+  // Recently logged meals (from earlier days), newest first and de-duped by
+  // name, so you can re-log a regular meal in one tap.
+  const recent: Meal[] = [];
+  const seen = new Set<string>();
+  const past = [...meals].filter((m) => m.date !== today).reverse();
+  past.sort((a, b) => b.date.localeCompare(a.date));
+  for (const m of past) {
+    const key = m.name.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    recent.push(m);
+    if (recent.length >= 8) break;
+  }
+
+  function logAgain(m: Meal) {
+    addMeal({
+      name: m.name,
+      type: m.type,
+      date: today,
+      components: m.components.map((c) => ({ ...c })),
+      recipeId: m.recipeId,
+      servingsEaten: m.servingsEaten,
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -47,6 +73,34 @@ export default function MealsPage() {
           <Macro label="Carbs" value={`${total.carbs}g`} />
         </div>
       </div>
+
+      {/* ---------- Log again ---------- */}
+      {recent.length > 0 && (
+        <div>
+          <h2 className="text-base font-semibold text-fg px-1 mb-2">Log again</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            {recent.map((m) => {
+              const n = mealNutrition(m, items);
+              return (
+                <motion.button
+                  key={m.id}
+                  onClick={() => logAgain(m)}
+                  whileTap={tap}
+                  className="shrink-0 flex flex-col items-start gap-0.5 bg-surface-alt rounded-2xl px-3.5 py-2.5 max-w-42.5"
+                >
+                  <span className="flex items-center gap-1 font-medium text-sm text-fg max-w-37.5 truncate">
+                    <Plus size={13} className="text-fg-faint shrink-0" />
+                    {m.name}
+                  </span>
+                  <span className="text-xs text-fg-faint">
+                    {n.calories} kcal · {TYPE_LABELS[m.type]}
+                  </span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ---------- Meals ---------- */}
       <div className="flex flex-col gap-3">

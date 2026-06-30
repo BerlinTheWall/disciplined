@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Wand2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Wand2, X } from "lucide-react";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -30,12 +30,16 @@ interface AddGroceryItemSheetProps {
   isOpen: boolean;
   onClose: () => void;
   editItem?: GroceryItem | null;
+  // Called with the new item's id after a fresh item is created — lets a caller
+  // (e.g. the meal/recipe picker) immediately select what was just added.
+  onCreated?: (id: string) => void;
 }
 
 export default function AddGroceryItemSheet({
   isOpen,
   onClose,
   editItem,
+  onCreated,
 }: AddGroceryItemSheetProps) {
   const addGroceryItem = useGroceryStore((s) => s.addGroceryItem);
   const updateGroceryItem = useGroceryStore((s) => s.updateGroceryItem);
@@ -56,8 +60,12 @@ export default function AddGroceryItemSheet({
   const [price, setPrice] = useState("");
   const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition());
   const [auto, setAuto] = useState(true);
+  // Price / stock / nutrition are tucked away by default so a quick add is just
+  // name + amount; editing an existing item opens them expanded.
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
+    setShowDetails(!!editItem);
     if (editItem) {
       setName(editItem.name);
       setCategory(editItem.category);
@@ -137,7 +145,8 @@ export default function AddGroceryItemSheet({
       if (!ok) return;
       updateGroceryItem(editItem!.id, payload);
     } else {
-      addGroceryItem(payload);
+      const id = addGroceryItem(payload);
+      onCreated?.(id);
     }
     onClose();
   }
@@ -258,80 +267,96 @@ export default function AddGroceryItemSheet({
               </div>
             </div>
 
-            {/* In stock */}
-            <label className="text-sm text-fg-muted mb-1 block">
-              In stock <span className="text-fg-faint">(how much you have now)</span>
-            </label>
-            <div className="relative mb-4">
-              <input
-                type="number"
-                inputMode="decimal"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                placeholder="0"
-                className="w-full text-base border border-border-input rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-border-focus"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-fg-faint">
-                {unit}
-              </span>
-            </div>
+            {/* Toggle for the optional details — keeps a quick add to name + amount */}
+            <motion.button
+              onClick={() => setShowDetails((v) => !v)}
+              whileTap={tap}
+              className="flex items-center gap-1.5 mb-4 text-sm font-medium text-fg-muted"
+            >
+              {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {showDetails ? "Fewer details" : "Price, stock & nutrition"}
+            </motion.button>
 
-            {/* Price */}
-            <label className="text-sm text-fg-muted mb-1 block">Price</label>
-            <div className="relative mb-5">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-fg-faint">
-                $
-              </span>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0.00"
-                className="w-full text-base border border-border-input rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:border-border-focus"
-              />
-            </div>
-
-            {/* Nutrition */}
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm text-fg-muted">
-                Nutrition <span className="text-fg-faint">(for this amount)</span>
-              </label>
-              <motion.button
-                onClick={reEstimate}
-                whileTap={tap}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                  auto ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"
-                }`}
-              >
-                <Wand2 size={12} />
-                {auto ? "Estimated" : "Re-estimate"}
-              </motion.button>
-            </div>
-            <p className="text-xs text-fg-faint mb-3">
-              {auto
-                ? "Auto-estimated from the item and amount. Edit any value to override."
-                : "Manually set. Tap Re-estimate to recalculate from the amount."}
-            </p>
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              {NUTRITION_FIELDS.map(({ key, label, unit: u }) => (
-                <div key={key}>
-                  <label className="text-[11px] text-fg-faint mb-1 block">{label}</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={nutrition[key]}
-                      onChange={(e) => setNutritionField(key, e.target.value)}
-                      className="w-full text-sm border border-border-input rounded-lg pl-2.5 pr-7 py-2 focus:outline-none focus:border-border-focus"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-fg-faint">
-                      {u}
-                    </span>
-                  </div>
+            {showDetails && (
+              <>
+                {/* In stock */}
+                <label className="text-sm text-fg-muted mb-1 block">
+                  In stock <span className="text-fg-faint">(how much you have now)</span>
+                </label>
+                <div className="relative mb-4">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    placeholder="0"
+                    className="w-full text-base border border-border-input rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-border-focus"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-fg-faint">
+                    {unit}
+                  </span>
                 </div>
-              ))}
-            </div>
+
+                {/* Price */}
+                <label className="text-sm text-fg-muted mb-1 block">Price</label>
+                <div className="relative mb-5">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-fg-faint">
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full text-base border border-border-input rounded-xl pl-8 pr-4 py-3 focus:outline-none focus:border-border-focus"
+                  />
+                </div>
+
+                {/* Nutrition */}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm text-fg-muted">
+                    Nutrition <span className="text-fg-faint">(for this amount)</span>
+                  </label>
+                  <motion.button
+                    onClick={reEstimate}
+                    whileTap={tap}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      auto
+                        ? "bg-surface-inverse text-fg-inverse"
+                        : "bg-surface-raised text-fg-muted"
+                    }`}
+                  >
+                    <Wand2 size={12} />
+                    {auto ? "Estimated" : "Re-estimate"}
+                  </motion.button>
+                </div>
+                <p className="text-xs text-fg-faint mb-3">
+                  {auto
+                    ? "Auto-estimated from the item and amount. Edit any value to override."
+                    : "Manually set. Tap Re-estimate to recalculate from the amount."}
+                </p>
+                <div className="grid grid-cols-3 gap-2 mb-6">
+                  {NUTRITION_FIELDS.map(({ key, label, unit: u }) => (
+                    <div key={key}>
+                      <label className="text-[11px] text-fg-faint mb-1 block">{label}</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={nutrition[key]}
+                          onChange={(e) => setNutritionField(key, e.target.value)}
+                          className="w-full text-sm border border-border-input rounded-lg pl-2.5 pr-7 py-2 focus:outline-none focus:border-border-focus"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-fg-faint">
+                          {u}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
 
             <motion.button
               onClick={handleSubmit}
