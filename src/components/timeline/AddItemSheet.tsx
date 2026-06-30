@@ -22,6 +22,7 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { formatAmount, indexItems } from "@/lib/grocery";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
+import { DEFAULT_PRIORITY, PRIORITIES, PRIORITY_META } from "@/lib/priority";
 import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
@@ -30,6 +31,7 @@ import { useRecipeStore } from "@/store/recipeStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
 import { useWorkoutStore } from "@/store/workoutStore";
+import type { Priority } from "@/types/task";
 import { useChoose, useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
@@ -254,6 +256,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
+  const [priority, setPriority] = useState<Priority>(DEFAULT_PRIORITY);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -279,6 +282,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setDaysOfWeek(editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6]);
       setWorkoutSessionId(editItem.type === "task" ? editItem.data.workoutSessionId : undefined);
       setRecipeId(editItem.type === "task" ? editItem.data.recipeId : undefined);
+      setPriority(
+        editItem.type === "task" ? (editItem.data.priority ?? DEFAULT_PRIORITY) : DEFAULT_PRIORITY
+      );
     } else {
       resetForm();
     }
@@ -299,6 +305,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
+    setPriority(DEFAULT_PRIORITY);
   }
 
   function linkWorkout(sessionId: string | undefined) {
@@ -382,6 +389,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           date,
+          priority,
           workoutSessionId,
           recipeId,
         });
@@ -404,6 +412,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           date,
+          priority,
           workoutSessionId,
           recipeId,
         });
@@ -667,6 +676,38 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           );
         })}
       </div>
+
+      {mode === "task" && (
+        <>
+          <label className="text-xs font-medium text-fg-muted mb-2 mt-4 block">Priority</label>
+          <div className="flex gap-2">
+            {PRIORITIES.map((p) => {
+              const meta = PRIORITY_META[p];
+              const selected = priority === p;
+              return (
+                <motion.button
+                  key={p}
+                  onClick={() => setPriority(p)}
+                  whileTap={tap}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
+                  style={
+                    selected
+                      ? {
+                          borderColor: meta.color,
+                          backgroundColor: `${meta.color}1a`,
+                          color: meta.color,
+                        }
+                      : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
+                  }
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+                  {meta.label}
+                </motion.button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {mode === "task" && workoutSessions.length > 0 && (
         <>

@@ -86,7 +86,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
   }
 
   return (
-    <div className="mb-5">
+    <div className="mb-2">
       {/* Month row — tap the title to jump to any month/year */}
       <div className="flex items-center justify-between mb-3 px-1">
         <motion.button

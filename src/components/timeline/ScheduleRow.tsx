@@ -1,10 +1,11 @@
 /* eslint-disable react-hooks/refs */
 import { useDraggable } from "@dnd-kit/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame } from "lucide-react";
+import { Flag, Flame } from "lucide-react";
 
 import { ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
+import { PRIORITY_META } from "@/lib/priority";
 import { themeColors } from "@/lib/theme";
 import {
   formatTimeLabel,
@@ -16,6 +17,7 @@ import {
   snapToGrid,
 } from "@/lib/time";
 import { useThemeStore } from "@/store/themeStore";
+import type { Priority } from "@/types/task";
 
 export const MIN_ROW_HEIGHT = 84;
 
@@ -38,6 +40,7 @@ export interface ScheduleRowData {
   icon: keyof typeof ICONS;
   completed: boolean;
   streak?: number;
+  priority?: Priority;
   startOffset?: number;
 }
 
@@ -59,6 +62,7 @@ export default function ScheduleRow({
   icon,
   completed,
   streak,
+  priority,
   startOffset = 0,
   virtualTop,
   overlapping = false,
@@ -207,6 +211,14 @@ export default function ScheduleRow({
                 transition={spring.snappy}
               />
             </span>
+            {priority && (
+              <Flag
+                size={13}
+                fill={PRIORITY_META[priority].color}
+                style={{ color: PRIORITY_META[priority].color }}
+                className="shrink-0"
+              />
+            )}
             {streak !== undefined && streak > 0 && (
               <span className="flex items-center gap-0.5 text-xs font-medium text-[#b5895f] shrink-0">
                 <Flame size={12} className="fill-[#b5895f]" />

@@ -4,6 +4,7 @@ import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 
 import BottomNav, { type Page } from "./components/BottomNav";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
+import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
 import AddItemSheet from "./components/timeline/AddItemSheet";
 import PlanDaySheet from "./components/timeline/PlanDaySheet";
@@ -19,6 +20,7 @@ import MealsPage from "./pages/MealsPage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
+import { useSettingsStore } from "./store/settingsStore";
 import { useTaskStore } from "./store/taskStore";
 import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 
@@ -56,8 +58,12 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isPlanOpen, setIsPlanOpen] = useState(false);
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("daily");
+  // Schedule view style (daily timeline vs weekly grid) is a persisted setting,
+  // toggled from the header and the Settings sheet.
+  const viewMode = useSettingsStore((s) => s.scheduleView) as ViewMode;
+  const setViewMode = useSettingsStore((s) => s.setScheduleView);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // In weekly view the week strip and the weekly grid share one drag controller
   // so swiping either moves both together. Reads the date at commit time via
@@ -146,7 +152,10 @@ function App() {
         onClose={() => setIsSideMenuOpen(false)}
         activePage={activePage}
         onNavigate={go}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
+
+      <SettingsSheet isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       {/* Title row — stays mounted; its contents animate */}
       <div className="px-4 pt-4">

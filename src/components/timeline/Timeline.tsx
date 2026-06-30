@@ -2,12 +2,14 @@ import { useContext, useState } from "react";
 
 import AddItemSheet from "./AddItemSheet";
 import DaySchedule from "./DaySchedule";
+import DayScheduleCards from "./DayScheduleCards";
 import QuickAddBar from "./QuickAddBar";
 import { WeekSwipeContext } from "./swipeController";
 import SwipePager from "./SwipePager";
 import WeeklyTimeline from "./WeeklyTimeline";
 import type { ViewMode } from "@/App";
 import { addDays, toISODate } from "@/lib/date";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Habit } from "@/types/habits";
 import type { Task } from "@/types/task";
@@ -24,6 +26,8 @@ export default function Timeline({ viewMode }: TimelineProps) {
   // Bumped on discrete navigation (tap/chevron/picker), preserved on swipe — see
   // the daily pageKey below.
   const navNonce = useTaskStore((s) => s.navNonce);
+  // Alternate (card) style for the tasks section, toggled in Settings.
+  const altStyle = useSettingsStore((s) => s.altStyle);
   // In weekly view, share the drag with the week strip above so they move together.
   const sharedController = useContext(WeekSwipeContext);
 
@@ -62,13 +66,14 @@ export default function Timeline({ viewMode }: TimelineProps) {
         onPrev={() => shiftSelectedDate(-1)}
         onNext={() => shiftSelectedDate(1)}
         pageKey={(offset) => `${navNonce}-${toISODate(addDays(selectedDateObj, offset))}`}
-        renderPage={(offset) => (
-          <DaySchedule
-            date={toISODate(addDays(selectedDateObj, offset))}
-            active={offset === 0}
-            onEdit={setEditItem}
-          />
-        )}
+        renderPage={(offset) => {
+          const d = toISODate(addDays(selectedDateObj, offset));
+          return altStyle ? (
+            <DayScheduleCards date={d} active={offset === 0} onEdit={setEditItem} />
+          ) : (
+            <DaySchedule date={d} active={offset === 0} onEdit={setEditItem} />
+          );
+        }}
       />
 
       <AddItemSheet isOpen={!!editItem} onClose={() => setEditItem(null)} editItem={editItem} />

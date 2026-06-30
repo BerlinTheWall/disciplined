@@ -17,9 +17,16 @@ interface SideMenuProps {
   onClose: () => void;
   activePage: Page;
   onNavigate: (page: Page) => void;
+  onOpenSettings: () => void;
 }
 
-export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: SideMenuProps) {
+export default function SideMenu({
+  isOpen,
+  onClose,
+  activePage,
+  onNavigate,
+  onOpenSettings,
+}: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore();
   const name = useProfileStore((s) => s.name);
   useScrollLock(isOpen);
@@ -120,6 +127,10 @@ export default function SideMenu({ isOpen, onClose, activePage, onNavigate }: Si
             {/* Settings + Theme */}
             <div className="px-3 py-2">
               <motion.button
+                onClick={() => {
+                  onClose();
+                  onOpenSettings();
+                }}
                 whileTap={tap}
                 className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
               >
