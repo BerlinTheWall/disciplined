@@ -644,7 +644,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             animate={{ opacity: 1, y: 0, height: "auto" }}
             exit={{ opacity: 0, y: -6, height: 0 }}
             transition={spring.snappy}
-            className="text-xs text-rose-400 px-4 pt-2 overflow-hidden"
+            className="text-xs text-[#b07a85] px-4 pt-2 overflow-hidden"
           >
             {error}
           </motion.p>

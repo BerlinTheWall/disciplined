@@ -21,6 +21,14 @@
   --border-strong: #e5e7eb;
   --border-input: #e5e7eb;
   --border-focus: #9ca3af;
+
+  /* Subtle ambient gradient behind everything: a faint warm glow in one corner
+     and a cool one in the other, fading into the base surface. Floating white
+     cards/pills read against it. */
+  --app-bg:
+    radial-gradient(85% 55% at 35% 0%, rgba(250, 224, 216, 0.5), transparent 60%),
+    radial-gradient(85% 55% at 65% 0%, rgba(227, 223, 246, 0.55), transparent 60%),
+    var(--surface);
 }
 
 [data-theme="dark"] {
@@ -43,12 +51,23 @@
   --border-strong: #4b5563;
   --border-input: #4b5563;
   --border-focus: #6b7280;
+
+  /* Same idea, dialled right down for the dark surface. */
+  --app-bg:
+    radial-gradient(85% 55% at 35% 0%, rgba(122, 98, 90, 0.22), transparent 60%),
+    radial-gradient(85% 55% at 65% 0%, rgba(98, 94, 130, 0.26), transparent 60%),
+    var(--surface);
 }
 
 /* ── Tailwind v4 theme mappings ────────────────────────────────────── */
 @theme inline {
   /* Neo-grotesque sans for the whole app (drives the default font + font-sans) */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Soft elevation for the "floating card" component style — cards sit on the
+     surface with a gentle shadow rather than a flat fill. */
+  --shadow-soft: 0 1px 4px rgba(17, 24, 39, 0.05);
+  --shadow-card: 0 2px 14px rgba(17, 24, 39, 0.06), 0 1px 3px rgba(17, 24, 39, 0.04);
 
   --color-surface: var(--surface);
   --color-surface-alt: var(--surface-alt);
@@ -74,7 +93,8 @@
 /* ── Global base styles ────────────────────────────────────────────── */
 body {
   margin: 0;
-  background-color: var(--surface);
+  background: var(--app-bg);
+  background-attachment: fixed;
   color: var(--fg);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;

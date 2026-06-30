@@ -321,7 +321,7 @@ export default function WeeklyTimeline({ anchorDate }: WeeklyTimelineProps) {
       {/* gap-1 + a 32px axis match the WeekHeader's gutter and column gaps, so
           each day column lines up under its weekday label. pt-2 gives the top
           hour label room (it's nudged up to center on the hour line). */}
-      <div className="flex overflow-x-clip gap-1 pt-2">
+      <div className="flex overflow-x-clip gap-2 pt-2">
         {/* Time axis — labels only, no lines */}
         <div className="w-8 shrink-0 relative" style={{ height: containerHeight }}>
           {timeLabels.map((mins) => (
@@ -485,8 +485,8 @@ export default function WeeklyTimeline({ anchorDate }: WeeklyTimelineProps) {
                         <span>·</span>
                         <span>{formatDateLabel(detail.iso)}</span>
                         {detail.streak ? (
-                          <span className="flex items-center gap-1 text-orange-500 ml-auto font-medium">
-                            <Flame size={13} className="fill-orange-500" />
+                          <span className="flex items-center gap-1 text-[#b5895f] ml-auto font-medium">
+                            <Flame size={13} className="fill-[#b5895f]" />
                             {detail.streak}
                           </span>
                         ) : null}

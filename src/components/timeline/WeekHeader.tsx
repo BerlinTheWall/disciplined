@@ -13,7 +13,7 @@ import {
   isSameDay,
   toISODate,
 } from "@/lib/date";
-import { tap } from "@/lib/motion";
+import { spring, tap } from "@/lib/motion";
 import { useTaskStore } from "@/store/taskStore";
 
 interface WeekHeaderProps {
@@ -43,7 +43,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
   function renderWeek(offset: -1 | 0 | 1) {
     const anchor = addDays(selectedDateObj, offset * 7);
     return (
-      <div className="flex justify-between gap-1">
+      <div className="flex gap-2">
         {leftGutter > 0 && <div style={{ width: leftGutter, flexShrink: 0 }} />}
 
         {getWeekDates(anchor).map((date) => {
@@ -51,31 +51,34 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
           const isSelected = iso === selectedDate;
           const isToday = isSameDay(date, today);
 
+          // Each day is its own floating pill (a slightly raised surface so it
+          // reads against the gradient). Selecting one springs the whole pill;
+          // today is marked by a red dot below the pill (outside it, so the
+          // pill's height never changes).
           return (
-            <button
-              key={iso}
-              onClick={() => setSelectedDate(iso)}
-              className="flex flex-col items-center gap-1 flex-1 py-1"
-            >
-              <span
-                className={`text-[11px] font-medium uppercase tracking-wide ${
-                  isSelected ? "text-fg" : "text-fg-faint"
-                }`}
+            <div key={iso} className="flex-1 flex flex-col items-center gap-1.5">
+              <motion.button
+                onClick={() => setSelectedDate(iso)}
+                whileTap={tap}
+                animate={{ scale: isSelected ? 1.05 : 1 }}
+                transition={spring.snappy}
+                className="w-full flex flex-col items-center gap-2.5 rounded-full bg-surface-raised shadow-card py-3.5"
               >
-                {getDayLabel(date)}
-              </span>
+                <span className="text-xs font-medium text-fg-muted">{getDayLabel(date)}</span>
+                <span
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold ${
+                    isSelected ? "bg-fg text-fg-inverse" : "text-fg"
+                  }`}
+                >
+                  {date.getDate()}
+                </span>
+              </motion.button>
 
+              {/* Red dot marks today, outside the pill so its height is unchanged */}
               <span
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-medium ${
-                  isSelected ? "bg-fg text-fg-inverse" : isToday ? "text-fg" : "text-fg-faint"
-                }`}
-              >
-                {date.getDate()}
-              </span>
-
-              {/* Tiny dot marks today — always reserves space for alignment */}
-              <span className={`w-1 h-1 rounded-full ${isToday ? "bg-rose-400" : "invisible"}`} />
-            </button>
+                className={`w-1.5 h-1.5 rounded-full ${isToday ? "bg-rose-400" : "invisible"}`}
+              />
+            </div>
           );
         })}
       </div>

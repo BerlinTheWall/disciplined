@@ -61,7 +61,7 @@ export default function MealsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- Today's diet ---------- */}
-      <div className="rounded-2xl bg-surface-feature text-white p-5">
+      <div className="rounded-3xl bg-surface-feature text-white p-6 shadow-card">
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Eaten today</p>
         <p className="text-3xl font-bold mt-1">
           {total.calories}
@@ -86,7 +86,7 @@ export default function MealsPage() {
                   key={m.id}
                   onClick={() => logAgain(m)}
                   whileTap={tap}
-                  className="shrink-0 flex flex-col items-start gap-0.5 bg-surface-alt rounded-2xl px-3.5 py-2.5 max-w-42.5"
+                  className="shrink-0 flex flex-col items-start gap-0.5 bg-surface rounded-2xl px-3.5 py-2.5 max-w-42.5 shadow-soft"
                 >
                   <span className="flex items-center gap-1 font-medium text-sm text-fg max-w-37.5 truncate">
                     <Plus size={13} className="text-fg-faint shrink-0" />
@@ -139,7 +139,7 @@ export default function MealsPage() {
                 onClick={() => setEditMeal(meal)}
                 whileTap={press}
                 transition={spring.snappy}
-                className="flex items-center gap-3 p-4 rounded-2xl bg-surface-alt text-left w-full"
+                className="flex items-center gap-3 p-4 rounded-3xl bg-surface text-left w-full shadow-card"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

@@ -393,7 +393,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
                     left: 12,
                     top: labelY - topY,
                     transform: "translateY(-50%)",
-                    color: "rgba(245, 158, 11, 0.6)",
+                    color: "#b5895f",
                   }}
                 >
                   ({overlapLabel})
@@ -519,7 +519,7 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
 
       {activeItems.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-2">
-          <p className="text-base font-medium text-fg">All done for today 🎉</p>
+          <p className="text-base font-medium text-fg">All done for today</p>
           <p className="text-sm text-fg-faint">Every task is complete.</p>
         </div>
       )}

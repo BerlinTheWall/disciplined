@@ -68,8 +68,8 @@ export default function HabitsPage() {
             {/* Streak + today status */}
             <div className="flex flex-col items-end gap-1 shrink-0">
               {streak > 0 && (
-                <span className="flex items-center gap-0.5 text-sm font-semibold text-orange-500">
-                  <Flame size={14} className="fill-orange-500" />
+                <span className="flex items-center gap-0.5 text-sm font-semibold text-[#b5895f]">
+                  <Flame size={14} className="fill-[#b5895f]" />
                   {streak}
                 </span>
               )}

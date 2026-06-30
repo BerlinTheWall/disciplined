@@ -77,11 +77,20 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
               whileTap={tap}
               className="flex flex-col items-center gap-1 flex-1"
             >
-              <Icon
-                size={26}
-                strokeWidth={isActive ? 2.3 : 1.6}
-                className={isActive ? "text-fg" : "text-fg-faint"}
-              />
+              <span className="relative flex items-center justify-center w-12 h-9">
+                {isActive && (
+                  <motion.span
+                    layoutId="navActive"
+                    transition={spring.snappy}
+                    className="absolute inset-0 bg-fg rounded-2xl"
+                  />
+                )}
+                <Icon
+                  size={24}
+                  strokeWidth={isActive ? 2.2 : 1.7}
+                  className={`relative z-10 ${isActive ? "text-fg-inverse" : "text-fg-faint"}`}
+                />
+              </span>
               <motion.span
                 animate={{ color: isActive ? colors.fg : colors.fgFaint }}
                 transition={{ duration: 0.15 }}

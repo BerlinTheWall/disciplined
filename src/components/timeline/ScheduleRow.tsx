@@ -208,8 +208,8 @@ export default function ScheduleRow({
               />
             </span>
             {streak !== undefined && streak > 0 && (
-              <span className="flex items-center gap-0.5 text-xs font-medium text-orange-500 shrink-0">
-                <Flame size={12} className="fill-orange-500" />
+              <span className="flex items-center gap-0.5 text-xs font-medium text-[#b5895f] shrink-0">
+                <Flame size={12} className="fill-[#b5895f]" />
                 {streak}
               </span>
             )}
