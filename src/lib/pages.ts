@@ -9,9 +9,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type Page = "meals" | "recipes" | "food" | "workout" | "schedule" | "habits" | "expenses";
+export type Page =
+  "home" | "meals" | "recipes" | "food" | "workout" | "schedule" | "habits" | "expenses";
 
 export const PAGE_ORDER: Page[] = [
+  "home",
   "meals",
   "recipes",
   "food",

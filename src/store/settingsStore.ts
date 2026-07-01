@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { DEFAULT_BACKGROUND, type BackgroundKey } from "@/lib/backgrounds";
+
 // App-wide preferences that should survive reloads. Right now just the schedule
 // view style (the daily timeline vs the weekly grid), toggled from Settings and
 // the schedule header.
@@ -13,6 +15,9 @@ interface SettingsState {
   // wired to any rendering — reserved for a future restyle.
   altStyle: boolean;
   setAltStyle: (on: boolean) => void;
+  // Ambient background preset (see @/lib/backgrounds).
+  background: BackgroundKey;
+  setBackground: (bg: BackgroundKey) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -22,6 +27,8 @@ export const useSettingsStore = create<SettingsState>()(
       setScheduleView: (view) => set({ scheduleView: view }),
       altStyle: false,
       setAltStyle: (on) => set({ altStyle: on }),
+      background: DEFAULT_BACKGROUND,
+      setBackground: (bg) => set({ background: bg }),
     }),
     { name: "disciplined-settings" }
   )

@@ -29,14 +29,6 @@ function periodKey(min: number) {
   return (PERIODS.find((p) => min < p.until) ?? PERIODS[PERIODS.length - 1]).key;
 }
 
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
-
 function fmt12(min: number) {
   const h = Math.floor(min / 60) % 24;
   const m = min % 60;
@@ -153,13 +145,11 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
 
             {/* Cards */}
             <div className="flex flex-col gap-3">
-              {group.items.map((item, idx) => {
+              {group.items.map((item) => {
                 const Icon = ICONS[item.icon] ?? ICONS.default;
                 const start = fmt12(item.startMinutes);
                 const end = fmt12(item.startMinutes + item.durationMinutes);
-                const onColor = isLightColor(item.color) ? "#111827" : "#ffffff";
                 const isCurrent = item.id === currentId && !item.completed;
-                const notLast = idx < group.items.length - 1;
                 const dur =
                   item.durationMinutes < 60
                     ? `${item.durationMinutes} min`
@@ -172,12 +162,12 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
                     key={item.id}
                     onClick={() => handleEdit(item.id)}
                     whileTap={press}
-                    className={`relative overflow-hidden block w-full bg-surface-alt border border-border-strong rounded-3xl shadow-soft p-4 text-left ${
+                    className={`relative overflow-hidden block w-full bg-surface-alt border border-border-strong rounded-3xl shadow-soft text-left ${
                       item.completed ? "opacity-60" : ""
                     }`}
                   >
                     {/* "Happening now" cue: a faint wash of the task's color that
-                        gently breathes — same idea as the other style. */}
+                        gently breathes. */}
                     {isCurrent && (
                       <motion.span
                         className="absolute inset-0 pointer-events-none"
@@ -188,88 +178,93 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
                       />
                     )}
 
-                    <div className="relative z-10 flex gap-4">
-                      {/* Time + connector, inside the card */}
-                      <div className="w-11 shrink-0 flex flex-col items-end">
+                    <div className="relative z-10 flex">
+                      {/* Time column (plain time + AM) */}
+                      <div className="w-20 shrink-0 flex flex-col text-center py-5">
                         <span className="text-base font-bold text-fg leading-none tabular-nums">
                           {start.time}
                         </span>
-                        <span className="text-xs text-fg-faint mt-1">{start.period}</span>
-                        {notLast && (
-                          <span className="self-center w-0.5 flex-1 rounded-full bg-border-strong mt-3" />
-                        )}
+                        <span className="text-xs text-fg-faint mt-1 text-end pr-6">
+                          {start.period}
+                        </span>
                       </div>
 
+                      {/* Vertical divider in the task's colour */}
+                      <span
+                        className="w-px self-stretch my-4"
+                        style={{
+                          background: `linear-gradient(to bottom, ${item.color}, ${item.color}22)`,
+                        }}
+                      />
+
                       {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p
-                            className={`flex-1 min-w-0 text-lg font-bold leading-snug ${
-                              item.completed ? "text-fg-faint line-through" : "text-fg"
-                            }`}
-                          >
-                            {item.title}
-                          </p>
+                      <div className="flex-1 min-w-0 px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <Icon size={16} className="shrink-0" style={{ color: item.color }} />
+                            <p
+                              className={`flex-1 min-w-0 truncate text-lg font-bold leading-snug ${
+                                item.completed ? "text-fg-faint line-through" : "text-fg"
+                              }`}
+                            >
+                              {item.title}
+                            </p>
+                            {item.streak ? (
+                              <span className="flex items-center gap-0.5 text-sm font-medium text-[#b5895f] shrink-0">
+                                <Flame size={13} className="fill-[#b5895f]" />
+                                {item.streak}
+                              </span>
+                            ) : null}
+                            <div className="flex items-center justify-end mt-2">
+                              {item.completed ? (
+                                <motion.span
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    handleToggle(item.id);
+                                  }}
+                                  whileTap={tap}
+                                  className="flex items-center gap-1.5 rounded-full text-sm font-semibold"
+                                  style={{ backgroundColor: `${item.color}1f`, color: item.color }}
+                                >
+                                  <span
+                                    className="w-6 h-6 rounded-full flex items-center justify-center"
+                                    style={{ backgroundColor: item.color }}
+                                  >
+                                    <Check size={14} strokeWidth={3} className="text-white" />
+                                  </span>
+                                </motion.span>
+                              ) : (
+                                <motion.span
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    handleToggle(item.id);
+                                  }}
+                                  whileTap={tap}
+                                  className="w-7 h-7 rounded-full border-2 shrink-0"
+                                  style={{ borderColor: item.color }}
+                                />
+                              )}
+                            </div>
+                          </div>
                           {item.priority && (
                             <Flag
                               size={16}
                               fill={PRIORITY_META[item.priority].color}
                               style={{ color: PRIORITY_META[item.priority].color }}
-                              className="shrink-0 mt-1"
+                              className="shrink-0"
                             />
                           )}
                         </div>
-                        <p className="text-sm text-fg-faint mt-1">
-                          {start.time} – {end.time} {end.period} · {dur}
+
+                        <p className="text-sm mt-1">
+                          <span className="text-fg-faint">
+                            {start.time} – {end.time} {end.period}
+                          </span>
+                          <span className="text-fg-faint"> · </span>
+                          <span className="font-medium" style={{ color: item.color }}>
+                            {dur}
+                          </span>
                         </p>
-
-                        <div className="flex items-center justify-between mt-4">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                              style={{ backgroundColor: item.color, color: onColor }}
-                            >
-                              <Icon size={17} />
-                            </span>
-                            {item.streak ? (
-                              <span className="flex items-center gap-0.5 text-sm font-medium text-[#b5895f]">
-                                <Flame size={14} className="fill-[#b5895f]" />
-                                {item.streak}
-                              </span>
-                            ) : isCurrent ? (
-                              <span className="text-xs font-medium text-fg-muted">Now</span>
-                            ) : null}
-                          </div>
-
-                          {item.completed ? (
-                            <motion.span
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                handleToggle(item.id);
-                              }}
-                              whileTap={tap}
-                              className="flex items-center gap-1.5 text-sm font-medium text-fg-muted shrink-0"
-                            >
-                              <span
-                                className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                                style={{ backgroundColor: item.color }}
-                              >
-                                <Check size={14} strokeWidth={3} style={{ color: onColor }} />
-                              </span>
-                              Completed
-                            </motion.span>
-                          ) : (
-                            <motion.span
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                handleToggle(item.id);
-                              }}
-                              whileTap={tap}
-                              className="w-7 h-7 rounded-full border-2 shrink-0"
-                              style={{ borderColor: item.color }}
-                            />
-                          )}
-                        </div>
                       </div>
                     </div>
                   </motion.button>

@@ -1,20 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, Dumbbell, Flame, Plus, UtensilsCrossed, Wallet } from "lucide-react";
+import { CalendarDays, Home, Plus, UtensilsCrossed, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { spring, tap } from "@/lib/motion";
-import { themeColors } from "@/lib/theme";
-import { useThemeStore } from "@/store/themeStore";
 
-export type Page = "meals" | "recipes" | "food" | "workout" | "schedule" | "habits" | "expenses";
-
-const TABS: { id: Page; icon: React.ElementType; label: string }[] = [
-  { id: "meals", icon: UtensilsCrossed, label: "Meals" },
-  { id: "workout", icon: Dumbbell, label: "Workout" },
-  { id: "schedule", icon: CalendarDays, label: "Schedule" },
-  { id: "habits", icon: Flame, label: "Habits" },
-  { id: "expenses", icon: Wallet, label: "Wallet" },
-];
+export type Page =
+  "home" | "meals" | "recipes" | "food" | "workout" | "schedule" | "habits" | "expenses";
 
 interface BottomNavProps {
   active: Page;
@@ -24,9 +16,6 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNavProps) {
-  const theme = useThemeStore((s) => s.theme);
-  const colors = themeColors[theme];
-
   const [isScrolling, setIsScrolling] = useState(false);
   const stopTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -43,6 +32,43 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
       if (stopTimer.current) clearTimeout(stopTimer.current);
     };
   }, []);
+
+  const tabs: {
+    key: string;
+    label: string;
+    icon: LucideIcon;
+    isActive: boolean;
+    onSelect: () => void;
+  }[] = [
+    {
+      key: "home",
+      label: "Home",
+      icon: Home,
+      isActive: active === "home",
+      onSelect: () => onChange("home"),
+    },
+    {
+      key: "calendar",
+      label: "Calendar",
+      icon: CalendarDays,
+      isActive: active === "schedule",
+      onSelect: () => onChange("schedule"),
+    },
+    {
+      key: "meals",
+      label: "Meals",
+      icon: UtensilsCrossed,
+      isActive: active === "meals",
+      onSelect: () => onChange("meals"),
+    },
+    {
+      key: "expenses",
+      label: "Wallet",
+      icon: Wallet,
+      isActive: active === "expenses",
+      onSelect: () => onChange("expenses"),
+    },
+  ];
 
   return (
     <div
@@ -68,17 +94,17 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
 
       {/* Pill */}
       <nav className="bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3.5">
-        {TABS.map(({ id, icon: Icon, label }) => {
-          const isActive = active === id;
+        {tabs.map((t) => {
+          const Icon = t.icon;
           return (
             <motion.button
-              key={id}
-              onClick={() => onChange(id)}
+              key={t.key}
+              onClick={t.onSelect}
               whileTap={tap}
               className="flex flex-col items-center gap-1 flex-1"
             >
               <span className="relative flex items-center justify-center w-12 h-9">
-                {isActive && (
+                {t.isActive && (
                   <motion.span
                     layoutId="navActive"
                     transition={spring.snappy}
@@ -87,17 +113,17 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
                 )}
                 <Icon
                   size={24}
-                  strokeWidth={isActive ? 2.2 : 1.7}
-                  className={`relative z-10 ${isActive ? "text-fg-inverse" : "text-fg-faint"}`}
+                  strokeWidth={t.isActive ? 2.2 : 1.7}
+                  className={`relative z-10 ${t.isActive ? "text-fg-inverse" : "text-fg-faint"}`}
                 />
               </span>
-              <motion.span
-                animate={{ color: isActive ? colors.fg : colors.fgFaint }}
-                transition={{ duration: 0.15 }}
-                className={`text-[11px] ${isActive ? "font-semibold" : "font-medium"}`}
+              <span
+                className={`text-[11px] ${
+                  t.isActive ? "text-fg font-semibold" : "text-fg-faint font-medium"
+                }`}
               >
-                {label}
-              </motion.span>
+                {t.label}
+              </span>
             </motion.button>
           );
         })}

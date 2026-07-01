@@ -11,20 +11,25 @@ import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
 import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
+import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
 import ExpensesPage from "./pages/ExpensesPage";
 import FoodPage from "./pages/FoodPage";
 import HabitsPage from "./pages/HabitsPage";
+import HomePage from "./pages/HomePage";
 import MealsPage from "./pages/MealsPage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useTaskStore } from "./store/taskStore";
+import { useThemeStore } from "./store/themeStore";
 import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 
 const PAGE_TITLES: Record<Page, string> = {
+  home: "", // the Home page shows its own greeting header
+
   meals: "Meals",
   recipes: "Recipes",
   food: "Food & Products",
@@ -37,6 +42,7 @@ const PAGE_TITLES: Record<Page, string> = {
 export type ViewMode = "daily" | "weekly";
 
 const PAGE_ORDER: Page[] = [
+  "home",
   "meals",
   "recipes",
   "food",
@@ -54,7 +60,7 @@ const pageVariants = {
 
 function App() {
   // [page, direction] — direction drives the slide
-  const [[activePage, dir], setPage] = useState<[Page, number]>(["schedule", 0]);
+  const [[activePage, dir], setPage] = useState<[Page, number]>(["home", 0]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isPlanOpen, setIsPlanOpen] = useState(false);
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false);
@@ -64,6 +70,17 @@ function App() {
   const setViewMode = useSettingsStore((s) => s.setScheduleView);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Apply the chosen ambient background preset (per theme) to the app's --app-bg.
+  const background = useSettingsStore((s) => s.background);
+  const theme = useThemeStore((s) => s.theme);
+  useEffect(() => {
+    const preset = BACKGROUNDS.find((b) => b.key === background) ?? BACKGROUNDS[0];
+    document.documentElement.style.setProperty(
+      "--app-bg",
+      theme === "dark" ? preset.dark : preset.light
+    );
+  }, [background, theme]);
 
   // In weekly view the week strip and the weekly grid share one drag controller
   // so swiping either moves both together. Reads the date at commit time via
@@ -121,6 +138,8 @@ function App() {
 
   function renderPage() {
     switch (activePage) {
+      case "home":
+        return <HomePage onViewAll={() => go("schedule")} />;
       case "schedule":
         return (
           // Only weekly view shares the controller (strip + grid both move by

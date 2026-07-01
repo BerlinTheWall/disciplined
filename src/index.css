@@ -26,8 +26,8 @@
      and a cool one in the other, fading into the base surface. Floating white
      cards/pills read against it. */
   --app-bg:
-    radial-gradient(85% 55% at 35% 0%, rgba(250, 224, 216, 0.5), transparent 60%),
-    radial-gradient(85% 55% at 65% 0%, rgba(227, 223, 246, 0.55), transparent 60%),
+    radial-gradient(60% 50% at 12% 6%, rgba(250, 224, 216, 0.45), transparent 72%),
+    radial-gradient(60% 50% at 88% 94%, rgba(227, 223, 246, 0.48), transparent 72%),
     var(--surface);
 }
 
@@ -54,8 +54,8 @@
 
   /* Same idea, dialled right down for the dark surface. */
   --app-bg:
-    radial-gradient(85% 55% at 35% 0%, rgba(122, 98, 90, 0.22), transparent 60%),
-    radial-gradient(85% 55% at 65% 0%, rgba(98, 94, 130, 0.26), transparent 60%),
+    radial-gradient(60% 50% at 12% 6%, rgba(122, 98, 90, 0.2), transparent 72%),
+    radial-gradient(60% 50% at 88% 94%, rgba(98, 94, 130, 0.22), transparent 72%),
     var(--surface);
 }
 

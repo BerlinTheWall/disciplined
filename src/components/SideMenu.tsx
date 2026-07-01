@@ -9,8 +9,10 @@ import { ALL_TABS } from "@/lib/pages";
 import { useProfileStore } from "@/store/profileStore";
 import { useThemeStore } from "@/store/themeStore";
 
-// Pages intentionally left out of the side menu (still reachable via bottom nav).
-const HIDDEN_FROM_MENU: Page[] = ["schedule", "habits", "expenses"];
+// Pages reachable from the bottom nav, so they're left out of the side menu.
+// (Home/Calendar are the schedule page, Wallet is expenses.) Workout and Habits
+// now live only in this menu.
+const HIDDEN_FROM_MENU: Page[] = ["schedule", "meals", "expenses"];
 
 interface SideMenuProps {
   isOpen: boolean;

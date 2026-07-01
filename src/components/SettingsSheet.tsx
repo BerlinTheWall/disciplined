@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { BACKGROUNDS } from "@/lib/backgrounds";
 import { spring, tap } from "@/lib/motion";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -61,6 +62,8 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const setScheduleView = useSettingsStore((s) => s.setScheduleView);
   const altStyle = useSettingsStore((s) => s.altStyle);
   const setAltStyle = useSettingsStore((s) => s.setAltStyle);
+  const background = useSettingsStore((s) => s.background);
+  const setBackground = useSettingsStore((s) => s.setBackground);
   const { theme, toggleTheme } = useThemeStore();
 
   const isWeekly = scheduleView === "weekly";
@@ -121,6 +124,37 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               on={theme === "dark"}
               onToggle={toggleTheme}
             />
+
+            {/* Background */}
+            <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2 mt-6">
+              Background
+            </p>
+            <div className="flex gap-3">
+              {BACKGROUNDS.map((bg) => {
+                const selected = background === bg.key;
+                return (
+                  <motion.button
+                    key={bg.key}
+                    onClick={() => setBackground(bg.key)}
+                    whileTap={tap}
+                    className="flex-1 flex flex-col items-center gap-2"
+                  >
+                    <span
+                      className="w-full h-16 rounded-2xl border-2 transition-colors"
+                      style={{
+                        background: bg.swatch,
+                        borderColor: selected ? "var(--fg)" : "var(--border-strong)",
+                      }}
+                    />
+                    <span
+                      className={`text-xs font-medium ${selected ? "text-fg" : "text-fg-muted"}`}
+                    >
+                      {bg.label}
+                    </span>
+                  </motion.button>
+                );
+              })}
+            </div>
           </motion.div>
         </>
       )}
