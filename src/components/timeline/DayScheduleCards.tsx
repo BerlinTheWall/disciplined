@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, CheckCircle2, Flame, Moon, Plus, Sun, Sunrise, Sunset } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Flame,
+  Moon,
+  Plus,
+  Sun,
+  Sunrise,
+  Sunset,
+} from "lucide-react";
 
 import type { ScheduleRowData } from "./ScheduleRow";
 import type { EditItem } from "./Timeline";
@@ -39,7 +49,6 @@ function fmt12(min: number) {
     time: `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")}`,
     period: h < 12 ? "AM" : "PM",
   };
-
 }
 
 // hex → rgba string, for the pulsing ring around the current task's icon.
@@ -110,6 +119,7 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
   // A just-completed task lingers in its group (showing the check) for a beat
   // before it animates out and drops into the Completed section.
   const [settling, setSettling] = useState<Set<string>>(new Set());
+  const [showCompleted, setShowCompleted] = useState(false);
 
   function handleEdit(id: string) {
     const task = tasks.find((t) => t.id === id);
@@ -139,7 +149,7 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
           next.delete(id);
           return next;
         });
-      }, 650);
+      }, 250);
     }
   }
 
@@ -309,6 +319,44 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
     );
   }
 
+  // Compact row used in the Completed section.
+  function renderCompactCard(item: ScheduleRowData) {
+    const Icon = ICONS[item.icon] ?? ICONS.default;
+    const start = fmt12(item.startMinutes);
+    return (
+      <motion.button
+        key={item.id}
+        layout
+        onClick={() => handleEdit(item.id)}
+        whileTap={press}
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 0.7, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+        transition={{ type: "spring", stiffness: 500, damping: 34, mass: 0.4 }}
+        className="flex items-center gap-2.5 w-full bg-surface-alt border border-border-strong rounded-2xl shadow-soft px-3 py-2 text-left"
+      >
+        <Icon size={15} style={{ color: item.color }} className="shrink-0" />
+        <span className="flex-1 min-w-0 truncate text-sm font-semibold text-fg-faint line-through">
+          {item.title}
+        </span>
+        <span className="text-xs text-fg-faint tabular-nums shrink-0">
+          {start.time} {start.period}
+        </span>
+        <motion.span
+          onClick={(ev) => {
+            ev.stopPropagation();
+            handleToggle(item.id);
+          }}
+          whileTap={tap}
+          className="w-5.5 h-5.5 rounded-full flex items-center justify-center shrink-0"
+          style={{ backgroundColor: item.color }}
+        >
+          <Check size={12} strokeWidth={3} className="text-white" />
+        </motion.span>
+      </motion.button>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 pb-24">
       {groups.map((group, gi) => {
@@ -336,24 +384,47 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
         );
       })}
 
-      {/* Completed */}
+      {/* Completed — collapsible */}
       {doneItems.length > 0 && (
         <div>
-          <div className="flex items-center gap-2 mb-3 px-1">
+          <button
+            onClick={() => setShowCompleted((v) => !v)}
+            className="flex items-center gap-2 w-full px-1"
+          >
             <CheckCircle2 size={17} style={{ color: DONE_GREEN }} />
             <h3 className="text-lg font-semibold" style={{ color: DONE_GREEN }}>
               Completed
             </h3>
             <span className="text-sm text-fg-faint">{doneItems.length}</span>
-          </div>
-          <div className="flex flex-col gap-3">
-            <AnimatePresence initial={false}>
-              {doneItems.map((item) => renderCard(item))}
-            </AnimatePresence>
-          </div>
+            <motion.span
+              animate={{ rotate: showCompleted ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+              className="ml-auto text-fg-faint"
+            >
+              <ChevronDown size={18} />
+            </motion.span>
+          </button>
+
+          <AnimatePresence initial={false}>
+            {showCompleted && (
+              <motion.div
+                key="completed-list"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-col gap-2 pt-3">
+                  <AnimatePresence initial={false}>
+                    {doneItems.map((item) => renderCompactCard(item))}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </div>
   );
 }
-
