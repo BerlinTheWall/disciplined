@@ -216,9 +216,9 @@ export default function HomePage({ onViewAll }: HomePageProps) {
     <div className="flex flex-col gap-6">
       {/* Greeting */}
       <h1 className="text-3xl font-bold leading-tight text-fg">
-        Let's Make
+        Everyday
         <br />
-        Today Productive
+        Counts
       </h1>
 
       {/* Today's progress */}
