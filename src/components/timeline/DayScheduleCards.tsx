@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Check, Flag, Flame, Moon, Plus, Sun, Sunrise, Sunset } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, CheckCircle2, Flame, Moon, Plus, Sun, Sunrise, Sunset } from "lucide-react";
 
 import type { ScheduleRowData } from "./ScheduleRow";
 import type { EditItem } from "./Timeline";
@@ -17,13 +17,16 @@ interface DayScheduleCardsProps {
   onEdit: (item: EditItem) => void;
 }
 
-// Parts of the day, used to group the cards under headers like the reference.
+// Parts of the day, used to group the cards under headers — each with a colour
+// that suits the time of day.
 const PERIODS = [
-  { key: "morning", label: "Morning", icon: Sunrise, until: 12 * 60 },
-  { key: "afternoon", label: "Afternoon", icon: Sun, until: 17 * 60 },
-  { key: "evening", label: "Evening", icon: Sunset, until: 21 * 60 },
-  { key: "night", label: "Night", icon: Moon, until: 24 * 60 },
+  { key: "morning", label: "Morning", icon: Sunrise, until: 12 * 60, color: "#e2a35c" },
+  { key: "afternoon", label: "Afternoon", icon: Sun, until: 17 * 60, color: "#dca63f" },
+  { key: "evening", label: "Evening", icon: Sunset, until: 21 * 60, color: "#cf7566" },
+  { key: "night", label: "Night", icon: Moon, until: 24 * 60, color: "#6f79bd" },
 ] as const;
+
+const DONE_GREEN = "#5f8c78";
 
 function periodKey(min: number) {
   return (PERIODS.find((p) => min < p.until) ?? PERIODS[PERIODS.length - 1]).key;
@@ -36,6 +39,16 @@ function fmt12(min: number) {
     time: `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")}`,
     period: h < 12 ? "AM" : "PM",
   };
+
+}
+
+// hex → rgba string, for the pulsing ring around the current task's icon.
+function hexToRgba(hex: string, alpha: number) {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function localDateString(d: Date) {
@@ -78,7 +91,7 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
 
   const items = [...taskItems, ...habitItems].sort((a, b) => a.startMinutes - b.startMinutes);
 
-  // Live clock so the "Now" badge follows real time (only matters for today).
+  // Live clock so the pulse follows real time (only matters for today).
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -94,6 +107,10 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
     }
   }
 
+  // A just-completed task lingers in its group (showing the check) for a beat
+  // before it animates out and drops into the Completed section.
+  const [settling, setSettling] = useState<Set<string>>(new Set());
+
   function handleEdit(id: string) {
     const task = tasks.find((t) => t.id === id);
     if (task) {
@@ -105,8 +122,25 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
   }
 
   function handleToggle(id: string) {
+    const wasCompleted = items.find((i) => i.id === id)?.completed ?? false;
     if (tasks.some((t) => t.id === id)) toggleTaskCompleted(id);
     else toggleHabitCompleted(id, date);
+
+    setSettling((prev) => {
+      const next = new Set(prev);
+      if (wasCompleted) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    if (!wasCompleted) {
+      window.setTimeout(() => {
+        setSettling((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 650);
+    }
   }
 
   if (items.length === 0) {
@@ -123,10 +157,157 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
     );
   }
 
+  // Active items live in their time-of-day groups; completed ones drop to the
+  // Completed section (but linger in their group while `settling`).
+  const activeItems = items.filter((i) => !i.completed || settling.has(i.id));
+  const doneItems = items.filter((i) => i.completed && !settling.has(i.id));
+
   const groups = PERIODS.map((p) => ({
     ...p,
-    items: items.filter((i) => periodKey(i.startMinutes) === p.key),
+    items: activeItems.filter((i) => periodKey(i.startMinutes) === p.key),
   })).filter((g) => g.items.length > 0);
+
+  function renderCard(item: ScheduleRowData) {
+    const Icon = ICONS[item.icon] ?? ICONS.default;
+    const start = fmt12(item.startMinutes);
+    const isCurrent = item.id === currentId && !item.completed;
+    const dur =
+      item.durationMinutes < 60
+        ? `${item.durationMinutes} min`
+        : `${Math.floor(item.durationMinutes / 60)}h${
+            item.durationMinutes % 60 ? ` ${item.durationMinutes % 60}m` : ""
+          }`;
+
+    return (
+      <motion.button
+        key={item.id}
+        layout
+        onClick={() => handleEdit(item.id)}
+        whileTap={press}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: item.completed ? 0.6 : 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.25, ease: "easeOut" } }}
+        transition={{ type: "spring", stiffness: 500, damping: 34, mass: 0.4 }}
+        className="relative overflow-hidden block w-full bg-surface-alt border border-border-strong rounded-3xl shadow-soft text-left"
+      >
+        {/* "Happening now" cue: a faint wash of the task's color that gently breathes. */}
+        {isCurrent && (
+          <motion.span
+            className="absolute inset-0 pointer-events-none"
+            style={{ backgroundColor: item.color }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.1, 0.2, 0.1] }}
+            transition={{ duration: 3, ease: "easeInOut", repeat: Infinity }}
+          />
+        )}
+
+        <div className="relative z-10 flex">
+          {/* Time column — the one place the start time is shown */}
+          <div className="w-20 shrink-0 flex flex-col items-center justify-center py-4">
+            <span className="text-lg font-bold text-fg leading-none tabular-nums">
+              {start.time}
+            </span>
+            <span className="text-xs text-fg-faint mt-1">{start.period}</span>
+          </div>
+
+          {/* Vertical divider in the task's colour */}
+          <span
+            className="w-px self-stretch my-4"
+            style={{ background: `linear-gradient(to bottom, ${item.color}, ${item.color}22)` }}
+          />
+
+          {/* Content */}
+          <div className="flex-1 min-w-0 px-4 py-4 flex flex-col justify-center gap-2.5">
+            {/* Title row: icon + title + complete toggle */}
+            <div className="flex items-center gap-2">
+              <motion.span
+                className="relative shrink-0 flex items-center justify-center rounded-full"
+                style={{ width: 22, height: 22 }}
+                animate={
+                  isCurrent
+                    ? {
+                        boxShadow: [
+                          `0 0 0 0 ${hexToRgba(item.color, 0.5)}`,
+                          `0 0 0 9px ${hexToRgba(item.color, 0)}`,
+                        ],
+                      }
+                    : { boxShadow: "0 0 0 0 rgba(0,0,0,0)" }
+                }
+                transition={
+                  isCurrent
+                    ? { duration: 1.8, ease: "easeOut", repeat: Infinity }
+                    : { duration: 0.2 }
+                }
+              >
+                <Icon size={20} style={{ color: item.color }} />
+              </motion.span>
+
+              <p
+                className={`flex-1 min-w-0 truncate text-lg font-bold leading-snug ${
+                  item.completed ? "text-fg-faint line-through" : "text-fg"
+                }`}
+              >
+                {item.title}
+              </p>
+
+              {item.completed ? (
+                <motion.span
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    handleToggle(item.id);
+                  }}
+                  whileTap={tap}
+                  initial={{ scale: 0.4 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 600, damping: 18 }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: item.color }}
+                >
+                  <Check size={15} strokeWidth={3} className="text-white" />
+                </motion.span>
+              ) : (
+                <motion.span
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    handleToggle(item.id);
+                  }}
+                  whileTap={tap}
+                  className="w-7 h-7 rounded-full border-2 shrink-0"
+                  style={{ borderColor: item.color }}
+                />
+              )}
+            </div>
+
+            {/* Meta row: duration, priority, streak */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-medium text-fg-faint">{dur}</span>
+              {item.priority && (
+                <span
+                  className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                  style={{
+                    backgroundColor: `${PRIORITY_META[item.priority].color}1f`,
+                    color: PRIORITY_META[item.priority].color,
+                  }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: PRIORITY_META[item.priority].color }}
+                  />
+                  {PRIORITY_META[item.priority].label} priority
+                </span>
+              )}
+              {item.streak ? (
+                <span className="flex items-center gap-0.5 text-sm font-medium text-[#b5895f]">
+                  <Flame size={13} className="fill-[#b5895f]" />
+                  {item.streak}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </motion.button>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-24">
@@ -137,143 +318,42 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
             {/* Section header */}
             <div className="flex items-center justify-between mb-3 px-1">
               <div className="flex items-center gap-2">
-                <PeriodIcon size={17} className="text-fg-muted" />
-                <h3 className="text-lg font-semibold text-fg">{group.label}</h3>
+                <PeriodIcon size={17} style={{ color: group.color }} />
+                <h3 className="text-lg font-semibold" style={{ color: group.color }}>
+                  {group.label}
+                </h3>
               </div>
               {gi === 0 && <span className="text-sm text-fg-faint">{relativeDayLabel(date)}</span>}
             </div>
 
             {/* Cards */}
             <div className="flex flex-col gap-3">
-              {group.items.map((item) => {
-                const Icon = ICONS[item.icon] ?? ICONS.default;
-                const start = fmt12(item.startMinutes);
-                const end = fmt12(item.startMinutes + item.durationMinutes);
-                const isCurrent = item.id === currentId && !item.completed;
-                const dur =
-                  item.durationMinutes < 60
-                    ? `${item.durationMinutes} min`
-                    : `${Math.floor(item.durationMinutes / 60)}h${
-                        item.durationMinutes % 60 ? ` ${item.durationMinutes % 60}m` : ""
-                      }`;
-
-                return (
-                  <motion.button
-                    key={item.id}
-                    onClick={() => handleEdit(item.id)}
-                    whileTap={press}
-                    className={`relative overflow-hidden block w-full bg-surface-alt border border-border-strong rounded-3xl shadow-soft text-left ${
-                      item.completed ? "opacity-60" : ""
-                    }`}
-                  >
-                    {/* "Happening now" cue: a faint wash of the task's color that
-                        gently breathes. */}
-                    {isCurrent && (
-                      <motion.span
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ backgroundColor: item.color }}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: [0.06, 0.16, 0.06] }}
-                        transition={{ duration: 3, ease: "easeInOut", repeat: Infinity }}
-                      />
-                    )}
-
-                    <div className="relative z-10 flex">
-                      {/* Time column (plain time + AM) */}
-                      <div className="w-20 shrink-0 flex flex-col text-center py-5">
-                        <span className="text-base font-bold text-fg leading-none tabular-nums">
-                          {start.time}
-                        </span>
-                        <span className="text-xs text-fg-faint mt-1 text-end pr-6">
-                          {start.period}
-                        </span>
-                      </div>
-
-                      {/* Vertical divider in the task's colour */}
-                      <span
-                        className="w-px self-stretch my-4"
-                        style={{
-                          background: `linear-gradient(to bottom, ${item.color}, ${item.color}22)`,
-                        }}
-                      />
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            <Icon size={16} className="shrink-0" style={{ color: item.color }} />
-                            <p
-                              className={`flex-1 min-w-0 truncate text-lg font-bold leading-snug ${
-                                item.completed ? "text-fg-faint line-through" : "text-fg"
-                              }`}
-                            >
-                              {item.title}
-                            </p>
-                            {item.streak ? (
-                              <span className="flex items-center gap-0.5 text-sm font-medium text-[#b5895f] shrink-0">
-                                <Flame size={13} className="fill-[#b5895f]" />
-                                {item.streak}
-                              </span>
-                            ) : null}
-                            <div className="flex items-center justify-end mt-2">
-                              {item.completed ? (
-                                <motion.span
-                                  onClick={(ev) => {
-                                    ev.stopPropagation();
-                                    handleToggle(item.id);
-                                  }}
-                                  whileTap={tap}
-                                  className="flex items-center gap-1.5 rounded-full text-sm font-semibold"
-                                  style={{ backgroundColor: `${item.color}1f`, color: item.color }}
-                                >
-                                  <span
-                                    className="w-6 h-6 rounded-full flex items-center justify-center"
-                                    style={{ backgroundColor: item.color }}
-                                  >
-                                    <Check size={14} strokeWidth={3} className="text-white" />
-                                  </span>
-                                </motion.span>
-                              ) : (
-                                <motion.span
-                                  onClick={(ev) => {
-                                    ev.stopPropagation();
-                                    handleToggle(item.id);
-                                  }}
-                                  whileTap={tap}
-                                  className="w-7 h-7 rounded-full border-2 shrink-0"
-                                  style={{ borderColor: item.color }}
-                                />
-                              )}
-                            </div>
-                          </div>
-                          {item.priority && (
-                            <Flag
-                              size={16}
-                              fill={PRIORITY_META[item.priority].color}
-                              style={{ color: PRIORITY_META[item.priority].color }}
-                              className="shrink-0"
-                            />
-                          )}
-                        </div>
-
-                        <p className="text-sm mt-1">
-                          <span className="text-fg-faint">
-                            {start.time} – {end.time} {end.period}
-                          </span>
-                          <span className="text-fg-faint"> · </span>
-                          <span className="font-medium" style={{ color: item.color }}>
-                            {dur}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </motion.button>
-                );
-              })}
+              <AnimatePresence initial={false}>
+                {group.items.map((item) => renderCard(item))}
+              </AnimatePresence>
             </div>
           </div>
         );
       })}
+
+      {/* Completed */}
+      {doneItems.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <CheckCircle2 size={17} style={{ color: DONE_GREEN }} />
+            <h3 className="text-lg font-semibold" style={{ color: DONE_GREEN }}>
+              Completed
+            </h3>
+            <span className="text-sm text-fg-faint">{doneItems.length}</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            <AnimatePresence initial={false}>
+              {doneItems.map((item) => renderCard(item))}
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
