@@ -13,6 +13,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import AddMealSheet from "@/components/meals/AddMealSheet";
+import MealDetailSheet from "@/components/meals/MealDetailSheet";
 import { todayISODate } from "@/lib/date";
 import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
 import { dayNutrition, indexItems, mealNutrition } from "@/lib/grocery";
@@ -45,6 +46,7 @@ export default function MealsPage() {
   const addMeal = useMealStore((s) => s.addMeal);
   const groceryItems = useGroceryStore((s) => s.groceryItems);
 
+  const [detailMeal, setDetailMeal] = useState<Meal | null>(null);
   const [editMeal, setEditMeal] = useState<Meal | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -209,7 +211,7 @@ export default function MealsPage() {
             return (
               <motion.button
                 key={meal.id}
-                onClick={() => setEditMeal(meal)}
+                onClick={() => setDetailMeal(meal)}
                 whileTap={press}
                 transition={spring.snappy}
                 className="flex items-center gap-3 p-3.5 rounded-3xl bg-surface text-left w-full shadow-card"
@@ -244,6 +246,15 @@ export default function MealsPage() {
           })
         )}
       </div>
+
+      <MealDetailSheet
+        meal={detailMeal}
+        onClose={() => setDetailMeal(null)}
+        onEdit={(meal) => {
+          setDetailMeal(null);
+          setEditMeal(meal);
+        }}
+      />
 
       <AddMealSheet
         isOpen={addOpen || !!editMeal}
