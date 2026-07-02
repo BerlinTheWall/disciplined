@@ -1,9 +1,20 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, UtensilsCrossed } from "lucide-react";
+import {
+  Coffee,
+  Cookie,
+  Droplet,
+  Drumstick,
+  Plus,
+  Sandwich,
+  UtensilsCrossed,
+  Wheat,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import AddMealSheet from "@/components/meals/AddMealSheet";
 import { todayISODate } from "@/lib/date";
+import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
 import { dayNutrition, indexItems, mealNutrition } from "@/lib/grocery";
 import { press, spring, tap } from "@/lib/motion";
 import { useGroceryStore } from "@/store/groceryStore";
@@ -16,6 +27,18 @@ const TYPE_LABELS: Record<MealType, string> = {
   dinner: "Dinner",
   snack: "Snack",
 };
+
+// Per-meal-type icon + soft tint, so each logged meal carries a glanceable
+// colored avatar rather than a plain text chip.
+const MEAL_META: Record<MealType, { icon: LucideIcon; bg: string; fg: string }> = {
+  breakfast: { icon: Coffee, bg: "#fef3e2", fg: "#e0993a" },
+  lunch: { icon: Sandwich, bg: "#e9f4ec", fg: "#6ba97a" },
+  dinner: { icon: UtensilsCrossed, bg: "#e8eefb", fg: "#6b83c9" },
+  snack: { icon: Cookie, bg: "#fbe9f0", fg: "#cf6d97" },
+};
+
+// Macro accent colors, shared with the calorie card's macro tints.
+const MACRO_COLORS = { carbs: "#d98a63", protein: "#6ba97a", fat: "#d3a944" };
 
 export default function MealsPage() {
   const meals = useMealStore((s) => s.meals);
@@ -61,40 +84,75 @@ export default function MealsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- Today's diet ---------- */}
-      <div className="rounded-3xl bg-surface-feature text-white p-6 shadow-card">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Eaten today</p>
-        <p className="text-3xl font-bold mt-1">
-          {total.calories}
-          <span className="text-base font-medium text-gray-500"> kcal</span>
-        </p>
-        <div className="flex gap-2 mt-4">
-          <Macro label="Protein" value={`${total.protein}g`} />
-          <Macro label="Fat" value={`${total.fat}g`} />
-          <Macro label="Carbs" value={`${total.carbs}g`} />
+      <div className="rounded-3xl bg-surface p-5 shadow-card">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-fg-muted">Today calorie</p>
+            <p className="text-4xl font-bold text-fg mt-1 tracking-tight">
+              {total.calories}
+              <span className="text-lg font-semibold text-fg-faint"> kcal</span>
+            </p>
+          </div>
+          <CalorieRing consumed={total.calories} goal={CALORIE_GOAL} />
+        </div>
+
+        <div className="flex gap-2.5 mt-5">
+          <MacroCard
+            icon={Wheat}
+            label="Carbs"
+            value={Math.round(total.carbs)}
+            goal={MACRO_GOALS.carbs}
+            bg="#fdeee7"
+            fg="#d98a63"
+          />
+          <MacroCard
+            icon={Drumstick}
+            label="Protein"
+            value={Math.round(total.protein)}
+            goal={MACRO_GOALS.protein}
+            bg="#e9f4ec"
+            fg="#6ba97a"
+          />
+          <MacroCard
+            icon={Droplet}
+            label="Fat"
+            value={Math.round(total.fat)}
+            goal={MACRO_GOALS.fat}
+            bg="#fbf3dc"
+            fg="#d3a944"
+          />
         </div>
       </div>
 
       {/* ---------- Log again ---------- */}
       {recent.length > 0 && (
-        <div>
-          <h2 className="text-base font-semibold text-fg px-1 mb-2">Log again</h2>
-          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        <div className="flex flex-col gap-2.5">
+          <h2 className="text-base font-semibold text-fg px-1">Log again</h2>
+          <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {recent.map((m) => {
               const n = mealNutrition(m, items);
+              const meta = MEAL_META[m.type];
+              const Icon = meta.icon;
               return (
                 <motion.button
                   key={m.id}
                   onClick={() => logAgain(m)}
                   whileTap={tap}
-                  className="shrink-0 flex flex-col items-start gap-0.5 bg-surface rounded-2xl px-3.5 py-2.5 max-w-42.5 shadow-soft"
+                  className="shrink-0 flex items-center gap-2.5 rounded-2xl bg-surface py-2 pl-2 pr-3 shadow-soft"
                 >
-                  <span className="flex items-center gap-1 font-medium text-sm text-fg max-w-37.5 truncate">
-                    <Plus size={13} className="text-fg-faint shrink-0" />
-                    {m.name}
+                  <span
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: meta.bg }}
+                  >
+                    <Icon size={16} style={{ color: meta.fg }} />
                   </span>
-                  <span className="text-xs text-fg-faint">
-                    {n.calories} kcal · {TYPE_LABELS[m.type]}
+                  <span className="min-w-0 text-left">
+                    <span className="block max-w-32 truncate text-sm font-medium text-fg leading-tight">
+                      {m.name}
+                    </span>
+                    <span className="block text-[11px] text-fg-faint">{n.calories} kcal</span>
                   </span>
+                  <Plus size={16} className="text-fg-faint shrink-0" />
                 </motion.button>
               );
             })}
@@ -104,12 +162,17 @@ export default function MealsPage() {
 
       {/* ---------- Meals ---------- */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between px-1">
-          <h2 className="text-base font-semibold text-fg">Today's meals</h2>
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-base font-semibold text-fg">
+            Today's meals
+            {todaysMeals.length > 0 && (
+              <span className="font-medium text-fg-faint"> · {todaysMeals.length}</span>
+            )}
+          </h2>
           <motion.button
             onClick={() => setAddOpen(true)}
             whileTap={tap}
-            className="flex items-center gap-1 text-sm text-fg-muted"
+            className="flex items-center gap-1 rounded-full bg-surface-alt px-3 py-1.5 text-sm font-medium text-fg-muted"
           >
             <Plus size={15} />
             Log meal
@@ -122,9 +185,17 @@ export default function MealsPage() {
               <UtensilsCrossed size={24} className="text-fg-faint" />
             </div>
             <p className="text-base font-medium text-fg">Nothing logged today</p>
-            <p className="text-sm text-fg-faint text-center">
+            <p className="max-w-xs text-sm text-fg-faint text-center">
               Build a meal from the food you've saved to track your diet.
             </p>
+            <motion.button
+              onClick={() => setAddOpen(true)}
+              whileTap={tap}
+              className="mt-1 flex items-center gap-1.5 rounded-full bg-surface-inverse px-4 py-2.5 text-sm font-medium text-fg-inverse"
+            >
+              <Plus size={16} />
+              Log a meal
+            </motion.button>
           </div>
         ) : (
           todaysMeals.map((meal) => {
@@ -133,30 +204,41 @@ export default function MealsPage() {
               .map((c) => items[c.itemId]?.name)
               .filter(Boolean)
               .join(", ");
+            const meta = MEAL_META[meal.type];
+            const Icon = meta.icon;
             return (
               <motion.button
                 key={meal.id}
                 onClick={() => setEditMeal(meal)}
                 whileTap={press}
                 transition={spring.snappy}
-                className="flex items-center gap-3 p-4 rounded-3xl bg-surface text-left w-full shadow-card"
+                className="flex items-center gap-3 p-3.5 rounded-3xl bg-surface text-left w-full shadow-card"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-fg leading-tight truncate">{meal.name}</p>
-                    <span className="text-[11px] font-medium text-fg-muted bg-surface-subtle rounded-full px-2 py-0.5 shrink-0">
-                      {TYPE_LABELS[meal.type]}
-                    </span>
-                  </div>
-                  {parts && <p className="text-xs text-fg-faint mt-1 truncate">{parts}</p>}
-                  <p className="text-xs text-fg-muted mt-1.5">
-                    {n.protein}g protein · {n.fat}g fat · {n.carbs}g carbs
-                  </p>
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: meta.bg }}
+                >
+                  <Icon size={22} style={{ color: meta.fg }} />
                 </div>
-                <p className="font-semibold text-fg shrink-0">
-                  {n.calories}
-                  <span className="text-xs font-medium text-fg-faint"> kcal</span>
-                </p>
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-wide leading-none"
+                    style={{ color: meta.fg }}
+                  >
+                    {TYPE_LABELS[meal.type]}
+                  </p>
+                  <p className="font-semibold text-fg leading-tight truncate mt-1">{meal.name}</p>
+                  {parts && <p className="text-xs text-fg-faint truncate mt-0.5">{parts}</p>}
+                  <div className="flex items-center gap-2.5 mt-1.5 text-[11px] font-medium text-fg-muted">
+                    <MacroPip color={MACRO_COLORS.protein} value={n.protein} />
+                    <MacroPip color={MACRO_COLORS.fat} value={n.fat} />
+                    <MacroPip color={MACRO_COLORS.carbs} value={n.carbs} />
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-fg leading-none">{n.calories}</p>
+                  <p className="text-[10px] font-medium text-fg-faint mt-1">kcal</p>
+                </div>
               </motion.button>
             );
           })
@@ -175,11 +257,86 @@ export default function MealsPage() {
   );
 }
 
-function Macro({ label, value }: { label: string; value: string }) {
+function MacroPip({ color, value }: { color: string; value: number }) {
   return (
-    <div className="flex-1 rounded-xl bg-surface-feature-alt px-3 py-2">
-      <p className="text-[11px] text-gray-400">{label}</p>
-      <p className="text-sm font-semibold mt-0.5 text-white">{value}</p>
+    <span className="flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+      {Math.round(value)}g
+    </span>
+  );
+}
+
+function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
+  const size = 96;
+  const stroke = 9;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  const pct = goal > 0 ? Math.min(consumed / goal, 1) : 0;
+  const left = Math.max(goal - consumed, 0);
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="var(--surface-raised)"
+          strokeWidth={stroke}
+        />
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="#2f6f7e"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          initial={false}
+          animate={{ strokeDashoffset: circumference * (1 - pct) }}
+          transition={spring.snappy}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-lg font-bold text-fg leading-none">{left}</span>
+        <span className="text-[10px] font-medium text-fg-faint mt-0.5">Left</span>
+      </div>
+    </div>
+  );
+}
+
+function MacroCard({
+  icon: Icon,
+  label,
+  value,
+  goal,
+  bg,
+  fg,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  goal: number;
+  bg: string;
+  fg: string;
+}) {
+  return (
+    <div className="flex-1 flex items-center gap-2.5 rounded-2xl bg-surface-alt px-3 py-2.5 min-w-0">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+        style={{ backgroundColor: bg }}
+      >
+        <Icon size={16} style={{ color: fg }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-fg-muted leading-none">{label}</p>
+        <p className="text-sm font-bold text-fg mt-1 leading-none">
+          {value}
+          <span className="text-fg-faint font-medium"> /{goal}</span>
+        </p>
+      </div>
     </div>
   );
 }

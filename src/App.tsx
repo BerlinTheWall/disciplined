@@ -222,7 +222,7 @@ function App() {
                   className="flex items-center gap-1.5 bg-surface-raised rounded-lg px-3 py-2 text-base font-medium text-fg"
                 >
                   <CalendarPlus size={17} />
-                  Plan day
+                  Day Plan
                 </motion.button>
                 <div className="flex items-center bg-surface-raised rounded-lg p-0.5">
                   {(["daily", "weekly"] as const).map((m) => (

@@ -64,7 +64,11 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
                 transition={spring.snappy}
                 className="w-full flex flex-col items-center gap-2.5 rounded-full bg-surface-raised shadow-card py-1.5"
               >
-                <span className="text-xs font-medium text-fg-muted pt-2">{getDayLabel(date)}</span>
+                <span
+                  className={`text-xs pt-2 ${isSelected ? "font-bold text-fg" : "font-medium text-fg-muted"}`}
+                >
+                  {getDayLabel(date)}
+                </span>
                 <span
                   className={`w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold ${
                     isSelected ? "bg-fg text-fg-inverse" : "text-fg"

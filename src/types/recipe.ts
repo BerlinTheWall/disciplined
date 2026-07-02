@@ -1,4 +1,4 @@
-import type { MealComponent } from "./meal";
+import type { MealComponent, MealType } from "./meal";
 
 // A recipe is a reusable "how to make it": a set of ingredients (referencing the
 // same food catalog as meals/shopping, scaled by servings) plus ordered steps.
@@ -19,4 +19,9 @@ export interface Recipe {
   description?: string;
   ingredients: RecipeIngredient[];
   steps: string[];
+  // Which meal slots this recipe suits (breakfast/lunch/…). Drives suggestions;
+  // empty/undefined means "no explicit slot", so it can be suggested anywhere.
+  mealTypes?: MealType[];
+  // Free-form preference tags, e.g. "vegetarian", "high-protein", "quick".
+  tags?: string[];
 }

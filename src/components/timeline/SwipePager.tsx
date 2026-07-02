@@ -67,11 +67,17 @@ export default function SwipePager({
             now" highlight, which bleeds a few px past the row) don't spill across
             the seam into the neighbouring day. */}
         {/* Current page — normal flow, defines the height. */}
-        <div key={pageKey?.(0)} className="overflow-x-clip">{renderPage(0)}</div>
+        <div key={pageKey?.(0)} className="overflow-x-clip">
+          {renderPage(0)}
+        </div>
         {/* Previous page — parked just off the left edge. */}
-        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full overflow-x-clip">{renderPage(-1)}</div>
+        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full overflow-x-clip">
+          {renderPage(-1)}
+        </div>
         {/* Next page — parked just off the right edge. */}
-        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full overflow-x-clip">{renderPage(1)}</div>
+        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full overflow-x-clip">
+          {renderPage(1)}
+        </div>
       </motion.div>
     </div>
   );

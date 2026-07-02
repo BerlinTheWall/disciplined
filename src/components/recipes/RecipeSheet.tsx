@@ -11,9 +11,17 @@ import { spring, tap } from "@/lib/motion";
 import { addNutrition, emptyNutrition } from "@/lib/nutritions";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useRecipeStore } from "@/store/recipeStore";
+import type { MealType } from "@/types/meal";
 import type { Recipe, RecipeIngredient } from "@/types/recipe";
 import { useConfirm } from "../ConfirmDialog";
 import AddGroceryItemSheet from "../expenses/AddGroceryItemSheet";
+
+const MEAL_TYPES: { value: MealType; label: string }[] = [
+  { value: "breakfast", label: "Breakfast" },
+  { value: "lunch", label: "Lunch" },
+  { value: "dinner", label: "Dinner" },
+  { value: "snack", label: "Snack" },
+];
 
 const COLOR_OPTIONS = [
   "#fb923c",
@@ -61,12 +69,16 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
   const [timeMin, setTimeMin] = useState("");
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
   const [steps, setSteps] = useState<string[]>([""]);
+  const [mealTypes, setMealTypes] = useState<MealType[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [query, setQuery] = useState("");
   const [newItemOpen, setNewItemOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setQuery("");
+    setTagInput("");
     if (editRecipe) {
       setName(editRecipe.name);
       setColor(editRecipe.color);
@@ -74,6 +86,8 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
       setTimeMin(editRecipe.timeMin ? String(editRecipe.timeMin) : "");
       setIngredients(editRecipe.ingredients);
       setSteps(editRecipe.steps.length ? editRecipe.steps : [""]);
+      setMealTypes(editRecipe.mealTypes ?? []);
+      setTags(editRecipe.tags ?? []);
     } else {
       setName("");
       setColor(COLOR_OPTIONS[0]);
@@ -81,6 +95,8 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
       setTimeMin("");
       setIngredients([]);
       setSteps([""]);
+      setMealTypes([]);
+      setTags([]);
     }
   }, [isOpen, editRecipe]);
 
@@ -109,6 +125,22 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
     );
   }
 
+  function toggleMealType(value: MealType) {
+    setMealTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  }
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase();
+    if (!t) return;
+    setTags((prev) => (prev.includes(t) ? prev : [...prev, t]));
+    setTagInput("");
+  }
+  function removeTag(tag: string) {
+    setTags((prev) => prev.filter((t) => t !== tag));
+  }
+
   function setStep(index: number, value: string) {
     setSteps((prev) => prev.map((s, i) => (i === index ? value : s)));
   }
@@ -135,6 +167,8 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
       timeMin: timeMin ? Number(timeMin) : undefined,
       ingredients,
       steps: steps.map((s) => s.trim()).filter(Boolean),
+      mealTypes,
+      tags,
     };
     if (isEditing) {
       const ok = await confirm({
@@ -296,6 +330,69 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
                     />
                   ))}
                 </div>
+
+                {/* Best for (meal slots) */}
+                <label className="text-xs font-medium text-fg-muted mb-2 block">Best for</label>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {MEAL_TYPES.map(({ value, label }) => {
+                    const on = mealTypes.includes(value);
+                    return (
+                      <motion.button
+                        key={value}
+                        onClick={() => toggleMealType(value)}
+                        whileTap={tap}
+                        className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${
+                          on
+                            ? "bg-surface-inverse text-fg-inverse"
+                            : "bg-surface-raised text-fg-muted"
+                        }`}
+                      >
+                        {label}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                {/* Preference tags */}
+                <label className="text-xs font-medium text-fg-muted mb-2 block">Tags</label>
+                <div className="flex items-center gap-2 bg-surface-raised rounded-xl px-3 py-2 mb-2">
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTag();
+                      }
+                    }}
+                    placeholder="e.g. vegetarian, high-protein, quick"
+                    className="flex-1 min-w-0 bg-transparent text-sm text-fg placeholder-fg-faint focus:outline-none"
+                  />
+                  <motion.button
+                    onClick={addTag}
+                    whileTap={tap}
+                    className="w-7 h-7 rounded-full bg-surface text-fg-muted flex items-center justify-center shrink-0"
+                    aria-label="Add tag"
+                  >
+                    <Plus size={15} />
+                  </motion.button>
+                </div>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-6">
+                    {tags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => removeTag(tag)}
+                        className="flex items-center gap-1 text-xs font-medium text-fg-muted bg-surface-alt rounded-full pl-2.5 pr-2 py-1"
+                      >
+                        {tag}
+                        <X size={12} className="text-fg-faint" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {tags.length === 0 && <div className="mb-6" />}
 
                 {/* Ingredients from catalog */}
                 <label className="text-xs font-medium text-fg-muted mb-2 block">Ingredients</label>
