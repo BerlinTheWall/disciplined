@@ -14,6 +14,9 @@ export interface Recipe {
   id: string;
   name: string;
   color: string;
+  // Optional cover photo, stored inline as a resized data URL (see lib/image).
+  // When absent, cards/headers fall back to the recipe's color.
+  image?: string;
   servings: number; // how many servings the full recipe yields
   timeMin?: number; // total time to make, minutes
   description?: string;

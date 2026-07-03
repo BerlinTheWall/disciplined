@@ -136,25 +136,15 @@ export default function RecipesPage() {
             <p className="text-center text-sm text-fg-faint">Try a different search or category.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            <RecipeCard
-              recipe={filtered[0]}
-              kcal={kcalOf(filtered[0])}
-              featured
-              onClick={() => setDetailRecipe(filtered[0])}
-            />
-            {filtered.length > 1 && (
-              <div className="grid grid-cols-2 gap-3">
-                {filtered.slice(1).map((recipe) => (
-                  <RecipeCard
-                    key={recipe.id}
-                    recipe={recipe}
-                    kcal={kcalOf(recipe)}
-                    onClick={() => setDetailRecipe(recipe)}
-                  />
-                ))}
-              </div>
-            )}
+          <div className="grid grid-cols-2 gap-3">
+            {filtered.map((recipe) => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                kcal={kcalOf(recipe)}
+                onClick={() => setDetailRecipe(recipe)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -186,12 +176,10 @@ function RecipeCard({
   recipe,
   kcal,
   onClick,
-  featured = false,
 }: {
   recipe: Recipe;
   kcal: number;
   onClick: () => void;
-  featured?: boolean;
 }) {
   const slot = recipe.mealTypes?.[0];
   const meta =
@@ -202,18 +190,22 @@ function RecipeCard({
       onClick={onClick}
       whileTap={press}
       transition={spring.snappy}
-      className={`relative w-full overflow-hidden rounded-3xl text-left shadow-card ${
-        featured ? "h-52" : "h-44"
-      }`}
+      className="relative aspect-square w-full overflow-hidden rounded-3xl text-left shadow-card"
       style={{ backgroundColor: recipe.color }}
     >
-      {/* Depth + a decorative chef-hat watermark */}
-      <div className="absolute inset-0 bg-linear-to-br from-white/15 to-black/25" />
-      <ChefHat
-        size={featured ? 132 : 104}
-        strokeWidth={1.5}
-        className="absolute -right-5 -top-5 text-white/20"
-      />
+      {recipe.image ? (
+        <img src={recipe.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <>
+          {/* Depth + a decorative chef-hat watermark */}
+          <div className="absolute inset-0 bg-linear-to-br from-white/15 to-black/25" />
+          <ChefHat
+            size={104}
+            strokeWidth={1.5}
+            className="absolute -right-5 -top-5 text-white/20"
+          />
+        </>
+      )}
 
       {/* kcal badge */}
       {kcal > 0 && (
@@ -232,19 +224,13 @@ function RecipeCard({
       ) : null}
 
       {/* title block over a legibility scrim */}
-      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/75 via-black/30 to-transparent p-4 pt-8">
+      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/75 via-black/30 to-transparent p-3.5 pt-8">
         {slot && (
           <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
             {SLOT_LABEL[slot]}
           </p>
         )}
-        <p
-          className={`truncate font-bold leading-tight text-white ${
-            featured ? "text-xl" : "text-base"
-          }`}
-        >
-          {recipe.name}
-        </p>
+        <p className="truncate text-base font-bold leading-tight text-white">{recipe.name}</p>
         <p className="mt-0.5 truncate text-xs text-white/75">{meta}</p>
       </div>
     </motion.button>

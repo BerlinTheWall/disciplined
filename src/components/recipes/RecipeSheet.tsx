@@ -1,12 +1,13 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChefHat, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChefHat, ImageOff, ImagePlus, Minus, Plus, Search, Trash2, X } from "lucide-react";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
 import { formatAmount, indexItems, lineNutrition } from "@/lib/grocery";
+import { fileToResizedDataUrl } from "@/lib/image";
 import { spring, tap } from "@/lib/motion";
 import { addNutrition, emptyNutrition } from "@/lib/nutritions";
 import { useGroceryStore } from "@/store/groceryStore";
@@ -60,11 +61,13 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
   const isEditing = !!editRecipe;
   useScrollLock(isOpen);
   const nameRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   useAutoFocus(nameRef, isOpen && !isEditing);
   const items = indexItems(groceryItems);
 
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLOR_OPTIONS[0]);
+  const [image, setImage] = useState<string | undefined>(undefined);
   const [servings, setServings] = useState(2);
   const [timeMin, setTimeMin] = useState("");
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
@@ -82,6 +85,7 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
     if (editRecipe) {
       setName(editRecipe.name);
       setColor(editRecipe.color);
+      setImage(editRecipe.image);
       setServings(editRecipe.servings);
       setTimeMin(editRecipe.timeMin ? String(editRecipe.timeMin) : "");
       setIngredients(editRecipe.ingredients);
@@ -91,6 +95,7 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
     } else {
       setName("");
       setColor(COLOR_OPTIONS[0]);
+      setImage(undefined);
       setServings(2);
       setTimeMin("");
       setIngredients([]);
@@ -163,6 +168,7 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
     const payload = {
       name: name.trim(),
       color,
+      image,
       servings: Math.max(1, servings),
       timeMin: timeMin ? Number(timeMin) : undefined,
       ingredients,
@@ -203,6 +209,17 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
     color: onColor,
   };
 
+  // With a cover photo the header darkens to a photo scrim, so all header
+  // chrome flips to white regardless of the accent color.
+  const hasImage = !!image;
+  const fgOnHeader = hasImage ? "#ffffff" : onColor;
+  const headerBtnStyle = hasImage
+    ? { backgroundColor: "rgba(0,0,0,0.4)", color: "#ffffff" }
+    : headerBtn;
+  const lightHeader = !hasImage && isLightColor(color);
+  const placeholderClass = lightHeader ? "placeholder-black/40" : "placeholder-white/50";
+  const headerBorder = lightHeader ? "rgba(17,24,39,0.3)" : "rgba(255,255,255,0.5)";
+
   return (
     <>
       <AnimatePresence>
@@ -222,49 +239,105 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
               exit={{ y: "100%" }}
               transition={spring.snappy}
             >
-              {/* Colored header */}
-              <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
-                <div className="flex items-center justify-between">
+              {/* Hidden picker — reads a photo, resizes it, stores as a data URL */}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  try {
+                    setImage(await fileToResizedDataUrl(file));
+                  } catch {
+                    // ignore unreadable images
+                  }
+                }}
+              />
+
+              {/* Header — cover photo, falling back to the accent color */}
+              <div
+                className={`relative flex flex-col overflow-hidden rounded-t-2xl px-4 pt-3 pb-5 ${
+                  hasImage ? "min-h-44" : ""
+                }`}
+                style={hasImage ? undefined : { backgroundColor: color }}
+              >
+                {hasImage && (
+                  <>
+                    <img
+                      src={image}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/35" />
+                  </>
+                )}
+
+                <div className="relative flex items-center justify-between">
                   <motion.button
                     onClick={onClose}
                     whileTap={tap}
                     className="w-9 h-9 rounded-full flex items-center justify-center"
-                    style={headerBtn}
+                    style={headerBtnStyle}
                   >
                     <X size={20} />
                   </motion.button>
-                  {isEditing && (
+                  <div className="flex items-center gap-2">
                     <motion.button
-                      onClick={handleDelete}
+                      onClick={() => fileRef.current?.click()}
                       whileTap={tap}
                       className="w-9 h-9 rounded-full flex items-center justify-center"
-                      style={headerBtn}
+                      style={headerBtnStyle}
+                      aria-label={hasImage ? "Change photo" : "Add photo"}
                     >
-                      <Trash2 size={18} />
+                      <ImagePlus size={18} />
                     </motion.button>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 mt-3">
-                  <div
-                    className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: "#2f2f33" }}
-                  >
-                    <ChefHat size={28} style={{ color }} />
+                    {hasImage && (
+                      <motion.button
+                        onClick={() => setImage(undefined)}
+                        whileTap={tap}
+                        className="w-9 h-9 rounded-full flex items-center justify-center"
+                        style={headerBtnStyle}
+                        aria-label="Remove photo"
+                      >
+                        <ImageOff size={18} />
+                      </motion.button>
+                    )}
+                    {isEditing && (
+                      <motion.button
+                        onClick={handleDelete}
+                        whileTap={tap}
+                        className="w-9 h-9 rounded-full flex items-center justify-center"
+                        style={headerBtnStyle}
+                        aria-label="Delete recipe"
+                      >
+                        <Trash2 size={18} />
+                      </motion.button>
+                    )}
                   </div>
+                </div>
+
+                <div
+                  className={`relative flex items-center gap-4 ${hasImage ? "mt-auto pt-6" : "mt-3"}`}
+                >
+                  {!hasImage && (
+                    <div
+                      className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: "#2f2f33" }}
+                    >
+                      <ChefHat size={28} style={{ color }} />
+                    </div>
+                  )}
                   <input
                     ref={nameRef}
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Recipe name"
-                    className={`flex-1 min-w-0 bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
-                    style={{
-                      color: onColor,
-                      caretColor: onColor,
-                      borderColor: isLightColor(color)
-                        ? "rgba(17,24,39,0.3)"
-                        : "rgba(255,255,255,0.5)",
-                    }}
+                    className={`flex-1 min-w-0 bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${placeholderClass}`}
+                    style={{ color: fgOnHeader, caretColor: fgOnHeader, borderColor: headerBorder }}
                   />
                 </div>
               </div>

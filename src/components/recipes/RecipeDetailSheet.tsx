@@ -50,6 +50,19 @@ export default function RecipeDetailSheet({ recipe, onClose, onEdit }: RecipeDet
   };
   const perServing = recipe ? perServingNutrition(recipe, items) : null;
 
+  // With a cover photo the header becomes the photo under a dark scrim, so the
+  // chrome flips to white regardless of the accent color.
+  const hasImage = !!recipe?.image;
+  const headerFg = hasImage ? "#ffffff" : onColor;
+  const headerBtnStyle = hasImage
+    ? { backgroundColor: "rgba(0,0,0,0.4)", color: "#ffffff" }
+    : headerBtn;
+  const headerMeta = hasImage
+    ? "rgba(255,255,255,0.85)"
+    : isLightColor(color)
+      ? "rgba(17,24,39,0.7)"
+      : "rgba(255,255,255,0.85)";
+
   return (
     <AnimatePresence>
       {isOpen && recipe && (
@@ -68,14 +81,30 @@ export default function RecipeDetailSheet({ recipe, onClose, onEdit }: RecipeDet
             exit={{ y: "100%" }}
             transition={spring.snappy}
           >
-            {/* Colored header */}
-            <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
-              <div className="flex items-center justify-between">
+            {/* Header — cover photo, falling back to the accent color */}
+            <div
+              className={`relative flex flex-col overflow-hidden px-4 pt-3 pb-5 rounded-t-2xl ${
+                hasImage ? "min-h-52" : ""
+              }`}
+              style={hasImage ? undefined : { backgroundColor: color }}
+            >
+              {hasImage && (
+                <>
+                  <img
+                    src={recipe.image}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40" />
+                </>
+              )}
+
+              <div className="relative flex items-center justify-between">
                 <motion.button
                   onClick={onClose}
                   whileTap={tap}
                   className="w-9 h-9 rounded-full flex items-center justify-center"
-                  style={headerBtn}
+                  style={headerBtnStyle}
                 >
                   <X size={20} />
                 </motion.button>
@@ -83,29 +112,28 @@ export default function RecipeDetailSheet({ recipe, onClose, onEdit }: RecipeDet
                   onClick={() => onEdit(recipe)}
                   whileTap={tap}
                   className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
-                  style={headerBtn}
+                  style={headerBtnStyle}
                 >
                   <Pencil size={15} />
                   Edit
                 </motion.button>
               </div>
-              <div className="flex items-center gap-4 mt-3">
-                <div
-                  className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "#2f2f33" }}
-                >
-                  <ChefHat size={28} style={{ color }} />
-                </div>
+              <div
+                className={`relative flex items-center gap-4 ${hasImage ? "mt-auto pt-6" : "mt-3"}`}
+              >
+                {!hasImage && (
+                  <div
+                    className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: "#2f2f33" }}
+                  >
+                    <ChefHat size={28} style={{ color }} />
+                  </div>
+                )}
                 <div className="min-w-0">
-                  <h2 className="text-2xl font-bold truncate" style={{ color: onColor }}>
+                  <h2 className="text-2xl font-bold truncate" style={{ color: headerFg }}>
                     {recipe.name}
                   </h2>
-                  <div
-                    className="flex items-center gap-3 mt-0.5"
-                    style={{
-                      color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)",
-                    }}
-                  >
+                  <div className="flex items-center gap-3 mt-0.5" style={{ color: headerMeta }}>
                     <span className="flex items-center gap-1 text-sm">
                       <Users size={14} />
                       {recipe.servings} servings
