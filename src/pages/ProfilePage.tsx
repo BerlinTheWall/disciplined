@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Flame, Pencil, TrendingDown, TrendingUp, Utensils } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
@@ -204,12 +205,9 @@ export default function ProfilePage() {
   const sessions = useWorkoutStore((s) => s.sessions);
   const expenses = useExpenseStore((s) => s.expenses);
   const monthlyBudget = useExpenseStore((s) => s.monthlyBudget);
-
-  const name = useProfileStore((s) => s.name);
-  const tagline = useProfileStore((s) => s.tagline);
-  const setName = useProfileStore((s) => s.setName);
-  const setTagline = useProfileStore((s) => s.setTagline);
-
+  const [name, tagline, setName, setTagline] = useProfileStore(
+    useShallow((state) => [state.name, state.tagline, state.setName, state.setTagline])
+  );
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftTagline, setDraftTagline] = useState(tagline);

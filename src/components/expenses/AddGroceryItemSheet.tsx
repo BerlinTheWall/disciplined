@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, Wand2, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -41,9 +42,9 @@ export default function AddGroceryItemSheet({
   editItem,
   onCreated,
 }: AddGroceryItemSheetProps) {
-  const addGroceryItem = useGroceryStore((s) => s.addGroceryItem);
-  const updateGroceryItem = useGroceryStore((s) => s.updateGroceryItem);
-  const deleteGroceryItem = useGroceryStore((s) => s.deleteGroceryItem);
+  const [addGroceryItem, updateGroceryItem, deleteGroceryItem] = useGroceryStore(
+    useShallow((state) => [state.addGroceryItem, state.updateGroceryItem, state.deleteGroceryItem])
+  );
   const confirm = useConfirm();
 
   const isEditing = !!editItem;

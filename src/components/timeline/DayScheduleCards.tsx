@@ -11,6 +11,7 @@ import {
   Sunrise,
   Sunset,
 } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import type { ScheduleRowData } from "./ScheduleRow";
 import type { EditItem } from "./Timeline";
@@ -77,10 +78,12 @@ function relativeDayLabel(iso: string) {
 }
 
 export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCardsProps) {
-  const tasks = useTaskStore((s) => s.tasks);
-  const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
-  const habits = useHabitStore((s) => s.habits);
-  const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
+  const [tasks, toggleTaskCompleted] = useTaskStore(
+    useShallow((state) => [state.tasks, state.toggleTaskCompleted])
+  );
+  const [habits, toggleHabitCompleted] = useHabitStore(
+    useShallow((state) => [state.habits, state.toggleHabitCompleted])
+  );
 
   const dateObj = new Date(date + "T00:00:00");
 

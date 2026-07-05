@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
@@ -26,9 +27,9 @@ export default function CatalogPickerSheet({
   onNewItem,
 }: CatalogPickerSheetProps) {
   const groceryItems = useGroceryStore((s) => s.groceryItems);
-  const lists = useShoppingListStore((s) => s.lists);
-  const addLine = useShoppingListStore((s) => s.addLine);
-  const removeLine = useShoppingListStore((s) => s.removeLine);
+  const [lists, addLine, removeLine] = useShoppingListStore(
+    useShallow((state) => [state.lists, state.addLine, state.removeLine])
+  );
   useScrollLock(isOpen);
 
   const list = lists.find((l) => l.id === listId) ?? null;

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import DoneTray from "./DoneTray";
 import ScheduleRow, { MIN_ROW_HEIGHT, type ScheduleRowData } from "./ScheduleRow";
@@ -163,11 +164,12 @@ interface DayScheduleProps {
 }
 
 export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) {
-  const tasks = useTaskStore((s) => s.tasks);
-  const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
-
-  const habits = useHabitStore((s) => s.habits);
-  const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
+  const [tasks, toggleTaskCompleted] = useTaskStore(
+    useShallow((state) => [state.tasks, state.toggleTaskCompleted])
+  );
+  const [habits, toggleHabitCompleted] = useHabitStore(
+    useShallow((state) => [state.habits, state.toggleHabitCompleted])
+  );
 
   const dateObj = new Date(date + "T00:00:00");
 

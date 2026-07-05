@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChefHat, Minus, Plus, Search, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -46,10 +47,9 @@ interface AddMealSheetProps {
 export default function AddMealSheet({ isOpen, onClose, editMeal }: AddMealSheetProps) {
   const groceryItems = useGroceryStore((s) => s.groceryItems);
   const recipes = useRecipeStore((s) => s.recipes);
-  const meals = useMealStore((s) => s.meals);
-  const addMeal = useMealStore((s) => s.addMeal);
-  const updateMeal = useMealStore((s) => s.updateMeal);
-  const deleteMeal = useMealStore((s) => s.deleteMeal);
+  const [meals, addMeal, updateMeal, deleteMeal] = useMealStore(
+    useShallow((state) => [state.meals, state.addMeal, state.updateMeal, state.deleteMeal])
+  );
   const confirm = useConfirm();
 
   const [newItemOpen, setNewItemOpen] = useState(false);

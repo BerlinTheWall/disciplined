@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { BACKGROUNDS } from "@/lib/backgrounds";
@@ -58,12 +59,18 @@ function Row({
 
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   useScrollLock(isOpen);
-  const scheduleView = useSettingsStore((s) => s.scheduleView);
-  const setScheduleView = useSettingsStore((s) => s.setScheduleView);
-  const altStyle = useSettingsStore((s) => s.altStyle);
-  const setAltStyle = useSettingsStore((s) => s.setAltStyle);
-  const background = useSettingsStore((s) => s.background);
-  const setBackground = useSettingsStore((s) => s.setBackground);
+
+  const [scheduleView, setScheduleView, altStyle, setAltStyle, background, setBackground] =
+    useSettingsStore(
+      useShallow((state) => [
+        state.scheduleView,
+        state.setScheduleView,
+        state.altStyle,
+        state.setAltStyle,
+        state.background,
+        state.setBackground,
+      ])
+    );
   const { theme, toggleTheme } = useThemeStore();
 
   const isWeekly = scheduleView === "weekly";
