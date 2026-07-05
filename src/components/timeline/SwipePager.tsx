@@ -65,17 +65,19 @@ export default function SwipePager({
       >
         {/* Each page clips to its own width so edge effects (e.g. the "happening
             now" highlight, which bleeds a few px past the row) don't spill across
-            the seam into the neighbouring day. */}
+            the seam into the neighbouring day. The px-1 inset means neighbouring
+            pages — parked flush against each other — leave an 8px gap at the seam
+            (4px each side), so content doesn't touch as it slides past. */}
         {/* Current page — normal flow, defines the height. */}
-        <div key={pageKey?.(0)} className="overflow-x-clip">
+        <div key={pageKey?.(0)} className="overflow-x-clip px-1">
           {renderPage(0)}
         </div>
         {/* Previous page — parked just off the left edge. */}
-        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full overflow-x-clip">
+        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full overflow-x-clip px-1">
           {renderPage(-1)}
         </div>
         {/* Next page — parked just off the right edge. */}
-        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full overflow-x-clip">
+        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full overflow-x-clip px-1">
           {renderPage(1)}
         </div>
       </motion.div>

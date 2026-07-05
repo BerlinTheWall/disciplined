@@ -46,10 +46,17 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
       <div className="flex gap-2">
         {leftGutter > 0 && <div style={{ width: leftGutter, flexShrink: 0 }} />}
 
-        {getWeekDates(anchor).map((date) => {
+        {getWeekDates(anchor).map((date, i, week) => {
           const iso = toISODate(date);
           const isSelected = iso === selectedDate;
           const isToday = isSameDay(date, today);
+
+          // The pages are clipped horizontally (so neighbouring weeks don't bleed
+          // across the swipe seam), so the edge pills scale from their inner edge
+          // — first grows rightward, last grows leftward — keeping the outer edge
+          // flush with the boundary instead of being cut off.
+          const scaleOrigin =
+            i === 0 ? "left center" : i === week.length - 1 ? "right center" : "center";
 
           // Each day is its own floating pill (a slightly raised surface so it
           // reads against the gradient). Selecting one springs the whole pill;
@@ -62,6 +69,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
                 whileTap={tap}
                 animate={{ scale: isSelected ? 1.05 : 1 }}
                 transition={spring.snappy}
+                style={{ transformOrigin: scaleOrigin }}
                 className="w-full flex flex-col items-center gap-2.5 rounded-full bg-surface-raised shadow-card py-1.5"
               >
                 <span

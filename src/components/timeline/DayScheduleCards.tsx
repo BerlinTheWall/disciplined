@@ -76,7 +76,7 @@ function relativeDayLabel(iso: string) {
   return d.toLocaleDateString(undefined, { weekday: "long" });
 }
 
-export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps) {
+export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCardsProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const habits = useHabitStore((s) => s.habits);
@@ -191,10 +191,15 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
     return (
       <motion.button
         key={item.id}
-        layout
+        // Layout tracking only on the active panel: an off-screen neighbour has
+        // it off, so when it slides into center on a swipe there's no prior box
+        // to animate from (no "loading" slide). In-panel reflow — a card leaving
+        // to the Completed section — still animates. Discrete nav remounts the
+        // panel, so its entrance plays via `initial` below.
+        layout={active}
         onClick={() => handleEdit(item.id)}
         whileTap={press}
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={active ? { opacity: 0, scale: 0.9 } : false}
         animate={{ opacity: item.completed ? 0.6 : 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.25, ease: "easeOut" } }}
         transition={{ type: "spring", stiffness: 500, damping: 34, mass: 0.4 }}
@@ -326,10 +331,10 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
     return (
       <motion.button
         key={item.id}
-        layout
+        layout={active}
         onClick={() => handleEdit(item.id)}
         whileTap={press}
-        initial={{ opacity: 0, y: -6 }}
+        initial={active ? { opacity: 0, y: -6 } : false}
         animate={{ opacity: 0.7, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
         transition={{ type: "spring", stiffness: 500, damping: 34, mass: 0.4 }}
@@ -376,7 +381,10 @@ export default function DayScheduleCards({ date, onEdit }: DayScheduleCardsProps
 
             {/* Cards */}
             <div className="flex flex-col gap-3">
-              <AnimatePresence initial={false}>
+              {/* initial={active}: the center panel plays its entrance when it
+                  mounts on discrete nav (tap a date); off-screen neighbours mount
+                  silently, so a swipe (which reuses a neighbour) shows no enter. */}
+              <AnimatePresence initial={active}>
                 {group.items.map((item) => renderCard(item))}
               </AnimatePresence>
             </div>

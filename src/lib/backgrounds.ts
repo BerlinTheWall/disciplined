@@ -13,8 +13,8 @@ export interface BackgroundPreset {
 }
 
 const wash = (a: string, b: string) =>
-  `radial-gradient(60% 50% at 12% 6%, ${a}, transparent 72%),` +
-  `radial-gradient(60% 50% at 88% 94%, ${b}, transparent 72%),` +
+  `radial-gradient(130% 90% at 50% 0%, ${a}, transparent 88%),` +
+  `radial-gradient(100% 85% at 90% 98%, ${b}, transparent 90%),` +
   `var(--surface)`;
 
 export const BACKGROUNDS: BackgroundPreset[] = [
@@ -22,22 +22,22 @@ export const BACKGROUNDS: BackgroundPreset[] = [
     key: "warm",
     label: "Warm",
     swatch: "linear-gradient(135deg, #fbe1d9, #e4dff6)",
-    light: wash("rgba(250, 224, 216, 0.45)", "rgba(227, 223, 246, 0.48)"),
-    dark: wash("rgba(122, 98, 90, 0.20)", "rgba(98, 94, 130, 0.22)"),
+    light: wash("rgba(250, 216, 205, 0.42)", "rgba(219, 213, 246, 0.85)"),
+    dark: wash("rgba(128, 100, 90, 0.2)", "rgba(102, 96, 140, 0.4)"),
   },
   {
     key: "cool",
     label: "Cool",
     swatch: "linear-gradient(135deg, #cfe0f4, #d0f0e8)",
-    light: wash("rgba(203, 224, 245, 0.5)", "rgba(205, 238, 231, 0.48)"),
-    dark: wash("rgba(78, 100, 132, 0.22)", "rgba(74, 116, 116, 0.2)"),
+    light: wash("rgba(188, 216, 245, 0.42)", "rgba(191, 236, 226, 0.82)"),
+    dark: wash("rgba(72, 100, 140, 0.2)", "rgba(66, 120, 120, 0.38)"),
   },
   {
     key: "mist",
     label: "Mist",
     swatch: "linear-gradient(135deg, #e6e7ee, #ece7ec)",
-    light: wash("rgba(228, 230, 238, 0.55)", "rgba(234, 230, 236, 0.5)"),
-    dark: wash("rgba(120, 124, 140, 0.16)", "rgba(110, 114, 132, 0.16)"),
+    light: wash("rgba(220, 224, 236, 0.45)", "rgba(230, 224, 234, 0.85)"),
+    dark: wash("rgba(120, 124, 140, 0.16)", "rgba(110, 114, 132, 0.3)"),
   },
 ];
 
