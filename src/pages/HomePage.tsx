@@ -3,14 +3,13 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, ClipboardList, Clock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import AddItemSheet from "@/components/timeline/AddItemSheet";
-import type { EditItem } from "@/components/timeline/Timeline";
 import { todayISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
 import { useHabitStore } from "@/store/habitStore";
+import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Priority } from "@/types/task";
 
@@ -127,10 +126,10 @@ function Chip({ count, label, active }: { count: number; label: string; active?:
 export default function HomePage({ onViewAll }: HomePageProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
+  const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
-
-  const [editItem, setEditItem] = useState<EditItem | null>(null);
+  const focusScheduleItem = useScheduleFocusStore((s) => s.focusItem);
 
   const today = todayISODate();
   const todayObj = new Date(today + "T00:00:00");
@@ -193,14 +192,13 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   )[0];
   const focus = current ?? upcoming ?? highPriority ?? null;
 
-  function openEdit(item: DayItem) {
-    if (item.kind === "task") {
-      const t = tasks.find((x) => x.id === item.id);
-      if (t) setEditItem({ type: "task", data: t });
-    } else {
-      const h = habits.find((x) => x.id === item.id);
-      if (h) setEditItem({ type: "habit", data: h });
-    }
+  // Jump to the schedule, land on this item's day, and let DaySchedule scroll it
+  // into view — rather than opening the edit sheet. Focus items are always
+  // today's, so today is the target date.
+  function openInSchedule(item: DayItem) {
+    setSelectedDate(today);
+    focusScheduleItem(item.id);
+    onViewAll?.();
   }
 
   function toggle(item: DayItem) {
@@ -254,7 +252,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
 
         {focus && fStart && fEnd ? (
           <motion.button
-            onClick={() => openEdit(focus)}
+            onClick={() => openInSchedule(focus)}
             whileTap={press}
             className="w-full text-left bg-surface-alt border border-border-strong rounded-3xl shadow-soft p-5"
           >
@@ -307,8 +305,6 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           </div>
         )}
       </div>
-
-      <AddItemSheet isOpen={!!editItem} onClose={() => setEditItem(null)} editItem={editItem} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type { EditItem } from "./Timeline";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { computeCompressedLayout, getPillHeight, minutesToPx } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
+import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
 
 const ICON_CENTER_X = 84;
@@ -236,10 +237,22 @@ export default function DaySchedule({ date, active, onEdit }: DayScheduleProps) 
   const containerRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!active) return;
-    const now = new Date();
-    if (date !== localDateString(now)) return;
 
-    const focusId = findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes());
+    // A tap on the Home page can ask to reveal a specific item here; that wins
+    // over the default "scroll to what's happening now", and is consumed once.
+    const pending = useScheduleFocusStore.getState().pendingItemId;
+    let focusId: string | null;
+    if (pending && activeItems.some((i) => i.id === pending)) {
+      focusId = pending;
+      useScheduleFocusStore.getState().clear();
+    } else {
+      const now = new Date();
+      focusId =
+        date === localDateString(now)
+          ? findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes())
+          : null;
+    }
+
     const root = containerRef.current;
     if (!focusId || !root) return;
 

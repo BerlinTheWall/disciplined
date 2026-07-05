@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
@@ -20,7 +20,11 @@ import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
 import { useHabitStore } from "@/store/habitStore";
+import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
+
+// How far down the viewport the focused card lands when scrolled into view.
+const FOCUS_VIEWPORT_RATIO = 0.3;
 
 interface DayScheduleCardsProps {
   date: string;
@@ -124,6 +128,28 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
   const [settling, setSettling] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
 
+  // A tap on the Home page can ask to reveal a specific card here — scroll it
+  // into view when this (center) panel mounts, then consume the request.
+  const containerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!active) return;
+    const pending = useScheduleFocusStore.getState().pendingItemId;
+    if (!pending || !items.some((i) => i.id === pending)) return;
+    useScheduleFocusStore.getState().clear();
+
+    const root = containerRef.current;
+    const scroller = root?.closest("[data-scroll-lock]") as HTMLElement | null;
+    const target = root?.querySelector(`[data-item-id="${pending}"]`) as HTMLElement | null;
+    if (!scroller || !target) return;
+
+    const delta =
+      target.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top -
+      scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
+    scroller.scrollTop += delta; // scrollTop self-clamps to the valid range
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, active]);
+
   function handleEdit(id: string) {
     const task = tasks.find((t) => t.id === id);
     if (task) {
@@ -194,6 +220,7 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
     return (
       <motion.button
         key={item.id}
+        data-item-id={item.id}
         // Layout tracking only on the active panel: an off-screen neighbour has
         // it off, so when it slides into center on a swipe there's no prior box
         // to animate from (no "loading" slide). In-panel reflow — a card leaving
@@ -366,7 +393,7 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-24">
+    <div ref={containerRef} className="flex flex-col gap-6 pb-24">
       {groups.map((group, gi) => {
         const PeriodIcon = group.icon;
         return (
