@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, ChevronLeft, Clock, Copy, Plus, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -85,12 +86,17 @@ interface PlanDaySheetProps {
 }
 
 export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
-  const tasks = useTaskStore((s) => s.tasks);
-  const addTask = useTaskStore((s) => s.addTask);
-  const deleteTask = useTaskStore((s) => s.deleteTask);
-  const copyTasksToDate = useTaskStore((s) => s.copyTasksToDate);
+  const [tasks, selectedDate, addTask, deleteTask, copyTasksToDate] = useTaskStore(
+    useShallow((state) => [
+      state.tasks,
+      state.selectedDate,
+      state.addTask,
+      state.deleteTask,
+      state.copyTasksToDate,
+    ])
+  );
+
   const confirm = useConfirm();
-  const selectedDate = useTaskStore((s) => s.selectedDate);
   useScrollLock(isOpen);
 
   const [title, setTitle] = useState("");

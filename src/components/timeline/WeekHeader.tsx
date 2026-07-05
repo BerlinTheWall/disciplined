@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import MonthYearPicker from "./MonthYearPicker";
 import { WeekSwipeContext } from "./swipeController";
@@ -21,8 +22,9 @@ interface WeekHeaderProps {
 }
 
 export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
-  const selectedDate = useTaskStore((s) => s.selectedDate);
-  const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
+  const [selectedDate, setSelectedDate] = useTaskStore(
+    useShallow((state) => [state.selectedDate, state.setSelectedDate])
+  );
   // In weekly view, share the drag with the grid below so they move together.
   const sharedController = useContext(WeekSwipeContext);
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -20,9 +21,9 @@ interface AddExpenseSheetProps {
 }
 
 export default function AddExpenseSheet({ isOpen, onClose, editExpense }: AddExpenseSheetProps) {
-  const addExpense = useExpenseStore((s) => s.addExpense);
-  const updateExpense = useExpenseStore((s) => s.updateExpense);
-  const deleteExpense = useExpenseStore((s) => s.deleteExpense);
+  const [addExpense, updateExpense, deleteExpense] = useExpenseStore(
+    useShallow((state) => [state.addExpense, state.updateExpense, state.deleteExpense])
+  );
   const confirm = useConfirm();
 
   const isEditing = !!editExpense;

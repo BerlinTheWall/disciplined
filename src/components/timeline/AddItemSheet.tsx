@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import type { EditItem } from "./Timeline";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
@@ -218,14 +219,17 @@ interface AddItemSheetProps {
 }
 
 export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheetProps) {
-  const addTask = useTaskStore((s) => s.addTask);
-  const updateTask = useTaskStore((s) => s.updateTask);
-  const deleteTask = useTaskStore((s) => s.deleteTask);
-  const selectedDate = useTaskStore((s) => s.selectedDate);
-  const addHabit = useHabitStore((s) => s.addHabit);
-  const updateHabit = useHabitStore((s) => s.updateHabit);
-  const deleteHabit = useHabitStore((s) => s.deleteHabit);
-  const skipHabitOccurrence = useHabitStore((s) => s.skipHabitOccurrence);
+  const [selectedDate, updateTask, addTask, deleteTask] = useTaskStore(
+    useShallow((state) => [state.selectedDate, state.updateTask, state.addTask, state.deleteTask])
+  );
+  const [addHabit, updateHabit, deleteHabit, skipHabitOccurrence] = useHabitStore(
+    useShallow((state) => [
+      state.addHabit,
+      state.updateHabit,
+      state.deleteHabit,
+      state.skipHabitOccurrence,
+    ])
+  );
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);

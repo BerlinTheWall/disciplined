@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Circle, Flame, Pencil, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import AddItemSheet from "./AddItemSheet";
 import type { EditItem } from "./Timeline";
@@ -171,11 +172,14 @@ interface WeeklyTimelineProps {
 }
 
 export default function WeeklyTimeline({ anchorDate }: WeeklyTimelineProps) {
-  const tasks = useTaskStore((s) => s.tasks);
-  const selectedDate = useTaskStore((s) => s.selectedDate);
-  const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
-  const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
-
+  const [selectedDate, tasks, setSelectedDate, toggleTaskCompleted] = useTaskStore(
+    useShallow((state) => [
+      state.selectedDate,
+      state.tasks,
+      state.setSelectedDate,
+      state.toggleTaskCompleted,
+    ])
+  );
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
 

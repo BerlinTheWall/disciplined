@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarPlus, Check, Minus, Pencil, Plus, ShoppingCart, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import AddExpenseSheet from "@/components/expenses/AddExpenseSheet";
 import AddGroceryItemSheet from "@/components/expenses/AddGroceryItemSheet";
@@ -28,15 +29,27 @@ export default function ExpensesPage() {
   const addExpense = useExpenseStore((s) => s.addExpense);
 
   const groceryItems = useGroceryStore((s) => s.groceryItems);
-
-  const lists = useShoppingListStore((s) => s.lists);
-  const activeListId = useShoppingListStore((s) => s.activeListId);
-  const createList = useShoppingListStore((s) => s.createList);
-  const setLineQty = useShoppingListStore((s) => s.setLineQty);
-  const removeLine = useShoppingListStore((s) => s.removeLine);
-  const toggleLine = useShoppingListStore((s) => s.toggleLine);
-  const setListTask = useShoppingListStore((s) => s.setListTask);
-  const markDone = useShoppingListStore((s) => s.markDone);
+  const [
+    lists,
+    activeListId,
+    createList,
+    setLineQty,
+    removeLine,
+    toggleLine,
+    setListTask,
+    markDone,
+  ] = useShoppingListStore(
+    useShallow((state) => [
+      state.lists,
+      state.activeListId,
+      state.createList,
+      state.setLineQty,
+      state.removeLine,
+      state.toggleLine,
+      state.setListTask,
+      state.markDone,
+    ])
+  );
 
   const addTask = useTaskStore((s) => s.addTask);
 

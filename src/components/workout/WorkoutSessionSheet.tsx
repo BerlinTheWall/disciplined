@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Trash2, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -63,9 +64,9 @@ export default function WorkoutSessionSheet({
   onClose,
   editSession,
 }: WorkoutSessionSheetProps) {
-  const addSession = useWorkoutStore((s) => s.addSession);
-  const updateSession = useWorkoutStore((s) => s.updateSession);
-  const deleteSession = useWorkoutStore((s) => s.deleteSession);
+  const [addSession, updateSession, deleteSession] = useWorkoutStore(
+    useShallow((state) => [state.addSession, state.updateSession, state.deleteSession])
+  );
   const confirm = useConfirm();
 
   const isEditing = !!editSession;

@@ -1,4 +1,5 @@
 import { useContext, useState } from "react";
+import { useShallow } from "zustand/shallow";
 
 import AddItemSheet from "./AddItemSheet";
 import DaySchedule from "./DaySchedule";
@@ -21,11 +22,9 @@ interface TimelineProps {
 }
 
 export default function Timeline({ viewMode }: TimelineProps) {
-  const selectedDate = useTaskStore((s) => s.selectedDate);
-  const swipeToDate = useTaskStore((s) => s.swipeToDate);
-  // Bumped on discrete navigation (tap/chevron/picker), preserved on swipe — see
-  // the daily pageKey below.
-  const navNonce = useTaskStore((s) => s.navNonce);
+  const [selectedDate, swipeToDate, navNonce] = useTaskStore(
+    useShallow((state) => [state.selectedDate, state.swipeToDate, state.navNonce])
+  );
   // Alternate (card) style for the tasks section, toggled in Settings.
   const altStyle = useSettingsStore((s) => s.altStyle);
   // In weekly view, share the drag with the week strip above so they move together.

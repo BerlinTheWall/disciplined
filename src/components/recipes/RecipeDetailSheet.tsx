@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Check, ChefHat, Clock, CookingPot, Pencil, Users, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
@@ -24,8 +25,9 @@ interface RecipeDetailSheetProps {
 }
 
 export default function RecipeDetailSheet({ recipe, onClose, onEdit }: RecipeDetailSheetProps) {
-  const groceryItems = useGroceryStore((s) => s.groceryItems);
-  const adjustStock = useGroceryStore((s) => s.adjustStock);
+  const [groceryItems, adjustStock] = useGroceryStore(
+    useShallow((state) => [state.groceryItems, state.adjustStock])
+  );
   const items = indexItems(groceryItems);
 
   useScrollLock(!!recipe);

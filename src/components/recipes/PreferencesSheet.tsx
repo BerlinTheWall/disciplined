@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, SlidersHorizontal, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { spring, tap } from "@/lib/motion";
@@ -14,14 +15,18 @@ interface PreferencesSheetProps {
 
 export default function PreferencesSheet({ isOpen, onClose }: PreferencesSheetProps) {
   useScrollLock(isOpen);
-
+  const [maxCookMinutes, likedTags, avoidTags, toggleLikedTag, toggleAvoidTag, setMaxCookMinutes] =
+    usePreferenceStore(
+      useShallow((state) => [
+        state.maxCookMinutes,
+        state.likedTags,
+        state.avoidTags,
+        state.toggleLikedTag,
+        state.toggleAvoidTag,
+        state.setMaxCookMinutes,
+      ])
+    );
   const recipes = useRecipeStore((s) => s.recipes);
-  const likedTags = usePreferenceStore((s) => s.likedTags);
-  const avoidTags = usePreferenceStore((s) => s.avoidTags);
-  const maxCookMinutes = usePreferenceStore((s) => s.maxCookMinutes);
-  const toggleLikedTag = usePreferenceStore((s) => s.toggleLikedTag);
-  const toggleAvoidTag = usePreferenceStore((s) => s.toggleAvoidTag);
-  const setMaxCookMinutes = usePreferenceStore((s) => s.setMaxCookMinutes);
 
   const [likedInput, setLikedInput] = useState("");
   const [avoidInput, setAvoidInput] = useState("");

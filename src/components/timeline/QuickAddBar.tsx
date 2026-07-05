@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Pencil, Plus } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import type { EditItem } from "./Timeline";
 import {
@@ -81,16 +82,25 @@ interface Plan {
 }
 
 export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
-  const tasks = useTaskStore((s) => s.tasks);
-  const addTask = useTaskStore((s) => s.addTask);
-  const updateTask = useTaskStore((s) => s.updateTask);
-  const deleteTask = useTaskStore((s) => s.deleteTask);
-  const selectedDate = useTaskStore((s) => s.selectedDate);
-  const habits = useHabitStore((s) => s.habits);
-  const addHabit = useHabitStore((s) => s.addHabit);
-  const updateHabit = useHabitStore((s) => s.updateHabit);
-  const deleteHabit = useHabitStore((s) => s.deleteHabit);
-  const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
+  const [selectedDate, tasks, deleteTask, updateTask, addTask] = useTaskStore(
+    useShallow((state) => [
+      state.selectedDate,
+      state.tasks,
+      state.deleteTask,
+      state.updateTask,
+      state.addTask,
+    ])
+  );
+
+  const [habits, addHabit, updateHabit, deleteHabit, toggleHabitCompleted] = useHabitStore(
+    useShallow((state) => [
+      state.habits,
+      state.addHabit,
+      state.updateHabit,
+      state.deleteHabit,
+      state.toggleHabitCompleted,
+    ])
+  );
   const sessions = useWorkoutStore((s) => s.sessions);
   const recipes = useRecipeStore((s) => s.recipes);
   const confirm = useConfirm();

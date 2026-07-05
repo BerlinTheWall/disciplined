@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChefHat, ImageOff, ImagePlus, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -53,9 +54,9 @@ interface RecipeSheetProps {
 
 export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheetProps) {
   const groceryItems = useGroceryStore((s) => s.groceryItems);
-  const addRecipe = useRecipeStore((s) => s.addRecipe);
-  const updateRecipe = useRecipeStore((s) => s.updateRecipe);
-  const deleteRecipe = useRecipeStore((s) => s.deleteRecipe);
+  const [addRecipe, updateRecipe, deleteRecipe] = useRecipeStore(
+    useShallow((state) => [state.addRecipe, state.updateRecipe, state.deleteRecipe])
+  );
   const confirm = useConfirm();
 
   const isEditing = !!editRecipe;
