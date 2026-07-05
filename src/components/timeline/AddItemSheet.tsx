@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpRight,
@@ -46,7 +46,7 @@ const COLOR_OPTIONS = [
   "#f472b6",
   "#f87171",
 ];
-const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
+const DURATION_OPTIONS = [15, 30, 60, 120];
 const DAY_OPTIONS = [
   { label: "S", value: 0 },
   { label: "M", value: 1 },
@@ -76,9 +76,6 @@ function minutesToTimeString(minutes: number) {
 function timeStringToMinutes(t: string) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
-}
-function snap15(min: number) {
-  return Math.round(min / 15) * 15;
 }
 function label24(min: number) {
   const m = ((min % 1440) + 1440) % 1440;
@@ -125,8 +122,6 @@ function relativeDayLabel(iso: string) {
 
 /* ---- single-column time wheel ------------------------------------ */
 
-const STEP = 15;
-const TIME_STEPS = Array.from({ length: 1440 / STEP }, (_, i) => i * STEP);
 const WHEEL_ITEM_H = 44;
 const WHEEL_VISIBLE = 5;
 const WHEEL_PAD = ((WHEEL_VISIBLE - 1) / 2) * WHEEL_ITEM_H;
@@ -144,29 +139,57 @@ function TimeWheel({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didMount = useRef(false);
+
+  // The wheel steps by the chosen duration so short tasks sit back-to-back — a
+  // 1-min task offers every minute (6:00, 6:01, …), a 5-min task every fifth
+  // (6:00, 6:05, …) — but never coarser than 15 min, so a 1-hour task still
+  // steps every 15 (6:00, 6:15, …) instead of only on the hour.
+  const step = Math.max(1, Math.min(durationMinutes, 15));
+  const steps = useMemo(() => {
+    const arr: number[] = [];
+    for (let m = 0; m < MINUTES_PER_DAY; m += step) arr.push(m);
+    return arr;
+  }, [step]);
+
   const selectedIndex = Math.max(
     0,
-    Math.min(TIME_STEPS.length - 1, snap15(timeStringToMinutes(value)) / STEP)
+    Math.min(steps.length - 1, Math.round(timeStringToMinutes(value) / step))
   );
   const [active, setActive] = useState(selectedIndex);
 
+  // Park the wheel on the current value. Runs on mount, when the value changes
+  // from outside (opening the sheet to edit an existing task), and when the step
+  // changes (the user picked a new duration). The distance guard avoids fighting
+  // a user scroll that has already settled at the target.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el) el.scrollTop = selectedIndex * WHEEL_ITEM_H;
+    if (!el) return;
+    const target = selectedIndex * WHEEL_ITEM_H;
+    if (Math.abs(el.scrollTop - target) > WHEEL_ITEM_H / 2) {
+      el.scrollTop = target;
+    }
     setActive(selectedIndex);
-  }, []);
+    // Keep the stored start time on the grid so what's shown matches what's
+    // saved: a task loaded at 6:15 with a 30-min duration (no 6:15 slot) snaps to
+    // the nearest slot. The guard skips the first, pre-populate render so we don't
+    // write back the stale default time the sheet still holds from last time.
+    if (didMount.current) {
+      const aligned = minutesToTimeString(steps[selectedIndex]);
+      if (aligned !== value) onChange(aligned);
+    } else {
+      didMount.current = true;
+    }
+  }, [selectedIndex, step]);
 
   function handleScroll() {
     const el = ref.current;
     if (!el) return;
-    const idx = Math.max(
-      0,
-      Math.min(TIME_STEPS.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_H))
-    );
+    const idx = Math.max(0, Math.min(steps.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_H)));
     setActive(idx);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      if (idx !== selectedIndex) onChange(minutesToTimeString(TIME_STEPS[idx]));
+      if (idx !== selectedIndex) onChange(minutesToTimeString(steps[idx]));
     }, 110);
   }
 
@@ -179,7 +202,7 @@ function TimeWheel({
         style={{ height: WHEEL_VISIBLE * WHEEL_ITEM_H, scrollbarWidth: "none" }}
       >
         <div style={{ height: WHEEL_PAD }} />
-        {TIME_STEPS.map((min, i) => (
+        {steps.map((min, i) => (
           <div
             key={min}
             className="flex items-center justify-center snap-center"
@@ -375,7 +398,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   }
 
   function handleSubmit() {
-    if (!title.trim() || duration < 5) return;
+    if (!title.trim() || duration < 1) return;
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
 
@@ -886,7 +909,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   );
 
   const saveDisabled =
-    !title.trim() || duration < 5 || (mode === "habit" && daysOfWeek.length === 0);
+    !title.trim() || duration < 1 || (mode === "habit" && daysOfWeek.length === 0);
 
   return (
     <AnimatePresence>
@@ -1098,7 +1121,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                           <motion.button
                             onClick={() => goTo(3)}
                             whileTap={tap}
-                            disabled={duration < 5 || startMin + duration > MINUTES_PER_DAY}
+                            disabled={duration < 1 || startMin + duration > MINUTES_PER_DAY}
                             className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
                             style={{ backgroundColor: color, color: onColor }}
                           >
