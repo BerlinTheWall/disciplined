@@ -123,8 +123,8 @@ function relativeDayLabel(iso: string) {
 
 /* ---- single-column time wheel ------------------------------------ */
 
-const WHEEL_ITEM_H = 44;
-const WHEEL_VISIBLE = 5;
+const WHEEL_ITEM_H = 40;
+const WHEEL_VISIBLE = 3;
 const WHEEL_PAD = ((WHEEL_VISIBLE - 1) / 2) * WHEEL_ITEM_H;
 
 function TimeWheel({
@@ -565,9 +565,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
 
   const scheduleBody = (
     <div>
-      <label className="text-xs font-medium text-fg-muted mb-2 block">Date</label>
-      <div className="relative mb-5">
-        <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3">
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Date</label>
+      <div className="relative mb-4">
+        <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5">
           <span className="flex items-center gap-2 text-fg font-medium">
             <Calendar size={18} className="text-fg-faint" />
             {formatFullDate(date)}
@@ -585,8 +585,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         />
       </div>
 
-      <label className="text-xs font-medium text-fg-muted mb-2 block">Start time</label>
-      <div className="mb-5">
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Start time</label>
+      <div className="mb-3">
         <TimeWheel
           value={time}
           durationMinutes={duration}
@@ -595,7 +595,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         />
       </div>
 
-      <label className="text-xs font-medium text-fg-muted mb-2 block">Duration</label>
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Duration</label>
       <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {DURATION_OPTIONS.map((d) => {
           const tooLong = d > maxDuration;
@@ -657,7 +657,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         </div>
       )}
 
-      <p className="text-xs text-fg-faint mt-3">
+      <p className="text-xs text-fg-faint mt-2.5">
         Ends at <span className="tabular-nums">{endLabel}</span>
         {duration >= maxDuration && " — capped to stay on the same day"}
       </p>
