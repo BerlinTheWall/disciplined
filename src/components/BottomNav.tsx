@@ -6,7 +6,15 @@ import type { LucideIcon } from "lucide-react";
 import { spring, tap } from "@/lib/motion";
 
 export type Page =
-  "home" | "meals" | "recipes" | "food" | "workout" | "schedule" | "habits" | "expenses";
+  | "home"
+  | "meals"
+  | "recipes"
+  | "food"
+  | "workout"
+  | "schedule"
+  | "habits"
+  | "expenses"
+  | "profile";
 
 interface BottomNavProps {
   active: Page;

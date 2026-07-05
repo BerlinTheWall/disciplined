@@ -81,7 +81,14 @@ export default function SideMenu({
 
             {/* User card */}
             <div className="px-5 pb-5">
-              <motion.button whileTap={tap} className="flex items-center gap-3 w-full text-left">
+              <motion.button
+                whileTap={tap}
+                onClick={() => {
+                  onNavigate("profile");
+                  onClose();
+                }}
+                className="flex items-center gap-3 w-full text-left"
+              >
                 <div className="w-12 h-12 rounded-full bg-fg flex items-center justify-center shrink-0">
                   <span className="text-base font-bold text-fg-inverse">{initial}</span>
                 </div>

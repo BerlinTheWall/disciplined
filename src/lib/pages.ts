@@ -10,7 +10,15 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 export type Page =
-  "home" | "meals" | "recipes" | "food" | "workout" | "schedule" | "habits" | "expenses";
+  | "home"
+  | "meals"
+  | "recipes"
+  | "food"
+  | "workout"
+  | "schedule"
+  | "habits"
+  | "expenses"
+  | "profile";
 
 export const PAGE_ORDER: Page[] = [
   "home",
@@ -21,6 +29,7 @@ export const PAGE_ORDER: Page[] = [
   "schedule",
   "habits",
   "expenses",
+  "profile",
 ];
 
 export const FAB_PAGES: Page[] = ["schedule", "expenses"];

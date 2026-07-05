@@ -19,6 +19,7 @@ import FoodPage from "./pages/FoodPage";
 import HabitsPage from "./pages/HabitsPage";
 import HomePage from "./pages/HomePage";
 import MealsPage from "./pages/MealsPage";
+import ProfilePage from "./pages/ProfilePage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
@@ -37,6 +38,7 @@ const PAGE_TITLES: Record<Page, string> = {
   schedule: "Today",
   habits: "Habits",
   expenses: "Expenses",
+  profile: "Profile",
 };
 
 export type ViewMode = "daily" | "weekly";
@@ -50,6 +52,7 @@ const PAGE_ORDER: Page[] = [
   "schedule",
   "habits",
   "expenses",
+  "profile",
 ];
 
 const pageVariants = {
@@ -161,6 +164,8 @@ function App() {
         return <HabitsPage />;
       case "expenses":
         return <ExpensesPage />;
+      case "profile":
+        return <ProfilePage />;
     }
   }
 
