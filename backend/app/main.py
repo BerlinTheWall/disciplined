@@ -1,0 +1,36 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
+from app.database import init_db
+from app.routers import chat, events, habits, meals, workouts
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
+
+app = FastAPI(title="Disciplined API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(events.router)
+app.include_router(habits.router)
+app.include_router(workouts.router)
+app.include_router(meals.router)
+app.include_router(chat.router)
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
