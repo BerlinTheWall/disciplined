@@ -31,14 +31,24 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const PLACEHOLDER = 'Add, command or ask — "gym mon 6am", "move lunch to 1pm", "what\'s tomorrow?"';
 const ASSISTANT_COLOR = "#a78bfa";
 
-// Input that reads as a question or an open-ended request goes straight to the
-// Gemini assistant — the local parsers would mangle it into a create.
-const ASSISTANT_CUE =
-  /^\s*(?:what|when|where|who|why|how|which|can|could|would|should|do|does|did|is|are|am|will|show|list|tell|suggest|help|plan|swap|clear|find|free|summarize|organize|optimi[sz]e)\b|\?/i;
-
 // Conversation context for the assistant, kept across page switches (capped so
 // the request stays small).
 let chatHistory: ChatMessage[] = [];
+
+// Verb used in the "couldn't find …" message for each action.
+const ACTION_VERB: Record<Command["action"], string> = {
+  reschedule: "move",
+  duration: "resize",
+  delete: "delete",
+  rename: "rename",
+  recolor: "recolor",
+  icon: "change",
+  complete: "update",
+  linkWorkout: "link",
+  linkRecipe: "link",
+  toHabit: "convert",
+  toTask: "convert",
+};
 
 function fmtDur(d: number) {
   if (d < 60) return `${d}m`;
@@ -132,6 +142,9 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
 
   // Sends the input to the Gemini scheduling assistant (backend /api/chat). It
   // executes changes server-side, so on mutation the events store is refreshed.
+  // When the assistant is unavailable (offline, rate-limited, bad key) the
+  // local parsers take over so the bar keeps working; the API error is shown
+  // only when they can't make sense of the input either.
   async function askAssistant(raw: string) {
     setBusy(true);
     try {
@@ -142,16 +155,22 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
       ];
       chatHistory = [...chatHistory, ...turn].slice(-12);
       if (res.actions.some((a) => MUTATING_CHAT_TOOLS.has(a.tool))) await refreshEvents();
+      setBusy(false);
       flash(null, null, res.reply);
     } catch (e) {
+      setBusy(false);
+      const handled = await tryCommand(raw, new Date());
+      if (handled) return;
+      if (parseQuickAdd(raw)) {
+        await create(raw);
+        return;
+      }
       flash(
         null,
         e instanceof ApiError
           ? e.message
           : 'Couldn\'t reach the assistant — try a direct command like "move lunch to 1pm".'
       );
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -489,10 +508,8 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
 
     const matches = resolveTarget(cmd.target, commandItems(), selectedDate);
     if (matches.length === 0) {
-      // The local grammar understood the intent but can't find the item — let
-      // the assistant try (it sees the whole schedule and handles looser
-      // phrasing). Its error path shows a message either way.
-      await askAssistant(raw);
+      const what = cmd.target.titleWords.join(" ") || "that item";
+      flash(null, `Couldn't find "${what}" to ${ACTION_VERB[cmd.action]}.`);
       return true;
     }
 
@@ -636,19 +653,8 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
     const raw = text.trim();
     if (!raw || busy) return;
     setText("");
-    // Questions and open-ended requests go straight to the assistant; concrete
-    // commands and creates stay local (instant, offline, confirm-first). What
-    // the local parsers can't read falls through to the assistant too.
-    if (ASSISTANT_CUE.test(raw)) {
-      await askAssistant(raw);
-      return;
-    }
-    const handled = await tryCommand(raw, new Date());
-    if (handled) return;
-    if (parseQuickAdd(raw)) {
-      await create(raw);
-      return;
-    }
+    // Everything goes to the Gemini assistant; the local parsers are its
+    // offline/error fallback (see askAssistant).
     await askAssistant(raw);
   }
 

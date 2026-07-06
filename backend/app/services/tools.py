@@ -36,14 +36,30 @@ _DATE_DESC = 'ISO date string, e.g. "2026-07-05".'
 FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
         name="create_event",
-        description="Create a new event on the user's schedule.",
+        description=(
+            "Create a new event on the user's schedule. Only title and date are required — "
+            "omit start_minutes and/or duration_minutes and a sensible free slot is chosen "
+            "automatically (the result tells you what was picked). Conflicts are checked "
+            "automatically: if the slot is taken, nothing is created and the overlapping "
+            "events are returned instead."
+        ),
         parameters=types.Schema(
             type=types.Type.OBJECT,
             properties={
                 "title": types.Schema(type=types.Type.STRING, description="Event title."),
                 "date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
-                "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
-                "duration_minutes": types.Schema(type=types.Type.INTEGER, description="Duration in minutes."),
+                "start_minutes": types.Schema(
+                    type=types.Type.INTEGER,
+                    description=_MINUTES_DESC + " Omit to auto-pick a free slot.",
+                ),
+                "duration_minutes": types.Schema(
+                    type=types.Type.INTEGER,
+                    description="Duration in minutes. Omit to default to 60.",
+                ),
+                "allow_conflict": types.Schema(
+                    type=types.Type.BOOLEAN,
+                    description="Set true only when the user explicitly wants the event despite an overlap.",
+                ),
                 "priority": types.Schema(
                     type=types.Type.STRING,
                     enum=["low", "medium", "high"],
@@ -58,7 +74,7 @@ FUNCTION_DECLARATIONS = [
                     description="Icon that best matches the event.",
                 ),
             },
-            required=["title", "date", "start_minutes", "duration_minutes"],
+            required=["title", "date"],
         ),
     ),
     types.FunctionDeclaration(
@@ -74,13 +90,21 @@ FUNCTION_DECLARATIONS = [
     ),
     types.FunctionDeclaration(
         name="move_event",
-        description="Move an existing event to a new date and/or start time.",
+        description=(
+            "Move an existing event to a new date and/or start time. Conflicts are checked "
+            "automatically: if the target slot is taken, nothing moves and the overlapping "
+            "events are returned instead."
+        ),
         parameters=types.Schema(
             type=types.Type.OBJECT,
             properties={
                 "event_id": types.Schema(type=types.Type.STRING, description="ID of the event to move."),
                 "new_date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
                 "new_start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
+                "allow_conflict": types.Schema(
+                    type=types.Type.BOOLEAN,
+                    description="Set true only when the user explicitly wants the move despite an overlap.",
+                ),
             },
             required=["event_id"],
         ),
@@ -135,12 +159,52 @@ async def _get_event(db: AsyncSession, event_id: str) -> Event | None:
     return await db.get(Event, event_id)
 
 
+async def _overlapping(
+    db: AsyncSession, date_str: str, start: int, duration: int, exclude_id: str | None = None
+) -> list[Event]:
+    query = select(Event).where(
+        Event.date == date_str,
+        Event.start_minutes < start + duration,
+        Event.start_minutes + Event.duration_minutes > start,
+    )
+    if exclude_id:
+        query = query.where(Event.id != exclude_id)
+    return list((await db.scalars(query)).all())
+
+
+async def _find_free_slot(db: AsyncSession, date_str: str, duration: int) -> int:
+    """First gap of `duration` minutes on the date, scanning from 9:00; falls
+    back to right after the last event when the daytime is packed."""
+    events = (
+        await db.scalars(
+            select(Event).where(Event.date == date_str).order_by(Event.start_minutes)
+        )
+    ).all()
+    candidate = 9 * 60
+    for e in events:
+        if candidate + duration <= e.start_minutes:
+            break
+        candidate = max(candidate, e.start_minutes + e.duration_minutes)
+    return min(candidate, 24 * 60 - duration)
+
+
 async def _create_event(db: AsyncSession, args: dict) -> dict:
+    duration = int(args.get("duration_minutes") or 60)
+    start = args.get("start_minutes")
+    start = int(start) if start is not None else await _find_free_slot(db, args["date"], duration)
+    if not args.get("allow_conflict"):
+        conflicts = await _overlapping(db, args["date"], start, duration)
+        if conflicts:
+            return {
+                "error": "slot_taken",
+                "message": "Not created — the slot overlaps existing events. Suggest an alternative, or retry with allow_conflict=true if the user insists.",
+                "conflicts": [event_to_dict(e) for e in conflicts],
+            }
     event = Event(
         title=args["title"],
         date=args["date"],
-        start_minutes=int(args["start_minutes"]),
-        duration_minutes=int(args["duration_minutes"]),
+        start_minutes=start,
+        duration_minutes=duration,
         priority=args.get("priority"),
         icon=args.get("icon", "default"),
     )
@@ -164,10 +228,24 @@ async def _move_event(db: AsyncSession, args: dict) -> dict:
     event = await _get_event(db, args["event_id"])
     if event is None:
         return {"error": f"No event with id {args['event_id']}"}
-    if args.get("new_date"):
-        event.date = args["new_date"]
-    if args.get("new_start_minutes") is not None:
-        event.start_minutes = int(args["new_start_minutes"])
+    new_date = args.get("new_date") or event.date
+    new_start = (
+        int(args["new_start_minutes"])
+        if args.get("new_start_minutes") is not None
+        else event.start_minutes
+    )
+    if not args.get("allow_conflict"):
+        conflicts = await _overlapping(
+            db, new_date, new_start, event.duration_minutes, exclude_id=event.id
+        )
+        if conflicts:
+            return {
+                "error": "slot_taken",
+                "message": "Not moved — the target slot overlaps existing events. Suggest an alternative, or retry with allow_conflict=true if the user insists.",
+                "conflicts": [event_to_dict(e) for e in conflicts],
+            }
+    event.date = new_date
+    event.start_minutes = new_start
     await db.commit()
     return {"moved": event_to_dict(event)}
 

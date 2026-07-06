@@ -3,7 +3,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash-lite"
+    # flash rather than flash-lite: lite kept asking for details instead of
+    # calling tools, and claimed changes it never made (see chat history).
+    gemini_model: str = "gemini-2.5-flash"
     database_url: str = "sqlite+aiosqlite:///./disciplined.db"
     # Vite dev server + Capacitor webview origins
     cors_origins: list[str] = [

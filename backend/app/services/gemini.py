@@ -27,13 +27,21 @@ def get_client() -> genai.Client:
 
 async def build_system_prompt(db: AsyncSession) -> str:
     today = date.today()
-    monday = today - timedelta(days=today.weekday())
-    sunday = monday + timedelta(days=6)
+    week_end = today + timedelta(days=6)
+
+    # Explicit weekday -> date table so the model never has to do date
+    # arithmetic (small models get "tomorrow" wrong without this).
+    day_lines = []
+    for offset in range(7):
+        d = today + timedelta(days=offset)
+        label = {0: " (TODAY)", 1: " (TOMORROW)"}.get(offset, "")
+        day_lines.append(f"- {_WEEKDAYS[d.weekday()]} {d.isoformat()}{label}")
+    date_reference = "\n".join(day_lines)
 
     events = (
         await db.scalars(
             select(Event)
-            .where(Event.date >= monday.isoformat(), Event.date <= sunday.isoformat())
+            .where(Event.date >= today.isoformat(), Event.date <= week_end.isoformat())
             .order_by(Event.date, Event.start_minutes)
         )
     ).all()
@@ -50,21 +58,24 @@ async def build_system_prompt(db: AsyncSession) -> str:
             )
         schedule = "\n".join(lines)
     else:
-        schedule = "(no events scheduled this week)"
+        schedule = "(nothing scheduled in the next 7 days)"
 
     return f"""You are the scheduling assistant for Disciplined, a personal productivity app.
-Today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}.
 
-The user's schedule for this week ({monday.isoformat()} to {sunday.isoformat()}):
+Date reference — today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}:
+{date_reference}
+
+The user's schedule for the next 7 days:
 {schedule}
 
 Rules:
+- Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference above. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
 - Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
 - Reference events by their id when calling tools. Never invent or guess an id.
 - Nothing changes unless you call a tool for it. Never tell the user something was created, moved, deleted or swapped unless you called create_event, move_event, delete_event or swap_events for it in this conversation turn and it returned without an error.
-- Before creating or moving an event, use check_conflicts on the target slot. If it reports no conflicts, proceed immediately with the change — do not stop after checking. If there is an overlap, don't make the change; tell the user and suggest a free alternative.
-- For events outside the week shown above, use list_events to look them up first.
-- When the user is vague ("tomorrow morning"), pick a sensible time and say what you chose.
+- To create or move, call create_event / move_event directly — they check for conflicts themselves. If they return slot_taken, nothing changed: tell the user about the overlap and suggest a free alternative. Use check_conflicts only to answer availability questions ("am I free at 3?").
+- For events outside the 7 days shown above, use list_events to look them up first.
+- Do not ask clarifying questions when a default works. Missing title: derive it from the message ("add a meeting tomorrow" -> "Meeting"). Missing time or duration: simply omit those arguments when calling create_event — it auto-picks a free slot and defaults to 60 minutes; report back what was picked. Create right away; the user will correct you if needed. Only ask when the request is truly ambiguous (e.g. which of two matching events to delete).
 - Keep replies short and conversational. Confirm what you did after making changes."""
 
 

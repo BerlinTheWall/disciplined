@@ -19,6 +19,9 @@ app = FastAPI(title="Disciplined API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    # Any localhost port: Vite hops to 5174+ when 5173 is busy, `vite preview`
+    # uses 4173, and Capacitor serves from capacitor://localhost.
+    allow_origin_regex=r"^(https?|capacitor)://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

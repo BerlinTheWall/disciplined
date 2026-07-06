@@ -4,7 +4,9 @@ import type { Task } from "@/types/task";
 import type { WorkoutSession } from "@/types/workout";
 
 // The backend speaks the same camelCase shapes as the types in src/types/.
-const BASE_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// 127.0.0.1 rather than "localhost": uvicorn binds IPv4 only, and resolving
+// localhost (possibly to ::1) is a known source of flaky fetches on Windows.
+const BASE_URL: string = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
 // The API returns null for absent optional fields; the frontend types use
 // undefined. Drop nulls so hydrated items match locally created ones.
