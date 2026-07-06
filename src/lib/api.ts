@@ -20,13 +20,29 @@ function stripNulls(value: unknown): unknown {
   return value;
 }
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
   if (!res.ok) {
-    throw new Error(`${init?.method ?? "GET"} ${path} failed with ${res.status}`);
+    let detail = `${init?.method ?? "GET"} ${path} failed with ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // no JSON body — keep the generic message
+    }
+    throw new ApiError(res.status, detail);
   }
   if (res.status === 204) return undefined as T;
   return stripNulls(await res.json()) as T;
@@ -65,6 +81,15 @@ export interface ChatResponse {
   reply: string;
   actions: ChatAction[];
 }
+
+// Chat tools that change the schedule server-side — when a chat turn ran any of
+// these, the events store must be refreshed from the server.
+export const MUTATING_CHAT_TOOLS = new Set([
+  "create_event",
+  "move_event",
+  "delete_event",
+  "swap_events",
+]);
 
 export const api = {
   events: resource<Task>("events"),

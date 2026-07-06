@@ -1,4 +1,7 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
+from google.genai import errors as genai_errors
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -6,6 +9,7 @@ from app.schemas import ChatRequest, ChatResponse
 from app.services.gemini import run_chat
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.post("", response_model=ChatResponse)
@@ -14,3 +18,14 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
         return await run_chat(db, body.message, body.history)
     except RuntimeError as exc:  # missing API key
         raise HTTPException(status_code=503, detail=str(exc))
+    except genai_errors.APIError as exc:
+        if exc.code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail="The assistant hit the Gemini rate limit — wait a minute and try again.",
+            )
+        logger.exception("Gemini API error")
+        raise HTTPException(status_code=502, detail=f"Gemini error {exc.code} — please try again.")
+    except Exception:
+        logger.exception("chat turn failed")
+        raise HTTPException(status_code=502, detail="The assistant failed — please try again.")

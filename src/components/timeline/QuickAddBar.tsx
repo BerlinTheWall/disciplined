@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Pencil, Plus } from "lucide-react";
+import { ArrowRight, LoaderCircle, Pencil, Plus, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import type { EditItem } from "./Timeline";
+import { api, ApiError, MUTATING_CHAT_TOOLS, type ChatMessage } from "@/lib/api";
 import {
   parseCommand,
   parseDateInput,
@@ -16,6 +17,7 @@ import {
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { parseQuickAdd } from "@/lib/quickAdd";
+import { refreshEvents } from "@/lib/sync";
 import { formatTimeLabel, formatTimeRange } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
 import { useRecipeStore } from "@/store/recipeStore";
@@ -26,7 +28,17 @@ import { useChoose, useConfirm, usePrompt, type ConfirmOptions } from "../Confir
 // Color a quick-added item gets until the user opens "edit details" to pick one.
 const DEFAULT_COLOR = "#34d399";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const PLACEHOLDER = 'Add or command — "gym mon 6am", "move lunch to 1pm", "delete standup"';
+const PLACEHOLDER = 'Add, command or ask — "gym mon 6am", "move lunch to 1pm", "what\'s tomorrow?"';
+const ASSISTANT_COLOR = "#a78bfa";
+
+// Input that reads as a question or an open-ended request goes straight to the
+// Gemini assistant — the local parsers would mangle it into a create.
+const ASSISTANT_CUE =
+  /^\s*(?:what|when|where|who|why|how|which|can|could|would|should|do|does|did|is|are|am|will|show|list|tell|suggest|help|plan|swap|clear|find|free|summarize|organize|optimi[sz]e)\b|\?/i;
+
+// Conversation context for the assistant, kept across page switches (capped so
+// the request stays small).
+let chatHistory: ChatMessage[] = [];
 
 function fmtDur(d: number) {
   if (d < 60) return `${d}m`;
@@ -45,21 +57,6 @@ function relativeDayLabel(iso: string) {
   if (diff === -1) return "Yesterday";
   return d.toLocaleDateString(undefined, { weekday: "long" });
 }
-
-// Verb used in the "couldn't find …" message for each action.
-const ACTION_VERB: Record<Command["action"], string> = {
-  reschedule: "move",
-  duration: "resize",
-  delete: "delete",
-  rename: "rename",
-  recolor: "recolor",
-  icon: "change",
-  complete: "update",
-  linkWorkout: "link",
-  linkRecipe: "link",
-  toHabit: "convert",
-  toTask: "convert",
-};
 
 interface QuickAddBarProps {
   onEditDetails: (item: EditItem) => void;
@@ -110,16 +107,52 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   const [text, setText] = useState("");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [assistant, setAssistant] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function flash(next: Confirmation | null, err: string | null = null) {
+  function flash(
+    next: Confirmation | null,
+    err: string | null = null,
+    reply: string | null = null
+  ) {
     setConfirmation(next);
     setError(err);
+    setAssistant(reply);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      setConfirmation(null);
-      setError(null);
-    }, 6000);
+    hideTimer.current = setTimeout(
+      () => {
+        setConfirmation(null);
+        setError(null);
+        setAssistant(null);
+      },
+      reply ? 15000 : 6000
+    );
+  }
+
+  // Sends the input to the Gemini scheduling assistant (backend /api/chat). It
+  // executes changes server-side, so on mutation the events store is refreshed.
+  async function askAssistant(raw: string) {
+    setBusy(true);
+    try {
+      const res = await api.chat(raw, chatHistory);
+      const turn: ChatMessage[] = [
+        { role: "user", content: raw },
+        { role: "model", content: res.reply },
+      ];
+      chatHistory = [...chatHistory, ...turn].slice(-12);
+      if (res.actions.some((a) => MUTATING_CHAT_TOOLS.has(a.tool))) await refreshEvents();
+      flash(null, null, res.reply);
+    } catch (e) {
+      flash(
+        null,
+        e instanceof ApiError
+          ? e.message
+          : 'Couldn\'t reach the assistant — try a direct command like "move lunch to 1pm".'
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   function commandItems(): CommandItem[] {
@@ -456,8 +489,10 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
 
     const matches = resolveTarget(cmd.target, commandItems(), selectedDate);
     if (matches.length === 0) {
-      const what = cmd.target.titleWords.join(" ") || "that item";
-      flash(null, `Couldn't find "${what}" to ${ACTION_VERB[cmd.action]}.`);
+      // The local grammar understood the intent but can't find the item — let
+      // the assistant try (it sees the whole schedule and handles looser
+      // phrasing). Its error path shows a message either way.
+      await askAssistant(raw);
       return true;
     }
 
@@ -599,10 +634,22 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const raw = text.trim();
-    if (!raw) return;
+    if (!raw || busy) return;
     setText("");
+    // Questions and open-ended requests go straight to the assistant; concrete
+    // commands and creates stay local (instant, offline, confirm-first). What
+    // the local parsers can't read falls through to the assistant too.
+    if (ASSISTANT_CUE.test(raw)) {
+      await askAssistant(raw);
+      return;
+    }
     const handled = await tryCommand(raw, new Date());
-    if (!handled) await create(raw);
+    if (handled) return;
+    if (parseQuickAdd(raw)) {
+      await create(raw);
+      return;
+    }
+    await askAssistant(raw);
   }
 
   function handleEditDetails() {
@@ -630,18 +677,23 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
           className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
         />
         <AnimatePresence>
-          {text.trim() && (
+          {(text.trim() || busy) && (
             <motion.button
               type="submit"
+              disabled={busy}
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.6 }}
               transition={spring.snappy}
               whileTap={tap}
-              aria-label="Submit"
+              aria-label={busy ? "Thinking" : "Submit"}
               className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-inverse text-fg-inverse"
             >
-              <ArrowRight size={18} />
+              {busy ? (
+                <LoaderCircle size={18} className="animate-spin" />
+              ) : (
+                <ArrowRight size={18} />
+              )}
             </motion.button>
           )}
         </AnimatePresence>
@@ -658,6 +710,28 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
           >
             {error}
           </motion.p>
+        )}
+
+        {assistant && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -6, height: 0 }}
+            transition={spring.snappy}
+            className="overflow-hidden"
+          >
+            <div className="flex items-start gap-3 bg-surface-alt rounded-2xl p-2.5 mt-2">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: ASSISTANT_COLOR, color: "#111827" }}
+              >
+                <Sparkles size={16} />
+              </div>
+              <p className="text-sm text-fg min-w-0 flex-1 whitespace-pre-wrap py-1.5">
+                {assistant}
+              </p>
+            </div>
+          </motion.div>
         )}
 
         {confirmation && ConfirmIcon && (

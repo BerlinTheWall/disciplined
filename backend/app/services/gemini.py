@@ -61,7 +61,8 @@ The user's schedule for this week ({monday.isoformat()} to {sunday.isoformat()})
 Rules:
 - Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
 - Reference events by their id when calling tools. Never invent or guess an id.
-- Before creating or moving an event, use check_conflicts on the target slot; warn the user about overlaps and suggest an alternative if there is one.
+- Nothing changes unless you call a tool for it. Never tell the user something was created, moved, deleted or swapped unless you called create_event, move_event, delete_event or swap_events for it in this conversation turn and it returned without an error.
+- Before creating or moving an event, use check_conflicts on the target slot. If it reports no conflicts, proceed immediately with the change — do not stop after checking. If there is an overlap, don't make the change; tell the user and suggest a free alternative.
 - For events outside the week shown above, use list_events to look them up first.
 - When the user is vague ("tomorrow morning"), pick a sensible time and say what you chose.
 - Keep replies short and conversational. Confirm what you did after making changes."""
@@ -75,11 +76,20 @@ def _to_contents(history: list[ChatMessage], message: str) -> list[types.Content
     return contents
 
 
+def _response_text(response: types.GenerateContentResponse | None) -> str | None:
+    if response is None or not response.candidates:
+        return None
+    text = response.text
+    return text.strip() if text and text.strip() else None
+
+
 async def run_chat(db: AsyncSession, message: str, history: list[ChatMessage]) -> ChatResponse:
     client = get_client()
     config = types.GenerateContentConfig(
         system_instruction=await build_system_prompt(db),
         tools=[types.Tool(function_declarations=FUNCTION_DECLARATIONS)],
+        # Tool selection needs to be dependable more than creative.
+        temperature=0.2,
     )
     contents = _to_contents(history, message)
     actions: list[ChatAction] = []
@@ -107,5 +117,28 @@ async def run_chat(db: AsyncSession, message: str, history: list[ChatMessage]) -
             )
         contents.append(types.Content(role="user", parts=result_parts))
 
-    reply = (response.text if response else None) or "Sorry, I couldn't finish that request."
-    return ChatResponse(reply=reply, actions=actions)
+    reply = _response_text(response)
+    if reply is None and actions:
+        # The model occasionally goes silent after a tool round — nudge once for
+        # a plain-text summary (tools disabled so it must answer in words).
+        if response is not None and response.candidates and response.candidates[0].content:
+            contents.append(response.candidates[0].content)
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part(text="Briefly tell me what you did and the outcome.")],
+            )
+        )
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=config.system_instruction, temperature=0.2
+            ),
+        )
+        reply = _response_text(response)
+
+    return ChatResponse(
+        reply=reply or "Sorry, I couldn't finish that request — please try rephrasing.",
+        actions=actions,
+    )
