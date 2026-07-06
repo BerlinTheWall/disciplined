@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import upsert
 from app.database import get_db
 from app.models import WorkoutSession
 from app.schemas import WorkoutSessionCreate, WorkoutSessionOut, WorkoutSessionUpdate
@@ -23,10 +24,7 @@ async def list_workouts(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=WorkoutSessionOut, status_code=201)
 async def create_workout(body: WorkoutSessionCreate, db: AsyncSession = Depends(get_db)):
-    workout = WorkoutSession(**body.model_dump())
-    db.add(workout)
-    await db.commit()
-    return workout
+    return await upsert(db, WorkoutSession, body.model_dump())
 
 
 @router.get("/{workout_id}", response_model=WorkoutSessionOut)

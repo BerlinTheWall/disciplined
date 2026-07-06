@@ -34,7 +34,9 @@ class EventBase(CamelModel):
 
 
 class EventCreate(EventBase):
-    pass
+    # Client-generated id (the frontend creates ids locally for optimistic UI);
+    # omitted -> the server generates one.
+    id: str | None = None
 
 
 class EventUpdate(CamelModel):
@@ -70,7 +72,7 @@ class HabitBase(CamelModel):
 
 
 class HabitCreate(HabitBase):
-    pass
+    id: str | None = None
 
 
 class HabitUpdate(CamelModel):
@@ -115,7 +117,7 @@ class WorkoutSessionBase(CamelModel):
 
 
 class WorkoutSessionCreate(WorkoutSessionBase):
-    pass
+    id: str | None = None
 
 
 class WorkoutSessionUpdate(CamelModel):
@@ -149,7 +151,7 @@ class MealBase(CamelModel):
 
 
 class MealCreate(MealBase):
-    pass
+    id: str | None = None
 
 
 class MealUpdate(CamelModel):

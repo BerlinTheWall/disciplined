@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import upsert
 from app.database import get_db
 from app.models import Meal
 from app.schemas import MealCreate, MealOut, MealUpdate
@@ -32,10 +33,7 @@ async def list_meals(
 
 @router.post("", response_model=MealOut, status_code=201)
 async def create_meal(body: MealCreate, db: AsyncSession = Depends(get_db)):
-    meal = Meal(**body.model_dump())
-    db.add(meal)
-    await db.commit()
-    return meal
+    return await upsert(db, Meal, body.model_dump())
 
 
 @router.get("/{meal_id}", response_model=MealOut)

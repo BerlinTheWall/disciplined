@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import upsert
 from app.database import get_db
 from app.models import Event
 from app.schemas import EventCreate, EventOut, EventUpdate
@@ -32,10 +33,7 @@ async def list_events(
 
 @router.post("", response_model=EventOut, status_code=201)
 async def create_event(body: EventCreate, db: AsyncSession = Depends(get_db)):
-    event = Event(**body.model_dump())
-    db.add(event)
-    await db.commit()
-    return event
+    return await upsert(db, Event, body.model_dump())
 
 
 @router.get("/{event_id}", response_model=EventOut)

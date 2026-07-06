@@ -6,6 +6,7 @@ import "./index.css";
 
 import App from "./App.tsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.tsx";
+import { startSync } from "./lib/sync.ts";
 
 // Apply persisted theme before first render to avoid flash
 try {
@@ -17,6 +18,10 @@ try {
 } catch (e) {
   console.log(e);
 }
+
+// Hydrate stores from the backend and start write-through sync (no-op if the
+// backend is unreachable — the app then runs on localStorage alone).
+void startSync();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

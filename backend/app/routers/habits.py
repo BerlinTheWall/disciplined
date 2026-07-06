@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import upsert
 from app.database import get_db
 from app.models import Habit
 from app.schemas import HabitCreate, HabitOut, HabitUpdate
@@ -23,10 +24,7 @@ async def list_habits(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=HabitOut, status_code=201)
 async def create_habit(body: HabitCreate, db: AsyncSession = Depends(get_db)):
-    habit = Habit(**body.model_dump())
-    db.add(habit)
-    await db.commit()
-    return habit
+    return await upsert(db, Habit, body.model_dump())
 
 
 @router.get("/{habit_id}", response_model=HabitOut)
