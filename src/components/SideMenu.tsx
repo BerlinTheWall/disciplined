@@ -6,6 +6,7 @@ import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { tap } from "@/lib/motion";
 import { ALL_TABS } from "@/lib/pages";
+import { useAuthStore } from "@/store/authStore";
 import { useProfileStore } from "@/store/profileStore";
 import { useThemeStore } from "@/store/themeStore";
 
@@ -31,6 +32,7 @@ export default function SideMenu({
 }: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore();
   const name = useProfileStore((s) => s.name);
+  const logout = useAuthStore((s) => s.logout);
   useScrollLock(isOpen);
 
   const initial = name.trim().charAt(0).toUpperCase() || "?";
@@ -177,6 +179,7 @@ export default function SideMenu({
             <div className="px-3 pb-10">
               <motion.button
                 whileTap={tap}
+                onClick={logout}
                 className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-500/10 transition-colors"
               >
                 <LogOut size={20} strokeWidth={1.8} />

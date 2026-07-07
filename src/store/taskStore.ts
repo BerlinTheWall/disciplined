@@ -15,10 +15,13 @@ interface State {
   navNonce: number;
 }
 
+// Sample ids are random, not fixed: these rows sync to the backend per
+// account, and a fixed id would collide with the copy another account
+// already owns (the server then rejects the create as someone else's row).
 const initialState: State = {
   tasks: [
     {
-      id: "1",
+      id: crypto.randomUUID(),
       title: "Morning workout",
       startMinutes: 7 * 60,
       durationMinutes: 45,
@@ -28,7 +31,7 @@ const initialState: State = {
       date: today,
     },
     {
-      id: "2",
+      id: crypto.randomUUID(),
       title: "Deep work block",
       startMinutes: 9 * 60,
       durationMinutes: 120,
@@ -38,7 +41,7 @@ const initialState: State = {
       date: today,
     },
     {
-      id: "3",
+      id: crypto.randomUUID(),
       title: "Lunch",
       startMinutes: 12 * 60 + 30,
       durationMinutes: 45,

@@ -13,10 +13,13 @@ interface State {
   sessions: WorkoutSession[];
 }
 
+// Sample ids are random, not fixed: these rows sync to the backend per
+// account, and a fixed id would collide with the copy another account
+// already owns (the server then rejects the create as someone else's row).
 const initialState: State = {
   sessions: [
     {
-      id: "w1",
+      id: crypto.randomUUID(),
       name: "Push day",
       type: "gym",
       color: WORKOUT_TYPE_META.gym.color,
@@ -27,7 +30,7 @@ const initialState: State = {
       ],
     },
     {
-      id: "w2",
+      id: crypto.randomUUID(),
       name: "5k tempo run",
       type: "running",
       color: WORKOUT_TYPE_META.running.color,
