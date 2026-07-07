@@ -1,3 +1,4 @@
+import { todayISODate } from "@/lib/date";
 import type { Habit } from "@/types/habits";
 import type { Meal } from "@/types/meal";
 import type { Task } from "@/types/task";
@@ -97,7 +98,12 @@ export const api = {
   habits: resource<Habit>("habits"),
   workouts: resource<WorkoutSession>("workouts"),
   meals: resource<Meal>("meals"),
+  // clientDate: the user's local calendar date, so "today"/"tomorrow" resolve
+  // against the user's clock even when the server runs in another timezone.
   chat: (message: string, history: ChatMessage[]): Promise<ChatResponse> =>
-    request("/api/chat", { method: "POST", body: JSON.stringify({ message, history }) }),
+    request("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history, clientDate: todayISODate() }),
+    }),
   health: () => request<{ status: string }>("/api/health"),
 };

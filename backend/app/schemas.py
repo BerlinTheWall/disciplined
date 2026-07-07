@@ -178,6 +178,10 @@ class ChatMessage(CamelModel):
 class ChatRequest(CamelModel):
     message: str
     history: list[ChatMessage] = []
+    # The client's local calendar date ("2026-07-07"). The server may be in a
+    # different timezone (e.g. UTC on Railway), so "today"/"tomorrow" must be
+    # resolved against the user's clock, not the server's.
+    client_date: str | None = None
 
 
 class ChatAction(CamelModel):

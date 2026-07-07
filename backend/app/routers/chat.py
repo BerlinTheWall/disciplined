@@ -15,7 +15,7 @@ logger = logging.getLogger("uvicorn.error")
 @router.post("", response_model=ChatResponse)
 async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
     try:
-        return await run_chat(db, body.message, body.history)
+        return await run_chat(db, body.message, body.history, body.client_date)
     except RuntimeError as exc:  # missing API key
         raise HTTPException(status_code=503, detail=str(exc))
     except genai_errors.APIError as exc:

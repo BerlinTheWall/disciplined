@@ -1,7 +1,12 @@
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function toISODate(date: Date) {
-  return date.toISOString().split("T")[0];
+  // Local calendar date — never toISOString(), which converts to UTC and is
+  // off by one from evening/early-morning depending on the timezone.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export function todayISODate() {

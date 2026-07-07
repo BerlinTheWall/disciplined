@@ -25,8 +25,18 @@ def get_client() -> genai.Client:
     return genai.Client(api_key=settings.gemini_api_key)
 
 
-async def build_system_prompt(db: AsyncSession) -> str:
-    today = date.today()
+def _resolve_today(client_date: str | None) -> date:
+    """The user's local date wins; fall back to the server clock."""
+    if client_date:
+        try:
+            return date.fromisoformat(client_date)
+        except ValueError:
+            pass
+    return date.today()
+
+
+async def build_system_prompt(db: AsyncSession, client_date: str | None = None) -> str:
+    today = _resolve_today(client_date)
     week_end = today + timedelta(days=6)
 
     # Explicit weekday -> date table so the model never has to do date
@@ -94,10 +104,15 @@ def _response_text(response: types.GenerateContentResponse | None) -> str | None
     return text.strip() if text and text.strip() else None
 
 
-async def run_chat(db: AsyncSession, message: str, history: list[ChatMessage]) -> ChatResponse:
+async def run_chat(
+    db: AsyncSession,
+    message: str,
+    history: list[ChatMessage],
+    client_date: str | None = None,
+) -> ChatResponse:
     client = get_client()
     config = types.GenerateContentConfig(
-        system_instruction=await build_system_prompt(db),
+        system_instruction=await build_system_prompt(db, client_date),
         tools=[types.Tool(function_declarations=FUNCTION_DECLARATIONS)],
         # Tool selection needs to be dependable more than creative.
         temperature=0.2,
