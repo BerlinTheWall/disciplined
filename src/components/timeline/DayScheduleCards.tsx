@@ -262,7 +262,7 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
           />
 
           {/* Content */}
-          <div className="flex-1 min-w-0 px-4 py-4 flex flex-col justify-center gap-2.5">
+          <div className="flex-1 min-w-0 pl-4 pr-3 py-4 flex flex-col justify-center gap-2.5">
             {/* Title row: icon + title + complete toggle */}
             <div className="flex items-center gap-2">
               <motion.span
@@ -294,33 +294,6 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
               >
                 {item.title}
               </p>
-
-              {item.completed ? (
-                <motion.span
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    handleToggle(item.id);
-                  }}
-                  whileTap={tap}
-                  initial={{ scale: 0.4 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 600, damping: 18 }}
-                  className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: item.color }}
-                >
-                  <Check size={15} strokeWidth={3} className="text-white" />
-                </motion.span>
-              ) : (
-                <motion.span
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    handleToggle(item.id);
-                  }}
-                  whileTap={tap}
-                  className="w-7 h-7 rounded-full border-2 shrink-0"
-                  style={{ borderColor: item.color }}
-                />
-              )}
             </div>
 
             {/* Meta row: duration, priority, streak */}
@@ -348,6 +321,36 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
                 </span>
               ) : null}
             </div>
+          </div>
+
+          {/* Complete toggle — its own column so it centers vertically in the card */}
+          <div className="flex items-center pr-4 shrink-0">
+            {item.completed ? (
+              <motion.span
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  handleToggle(item.id);
+                }}
+                whileTap={tap}
+                initial={{ scale: 0.4 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 600, damping: 18 }}
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: item.color }}
+              >
+                <Check size={15} strokeWidth={3} className="text-white" />
+              </motion.span>
+            ) : (
+              <motion.span
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  handleToggle(item.id);
+                }}
+                whileTap={tap}
+                className="w-7 h-7 rounded-full border-2 shrink-0"
+                style={{ borderColor: item.color }}
+              />
+            )}
           </div>
         </div>
       </motion.button>

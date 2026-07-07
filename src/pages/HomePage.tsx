@@ -209,6 +209,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   const fStart = focus ? fmt12(focus.startMinutes) : null;
   const fEnd = focus ? fmt12(focus.startMinutes + focus.durationMinutes) : null;
   const fPrio = focus?.priority ? PRIORITY_META[focus.priority] : null;
+  const FocusIcon = focus ? (ICONS[focus.icon] ?? ICONS.default) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -274,7 +275,17 @@ export default function HomePage({ onViewAll }: HomePageProps) {
               <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
             </div>
 
-            <p className="text-xl font-bold text-fg mt-3 leading-snug">{focus.title}</p>
+            <div className="flex items-center gap-2.5 mt-3">
+              <span
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: `${focus.color}1f` }}
+              >
+                {FocusIcon && <FocusIcon size={18} style={{ color: focus.color }} />}
+              </span>
+              <p className="text-xl font-bold text-fg leading-snug min-w-0 truncate">
+                {focus.title}
+              </p>
+            </div>
 
             <div className="flex items-center justify-between mt-3">
               <div className="flex items-center gap-1.5 text-sm text-fg-faint">
