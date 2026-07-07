@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
-import { WORKOUT_TYPE_META } from "@/lib/workout";
 import type { WorkoutExercise, WorkoutSession } from "@/types/workout";
 
 export function blankExercise(name = ""): WorkoutExercise {
@@ -13,41 +12,10 @@ interface State {
   sessions: WorkoutSession[];
 }
 
-// Sample ids are random, not fixed: these rows sync to the backend per
-// account, and a fixed id would collide with the copy another account
-// already owns (the server then rejects the create as someone else's row).
+// No sample data: sessions sync to the signed-in account, so seeding demo
+// items here would fill every new account with them.
 const initialState: State = {
-  sessions: [
-    {
-      id: crypto.randomUUID(),
-      name: "Push day",
-      type: "gym",
-      color: WORKOUT_TYPE_META.gym.color,
-      exercises: [
-        { id: "e1", name: "Bench press", sets: 3, reps: 8, weight: 60, restSec: 90 },
-        { id: "e2", name: "Overhead press", sets: 3, reps: 10, weight: 35, restSec: 90 },
-        { id: "e3", name: "Tricep pushdown", sets: 3, reps: 12, restSec: 60 },
-      ],
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "5k tempo run",
-      type: "running",
-      color: WORKOUT_TYPE_META.running.color,
-      exercises: [
-        { id: "e4", name: "Warm-up jog", distance: 1, durationMin: 7, pace: "6:30 /km" },
-        {
-          id: "e5",
-          name: "Tempo block",
-          distance: 3,
-          durationMin: 15,
-          pace: "5:00 /km",
-          incline: 1,
-        },
-        { id: "e6", name: "Cool down", distance: 1, durationMin: 7 },
-      ],
-    },
-  ],
+  sessions: [],
 };
 
 interface Actions {

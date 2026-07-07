@@ -8,22 +8,10 @@ interface State {
   habits: Habit[];
 }
 
-// Sample ids are random, not fixed: these rows sync to the backend per
-// account, and a fixed id would collide with the copy another account
-// already owns (the server then rejects the create as someone else's row).
+// No sample data: habits sync to the signed-in account, so seeding demo items
+// here would fill every new account with them.
 const initialState: State = {
-  habits: [
-    {
-      id: crypto.randomUUID(),
-      title: "Drink water",
-      startMinutes: 8 * 60,
-      durationMinutes: 15,
-      color: "#38bdf8",
-      icon: "health",
-      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      completedDates: [],
-    },
-  ],
+  habits: [],
 };
 
 interface Actions {

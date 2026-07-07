@@ -15,42 +15,10 @@ interface State {
   navNonce: number;
 }
 
-// Sample ids are random, not fixed: these rows sync to the backend per
-// account, and a fixed id would collide with the copy another account
-// already owns (the server then rejects the create as someone else's row).
+// No sample data: tasks sync to the signed-in account, so seeding demo items
+// here would fill every new account with them.
 const initialState: State = {
-  tasks: [
-    {
-      id: crypto.randomUUID(),
-      title: "Morning workout",
-      startMinutes: 7 * 60,
-      durationMinutes: 45,
-      color: "#34d399",
-      icon: "workout",
-      completed: false,
-      date: today,
-    },
-    {
-      id: crypto.randomUUID(),
-      title: "Deep work block",
-      startMinutes: 9 * 60,
-      durationMinutes: 120,
-      color: "#60a5fa",
-      icon: "work",
-      completed: false,
-      date: today,
-    },
-    {
-      id: crypto.randomUUID(),
-      title: "Lunch",
-      startMinutes: 12 * 60 + 30,
-      durationMinutes: 45,
-      color: "#fbbf24",
-      icon: "meal",
-      completed: false,
-      date: today,
-    },
-  ],
+  tasks: [],
   selectedDate: today,
   navNonce: 0,
 };
