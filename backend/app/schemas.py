@@ -28,6 +28,7 @@ class EventBase(CamelModel):
     icon: str = "default"
     completed: bool = False
     priority: Priority | None = None
+    reminder_minutes_before: int | None = Field(default=None, ge=0)
     shopping_list_id: str | None = None
     workout_session_id: str | None = None
     recipe_id: str | None = None
@@ -48,6 +49,7 @@ class EventUpdate(CamelModel):
     icon: str | None = None
     completed: bool | None = None
     priority: Priority | None = None
+    reminder_minutes_before: int | None = Field(default=None, ge=0)
     shopping_list_id: str | None = None
     workout_session_id: str | None = None
     recipe_id: str | None = None
@@ -69,6 +71,7 @@ class HabitBase(CamelModel):
     days_of_week: list[int] = []  # 0 = Sunday ... 6 = Saturday
     completed_dates: list[str] = []
     skipped_dates: list[str] = []
+    reminder_minutes_before: int | None = Field(default=None, ge=0)
 
 
 class HabitCreate(HabitBase):
@@ -84,6 +87,7 @@ class HabitUpdate(CamelModel):
     days_of_week: list[int] | None = None
     completed_dates: list[str] | None = None
     skipped_dates: list[str] | None = None
+    reminder_minutes_before: int | None = Field(default=None, ge=0)
 
 
 class HabitOut(HabitBase):

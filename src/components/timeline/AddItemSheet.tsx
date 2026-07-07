@@ -24,11 +24,13 @@ import { formatAmount, indexItems } from "@/lib/grocery";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { DEFAULT_PRIORITY, PRIORITIES, PRIORITY_META } from "@/lib/priority";
+import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useRecipeFocusStore } from "@/store/recipeFocusStore";
 import { useRecipeStore } from "@/store/recipeStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
 import { useWorkoutStore } from "@/store/workoutStore";
@@ -284,6 +286,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority>(DEFAULT_PRIORITY);
+  const [reminder, setReminder] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -312,6 +315,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setPriority(
         editItem.type === "task" ? (editItem.data.priority ?? DEFAULT_PRIORITY) : DEFAULT_PRIORITY
       );
+      setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
     }
@@ -333,6 +337,16 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
     setPriority(DEFAULT_PRIORITY);
+    setReminder(useSettingsStore.getState().defaultReminderMinutes);
+  }
+
+  function pickReminder(value: number | null) {
+    setReminder(value);
+    // First time someone asks for a reminder, get notification permission out
+    // of the way; declining still leaves in-app banners working.
+    if (value !== null && notifyPermission() === "default") {
+      void requestNotifyPermission();
+    }
   }
 
   function linkWorkout(sessionId: string | undefined) {
@@ -417,6 +431,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           icon,
           date,
           priority,
+          reminderMinutesBefore: reminder,
           workoutSessionId,
           recipeId,
         });
@@ -428,6 +443,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           daysOfWeek,
+          reminderMinutesBefore: reminder,
         });
       }
     } else {
@@ -440,6 +456,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           icon,
           date,
           priority,
+          reminderMinutesBefore: reminder,
           workoutSessionId,
           recipeId,
         });
@@ -452,6 +469,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           daysOfWeek,
+          reminderMinutesBefore: reminder,
         });
       }
     }
@@ -661,6 +679,20 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         Ends at <span className="tabular-nums">{endLabel}</span>
         {duration >= maxDuration && " — capped to stay on the same day"}
       </p>
+
+      <label className="text-xs font-medium text-fg-muted mb-1.5 mt-4 block">Reminder</label>
+      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {REMINDER_OPTIONS.map((opt) => (
+          <motion.button
+            key={String(opt.value)}
+            onClick={() => pickReminder(opt.value)}
+            whileTap={tap}
+            className={chipCls(reminder === opt.value)}
+          >
+            {opt.label}
+          </motion.button>
+        ))}
+      </div>
     </div>
   );
 

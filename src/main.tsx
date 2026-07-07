@@ -23,6 +23,15 @@ try {
 // backend is unreachable — the app then runs on localStorage alone).
 void startSync();
 
+// Service worker for reminder notifications (Android requires showing them
+// through a registration). Failing to register just means constructor-based
+// notifications where supported.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch((e) => {
+    console.warn("[sw] registration failed", e);
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <MotionConfig reducedMotion="user">

@@ -12,6 +12,7 @@ export interface Task {
   completed: boolean;
   date: string; // ISO date, e.g. "2026-06-17"
   priority?: Priority; // importance; defaults to "medium" when unset
+  reminderMinutesBefore?: number | null; // minutes before start to notify; null/unset = no reminder
   shoppingListId?: string; // set when this task is a grocery run
   workoutSessionId?: string; // set when this task is linked to a workout plan
   recipeId?: string; // set when this task is linked to a recipe (cooking / meal prep)

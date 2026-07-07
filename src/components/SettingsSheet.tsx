@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
@@ -5,6 +6,7 @@ import { useShallow } from "zustand/shallow";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { spring, tap } from "@/lib/motion";
+import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
 
@@ -71,9 +73,39 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setBackground,
       ])
     );
+  const [remindersEnabled, setRemindersEnabled, defaultReminderMinutes, setDefaultReminderMinutes] =
+    useSettingsStore(
+      useShallow((state) => [
+        state.remindersEnabled,
+        state.setRemindersEnabled,
+        state.defaultReminderMinutes,
+        state.setDefaultReminderMinutes,
+      ])
+    );
   const { theme, toggleTheme } = useThemeStore();
+  // Browser notification permission — refreshed after we ask for it, so the
+  // subtitle below reflects the outcome.
+  const [permission, setPermission] = useState(notifyPermission);
 
   const isWeekly = scheduleView === "weekly";
+
+  async function toggleReminders() {
+    const next = !remindersEnabled;
+    setRemindersEnabled(next);
+    // Ask for system-notification permission when turning reminders on; if
+    // it's declined, reminders still work as in-app banners.
+    if (next && notifyPermission() === "default") {
+      setPermission(await requestNotifyPermission());
+    }
+  }
+
+  const reminderSubtitle = !remindersEnabled
+    ? "You won't get reminders for tasks and habits"
+    : permission === "granted"
+      ? "Notifies you before tasks and habits start"
+      : permission === "denied"
+        ? "In-app only — allow notifications in your browser to get alerts when the app is closed"
+        : "In-app banners before tasks and habits start";
 
   return (
     <AnimatePresence>
@@ -119,6 +151,49 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
                 on={altStyle}
                 onToggle={() => setAltStyle(!altStyle)}
               />
+            </div>
+
+            {/* Notifications */}
+            <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
+              Notifications
+            </p>
+            <div className="mb-6 flex flex-col gap-2">
+              <Row
+                title="Reminders"
+                subtitle={reminderSubtitle}
+                on={remindersEnabled}
+                onToggle={() => void toggleReminders()}
+              />
+              {remindersEnabled && (
+                <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">
+                  <p className="font-medium text-fg">Default reminder</p>
+                  <p className="text-sm text-fg-faint mt-0.5 mb-3">
+                    Pre-selected for new tasks and habits
+                  </p>
+                  <div
+                    className="flex gap-2 overflow-x-auto pb-0.5"
+                    style={{ scrollbarWidth: "none" }}
+                  >
+                    {REMINDER_OPTIONS.map((opt) => {
+                      const selected = defaultReminderMinutes === opt.value;
+                      return (
+                        <motion.button
+                          key={String(opt.value)}
+                          onClick={() => setDefaultReminderMinutes(opt.value)}
+                          whileTap={tap}
+                          className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${
+                            selected
+                              ? "bg-surface-inverse text-fg-inverse"
+                              : "bg-surface-raised text-fg-muted"
+                          }`}
+                        >
+                          {opt.label}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Appearance */}

@@ -18,6 +18,13 @@ interface SettingsState {
   // Ambient background preset (see @/lib/backgrounds).
   background: BackgroundKey;
   setBackground: (bg: BackgroundKey) => void;
+  // Master switch for task/habit reminders (system notifications + in-app
+  // banners). Individual items opt in via their reminderMinutesBefore.
+  remindersEnabled: boolean;
+  setRemindersEnabled: (on: boolean) => void;
+  // Reminder lead time pre-selected for newly created items; null = none.
+  defaultReminderMinutes: number | null;
+  setDefaultReminderMinutes: (minutes: number | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -29,6 +36,10 @@ export const useSettingsStore = create<SettingsState>()(
       setAltStyle: (on) => set({ altStyle: on }),
       background: DEFAULT_BACKGROUND,
       setBackground: (bg) => set({ background: bg }),
+      remindersEnabled: true,
+      setRemindersEnabled: (on) => set({ remindersEnabled: on }),
+      defaultReminderMinutes: null,
+      setDefaultReminderMinutes: (minutes) => set({ defaultReminderMinutes: minutes }),
     }),
     { name: "disciplined-settings" }
   )

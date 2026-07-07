@@ -5,6 +5,7 @@ import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 import BottomNav, { type Page } from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
+import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
 import AddItemSheet from "./components/timeline/AddItemSheet";
@@ -284,6 +285,14 @@ function App() {
       <PlanDaySheet isOpen={isPlanOpen} onClose={() => setIsPlanOpen(false)} />
       <AddGroceryItemSheet isOpen={isGroceryAddOpen} onClose={() => setIsGroceryAddOpen(false)} />
       <ChatSheet />
+
+      {/* Reminder scheduler + foreground banners; tapping one jumps to that day */}
+      <ReminderHost
+        onOpen={(date) => {
+          useTaskStore.getState().setSelectedDate(date);
+          go("schedule");
+        }}
+      />
 
       <BottomNav active={activePage} onChange={go} onAdd={openFab} fabOpen={fabOpen} />
     </div>
