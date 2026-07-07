@@ -41,7 +41,9 @@ def _resolve_today(client_date: str | None) -> date:
     return date.today()
 
 
-async def build_system_prompt(db: AsyncSession, client_date: str | None = None) -> str:
+async def build_system_prompt(
+    db: AsyncSession, user_id: str, client_date: str | None = None
+) -> str:
     today = _resolve_today(client_date)
     week_end = today + timedelta(days=6)
 
@@ -57,14 +59,18 @@ async def build_system_prompt(db: AsyncSession, client_date: str | None = None) 
     events = (
         await db.scalars(
             select(Event)
-            .where(Event.date >= today.isoformat(), Event.date <= week_end.isoformat())
+            .where(
+                Event.user_id == user_id,
+                Event.date >= today.isoformat(),
+                Event.date <= week_end.isoformat(),
+            )
             .order_by(Event.date, Event.start_minutes)
         )
     ).all()
 
     # The day's schedule is events plus recurring-habit occurrences, merged.
     items = [event_to_dict(e) for e in events]
-    items += await habit_occurrences(db, today.isoformat(), week_end.isoformat())
+    items += await habit_occurrences(db, user_id, today.isoformat(), week_end.isoformat())
     items.sort(key=lambda i: (i["date"], i["start_minutes"]))
 
     if items:
@@ -120,13 +126,14 @@ def _response_text(response: types.GenerateContentResponse | None) -> str | None
 
 async def run_chat(
     db: AsyncSession,
+    user_id: str,
     message: str,
     history: list[ChatMessage],
     client_date: str | None = None,
 ) -> ChatResponse:
     client = get_client()
     config = types.GenerateContentConfig(
-        system_instruction=await build_system_prompt(db, client_date),
+        system_instruction=await build_system_prompt(db, user_id, client_date),
         tools=[types.Tool(function_declarations=FUNCTION_DECLARATIONS)],
         # Tool selection needs to be dependable more than creative.
         temperature=0.2,
@@ -150,7 +157,7 @@ async def run_chat(
         result_parts = []
         for call in response.function_calls:
             args = dict(call.args or {})
-            result = await execute_tool(db, call.name, args)
+            result = await execute_tool(db, user_id, call.name, args)
             actions.append(ChatAction(tool=call.name, args=args, result=result))
             result_parts.append(
                 types.Part.from_function_response(name=call.name, response={"result": result})

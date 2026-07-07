@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import chat, events, habits, meals, workouts
+from app.routers import auth, chat, events, habits, meals, workouts
 
 
 @asynccontextmanager
@@ -27,6 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(habits.router)
 app.include_router(workouts.router)

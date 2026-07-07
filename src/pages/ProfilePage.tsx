@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Flame, Pencil, TrendingDown, TrendingUp, Utensils } from "lucide-react";
+import { Check, Flame, LogOut, Pencil, TrendingDown, TrendingUp, Utensils } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
@@ -22,6 +22,7 @@ import {
 } from "@/lib/insights";
 import { tap } from "@/lib/motion";
 import { WORKOUT_TYPE_META } from "@/lib/workout";
+import { useAuthStore } from "@/store/authStore";
 import { useExpenseStore } from "@/store/expenseStore";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
@@ -208,6 +209,8 @@ export default function ProfilePage() {
   const [name, tagline, setName, setTagline] = useProfileStore(
     useShallow((state) => [state.name, state.tagline, state.setName, state.setTagline])
   );
+  const account = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftTagline, setDraftTagline] = useState(tagline);
@@ -547,6 +550,21 @@ export default function ProfilePage() {
         ) : (
           <p className="text-sm text-fg-faint">No spending logged this month.</p>
         )}
+      </Card>
+
+      {/* Account */}
+      <Card title="Account">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-fg-muted truncate">{account?.email}</p>
+          <motion.button
+            whileTap={tap}
+            onClick={logout}
+            className="flex items-center gap-1.5 shrink-0 rounded-xl bg-surface-subtle px-3 py-2 text-sm font-medium text-red-400"
+          >
+            <LogOut size={15} />
+            Log out
+          </motion.button>
+        </div>
       </Card>
     </div>
   );

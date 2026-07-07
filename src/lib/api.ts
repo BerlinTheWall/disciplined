@@ -32,11 +32,33 @@ export class ApiError extends Error {
   }
 }
 
+// Login token, kept as a plain localStorage entry (not in a zustand store) so
+// it is readable here without importing any store and before stores hydrate.
+const TOKEN_KEY = "disciplined-token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null): void {
+  if (token === null) localStorage.removeItem(TOKEN_KEY);
+  else localStorage.setItem(TOKEN_KEY, token);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...init,
   });
+  // An expired/revoked token means every call will fail — tell the app shell
+  // to log out. A 401 from the auth endpoints is just wrong credentials.
+  if (res.status === 401 && !path.startsWith("/api/auth/")) {
+    window.dispatchEvent(new Event("api-unauthorized"));
+  }
   if (!res.ok) {
     let detail = `${init?.method ?? "GET"} ${path} failed with ${res.status}`;
     try {
@@ -68,6 +90,17 @@ function resource<T extends { id: string }>(name: string): ApiResource<T> {
   };
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
 export interface ChatMessage {
   role: "user" | "model";
   content: string;
@@ -94,6 +127,19 @@ export const MUTATING_CHAT_TOOLS = new Set([
 ]);
 
 export const api = {
+  auth: {
+    register: (email: string, password: string, displayName: string): Promise<AuthResponse> =>
+      request("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password, displayName }),
+      }),
+    login: (email: string, password: string): Promise<AuthResponse> =>
+      request("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      }),
+    me: (): Promise<AuthUser> => request("/api/auth/me"),
+  },
   events: resource<Task>("events"),
   habits: resource<Habit>("habits"),
   workouts: resource<WorkoutSession>("workouts"),

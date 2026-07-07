@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -12,6 +12,31 @@ class CamelModel(BaseModel):
         populate_by_name=True,
         from_attributes=True,
     )
+
+
+# ---- Auth ----
+
+
+class RegisterRequest(CamelModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=72)  # bcrypt truncates past 72 bytes
+    display_name: str = ""
+
+
+class LoginRequest(CamelModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(CamelModel):
+    id: str
+    email: str
+    display_name: str
+
+
+class AuthResponse(CamelModel):
+    token: str
+    user: UserOut
 
 
 # ---- Events (frontend: Task) ----

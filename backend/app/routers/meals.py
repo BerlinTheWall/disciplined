@@ -2,17 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_user
 from app.crud import upsert
 from app.database import get_db
-from app.models import Meal
+from app.models import Meal, User
 from app.schemas import MealCreate, MealOut, MealUpdate
 
 router = APIRouter(prefix="/api/meals", tags=["meals"])
 
 
-async def get_meal_or_404(meal_id: str, db: AsyncSession) -> Meal:
+async def get_meal_or_404(meal_id: str, db: AsyncSession, user: User) -> Meal:
     meal = await db.get(Meal, meal_id)
-    if meal is None:
+    if meal is None or meal.user_id != user.id:
         raise HTTPException(status_code=404, detail="Meal not found")
     return meal
 
@@ -22,8 +23,9 @@ async def list_meals(
     start: str | None = None,
     end: str | None = None,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    query = select(Meal)
+    query = select(Meal).where(Meal.user_id == user.id)
     if start:
         query = query.where(Meal.date >= start)
     if end:
@@ -32,18 +34,31 @@ async def list_meals(
 
 
 @router.post("", response_model=MealOut, status_code=201)
-async def create_meal(body: MealCreate, db: AsyncSession = Depends(get_db)):
-    return await upsert(db, Meal, body.model_dump())
+async def create_meal(
+    body: MealCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await upsert(db, Meal, body.model_dump(), user.id)
 
 
 @router.get("/{meal_id}", response_model=MealOut)
-async def get_meal(meal_id: str, db: AsyncSession = Depends(get_db)):
-    return await get_meal_or_404(meal_id, db)
+async def get_meal(
+    meal_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await get_meal_or_404(meal_id, db, user)
 
 
 @router.patch("/{meal_id}", response_model=MealOut)
-async def update_meal(meal_id: str, body: MealUpdate, db: AsyncSession = Depends(get_db)):
-    meal = await get_meal_or_404(meal_id, db)
+async def update_meal(
+    meal_id: str,
+    body: MealUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    meal = await get_meal_or_404(meal_id, db, user)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(meal, field, value)
     await db.commit()
@@ -51,7 +66,11 @@ async def update_meal(meal_id: str, body: MealUpdate, db: AsyncSession = Depends
 
 
 @router.delete("/{meal_id}", status_code=204)
-async def delete_meal(meal_id: str, db: AsyncSession = Depends(get_db)):
-    meal = await get_meal_or_404(meal_id, db)
+async def delete_meal(
+    meal_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    meal = await get_meal_or_404(meal_id, db, user)
     await db.delete(meal)
     await db.commit()

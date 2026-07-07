@@ -10,12 +10,25 @@ def new_id() -> str:
     return uuid4().hex
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    display_name: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+
+
 class Event(Base):
     """A scheduled block on the calendar (the frontend calls these Tasks)."""
 
     __tablename__ = "events"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    # Nullable so the add-column migration works on existing tables; rows are
+    # always stamped on create, and pre-auth rows get adopted by the first user.
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     title: Mapped[str] = mapped_column(String)
     date: Mapped[str] = mapped_column(String, index=True)  # ISO date "2026-07-05"
     start_minutes: Mapped[int] = mapped_column(Integer)  # minutes since midnight
@@ -34,6 +47,7 @@ class Habit(Base):
     __tablename__ = "habits"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     title: Mapped[str] = mapped_column(String)
     start_minutes: Mapped[int] = mapped_column(Integer)
     duration_minutes: Mapped[int] = mapped_column(Integer)
@@ -49,6 +63,7 @@ class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String, default="gym")  # gym|running|cycling|swimming|yoga|other
     color: Mapped[str] = mapped_column(String, default="#6366f1")
@@ -59,6 +74,7 @@ class Meal(Base):
     __tablename__ = "meals"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String)  # breakfast|lunch|dinner|snack
     date: Mapped[str] = mapped_column(String, index=True)

@@ -45,10 +45,12 @@ def habit_occurrence_to_dict(h: Habit, date_str: str) -> dict[str, Any]:
     }
 
 
-async def habit_occurrences(db: AsyncSession, start_date: str, end_date: str) -> list[dict]:
+async def habit_occurrences(
+    db: AsyncSession, user_id: str, start_date: str, end_date: str
+) -> list[dict]:
     """Recurring habits expanded to concrete occurrences within the date range
     (inclusive). Habits use the frontend's weekday convention: 0 = Sunday."""
-    habits = (await db.scalars(select(Habit))).all()
+    habits = (await db.scalars(select(Habit).where(Habit.user_id == user_id))).all()
     if not habits:
         return []
     out: list[dict] = []
@@ -189,12 +191,16 @@ FUNCTION_DECLARATIONS = [
 MUTATING_TOOLS = {"create_event", "move_event", "delete_event", "swap_events"}
 
 
-async def _get_event(db: AsyncSession, event_id: str) -> Event | None:
-    return await db.get(Event, event_id)
+async def _get_event(db: AsyncSession, user_id: str, event_id: str) -> Event | None:
+    event = await db.get(Event, event_id)
+    if event is None or event.user_id != user_id:
+        return None
+    return event
 
 
-async def _missing_event_error(db: AsyncSession, item_id: str) -> dict:
-    if await db.get(Habit, item_id) is not None:
+async def _missing_event_error(db: AsyncSession, user_id: str, item_id: str) -> dict:
+    habit = await db.get(Habit, item_id)
+    if habit is not None and habit.user_id == user_id:
         return {
             "error": (
                 f"{item_id} is a recurring habit — habits can't be changed through chat yet. "
@@ -205,10 +211,16 @@ async def _missing_event_error(db: AsyncSession, item_id: str) -> dict:
 
 
 async def _overlapping(
-    db: AsyncSession, date_str: str, start: int, duration: int, exclude_id: str | None = None
+    db: AsyncSession,
+    user_id: str,
+    date_str: str,
+    start: int,
+    duration: int,
+    exclude_id: str | None = None,
 ) -> list[dict]:
     """Events and habit occurrences that clash with the slot, as dicts."""
     query = select(Event).where(
+        Event.user_id == user_id,
         Event.date == date_str,
         Event.start_minutes < start + duration,
         Event.start_minutes + Event.duration_minutes > start,
@@ -216,7 +228,7 @@ async def _overlapping(
     if exclude_id:
         query = query.where(Event.id != exclude_id)
     clashes = [event_to_dict(e) for e in (await db.scalars(query)).all()]
-    for occ in await habit_occurrences(db, date_str, date_str):
+    for occ in await habit_occurrences(db, user_id, date_str, date_str):
         if occ["start_minutes"] < start + duration and (
             occ["start_minutes"] + occ["duration_minutes"] > start
         ):
@@ -224,12 +236,14 @@ async def _overlapping(
     return clashes
 
 
-async def _find_free_slot(db: AsyncSession, date_str: str, duration: int) -> int:
+async def _find_free_slot(db: AsyncSession, user_id: str, date_str: str, duration: int) -> int:
     """First gap of `duration` minutes on the date, scanning from 9:00; falls
     back to right after the last event when the daytime is packed."""
     events = (
         await db.scalars(
-            select(Event).where(Event.date == date_str).order_by(Event.start_minutes)
+            select(Event)
+            .where(Event.user_id == user_id, Event.date == date_str)
+            .order_by(Event.start_minutes)
         )
     ).all()
     candidate = 9 * 60
@@ -240,12 +254,15 @@ async def _find_free_slot(db: AsyncSession, date_str: str, duration: int) -> int
     return min(candidate, 24 * 60 - duration)
 
 
-async def _create_event(db: AsyncSession, args: dict) -> dict:
+async def _create_event(db: AsyncSession, user_id: str, args: dict) -> dict:
     duration = int(args.get("duration_minutes") or 60)
     start = args.get("start_minutes")
-    start = int(start) if start is not None else await _find_free_slot(db, args["date"], duration)
+    if start is not None:
+        start = int(start)
+    else:
+        start = await _find_free_slot(db, user_id, args["date"], duration)
     if not args.get("allow_conflict"):
-        conflicts = await _overlapping(db, args["date"], start, duration)
+        conflicts = await _overlapping(db, user_id, args["date"], start, duration)
         if conflicts:
             return {
                 "error": "slot_taken",
@@ -259,14 +276,15 @@ async def _create_event(db: AsyncSession, args: dict) -> dict:
         duration_minutes=duration,
         priority=args.get("priority"),
         icon=args.get("icon", "default"),
+        user_id=user_id,
     )
     db.add(event)
     await db.commit()
     return {"created": event_to_dict(event)}
 
 
-async def _list_events(db: AsyncSession, args: dict) -> dict:
-    query = select(Event)
+async def _list_events(db: AsyncSession, user_id: str, args: dict) -> dict:
+    query = select(Event).where(Event.user_id == user_id)
     if args.get("start_date"):
         query = query.where(Event.date >= args["start_date"])
     if args.get("end_date"):
@@ -278,15 +296,15 @@ async def _list_events(db: AsyncSession, args: dict) -> dict:
     # show the week ahead.
     start = args.get("start_date") or date.today().isoformat()
     end = args.get("end_date") or (date.fromisoformat(start) + timedelta(days=6)).isoformat()
-    items += await habit_occurrences(db, start, end)
+    items += await habit_occurrences(db, user_id, start, end)
     items.sort(key=lambda i: (i["date"], i["start_minutes"]))
     return {"events": items}
 
 
-async def _move_event(db: AsyncSession, args: dict) -> dict:
-    event = await _get_event(db, args["event_id"])
+async def _move_event(db: AsyncSession, user_id: str, args: dict) -> dict:
+    event = await _get_event(db, user_id, args["event_id"])
     if event is None:
-        return await _missing_event_error(db, args["event_id"])
+        return await _missing_event_error(db, user_id, args["event_id"])
     new_date = args.get("new_date") or event.date
     new_start = (
         int(args["new_start_minutes"])
@@ -295,7 +313,7 @@ async def _move_event(db: AsyncSession, args: dict) -> dict:
     )
     if not args.get("allow_conflict"):
         conflicts = await _overlapping(
-            db, new_date, new_start, event.duration_minutes, exclude_id=event.id
+            db, user_id, new_date, new_start, event.duration_minutes, exclude_id=event.id
         )
         if conflicts:
             return {
@@ -309,19 +327,20 @@ async def _move_event(db: AsyncSession, args: dict) -> dict:
     return {"moved": event_to_dict(event)}
 
 
-async def _delete_event(db: AsyncSession, args: dict) -> dict:
-    event = await _get_event(db, args["event_id"])
+async def _delete_event(db: AsyncSession, user_id: str, args: dict) -> dict:
+    event = await _get_event(db, user_id, args["event_id"])
     if event is None:
-        return await _missing_event_error(db, args["event_id"])
+        return await _missing_event_error(db, user_id, args["event_id"])
     deleted = event_to_dict(event)
     await db.delete(event)
     await db.commit()
     return {"deleted": deleted}
 
 
-async def _check_conflicts(db: AsyncSession, args: dict) -> dict:
+async def _check_conflicts(db: AsyncSession, user_id: str, args: dict) -> dict:
     conflicts = await _overlapping(
         db,
+        user_id,
         args["date"],
         int(args["start_minutes"]),
         int(args["duration_minutes"]),
@@ -333,12 +352,12 @@ async def _check_conflicts(db: AsyncSession, args: dict) -> dict:
     }
 
 
-async def _swap_events(db: AsyncSession, args: dict) -> dict:
-    a = await _get_event(db, args["event_id_a"])
-    b = await _get_event(db, args["event_id_b"])
+async def _swap_events(db: AsyncSession, user_id: str, args: dict) -> dict:
+    a = await _get_event(db, user_id, args["event_id_a"])
+    b = await _get_event(db, user_id, args["event_id_b"])
     if a is None or b is None:
         missing = args["event_id_a"] if a is None else args["event_id_b"]
-        return await _missing_event_error(db, missing)
+        return await _missing_event_error(db, user_id, missing)
     a.date, b.date = b.date, a.date
     a.start_minutes, b.start_minutes = b.start_minutes, a.start_minutes
     await db.commit()
@@ -355,12 +374,12 @@ _EXECUTORS = {
 }
 
 
-async def execute_tool(db: AsyncSession, name: str, args: dict) -> dict:
+async def execute_tool(db: AsyncSession, user_id: str, name: str, args: dict) -> dict:
     executor = _EXECUTORS.get(name)
     if executor is None:
         return {"error": f"Unknown tool: {name}"}
     try:
-        return await executor(db, args)
+        return await executor(db, user_id, args)
     except Exception as exc:  # surface failures to Gemini instead of crashing the turn
         await db.rollback()
         return {"error": f"{type(exc).__name__}: {exc}"}
