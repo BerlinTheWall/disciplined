@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import Event
 from app.schemas import ChatAction, ChatMessage, ChatResponse
-from app.services.tools import FUNCTION_DECLARATIONS, execute_tool, fmt_minutes
+from app.services.tools import (
+    FUNCTION_DECLARATIONS,
+    event_to_dict,
+    execute_tool,
+    fmt_minutes,
+    habit_occurrences,
+)
 
 MAX_TOOL_ROUNDS = 8
 
@@ -56,15 +62,22 @@ async def build_system_prompt(db: AsyncSession, client_date: str | None = None) 
         )
     ).all()
 
-    if events:
+    # The day's schedule is events plus recurring-habit occurrences, merged.
+    items = [event_to_dict(e) for e in events]
+    items += await habit_occurrences(db, today.isoformat(), week_end.isoformat())
+    items.sort(key=lambda i: (i["date"], i["start_minutes"]))
+
+    if items:
         lines = []
-        for e in events:
-            day = _WEEKDAYS[date.fromisoformat(e.date).weekday()]
-            end = e.start_minutes + e.duration_minutes
-            status = " (completed)" if e.completed else ""
+        for item in items:
+            day = _WEEKDAYS[date.fromisoformat(item["date"]).weekday()]
+            end = item["start_minutes"] + item["duration_minutes"]
+            kind = " | habit (repeats)" if item["kind"] == "habit" else ""
+            status = " (completed)" if item["completed"] else ""
             lines.append(
-                f"- id={e.id} | {day} {e.date} {fmt_minutes(e.start_minutes)}-{fmt_minutes(end)}"
-                f" | {e.title}{status}"
+                f"- id={item['id']} | {day} {item['date']}"
+                f" {fmt_minutes(item['start_minutes'])}-{fmt_minutes(end)}"
+                f" | {item['title']}{kind}{status}"
             )
         schedule = "\n".join(lines)
     else:
@@ -82,6 +95,7 @@ Rules:
 - Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference above. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
 - Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
 - Reference events by their id when calling tools. Never invent or guess an id.
+- The schedule mixes one-time events and recurring habits (marked "habit"). Habits are a full part of the user's day — include them when listing or summarizing a day. Your tools can only change events: if asked to move, delete or edit a habit, explain that habits are managed in the app's Habits tab.
 - Nothing changes unless you call a tool for it. Never tell the user something was created, moved, deleted or swapped unless you called create_event, move_event, delete_event or swap_events for it in this conversation turn and it returned without an error.
 - To create or move, call create_event / move_event directly — they check for conflicts themselves. If they return slot_taken, nothing changed: tell the user about the overlap and suggest a free alternative. Use check_conflicts only to answer availability questions ("am I free at 3?").
 - For events outside the 7 days shown above, use list_events to look them up first.
@@ -144,17 +158,26 @@ async def run_chat(
         contents.append(types.Content(role="user", parts=result_parts))
 
     reply = _response_text(response)
-    if reply is None and actions:
-        # The model occasionally goes silent after a tool round — nudge once for
-        # a plain-text summary (tools disabled so it must answer in words).
-        if response is not None and response.candidates and response.candidates[0].content:
-            contents.append(response.candidates[0].content)
-        contents.append(
-            types.Content(
-                role="user",
-                parts=[types.Part(text="Briefly tell me what you did and the outcome.")],
+    if reply is None:
+        # The model occasionally returns an empty final message (it spent the
+        # turn thinking, or a malformed tool call got dropped). This is a model
+        # hiccup, not bad user input — retry once, explicitly demanding plain
+        # text with tools disabled so it can't go silent into another round.
+        if response is not None and response.candidates:
+            content = response.candidates[0].content
+            # Don't re-append a turn with unanswered function calls — the API
+            # rejects a function_call that isn't followed by its response.
+            has_pending_calls = bool(content and content.parts) and any(
+                p.function_call for p in content.parts
             )
+            if content and content.parts and not has_pending_calls:
+                contents.append(content)
+        nudge = (
+            "Briefly tell the user what you did and the outcome, in plain text."
+            if actions
+            else "Reply to the user now, in plain text."
         )
+        contents.append(types.Content(role="user", parts=[types.Part(text=nudge)]))
         response = await client.aio.models.generate_content(
             model=settings.gemini_model,
             contents=contents,
@@ -165,6 +188,6 @@ async def run_chat(
         reply = _response_text(response)
 
     return ChatResponse(
-        reply=reply or "Sorry, I couldn't finish that request — please try rephrasing.",
+        reply=reply or "Sorry — something went wrong on my side. Please try that again.",
         actions=actions,
     )
