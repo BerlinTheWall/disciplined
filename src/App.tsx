@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 
 import BottomNav, { type Page } from "./components/BottomNav";
+import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
@@ -282,6 +283,7 @@ function App() {
       <AddItemSheet isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
       <PlanDaySheet isOpen={isPlanOpen} onClose={() => setIsPlanOpen(false)} />
       <AddGroceryItemSheet isOpen={isGroceryAddOpen} onClose={() => setIsGroceryAddOpen(false)} />
+      <ChatSheet />
 
       <BottomNav active={activePage} onChange={go} onAdd={openFab} fabOpen={fabOpen} />
     </div>

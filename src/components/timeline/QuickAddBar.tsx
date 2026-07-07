@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, LoaderCircle, Pencil, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, Pencil, Plus } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import type { EditItem } from "./Timeline";
-import { api, ApiError, MUTATING_CHAT_TOOLS, type ChatMessage } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import {
   parseCommand,
   parseDateInput,
@@ -17,8 +17,8 @@ import {
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { parseQuickAdd } from "@/lib/quickAdd";
-import { refreshEvents } from "@/lib/sync";
 import { formatTimeLabel, formatTimeRange } from "@/lib/time";
+import { useChatStore } from "@/store/chatStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -29,11 +29,6 @@ import { useChoose, useConfirm, usePrompt, type ConfirmOptions } from "../Confir
 const DEFAULT_COLOR = "#34d399";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const PLACEHOLDER = 'Add, command or ask — "gym mon 6am", "move lunch to 1pm", "what\'s tomorrow?"';
-const ASSISTANT_COLOR = "#a78bfa";
-
-// Conversation context for the assistant, kept across page switches (capped so
-// the request stays small).
-let chatHistory: ChatMessage[] = [];
 
 // Verb used in the "couldn't find …" message for each action.
 const ACTION_VERB: Record<Command["action"], string> = {
@@ -114,51 +109,35 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   const choose = useChoose();
   const prompt = usePrompt();
 
+  const [chatBusy, openChat, closeChat, sendChat] = useChatStore(
+    useShallow((state) => [state.busy, state.openChat, state.closeChat, state.send])
+  );
+
   const [text, setText] = useState("");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [assistant, setAssistant] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function flash(
-    next: Confirmation | null,
-    err: string | null = null,
-    reply: string | null = null
-  ) {
+  function flash(next: Confirmation | null, err: string | null = null) {
     setConfirmation(next);
     setError(err);
-    setAssistant(reply);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(
-      () => {
-        setConfirmation(null);
-        setError(null);
-        setAssistant(null);
-      },
-      reply ? 15000 : 6000
-    );
+    hideTimer.current = setTimeout(() => {
+      setConfirmation(null);
+      setError(null);
+    }, 6000);
   }
 
-  // Sends the input to the Gemini scheduling assistant (backend /api/chat). It
-  // executes changes server-side, so on mutation the events store is refreshed.
-  // When the assistant is unavailable (offline, rate-limited, bad key) the
-  // local parsers take over so the bar keeps working; the API error is shown
-  // only when they can't make sense of the input either.
+  // Opens the chat sheet and sends the input to the Gemini assistant. When the
+  // assistant is unavailable (offline, rate-limited, bad key) the sheet closes
+  // and the local parsers take over so the bar keeps working; the API error is
+  // shown only when they can't make sense of the input either.
   async function askAssistant(raw: string) {
-    setBusy(true);
+    openChat();
     try {
-      const res = await api.chat(raw, chatHistory);
-      const turn: ChatMessage[] = [
-        { role: "user", content: raw },
-        { role: "model", content: res.reply },
-      ];
-      chatHistory = [...chatHistory, ...turn].slice(-12);
-      if (res.actions.some((a) => MUTATING_CHAT_TOOLS.has(a.tool))) await refreshEvents();
-      setBusy(false);
-      flash(null, null, res.reply);
+      await sendChat(raw);
     } catch (e) {
-      setBusy(false);
+      closeChat();
       const handled = await tryCommand(raw, new Date());
       if (handled) return;
       if (parseQuickAdd(raw)) {
@@ -651,7 +630,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const raw = text.trim();
-    if (!raw || busy) return;
+    if (!raw || chatBusy) return;
     setText("");
     // Everything goes to the Gemini assistant; the local parsers are its
     // offline/error fallback (see askAssistant).
@@ -683,23 +662,18 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
           className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
         />
         <AnimatePresence>
-          {(text.trim() || busy) && (
+          {text.trim() && (
             <motion.button
               type="submit"
-              disabled={busy}
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.6 }}
               transition={spring.snappy}
               whileTap={tap}
-              aria-label={busy ? "Thinking" : "Submit"}
+              aria-label="Submit"
               className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-inverse text-fg-inverse"
             >
-              {busy ? (
-                <LoaderCircle size={18} className="animate-spin" />
-              ) : (
-                <ArrowRight size={18} />
-              )}
+              <ArrowRight size={18} />
             </motion.button>
           )}
         </AnimatePresence>
@@ -716,28 +690,6 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
           >
             {error}
           </motion.p>
-        )}
-
-        {assistant && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -6, height: 0 }}
-            transition={spring.snappy}
-            className="overflow-hidden"
-          >
-            <div className="flex items-start gap-3 bg-surface-alt rounded-2xl p-2.5 mt-2">
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: ASSISTANT_COLOR, color: "#111827" }}
-              >
-                <Sparkles size={16} />
-              </div>
-              <p className="text-sm text-fg min-w-0 flex-1 whitespace-pre-wrap py-1.5">
-                {assistant}
-              </p>
-            </div>
-          </motion.div>
         )}
 
         {confirmation && ConfirmIcon && (
