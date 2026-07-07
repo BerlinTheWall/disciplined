@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Mic, Sparkles, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { speak, stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore, type ChatBubble } from "@/store/chatStore";
 
@@ -67,10 +68,36 @@ export default function ChatSheet() {
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // Voice input: live transcript shows in the input; a finished utterance is
+  // sent right away, and the reply to a spoken message is read aloud.
+  const {
+    supported: voiceSupported,
+    listening,
+    start: startListening,
+    stop: stopListening,
+  } = useSpeechRecognition({
+    onInterim: setText,
+    onFinal: (transcript) => {
+      setText("");
+      void send(transcript)
+        .then((res) => speak(res.reply))
+        .catch(() => {});
+    },
+  });
+
   // Keep the newest message in view.
   useEffect(() => {
     if (isOpen) listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [isOpen, messages.length, busy]);
+
+  // Closing the sheet ends any listening/talking in progress.
+  useEffect(() => {
+    if (!isOpen) {
+      stopListening();
+      stopSpeaking();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,9 +178,32 @@ export default function ChatSheet() {
                 type="text"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Message the assistant…"
+                placeholder={listening ? "Listening…" : "Message the assistant…"}
                 className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
               />
+              {voiceSupported && (
+                <motion.button
+                  type="button"
+                  onClick={listening ? stopListening : startListening}
+                  whileTap={tap}
+                  aria-label={listening ? "Stop listening" : "Speak"}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    listening ? "bg-[#f87171] text-white" : "text-fg-faint"
+                  }`}
+                >
+                  {listening ? (
+                    <motion.span
+                      animate={{ scale: [1, 1.25, 1] }}
+                      transition={{ duration: 1.2, repeat: Infinity }}
+                      className="flex"
+                    >
+                      <Mic size={16} />
+                    </motion.span>
+                  ) : (
+                    <Mic size={16} />
+                  )}
+                </motion.button>
+              )}
               <motion.button
                 type="submit"
                 disabled={busy || !text.trim()}

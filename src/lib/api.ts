@@ -60,8 +60,7 @@ export interface ApiResource<T extends { id: string }> {
 function resource<T extends { id: string }>(name: string): ApiResource<T> {
   return {
     list: () => request<T[]>(`/api/${name}`),
-    create: (item) =>
-      request<T>(`/api/${name}`, { method: "POST", body: JSON.stringify(item) }),
+    create: (item) => request<T>(`/api/${name}`, { method: "POST", body: JSON.stringify(item) }),
     update: (item) =>
       request<T>(`/api/${name}/${item.id}`, { method: "PATCH", body: JSON.stringify(item) }),
     remove: (id) => request<void>(`/api/${name}/${id}`, { method: "DELETE" }),

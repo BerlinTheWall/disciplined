@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Pencil, Plus } from "lucide-react";
+import { ArrowRight, Pencil, Plus, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import type { EditItem } from "./Timeline";
@@ -661,6 +661,15 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
           placeholder={PLACEHOLDER}
           className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
         />
+        <motion.button
+          type="button"
+          onClick={openChat}
+          whileTap={tap}
+          aria-label="Open assistant"
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-fg-faint"
+        >
+          <Sparkles size={18} />
+        </motion.button>
         <AnimatePresence>
           {text.trim() && (
             <motion.button
