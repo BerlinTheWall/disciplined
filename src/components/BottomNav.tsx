@@ -101,7 +101,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
       </AnimatePresence>
 
       {/* Pill */}
-      <nav className="bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3.5">
+      <nav className="bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-2.5">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
@@ -109,9 +109,9 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
               key={t.key}
               onClick={t.onSelect}
               whileTap={tap}
-              className="flex flex-col items-center gap-1 flex-1"
+              className="flex flex-col items-center gap-0.5 flex-1"
             >
-              <span className="relative flex items-center justify-center w-12 h-9">
+              <span className="relative flex items-center justify-center w-11 h-8">
                 {t.isActive && (
                   <motion.span
                     layoutId="navActive"
@@ -120,7 +120,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
                   />
                 )}
                 <Icon
-                  size={24}
+                  size={22}
                   strokeWidth={t.isActive ? 2.2 : 1.7}
                   className={`relative z-10 ${t.isActive ? "text-fg-inverse" : "text-fg-faint"}`}
                 />
