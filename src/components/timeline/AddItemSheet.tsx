@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Dumbbell,
   Repeat,
+  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,9 +22,9 @@ import type { EditItem } from "./Timeline";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { formatAmount, indexItems } from "@/lib/grocery";
-import { guessIcon, ICONS } from "@/lib/icons";
+import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
-import { DEFAULT_PRIORITY, PRIORITIES, PRIORITY_META } from "@/lib/priority";
+import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGroceryStore } from "@/store/groceryStore";
@@ -285,13 +286,19 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
-  const [priority, setPriority] = useState<Priority>(DEFAULT_PRIORITY);
+  const [priority, setPriority] = useState<Priority | null>(null);
   const [reminder, setReminder] = useState<number | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [suggestDismissed, setSuggestDismissed] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setStep(1);
     setDir(1);
+    setAdvancedOpen(false);
+    setStyleOpen(false);
+    setSuggestDismissed(false);
     if (editItem) {
       setMode(editItem.type);
       setTitle(editItem.data.title);
@@ -310,11 +317,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setIcon(editItem.data.icon);
       setIconTouched(true);
       setDaysOfWeek(editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6]);
-      setWorkoutSessionId(editItem.type === "task" ? editItem.data.workoutSessionId : undefined);
-      setRecipeId(editItem.type === "task" ? editItem.data.recipeId : undefined);
-      setPriority(
-        editItem.type === "task" ? (editItem.data.priority ?? DEFAULT_PRIORITY) : DEFAULT_PRIORITY
-      );
+      setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
+      setRecipeId(editItem.data.recipeId ?? undefined);
+      setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
       setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
@@ -336,7 +341,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
-    setPriority(DEFAULT_PRIORITY);
+    setPriority(null);
     setReminder(useSettingsStore.getState().defaultReminderMinutes);
   }
 
@@ -415,10 +420,52 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!title.trim() || duration < 1) return;
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
+
+    // Type changed while editing: create the item on the other side, then
+    // remove the original. Each store syncs its own create/delete.
+    if (isEditing && mode !== editItem!.type) {
+      if (mode === "habit") {
+        if (daysOfWeek.length === 0) return;
+        addHabit({
+          title: title.trim(),
+          startMinutes,
+          durationMinutes: duration,
+          color,
+          icon,
+          daysOfWeek,
+          reminderMinutesBefore: reminder,
+          workoutSessionId,
+          recipeId,
+        });
+        deleteTask(editItem!.data.id);
+      } else {
+        const ok = await confirm({
+          title: "Convert to one-time task?",
+          message: `"${title.trim()}" will stop repeating and its completion history will be removed.`,
+          confirmLabel: "Convert",
+        });
+        if (!ok) return;
+        addTask({
+          title: title.trim(),
+          startMinutes,
+          durationMinutes: duration,
+          color,
+          icon,
+          date,
+          priority,
+          reminderMinutesBefore: reminder,
+          workoutSessionId,
+          recipeId,
+        });
+        deleteHabit(editItem!.data.id);
+      }
+      onClose();
+      return;
+    }
 
     if (isEditing) {
       if (editItem!.type === "habit" && daysOfWeek.length === 0) return;
@@ -432,8 +479,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           date,
           priority,
           reminderMinutesBefore: reminder,
-          workoutSessionId,
-          recipeId,
+          workoutSessionId: workoutSessionId ?? null,
+          recipeId: recipeId ?? null,
         });
       } else {
         updateHabit(editItem!.data.id, {
@@ -444,6 +491,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           icon,
           daysOfWeek,
           reminderMinutesBefore: reminder,
+          workoutSessionId: workoutSessionId ?? null,
+          recipeId: recipeId ?? null,
         });
       }
     } else {
@@ -470,6 +519,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           icon,
           daysOfWeek,
           reminderMinutesBefore: reminder,
+          workoutSessionId,
+          recipeId,
         });
       }
     }
@@ -524,6 +575,16 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
   const linkedSession = workoutSessions.find((s) => s.id === workoutSessionId);
   const linkedRecipe = recipes.find((r) => r.id === recipeId);
+
+  // Title/icon smells like a workout or a meal but nothing is linked yet —
+  // offer a one-tap link without making the user dig into Advanced settings.
+  const guessedKind = guessLinkKind(title, icon);
+  const linkSuggestion =
+    guessedKind === "workout" && !workoutSessionId && workoutSessions.length > 0
+      ? ("workout" as const)
+      : guessedKind === "meal" && !recipeId && recipes.length > 0
+        ? ("meal" as const)
+        : null;
   const chipCls = (selected: boolean) =>
     `px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`;
 
@@ -679,8 +740,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         Ends at <span className="tabular-nums">{endLabel}</span>
         {duration >= maxDuration && " — capped to stay on the same day"}
       </p>
+    </div>
+  );
 
-      <label className="text-xs font-medium text-fg-muted mb-1.5 mt-4 block">Reminder</label>
+  const reminderBody = (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Reminder</label>
       <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {REMINDER_OPTIONS.map((opt) => (
           <motion.button
@@ -702,14 +767,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       <div className="flex flex-col gap-2">
         {(["task", "habit"] as const).map((m) => {
           const selected = mode === m;
-          const locked = isEditing && editItem!.type !== m;
           return (
             <motion.button
               key={m}
-              onClick={() => !isEditing && setMode(m)}
-              whileTap={isEditing ? undefined : tap}
-              disabled={locked}
-              className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-surface-inverse bg-surface-alt" : "border-border-strong"} ${locked ? "opacity-40" : ""}`}
+              onClick={() => setMode(m)}
+              whileTap={tap}
+              className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-surface-inverse bg-surface-alt" : "border-border-strong"}`}
             >
               <div
                 className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
@@ -736,6 +799,14 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         })}
       </div>
 
+      {isEditing && mode !== editItem!.type && (
+        <p className="text-xs text-fg-faint mt-2 px-1">
+          {mode === "habit"
+            ? "Saving will convert this into a repeating habit."
+            : "Saving will convert this into a one-time task — the repeat schedule and its history will be removed."}
+        </p>
+      )}
+
       {mode === "task" && (
         <>
           <label className="text-xs font-medium text-fg-muted mb-2 mt-4 block">Priority</label>
@@ -746,7 +817,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               return (
                 <motion.button
                   key={p}
-                  onClick={() => setPriority(p)}
+                  onClick={() => setPriority(selected ? null : p)}
                   whileTap={tap}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
                   style={
@@ -768,7 +839,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         </>
       )}
 
-      {mode === "task" && workoutSessions.length > 0 && (
+      {workoutSessions.length > 0 && (
         <>
           <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
             <Dumbbell size={13} />
@@ -844,7 +915,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         </>
       )}
 
-      {mode === "task" && recipes.length > 0 && (
+      {recipes.length > 0 && (
         <>
           <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
             <ChefHat size={13} />
@@ -1038,12 +1109,16 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               </div>
 
               <div className="flex items-center gap-4 mt-3">
-                <div
+                {/* In edit mode the avatar doubles as the way into the
+                    color/icon pickers. */}
+                <motion.button
+                  onClick={() => isEditing && setStyleOpen((v) => !v)}
+                  whileTap={isEditing ? tap : undefined}
                   className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
                   style={{ backgroundColor: "#2f2f33" }}
                 >
                   <HeaderIcon size={28} style={{ color }} />
-                </div>
+                </motion.button>
                 <div className="flex-1 min-w-0">
                   {(isEditing || step > 1) && (
                     <p
@@ -1081,9 +1156,115 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               {isEditing ? (
                 /* ---- EDIT — one scrollable form, no steps, no confirm ---- */
                 <div className="flex flex-col gap-6">
-                  {detailsBody}
+                  <AnimatePresence initial={false}>
+                    {styleOpen && (
+                      <motion.div
+                        key="style"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden -mb-6"
+                      >
+                        <div className="pb-6">{detailsBody}</div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   {scheduleBody}
-                  {typeLinksBody}
+
+                  {linkSuggestion && !suggestDismissed && (
+                    <div className="rounded-2xl bg-surface-alt p-3">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
+                          {linkSuggestion === "workout" ? (
+                            <Dumbbell size={13} />
+                          ) : (
+                            <ChefHat size={13} />
+                          )}
+                          {linkSuggestion === "workout"
+                            ? "This looks like a workout — link a session?"
+                            : "This looks like a meal — link a recipe?"}
+                        </p>
+                        <motion.button
+                          onClick={() => setSuggestDismissed(true)}
+                          whileTap={tap}
+                          className="shrink-0 text-fg-faint"
+                        >
+                          <X size={15} />
+                        </motion.button>
+                      </div>
+                      <div
+                        className="wheel-col flex gap-2 overflow-x-auto"
+                        style={{ scrollbarWidth: "none" }}
+                      >
+                        {linkSuggestion === "workout"
+                          ? workoutSessions.map((s) => {
+                              const SIcon = WORKOUT_TYPE_META[s.type].icon;
+                              return (
+                                <motion.button
+                                  key={s.id}
+                                  onClick={() => linkWorkout(s.id)}
+                                  whileTap={tap}
+                                  className={`flex items-center gap-1.5 ${chipCls(false)}`}
+                                >
+                                  <SIcon size={14} />
+                                  {s.name}
+                                </motion.button>
+                              );
+                            })
+                          : recipes.map((r) => (
+                              <motion.button
+                                key={r.id}
+                                onClick={() => linkRecipe(r.id)}
+                                whileTap={tap}
+                                className={`flex items-center gap-1.5 ${chipCls(false)}`}
+                              >
+                                <ChefHat size={14} />
+                                {r.name}
+                              </motion.button>
+                            ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Everything beyond title/date/time/duration lives behind
+                      this fold to keep the common edit path short. */}
+                  <div>
+                    <motion.button
+                      onClick={() => setAdvancedOpen((v) => !v)}
+                      whileTap={tap}
+                      className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3"
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium text-fg-muted">
+                        <SlidersHorizontal size={15} />
+                        Advanced settings
+                      </span>
+                      <ChevronRight
+                        size={16}
+                        className={`text-fg-faint transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+                      />
+                    </motion.button>
+
+                    <AnimatePresence initial={false}>
+                      {advancedOpen && (
+                        <motion.div
+                          key="advanced"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="flex flex-col gap-6 pt-5">
+                            {reminderBody}
+                            {typeLinksBody}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
                   <motion.button
                     onClick={handleSubmit}
                     whileTap={tap}
@@ -1145,6 +1326,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                         transition={{ duration: 0.18 }}
                       >
                         {scheduleBody}
+                        <div className="mt-4">{reminderBody}</div>
 
                         <div className="flex gap-2 mt-6">
                           <motion.button

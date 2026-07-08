@@ -26,7 +26,7 @@ interface DayItem {
   color: string;
   icon: keyof typeof ICONS;
   completed: boolean;
-  priority?: Priority;
+  priority?: Priority | null;
 }
 
 const PRIO_RANK: Record<Priority, number> = { high: 3, medium: 2, low: 1 };

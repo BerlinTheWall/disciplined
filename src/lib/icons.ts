@@ -126,3 +126,13 @@ export function guessIcon(title: string): IconKey | null {
   }
   return null;
 }
+
+// Which link a task/habit plausibly wants, judged from its title keywords or
+// the icon the user picked. Used to suggest linking a workout or a recipe.
+export function guessLinkKind(title: string, icon: IconKey): "workout" | "meal" | null {
+  const workoutish: IconKey[] = ["workout", "bike"];
+  const guessed = guessIcon(title);
+  if ((guessed && workoutish.includes(guessed)) || workoutish.includes(icon)) return "workout";
+  if (guessed === "meal" || icon === "meal") return "meal";
+  return null;
+}

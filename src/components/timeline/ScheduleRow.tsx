@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/refs */
 import { useDraggable } from "@dnd-kit/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flag, Flame } from "lucide-react";
+import { Flame, Pencil } from "lucide-react";
 
 import { ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -16,6 +16,7 @@ import {
   pxToMinutes,
   snapToGrid,
 } from "@/lib/time";
+import { useScheduleEditStore } from "@/store/scheduleEditStore";
 import { useThemeStore } from "@/store/themeStore";
 import type { Priority } from "@/types/task";
 
@@ -40,7 +41,7 @@ export interface ScheduleRowData {
   icon: keyof typeof ICONS;
   completed: boolean;
   streak?: number;
-  priority?: Priority;
+  priority?: Priority | null;
   startOffset?: number;
 }
 
@@ -73,6 +74,9 @@ export default function ScheduleRow({
 }: ScheduleRowProps) {
   const move = useDraggable({ id });
   const resize = useDraggable({ id: `resize-${id}` });
+
+  // Page-level editing mode: rows slide aside to reveal a per-row edit button.
+  const editMode = useScheduleEditStore((s) => s.editMode);
 
   const theme = useThemeStore((s) => s.theme);
   const colors = themeColors[theme];
@@ -211,14 +215,17 @@ export default function ScheduleRow({
                 transition={spring.snappy}
               />
             </span>
-            {priority && (
-              <Flag
-                size={13}
-                fill={PRIORITY_META[priority].color}
-                style={{ color: PRIORITY_META[priority].color }}
-                className="shrink-0"
-              />
-            )}
+            {priority &&
+              (() => {
+                const PrioIcon = PRIORITY_META[priority].icon;
+                return (
+                  <PrioIcon
+                    size={14}
+                    style={{ color: PRIORITY_META[priority].color }}
+                    className="shrink-0"
+                  />
+                );
+              })()}
             {streak !== undefined && streak > 0 && (
               <span className="flex items-center gap-0.5 text-xs font-medium text-[#b5895f] shrink-0">
                 <Flame size={12} className="fill-[#b5895f]" />
@@ -273,6 +280,25 @@ export default function ScheduleRow({
             )}
           </AnimatePresence>
         </motion.button>
+
+        {/* Edit-mode rail: grows in from the right, nudging the row content
+            aside, and is the row's edit entry point. */}
+        <AnimatePresence initial={false}>
+          {editMode && (
+            <motion.button
+              key="edit"
+              onClick={() => onEdit(id)}
+              whileTap={tap}
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 34, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={spring.snappy}
+              className="h-8 rounded-full bg-surface-raised flex items-center justify-center shrink-0 overflow-hidden"
+            >
+              <Pencil size={15} className="text-fg-muted shrink-0" />
+            </motion.button>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );

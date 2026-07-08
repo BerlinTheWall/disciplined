@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Flame,
   Moon,
+  Pencil,
   Plus,
   Sun,
   Sunrise,
@@ -20,6 +21,7 @@ import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
 import { useHabitStore } from "@/store/habitStore";
+import { useScheduleEditStore } from "@/store/scheduleEditStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
 
@@ -30,6 +32,7 @@ interface DayScheduleCardsProps {
   date: string;
   active: boolean;
   onEdit: (item: EditItem) => void;
+  onDetail: (item: EditItem) => void;
 }
 
 // Parts of the day, used to group the cards under headers — each with a colour
@@ -81,7 +84,9 @@ function relativeDayLabel(iso: string) {
   return d.toLocaleDateString(undefined, { weekday: "long" });
 }
 
-export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCardsProps) {
+export default function DayScheduleCards({ date, active, onEdit, onDetail }: DayScheduleCardsProps) {
+  // Page-level editing mode: cards slide aside to reveal a per-card edit button.
+  const editMode = useScheduleEditStore((s) => s.editMode);
   const [tasks, toggleTaskCompleted] = useTaskStore(
     useShallow((state) => [state.tasks, state.toggleTaskCompleted])
   );
@@ -151,13 +156,15 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
   }, [date, active]);
 
   function handleEdit(id: string) {
+    // Editing mode opens the editor; a normal tap shows the read-only detail popup.
+    const open = useScheduleEditStore.getState().editMode ? onEdit : onDetail;
     const task = tasks.find((t) => t.id === id);
     if (task) {
-      onEdit({ type: "task", data: task });
+      open({ type: "task", data: task });
       return;
     }
     const habit = habits.find((h) => h.id === id);
-    if (habit) onEdit({ type: "habit", data: habit });
+    if (habit) open({ type: "habit", data: habit });
   }
 
   function handleToggle(id: string) {
@@ -352,6 +359,28 @@ export default function DayScheduleCards({ date, active, onEdit }: DayScheduleCa
               />
             )}
           </div>
+
+          {/* Edit-mode rail: grows in from the right, nudging the card content
+              aside, and is the card's edit entry point. (span, not button — the
+              whole card is already a button.) */}
+          <AnimatePresence initial={false}>
+            {editMode && (
+              <motion.span
+                key="edit"
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  handleEdit(item.id);
+                }}
+                whileTap={tap}
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 46, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                className="self-stretch shrink-0 flex items-center justify-center overflow-hidden bg-surface-raised border-l border-border-strong"
+              >
+                <Pencil size={16} className="text-fg-muted shrink-0" />
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
       </motion.button>
     );

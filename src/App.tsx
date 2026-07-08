@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
+import { AlignLeft, CalendarPlus, LayoutGrid, Menu, Pencil } from "lucide-react";
 
 import BottomNav, { type Page } from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
@@ -25,6 +25,7 @@ import ProfilePage from "./pages/ProfilePage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
+import { useScheduleEditStore } from "./store/scheduleEditStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
@@ -100,8 +101,13 @@ function App() {
     () => shiftWeek(1)
   );
 
+  const editMode = useScheduleEditStore((s) => s.editMode);
+  const toggleEditMode = useScheduleEditStore((s) => s.toggleEditMode);
+
   function go(p: Page) {
     if (p === activePage) return;
+    // Leaving the schedule drops editing mode so it never lingers unseen.
+    if (p !== "schedule") useScheduleEditStore.getState().setEditMode(false);
     const from = PAGE_ORDER.indexOf(activePage);
     setPage([p, PAGE_ORDER.indexOf(p) > from ? 1 : -1]);
   }
@@ -223,6 +229,16 @@ function App() {
                 transition={spring.snappy}
                 className="flex items-center gap-2"
               >
+                <motion.button
+                  onClick={toggleEditMode}
+                  whileTap={tap}
+                  aria-label="Edit tasks"
+                  className={`p-2 rounded-lg ${
+                    editMode ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg"
+                  }`}
+                >
+                  <Pencil size={17} />
+                </motion.button>
                 <motion.button
                   onClick={() => setIsPlanOpen(true)}
                   whileTap={tap}

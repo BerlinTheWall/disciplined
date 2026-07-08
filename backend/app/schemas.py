@@ -97,6 +97,8 @@ class HabitBase(CamelModel):
     completed_dates: list[str] = []
     skipped_dates: list[str] = []
     reminder_minutes_before: int | None = Field(default=None, ge=0)
+    workout_session_id: str | None = None
+    recipe_id: str | None = None
 
 
 class HabitCreate(HabitBase):
@@ -113,6 +115,8 @@ class HabitUpdate(CamelModel):
     completed_dates: list[str] | None = None
     skipped_dates: list[str] | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
+    workout_session_id: str | None = None
+    recipe_id: str | None = None
 
 
 class HabitOut(HabitBase):

@@ -57,6 +57,8 @@ class Habit(Base):
     completed_dates: Mapped[list] = mapped_column(JSON, default=list)  # ISO dates
     skipped_dates: Mapped[list] = mapped_column(JSON, default=list)
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class WorkoutSession(Base):
