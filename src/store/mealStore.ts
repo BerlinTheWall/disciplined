@@ -9,14 +9,19 @@ import type { Meal } from "@/types/meal";
 
 interface State {
   meals: Meal[];
+  // "Log again" suggestions cleared by the user: normalized meal name -> the
+  // meal date it was dismissed at. Meals logged after that date resurface.
+  logAgainDismissed: Record<string, string>;
 }
 
 const initialState: State = {
   meals: [],
+  logAgainDismissed: {},
 };
 
 interface Actions {
   addMeal: (meal: Omit<Meal, "id">) => string;
+  clearLogAgain: (entries: Record<string, string>) => void;
   updateMeal: (id: string, changes: Partial<Omit<Meal, "id">>) => void;
   deleteMeal: (id: string) => void;
   setComponentServings: (mealId: string, itemId: string, servings: number) => void;
@@ -35,6 +40,11 @@ export const useMealStore = create<State & Actions>()(
         });
         return id;
       },
+
+      clearLogAgain: (entries) =>
+        set((state) => {
+          Object.assign(state.logAgainDismissed, entries);
+        }),
 
       updateMeal: (id, changes) =>
         set((state) => {

@@ -44,6 +44,8 @@ const MACRO_COLORS = { carbs: "#d98a63", protein: "#6ba97a", fat: "#d3a944" };
 export default function MealsPage() {
   const meals = useMealStore((s) => s.meals);
   const addMeal = useMealStore((s) => s.addMeal);
+  const logAgainDismissed = useMealStore((s) => s.logAgainDismissed);
+  const clearLogAgain = useMealStore((s) => s.clearLogAgain);
   const groceryItems = useGroceryStore((s) => s.groceryItems);
 
   const [detailMeal, setDetailMeal] = useState<Meal | null>(null);
@@ -68,8 +70,16 @@ export default function MealsPage() {
     const key = m.name.trim().toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
+    const dismissedAt = logAgainDismissed[key];
+    if (dismissedAt && m.date <= dismissedAt) continue;
     recent.push(m);
     if (recent.length >= 8) break;
+  }
+
+  function clearRecent() {
+    clearLogAgain(
+      Object.fromEntries(recent.map((m) => [m.name.trim().toLowerCase(), m.date]))
+    );
   }
 
   function logAgain(m: Meal) {
@@ -129,7 +139,16 @@ export default function MealsPage() {
       {/* ---------- Log again ---------- */}
       {recent.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <h2 className="text-base font-semibold text-fg px-1">Log again</h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-base font-semibold text-fg">Log again</h2>
+            <motion.button
+              onClick={clearRecent}
+              whileTap={tap}
+              className="text-sm font-medium text-fg-faint"
+            >
+              Clear
+            </motion.button>
+          </div>
           <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {recent.map((m) => {
               const n = mealNutrition(m, items);
