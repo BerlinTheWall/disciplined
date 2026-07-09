@@ -298,6 +298,14 @@ const stepVariants = {
   exit: (d: number) => ({ x: d > 0 ? -32 : 32, opacity: 0 }),
 };
 
+// Same idea for the calendar's month grid: slide in from the side you're
+// heading toward (dir 0 on first render skips the slide entirely).
+const monthVariants = {
+  enter: (d: number) => ({ x: d > 0 ? 56 : d < 0 ? -56 : 0, opacity: d === 0 ? 1 : 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (d: number) => ({ x: d > 0 ? -56 : d < 0 ? 56 : 0, opacity: 0 }),
+};
+
 interface AddItemSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1572,6 +1580,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
                   onClick={() => setOpenRow(null)}
                 />
                 <motion.div
@@ -1580,7 +1589,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                   initial={{ y: "100%" }}
                   animate={{ y: 0 }}
                   exit={{ y: "100%" }}
-                  transition={spring.snappy}
+                  transition={spring.gentle}
                 >
                   <div className="sticky top-0 bg-surface rounded-t-2xl flex items-center justify-between px-4 pt-3 pb-2">
                     <h3 className="text-base font-semibold text-fg">
@@ -1665,12 +1674,19 @@ function CalendarMonth({
 }) {
   const selected = isoToDate(value);
   const [view, setView] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
+  // +1 sliding forward, -1 back — drives which side the next month enters from.
+  const [dir, setDir] = useState(0);
   const todayIso = toISODate(new Date());
   const y = view.getFullYear();
   const m = view.getMonth();
   const firstWeekday = new Date(y, m, 1).getDay();
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const onSelColor = isLightColor(color) ? "#111827" : "#ffffff";
+
+  function shiftMonth(delta: number) {
+    setDir(delta);
+    setView(new Date(y, m + delta, 1));
+  }
 
   return (
     <div>
@@ -1680,7 +1696,7 @@ function CalendarMonth({
         </p>
         <div className="flex gap-2">
           <motion.button
-            onClick={() => setView(new Date(y, m - 1, 1))}
+            onClick={() => shiftMonth(-1)}
             whileTap={tap}
             aria-label="Previous month"
             className="w-9 h-9 rounded-full bg-surface-raised flex items-center justify-center text-fg-muted"
@@ -1688,7 +1704,7 @@ function CalendarMonth({
             <ChevronLeft size={18} />
           </motion.button>
           <motion.button
-            onClick={() => setView(new Date(y, m + 1, 1))}
+            onClick={() => shiftMonth(1)}
             whileTap={tap}
             aria-label="Next month"
             className="w-9 h-9 rounded-full bg-surface-raised flex items-center justify-center text-fg-muted"
@@ -1706,43 +1722,56 @@ function CalendarMonth({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-y-1">
-        {Array.from({ length: firstWeekday }, (_, i) => (
-          <span key={`pad-${i}`} />
-        ))}
-        {Array.from({ length: daysInMonth }, (_, i) => {
-          const iso = toISODate(new Date(y, m, i + 1));
-          const isSelected = iso === value;
-          const isToday = iso === todayIso;
-          const dots = markers(iso).slice(0, 3);
-          return (
-            <button
-              key={iso}
-              onClick={() => onChange(iso)}
-              className="flex flex-col items-center gap-1 py-0.5"
-            >
-              <span
-                className="w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold"
-                style={
-                  isSelected
-                    ? { backgroundColor: color, color: onSelColor }
-                    : { color: isToday ? color : "var(--fg)" }
-                }
-              >
-                {i + 1}
-              </span>
-              <span className="flex gap-0.5 h-1.5">
-                {dots.map((c, j) => (
+      <div className="relative overflow-x-clip">
+        <AnimatePresence mode="popLayout" custom={dir} initial={false}>
+          <motion.div
+            key={`${y}-${m}`}
+            custom={dir}
+            variants={monthVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="grid grid-cols-7 gap-y-1"
+          >
+            {Array.from({ length: firstWeekday }, (_, i) => (
+              <span key={`pad-${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const iso = toISODate(new Date(y, m, i + 1));
+              const isSelected = iso === value;
+              const isToday = iso === todayIso;
+              const dots = markers(iso).slice(0, 3);
+              return (
+                <button
+                  key={iso}
+                  onClick={() => onChange(iso)}
+                  className="flex flex-col items-center gap-1 py-0.5"
+                >
                   <span
-                    key={j}
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </span>
-            </button>
-          );
-        })}
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold"
+                    style={
+                      isSelected
+                        ? { backgroundColor: color, color: onSelColor }
+                        : { color: isToday ? color : "var(--fg)" }
+                    }
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="flex gap-0.5 h-1.5">
+                    {dots.map((c, j) => (
+                      <span
+                        key={j}
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </span>
+                </button>
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
