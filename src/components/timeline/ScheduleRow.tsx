@@ -161,7 +161,10 @@ export default function ScheduleRow({
         </span>
       </div>
 
-      <div className="flex-1 flex items-center gap-3 pl-4">
+      {/* min-w-0: without it this wrapper's min-content (title's max-w cap +
+          pill + toggle + edit rail) can exceed the row and push the toggle and
+          edit button off-screen instead of truncating the title further. */}
+      <div className="flex-1 min-w-0 flex items-center gap-3 pl-4">
         <motion.div
           ref={move.setNodeRef}
           {...move.listeners}
@@ -289,9 +292,12 @@ export default function ScheduleRow({
               key="edit"
               onClick={() => onEdit(id)}
               whileTap={tap}
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 34, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
+              // marginLeft cancels the container's gap-3 while collapsed, so
+              // the rail's footprint animates all the way to 0 — otherwise the
+              // 12px gap vanishes only on unmount and the toggle jumps.
+              initial={{ width: 0, opacity: 0, marginLeft: -12 }}
+              animate={{ width: 34, opacity: 1, marginLeft: 0 }}
+              exit={{ width: 0, opacity: 0, marginLeft: -12 }}
               transition={spring.snappy}
               className="h-8 rounded-full bg-surface-raised flex items-center justify-center shrink-0 overflow-hidden"
             >
