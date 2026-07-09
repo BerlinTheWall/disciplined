@@ -1,17 +1,19 @@
 import { useContext, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import MonthYearPicker from "./MonthYearPicker";
+import CalendarMonth from "./CalendarMonth";
 import { WeekSwipeContext } from "./swipeController";
 import SwipePager from "./SwipePager";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import {
   addDays,
   formatMonthYear,
   getDayLabel,
   getWeekDates,
   isSameDay,
+  todayISODate,
   toISODate,
 } from "@/lib/date";
 import { spring, tap } from "@/lib/motion";
@@ -29,6 +31,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
   const sharedController = useContext(WeekSwipeContext);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  useScrollLock(pickerOpen);
 
   const selectedDateObj = new Date(selectedDate + "T00:00:00");
   const today = new Date();
@@ -37,8 +40,9 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
     setSelectedDate(toISODate(addDays(selectedDateObj, delta * 7)));
   }
 
-  function jumpTo(date: Date) {
-    setSelectedDate(toISODate(date));
+  function jumpTo(iso: string) {
+    setSelectedDate(iso);
+    setPickerOpen(false);
   }
 
   // One week's row of day buttons, for the week containing `anchor`.
@@ -137,12 +141,40 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
         renderPage={renderWeek}
       />
 
-      <MonthYearPicker
-        isOpen={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        value={selectedDateObj}
-        onSelect={jumpTo}
-      />
+      {/* Tap the month title → the same month calendar the edit sheet uses;
+          picking a day jumps straight to it. */}
+      <AnimatePresence>
+        {pickerOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPickerOpen(false)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+              <motion.div
+                className="w-full max-w-sm bg-surface rounded-3xl shadow-xl p-4 pointer-events-auto"
+                initial={{ opacity: 0, scale: 0.9, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 12 }}
+                transition={spring.snappy}
+              >
+                <CalendarMonth value={selectedDate} color="#fb7185" onChange={jumpTo} />
+
+                <motion.button
+                  onClick={() => jumpTo(todayISODate())}
+                  whileTap={tap}
+                  className="w-full mt-4 py-2.5 rounded-xl text-sm font-medium bg-surface-raised text-fg"
+                >
+                  Jump to today
+                </motion.button>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

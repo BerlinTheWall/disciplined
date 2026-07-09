@@ -10,7 +10,6 @@ import {
   Check,
   CheckCircle2,
   ChefHat,
-  ChevronLeft,
   ChevronRight,
   Clock,
   Dumbbell,
@@ -24,12 +23,11 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import CalendarMonth from "./CalendarMonth";
 import type { EditItem } from "./Timeline";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { toISODate } from "@/lib/date";
 import { formatAmount, indexItems } from "@/lib/grocery";
-import { isHabitActiveOnDate } from "@/lib/habits";
 import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
@@ -98,20 +96,6 @@ const FIELD_PANEL_TITLES: Record<EditRowKey, string> = {
 };
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 function repeatSummary(days: number[]) {
   if (days.length === 7) return "Every day";
@@ -299,14 +283,6 @@ const stepVariants = {
   exit: (d: number) => ({ x: d > 0 ? -32 : 32, opacity: 0 }),
 };
 
-// Same idea for the calendar's month grid: slide in from the side you're
-// heading toward (dir 0 on first render skips the slide entirely).
-const monthVariants = {
-  enter: (d: number) => ({ x: d > 0 ? 56 : d < 0 ? -56 : 0, opacity: d === 0 ? 1 : 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (d: number) => ({ x: d > 0 ? -56 : d < 0 ? 56 : 0, opacity: 0 }),
-};
-
 interface AddItemSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -333,8 +309,6 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         state.toggleHabitCompleted,
       ])
     );
-  const tasks = useTaskStore((s) => s.tasks);
-  const habits = useHabitStore((s) => s.habits);
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);
@@ -650,15 +624,6 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   function goTo(next: number) {
     setDir(next > step ? 1 : -1);
     setStep(next);
-  }
-
-  // Calendar dots: colors of the items already scheduled on a given day.
-  function dayMarkers(iso: string) {
-    const d = isoToDate(iso);
-    return [
-      ...habits.filter((h) => isHabitActiveOnDate(h, d)).map((h) => h.color),
-      ...tasks.filter((t) => t.date === iso).map((t) => t.color),
-    ];
   }
 
   // Header completion circle — writes straight to the store (completion isn't
@@ -1621,12 +1586,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                   </div>
                   <div className="px-4 pb-8 pt-1">
                     {openRow === "date" && (
-                      <CalendarMonth
-                        value={date}
-                        color={color}
-                        onChange={setDate}
-                        markers={dayMarkers}
-                      />
+                      <CalendarMonth value={date} color={color} onChange={setDate} />
                     )}
                     {openRow === "time" && (
                       <div>
@@ -1670,125 +1630,6 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         </>
       )}
     </AnimatePresence>
-  );
-}
-
-// Month-grid date picker for the edit sheet's Date panel: month navigation,
-// the selected day filled in the item's color, today tinted in it, and up to
-// three dots per day marking items already scheduled there.
-function CalendarMonth({
-  value,
-  color,
-  onChange,
-  markers,
-}: {
-  value: string;
-  color: string;
-  onChange: (iso: string) => void;
-  markers: (iso: string) => string[];
-}) {
-  const selected = isoToDate(value);
-  const [view, setView] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
-  // +1 sliding forward, -1 back — drives which side the next month enters from.
-  const [dir, setDir] = useState(0);
-  const todayIso = toISODate(new Date());
-  const y = view.getFullYear();
-  const m = view.getMonth();
-  const firstWeekday = new Date(y, m, 1).getDay();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const onSelColor = isLightColor(color) ? "#111827" : "#ffffff";
-
-  function shiftMonth(delta: number) {
-    setDir(delta);
-    setView(new Date(y, m + delta, 1));
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xl font-bold text-fg">
-          {MONTH_NAMES[m]} <span style={{ color }}>{y}</span>
-        </p>
-        <div className="flex gap-2">
-          <motion.button
-            onClick={() => shiftMonth(-1)}
-            whileTap={tap}
-            aria-label="Previous month"
-            className="w-9 h-9 rounded-full bg-surface-raised flex items-center justify-center text-fg-muted"
-          >
-            <ChevronLeft size={18} />
-          </motion.button>
-          <motion.button
-            onClick={() => shiftMonth(1)}
-            whileTap={tap}
-            aria-label="Next month"
-            className="w-9 h-9 rounded-full bg-surface-raised flex items-center justify-center text-fg-muted"
-          >
-            <ChevronRight size={18} />
-          </motion.button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-7 mb-1">
-        {DAY_NAMES.map((d) => (
-          <span key={d} className="text-center text-sm text-fg-faint">
-            {d}
-          </span>
-        ))}
-      </div>
-
-      <div className="relative overflow-x-clip">
-        <AnimatePresence mode="popLayout" custom={dir} initial={false}>
-          <motion.div
-            key={`${y}-${m}`}
-            custom={dir}
-            variants={monthVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="grid grid-cols-7 gap-y-1"
-          >
-            {Array.from({ length: firstWeekday }, (_, i) => (
-              <span key={`pad-${i}`} />
-            ))}
-            {Array.from({ length: daysInMonth }, (_, i) => {
-              const iso = toISODate(new Date(y, m, i + 1));
-              const isSelected = iso === value;
-              const isToday = iso === todayIso;
-              const dots = markers(iso).slice(0, 3);
-              return (
-                <button
-                  key={iso}
-                  onClick={() => onChange(iso)}
-                  className="flex flex-col items-center gap-1 py-0.5"
-                >
-                  <span
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold"
-                    style={
-                      isSelected
-                        ? { backgroundColor: color, color: onSelColor }
-                        : { color: isToday ? color : "var(--fg)" }
-                    }
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="flex gap-0.5 h-1.5">
-                    {dots.map((c, j) => (
-                      <span
-                        key={j}
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </span>
-                </button>
-              );
-            })}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </div>
   );
 }
 
