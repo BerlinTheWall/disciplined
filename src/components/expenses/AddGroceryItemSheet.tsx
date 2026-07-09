@@ -25,6 +25,7 @@ import {
 } from "@/lib/nutritions";
 import { useGroceryStore } from "@/store/groceryStore";
 import type { GroceryItem } from "@/types/grocery";
+import Collapse from "../Collapse";
 import { useConfirm } from "../ConfirmDialog";
 
 interface AddGroceryItemSheetProps {
@@ -278,7 +279,7 @@ export default function AddGroceryItemSheet({
               {showDetails ? "Fewer details" : "Price, stock & nutrition"}
             </motion.button>
 
-            {showDetails && (
+            <Collapse open={showDetails}>
               <>
                 {/* In stock */}
                 <label className="text-sm text-fg-muted mb-1 block">
@@ -357,7 +358,7 @@ export default function AddGroceryItemSheet({
                   ))}
                 </div>
               </>
-            )}
+            </Collapse>
 
             <motion.button
               onClick={handleSubmit}

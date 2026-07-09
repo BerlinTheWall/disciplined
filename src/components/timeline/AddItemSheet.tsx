@@ -49,6 +49,7 @@ import { useTaskStore } from "@/store/taskStore";
 import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 import type { Priority } from "@/types/task";
+import Collapse from "../Collapse";
 import { useChoose, useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
@@ -827,7 +828,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         </motion.button>
       </div>
 
-      {customMode && (
+      <Collapse open={customMode}>
         <div className="flex items-center gap-2 mt-3 bg-surface-raised rounded-2xl px-4 py-3">
           <input
             type="number"
@@ -854,7 +855,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
             {formatDuration(duration)}
           </span>
         </div>
-      )}
+      </Collapse>
 
       <p className="text-xs text-fg-faint mt-2.5">
         Ends at <span className="tabular-nums">{endLabel}</span>
@@ -938,13 +939,13 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         })}
       </div>
 
-      {isEditing && mode !== editItem!.type && (
+      <Collapse open={isEditing && mode !== editItem?.type}>
         <p className="text-xs text-fg-faint mt-2 px-1">
           {mode === "habit"
             ? "Saving will convert this into a repeating habit."
             : "Saving will convert this into a one-time task — the repeat schedule and its history will be removed."}
         </p>
-      )}
+      </Collapse>
     </div>
   );
 
@@ -1007,44 +1008,48 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         })}
       </div>
 
-      {linkedSession && (
-        <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-fg-muted">What you'll do</p>
-            <motion.button
-              onClick={() => {
-                openWorkoutSession(linkedSession.id);
-                onClose();
-              }}
-              whileTap={tap}
-              className="flex items-center gap-1 text-xs font-medium"
-              style={{ color }}
-            >
-              Open in Workout
-              <ArrowUpRight size={14} />
-            </motion.button>
-          </div>
-          {linkedSession.exercises.length === 0 ? (
-            <p className="text-sm text-fg-faint">No exercises added to this session yet.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {linkedSession.exercises.map((ex, i) => (
-                <div key={ex.id} className="flex items-baseline gap-2">
-                  <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">{i + 1}.</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-fg leading-tight">{ex.name}</p>
-                    {exerciseSummary(ex, linkedSession.type) && (
-                      <p className="text-xs text-fg-faint">
-                        {exerciseSummary(ex, linkedSession.type)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
+      <Collapse open={!!linkedSession}>
+        {linkedSession && (
+          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-fg-muted">What you'll do</p>
+              <motion.button
+                onClick={() => {
+                  openWorkoutSession(linkedSession.id);
+                  onClose();
+                }}
+                whileTap={tap}
+                className="flex items-center gap-1 text-xs font-medium"
+                style={{ color }}
+              >
+                Open in Workout
+                <ArrowUpRight size={14} />
+              </motion.button>
             </div>
-          )}
-        </div>
-      )}
+            {linkedSession.exercises.length === 0 ? (
+              <p className="text-sm text-fg-faint">No exercises added to this session yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {linkedSession.exercises.map((ex, i) => (
+                  <div key={ex.id} className="flex items-baseline gap-2">
+                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
+                      {i + 1}.
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-fg leading-tight">{ex.name}</p>
+                      {exerciseSummary(ex, linkedSession.type) && (
+                        <p className="text-xs text-fg-faint">
+                          {exerciseSummary(ex, linkedSession.type)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Collapse>
     </div>
   );
 
@@ -1075,51 +1080,55 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         ))}
       </div>
 
-      {linkedRecipe && (
-        <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-fg-muted">What to make</p>
-            <motion.button
-              onClick={() => {
-                openRecipe(linkedRecipe.id);
-                onClose();
-              }}
-              whileTap={tap}
-              className="flex items-center gap-1 text-xs font-medium"
-              style={{ color }}
-            >
-              Open in Recipes
-              <ArrowUpRight size={14} />
-            </motion.button>
-          </div>
-
-          {linkedRecipe.ingredients.length > 0 && (
-            <p className="text-sm text-fg mb-2">
-              {linkedRecipe.ingredients
-                .map((ing) => {
-                  const item = catalog[ing.itemId];
-                  if (!item) return null;
-                  return `${item.name} (${formatAmount(item, ing.servings)})`;
-                })
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-          )}
-
-          {linkedRecipe.steps.length === 0 ? (
-            <p className="text-sm text-fg-faint">No steps added to this recipe yet.</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {linkedRecipe.steps.map((step, i) => (
-                <div key={i} className="flex items-baseline gap-2">
-                  <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">{i + 1}.</span>
-                  <p className="text-sm text-fg leading-snug">{step}</p>
-                </div>
-              ))}
+      <Collapse open={!!linkedRecipe}>
+        {linkedRecipe && (
+          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-fg-muted">What to make</p>
+              <motion.button
+                onClick={() => {
+                  openRecipe(linkedRecipe.id);
+                  onClose();
+                }}
+                whileTap={tap}
+                className="flex items-center gap-1 text-xs font-medium"
+                style={{ color }}
+              >
+                Open in Recipes
+                <ArrowUpRight size={14} />
+              </motion.button>
             </div>
-          )}
-        </div>
-      )}
+
+            {linkedRecipe.ingredients.length > 0 && (
+              <p className="text-sm text-fg mb-2">
+                {linkedRecipe.ingredients
+                  .map((ing) => {
+                    const item = catalog[ing.itemId];
+                    if (!item) return null;
+                    return `${item.name} (${formatAmount(item, ing.servings)})`;
+                  })
+                  .filter(Boolean)
+                  .join(", ")}
+              </p>
+            )}
+
+            {linkedRecipe.steps.length === 0 ? (
+              <p className="text-sm text-fg-faint">No steps added to this recipe yet.</p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {linkedRecipe.steps.map((step, i) => (
+                  <div key={i} className="flex items-baseline gap-2">
+                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
+                      {i + 1}.
+                    </span>
+                    <p className="text-sm text-fg leading-snug">{step}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Collapse>
     </div>
   );
 
@@ -1142,20 +1151,20 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const typeLinksBody = (
     <div>
       {typeCards}
-      {mode === "task" && (
+      <Collapse open={mode === "task"}>
         <div className="mt-4">
           <label className="text-xs font-medium text-fg-muted mb-2 block">Priority</label>
           {priorityButtons}
         </div>
-      )}
+      </Collapse>
       {workoutLinkBody && <div className="mt-4">{workoutLinkBody}</div>}
       {recipeLinkBody && <div className="mt-4">{recipeLinkBody}</div>}
-      {mode === "habit" && (
+      <Collapse open={mode === "habit"}>
         <div className="mt-4">
           <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat on</label>
           {repeatDaysBody}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 
@@ -1365,7 +1374,13 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                     </div>
                   )}
 
-                  {linkSuggestion && !suggestDismissed && (
+                  {/* -mb-4/pb-4 cancel the stack's gap while collapsed so the
+                      card's disappearance doesn't end with a spacing jump. */}
+                  <Collapse
+                    open={!!linkSuggestion && !suggestDismissed}
+                    outerClassName="-mb-4"
+                    className="pb-4"
+                  >
                     <div className="rounded-2xl bg-surface-alt p-3">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
@@ -1418,7 +1433,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                             ))}
                       </div>
                     </div>
-                  )}
+                  </Collapse>
 
                   <motion.button
                     onClick={handleSubmit}
@@ -1629,14 +1644,14 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                     {openRow === "repeat" && (
                       <div>
                         {typeCards}
-                        {mode === "habit" && (
+                        <Collapse open={mode === "habit"}>
                           <div className="mt-4">
                             <label className="text-xs font-medium text-fg-muted mb-2 block">
                               Repeat on
                             </label>
                             {repeatDaysBody}
                           </div>
-                        )}
+                        </Collapse>
                       </div>
                     )}
                     {openRow === "alert" && reminderChips}

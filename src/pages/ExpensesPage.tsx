@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CalendarPlus, Check, Minus, Pencil, Plus, ShoppingCart, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import Collapse from "@/components/Collapse";
 import AddExpenseSheet from "@/components/expenses/AddExpenseSheet";
 import AddGroceryItemSheet from "@/components/expenses/AddGroceryItemSheet";
 import CatalogPickerSheet from "@/components/expenses/CatalogPickerSheet";
@@ -154,7 +155,9 @@ export default function ExpensesPage() {
           )}
         </div>
 
-        {editingBudget ? (
+        {/* Two stacked collapses morph the card height smoothly as the
+            display and edit states swap. */}
+        <Collapse open={editingBudget}>
           <div className="mt-3">
             <label className="text-xs text-gray-400 mb-1 block">Monthly budget</label>
             <div className="flex gap-2">
@@ -186,7 +189,8 @@ export default function ExpensesPage() {
               </motion.button>
             </div>
           </div>
-        ) : (
+        </Collapse>
+        <Collapse open={!editingBudget}>
           <>
             <p className="text-3xl font-bold mt-1">
               {money(spent)}
@@ -225,7 +229,7 @@ export default function ExpensesPage() {
               </motion.button>
             )}
           </>
-        )}
+        </Collapse>
       </div>
 
       {/* ---------- Shopping list (current trip) ---------- */}
