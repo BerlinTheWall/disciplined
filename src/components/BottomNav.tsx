@@ -101,7 +101,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
       </AnimatePresence>
 
       {/* Pill */}
-      <nav className="bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-3.5">
+      <nav className="bg-surface rounded-full shadow-xl border border-border-strong flex items-center px-2 py-2.5">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
