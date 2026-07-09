@@ -14,7 +14,7 @@ import { useSwipeController, WeekSwipeContext } from "./components/timeline/swip
 import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
 import { BACKGROUNDS } from "./lib/backgrounds";
-import { addDays, toISODate } from "./lib/date";
+import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
 import ExpensesPage from "./pages/ExpensesPage";
 import FoodPage from "./pages/FoodPage";
@@ -99,6 +99,23 @@ function App() {
     () => shiftWeek(-1),
     () => shiftWeek(1)
   );
+
+  // The schedule page is titled by the day being viewed: Today/Tomorrow/
+  // Yesterday by name, any other day as a date with the month tinted.
+  const selectedDate = useTaskStore((s) => s.selectedDate);
+  const relDayName = activePage === "schedule" ? relativeDayName(selectedDate) : null;
+  const titleDate = new Date(selectedDate + "T00:00:00");
+  const pageTitle =
+    activePage !== "schedule"
+      ? PAGE_TITLES[activePage]
+      : (relDayName ?? (
+          <>
+            <span className="text-rose-400">
+              {titleDate.toLocaleDateString(undefined, { month: "short" })}
+            </span>{" "}
+            {titleDate.getDate()}, {titleDate.getFullYear()}
+          </>
+        ));
 
   function go(p: Page) {
     if (p === activePage) return;
@@ -199,7 +216,11 @@ function App() {
             <div className="relative h-10 flex items-center overflow-hidden">
               <AnimatePresence mode="popLayout" custom={dir} initial={false}>
                 <motion.h1
-                  key={activePage}
+                  key={
+                    activePage === "schedule"
+                      ? `schedule-${relDayName ?? selectedDate}`
+                      : activePage
+                  }
                   custom={dir}
                   initial={{ y: dir > 0 ? 24 : -24, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -207,7 +228,7 @@ function App() {
                   transition={spring.snappy}
                   className="text-3xl font-bold whitespace-nowrap text-fg"
                 >
-                  {PAGE_TITLES[activePage]}
+                  {pageTitle}
                 </motion.h1>
               </AnimatePresence>
             </div>

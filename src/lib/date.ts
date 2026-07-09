@@ -43,3 +43,15 @@ export function getDayLabel(date: Date) {
 export function isSameDay(a: Date, b: Date) {
   return toISODate(a) === toISODate(b);
 }
+
+// "Today" / "Tomorrow" / "Yesterday", or null when the day needs a real date.
+export function relativeDayName(iso: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(iso + "T00:00:00");
+  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  return null;
+}
