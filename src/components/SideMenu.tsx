@@ -7,7 +7,6 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { tap } from "@/lib/motion";
 import { ALL_TABS } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
-import { useProfileStore } from "@/store/profileStore";
 import { useThemeStore } from "@/store/themeStore";
 
 // Pages reachable from the bottom nav, so they're left out of the side menu.
@@ -31,11 +30,8 @@ export default function SideMenu({
   onOpenSettings,
 }: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore();
-  const name = useProfileStore((s) => s.name);
   const logout = useAuthStore((s) => s.logout);
   useScrollLock(isOpen);
-
-  const initial = name.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <AnimatePresence>
@@ -80,26 +76,6 @@ export default function SideMenu({
             >
               <X size={18} />
             </motion.button>
-
-            {/* User card */}
-            <div className="px-5 pb-5">
-              <motion.button
-                whileTap={tap}
-                onClick={() => {
-                  onNavigate("profile");
-                  onClose();
-                }}
-                className="flex items-center gap-3 w-full text-left"
-              >
-                <div className="w-12 h-12 rounded-full bg-fg flex items-center justify-center shrink-0">
-                  <span className="text-base font-bold text-fg-inverse">{initial}</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-fg">{name}</p>
-                  <p className="text-sm text-fg-faint">View profile</p>
-                </div>
-              </motion.button>
-            </div>
 
             {/* Nav items */}
             <div className="px-3 flex-1">

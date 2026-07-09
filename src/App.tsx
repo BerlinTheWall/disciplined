@@ -24,6 +24,7 @@ import MealsPage from "./pages/MealsPage";
 import ProfilePage from "./pages/ProfilePage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
+import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useTaskStore } from "./store/taskStore";
@@ -116,6 +117,10 @@ function App() {
             {titleDate.getDate()}, {titleDate.getFullYear()}
           </>
         ));
+
+  // Initial-letter avatar in the home header — the way into the profile page.
+  const profileName = useProfileStore((s) => s.name);
+  const profileInitial = profileName.trim().charAt(0).toUpperCase() || "?";
 
   function go(p: Page) {
     if (p === activePage) return;
@@ -226,7 +231,7 @@ function App() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: dir > 0 ? -24 : 24, opacity: 0 }}
                   transition={spring.snappy}
-                  className={`${activePage === "schedule" ? "text-2xl" : "text-3xl"} font-bold whitespace-nowrap text-fg`}
+                  className={`${activePage === "schedule" ? "text-2xl" : "text-2xl"} font-bold whitespace-nowrap text-fg`}
                 >
                   {pageTitle}
                 </motion.h1>
@@ -234,10 +239,32 @@ function App() {
             </div>
           </div>
 
-          {/* Plan day + Daily/Weekly toggle — only on schedule page */}
+          {/* Right side of the header: profile avatar on Home, plan-day +
+              daily/weekly toggle on the schedule page */}
           <AnimatePresence>
+            {activePage === "home" && (
+              <motion.button
+                key="profile"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={spring.snappy}
+                onClick={() => go("profile")}
+                whileTap={tap}
+                aria-label="Open profile"
+                className="flex items-center gap-2.5"
+              >
+                <span className="text-base font-semibold text-fg max-w-36 truncate">
+                  {profileName}
+                </span>
+                <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
+                  <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
+                </span>
+              </motion.button>
+            )}
             {activePage === "schedule" && (
               <motion.div
+                key="schedule-controls"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
@@ -247,17 +274,17 @@ function App() {
                 <motion.button
                   onClick={() => setIsPlanOpen(true)}
                   whileTap={tap}
-                  className="flex items-center gap-1.5 bg-surface-raised rounded-lg px-3 py-2 text-base font-medium text-fg"
+                  className="flex items-center gap-1.5 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
                 >
                   <CalendarPlus size={17} />
                   Day Plan
                 </motion.button>
-                <div className="flex items-center bg-surface-raised rounded-lg p-0.5">
+                <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
                   {(["daily", "weekly"] as const).map((m) => (
                     <button
                       key={m}
                       onClick={() => setViewMode(m)}
-                      className="relative p-1.5 rounded-md"
+                      className="relative h-full px-2 rounded-md flex items-center justify-center"
                       aria-label={`${m} view`}
                     >
                       {viewMode === m && (
