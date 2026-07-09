@@ -5,14 +5,20 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpRight,
+  Bell,
   Calendar,
   Check,
   CheckCircle2,
   ChefHat,
+  ChevronLeft,
   ChevronRight,
+  Clock,
   Dumbbell,
+  Flag,
+  Link2,
+  MoreHorizontal,
+  Palette,
   Repeat,
-  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,11 +27,18 @@ import { useShallow } from "zustand/shallow";
 import type { EditItem } from "./Timeline";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { toISODate } from "@/lib/date";
 import { formatAmount, indexItems } from "@/lib/grocery";
+import { isHabitActiveOnDate } from "@/lib/habits";
 import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
-import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
+import {
+  notifyPermission,
+  REMINDER_OPTIONS,
+  reminderLabel,
+  requestNotifyPermission,
+} from "@/lib/reminders";
 import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
@@ -50,7 +63,15 @@ const COLOR_OPTIONS = [
   "#f472b6",
   "#f87171",
 ];
-const DURATION_OPTIONS = [15, 30, 60, 120];
+const DURATION_OPTIONS = [15, 30, 45, 60, 90];
+
+// Labels in the duration track: bare minutes when idle ("30"), the unit only
+// on the selected pill ("30min"), hours always spelled ("1h", "1.5h").
+function durationTrackLabel(d: number, selected: boolean) {
+  if (d < 60) return selected ? `${d}min` : `${d}`;
+  const h = d / 60;
+  return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
+}
 const DAY_OPTIONS = [
   { label: "S", value: 0 },
   { label: "M", value: 1 },
@@ -62,6 +83,43 @@ const DAY_OPTIONS = [
 ];
 
 const MINUTES_PER_DAY = 1440;
+
+// Rows of the edit sheet; tapping one slides its editor up from the bottom.
+type EditRowKey = "date" | "time" | "repeat" | "alert" | "priority" | "links";
+
+const FIELD_PANEL_TITLES: Record<EditRowKey, string> = {
+  date: "Date",
+  time: "Time",
+  repeat: "Repeat",
+  alert: "Alert",
+  priority: "Priority",
+  links: "Links",
+};
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function repeatSummary(days: number[]) {
+  if (days.length === 7) return "Every day";
+  if (days.length === 0) return "No days picked";
+  const sorted = [...days].sort((a, b) => a - b);
+  if (sorted.length === 5 && sorted[0] === 1 && sorted[4] === 5) return "Weekdays";
+  if (sorted.length === 2 && sorted[0] === 0 && sorted[1] === 6) return "Weekends";
+  return sorted.map((d) => DAY_NAMES[d]).join(", ");
+}
 
 /* ---- helpers ----------------------------------------------------- */
 
@@ -128,19 +186,21 @@ function relativeDayLabel(iso: string) {
 
 const WHEEL_ITEM_H = 40;
 const WHEEL_VISIBLE = 3;
-const WHEEL_PAD = ((WHEEL_VISIBLE - 1) / 2) * WHEEL_ITEM_H;
 
 function TimeWheel({
   value,
   durationMinutes,
   color,
   onChange,
+  visibleRows = WHEEL_VISIBLE,
 }: {
   value: string;
   durationMinutes: number;
   color: string;
   onChange: (next: string) => void;
+  visibleRows?: number;
 }) {
+  const wheelPad = ((visibleRows - 1) / 2) * WHEEL_ITEM_H;
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didMount = useRef(false);
@@ -203,9 +263,9 @@ function TimeWheel({
         ref={ref}
         onScroll={handleScroll}
         className="wheel-col overflow-y-scroll snap-y snap-mandatory"
-        style={{ height: WHEEL_VISIBLE * WHEEL_ITEM_H, scrollbarWidth: "none" }}
+        style={{ height: visibleRows * WHEEL_ITEM_H, scrollbarWidth: "none" }}
       >
-        <div style={{ height: WHEEL_PAD }} />
+        <div style={{ height: wheelPad }} />
         {steps.map((min, i) => (
           <div
             key={min}
@@ -224,7 +284,7 @@ function TimeWheel({
             )}
           </div>
         ))}
-        <div style={{ height: WHEEL_PAD }} />
+        <div style={{ height: wheelPad }} />
       </div>
     </div>
   );
@@ -245,17 +305,27 @@ interface AddItemSheetProps {
 }
 
 export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheetProps) {
-  const [selectedDate, updateTask, addTask, deleteTask] = useTaskStore(
-    useShallow((state) => [state.selectedDate, state.updateTask, state.addTask, state.deleteTask])
-  );
-  const [addHabit, updateHabit, deleteHabit, skipHabitOccurrence] = useHabitStore(
+  const [selectedDate, updateTask, addTask, deleteTask, toggleTaskCompleted] = useTaskStore(
     useShallow((state) => [
-      state.addHabit,
-      state.updateHabit,
-      state.deleteHabit,
-      state.skipHabitOccurrence,
+      state.selectedDate,
+      state.updateTask,
+      state.addTask,
+      state.deleteTask,
+      state.toggleTaskCompleted,
     ])
   );
+  const [addHabit, updateHabit, deleteHabit, skipHabitOccurrence, toggleHabitCompleted] =
+    useHabitStore(
+      useShallow((state) => [
+        state.addHabit,
+        state.updateHabit,
+        state.deleteHabit,
+        state.skipHabitOccurrence,
+        state.toggleHabitCompleted,
+      ])
+    );
+  const tasks = useTaskStore((s) => s.tasks);
+  const habits = useHabitStore((s) => s.habits);
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);
@@ -288,7 +358,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
   const [reminder, setReminder] = useState<number | null>(null);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
+  const [done, setDone] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
   const [suggestDismissed, setSuggestDismissed] = useState(false);
 
@@ -296,10 +367,15 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     if (!isOpen) return;
     setStep(1);
     setDir(1);
-    setAdvancedOpen(false);
+    setOpenRow(null);
     setStyleOpen(false);
     setSuggestDismissed(false);
     if (editItem) {
+      setDone(
+        editItem.type === "task"
+          ? editItem.data.completed
+          : editItem.data.completedDates.includes(selectedDate)
+      );
       setMode(editItem.type);
       setTitle(editItem.data.title);
       setDate(editItem.type === "task" ? editItem.data.date : selectedDate);
@@ -567,6 +643,24 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setStep(next);
   }
 
+  // Calendar dots: colors of the items already scheduled on a given day.
+  function dayMarkers(iso: string) {
+    const d = isoToDate(iso);
+    return [
+      ...habits.filter((h) => isHabitActiveOnDate(h, d)).map((h) => h.color),
+      ...tasks.filter((t) => t.date === iso).map((t) => t.color),
+    ];
+  }
+
+  // Header completion circle — writes straight to the store (completion isn't
+  // part of the staged form), mirrored locally since editItem is a snapshot.
+  function toggleDone() {
+    if (!editItem) return;
+    if (editItem.type === "task") toggleTaskCompleted(editItem.data.id);
+    else toggleHabitCompleted(editItem.data.id, date);
+    setDone((v) => !v);
+  }
+
   const startMin = timeStringToMinutes(time);
   const maxDuration = MINUTES_PER_DAY - startMin;
   const endMin = startMin + duration;
@@ -642,42 +736,53 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     </div>
   );
 
-  const scheduleBody = (
+  const datePickerField = (
+    <div className="relative">
+      <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5">
+        <span className="flex items-center gap-2 text-fg font-medium">
+          <Calendar size={18} className="text-fg-faint" />
+          {formatFullDate(date)}
+        </span>
+        <span className="flex items-center gap-1 text-fg-faint text-sm">
+          {relativeDayLabel(date)}
+          <ChevronRight size={16} />
+        </span>
+      </div>
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => e.target.value && setDate(e.target.value)}
+        className="absolute inset-0 opacity-0 w-full h-full"
+      />
+    </div>
+  );
+
+  const dateBody = (
     <div>
       <label className="text-xs font-medium text-fg-muted mb-1.5 block">Date</label>
-      <div className="relative mb-4">
-        <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5">
-          <span className="flex items-center gap-2 text-fg font-medium">
-            <Calendar size={18} className="text-fg-faint" />
-            {formatFullDate(date)}
-          </span>
-          <span className="flex items-center gap-1 text-fg-faint text-sm">
-            {relativeDayLabel(date)}
-            <ChevronRight size={16} />
-          </span>
-        </div>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => e.target.value && setDate(e.target.value)}
-          className="absolute inset-0 opacity-0 w-full h-full"
-        />
-      </div>
+      <div className="mb-4">{datePickerField}</div>
+    </div>
+  );
 
+  const timeWheelField = (
+    <TimeWheel value={time} durationMinutes={duration} color={color} onChange={handleTimeChange} />
+  );
+
+  const timeBody = (
+    <div>
       <label className="text-xs font-medium text-fg-muted mb-1.5 block">Start time</label>
-      <div className="mb-3">
-        <TimeWheel
-          value={time}
-          durationMinutes={duration}
-          color={color}
-          onChange={handleTimeChange}
-        />
-      </div>
+      {timeWheelField}
+    </div>
+  );
 
-      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Duration</label>
-      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+  const durationField = (
+    <div>
+      {/* Segmented track: the selected duration is a filled pill in the
+          item's color, everything else quiet text on the shared rail. */}
+      <div className="flex items-center bg-surface-raised rounded-full p-1">
         {DURATION_OPTIONS.map((d) => {
           const tooLong = d > maxDuration;
+          const selected = !customMode && duration === d;
           return (
             <motion.button
               key={d}
@@ -688,9 +793,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               }}
               whileTap={tooLong ? undefined : tap}
               disabled={tooLong}
-              className={`${chipCls(!customMode && duration === d)} disabled:opacity-30`}
+              className={`flex-1 py-2 rounded-full text-sm font-medium disabled:opacity-30 ${
+                selected ? "font-semibold" : "text-fg-faint"
+              }`}
+              style={selected ? { backgroundColor: color, color: onColor } : undefined}
             >
-              {formatDuration(d)}
+              {durationTrackLabel(d, selected)}
             </motion.button>
           );
         })}
@@ -701,9 +809,13 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
             setCustomM(String(duration % 60));
           }}
           whileTap={tap}
-          className={chipCls(customMode)}
+          aria-label="Custom duration"
+          className="flex-1 py-2 rounded-full flex items-center justify-center"
+          style={
+            customMode ? { backgroundColor: color, color: onColor } : { color: "var(--fg-faint)" }
+          }
         >
-          Custom
+          <MoreHorizontal size={18} />
         </motion.button>
       </div>
 
@@ -743,25 +855,44 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     </div>
   );
 
-  const reminderBody = (
+  const durationBody = (
     <div>
-      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Reminder</label>
-      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-        {REMINDER_OPTIONS.map((opt) => (
-          <motion.button
-            key={String(opt.value)}
-            onClick={() => pickReminder(opt.value)}
-            whileTap={tap}
-            className={chipCls(reminder === opt.value)}
-          >
-            {opt.label}
-          </motion.button>
-        ))}
-      </div>
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Duration</label>
+      {durationField}
     </div>
   );
 
-  const typeLinksBody = (
+  const scheduleBody = (
+    <div>
+      {dateBody}
+      {timeBody}
+      <div className="mt-3">{durationBody}</div>
+    </div>
+  );
+
+  const reminderChips = (
+    <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+      {REMINDER_OPTIONS.map((opt) => (
+        <motion.button
+          key={String(opt.value)}
+          onClick={() => pickReminder(opt.value)}
+          whileTap={tap}
+          className={chipCls(reminder === opt.value)}
+        >
+          {opt.label}
+        </motion.button>
+      ))}
+    </div>
+  );
+
+  const reminderBody = (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Reminder</label>
+      {reminderChips}
+    </div>
+  );
+
+  const typeCards = (
     <div>
       <label className="text-xs font-medium text-fg-muted mb-2 block">This is a…</label>
       <div className="flex flex-col gap-2">
@@ -806,211 +937,216 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
             : "Saving will convert this into a one-time task — the repeat schedule and its history will be removed."}
         </p>
       )}
+    </div>
+  );
 
-      {mode === "task" && (
-        <>
-          <label className="text-xs font-medium text-fg-muted mb-2 mt-4 block">Priority</label>
-          <div className="flex gap-2">
-            {PRIORITIES.map((p) => {
-              const meta = PRIORITY_META[p];
-              const selected = priority === p;
-              return (
-                <motion.button
-                  key={p}
-                  onClick={() => setPriority(selected ? null : p)}
-                  whileTap={tap}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
-                  style={
-                    selected
-                      ? {
-                          borderColor: meta.color,
-                          backgroundColor: `${meta.color}1a`,
-                          color: meta.color,
-                        }
-                      : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
+  const priorityButtons = (
+    <div className="flex gap-2">
+      {PRIORITIES.map((p) => {
+        const meta = PRIORITY_META[p];
+        const selected = priority === p;
+        return (
+          <motion.button
+            key={p}
+            onClick={() => setPriority(selected ? null : p)}
+            whileTap={tap}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
+            style={
+              selected
+                ? {
+                    borderColor: meta.color,
+                    backgroundColor: `${meta.color}1a`,
+                    color: meta.color,
                   }
-                >
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                  {meta.label}
-                </motion.button>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {workoutSessions.length > 0 && (
-        <>
-          <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
-            <Dumbbell size={13} />
-            Link a workout (optional)
-          </label>
-          <div
-            className="wheel-col flex gap-2 overflow-x-auto pb-1"
-            style={{ scrollbarWidth: "none" }}
+                : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
+            }
           >
-            <motion.button
-              onClick={() => linkWorkout(undefined)}
-              whileTap={tap}
-              className={chipCls(!workoutSessionId)}
-            >
-              None
-            </motion.button>
-            {workoutSessions.map((s) => {
-              const SIcon = WORKOUT_TYPE_META[s.type].icon;
-              return (
-                <motion.button
-                  key={s.id}
-                  onClick={() => linkWorkout(s.id)}
-                  whileTap={tap}
-                  className={`flex items-center gap-1.5 ${chipCls(workoutSessionId === s.id)}`}
-                >
-                  <SIcon size={14} />
-                  {s.name}
-                </motion.button>
-              );
-            })}
-          </div>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+            {meta.label}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
 
-          {linkedSession && (
-            <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-fg-muted">What you'll do</p>
-                <motion.button
-                  onClick={() => {
-                    openWorkoutSession(linkedSession.id);
-                    onClose();
-                  }}
-                  whileTap={tap}
-                  className="flex items-center gap-1 text-xs font-medium"
-                  style={{ color }}
-                >
-                  Open in Workout
-                  <ArrowUpRight size={14} />
-                </motion.button>
-              </div>
-              {linkedSession.exercises.length === 0 ? (
-                <p className="text-sm text-fg-faint">No exercises added to this session yet.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {linkedSession.exercises.map((ex, i) => (
-                    <div key={ex.id} className="flex items-baseline gap-2">
-                      <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
-                        {i + 1}.
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-fg leading-tight">{ex.name}</p>
-                        {exerciseSummary(ex, linkedSession.type) && (
-                          <p className="text-xs text-fg-faint">
-                            {exerciseSummary(ex, linkedSession.type)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+  const workoutLinkBody = workoutSessions.length > 0 && (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-2 flex items-center gap-1.5">
+        <Dumbbell size={13} />
+        Link a workout (optional)
+      </label>
+      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        <motion.button
+          onClick={() => linkWorkout(undefined)}
+          whileTap={tap}
+          className={chipCls(!workoutSessionId)}
+        >
+          None
+        </motion.button>
+        {workoutSessions.map((s) => {
+          const SIcon = WORKOUT_TYPE_META[s.type].icon;
+          return (
+            <motion.button
+              key={s.id}
+              onClick={() => linkWorkout(s.id)}
+              whileTap={tap}
+              className={`flex items-center gap-1.5 ${chipCls(workoutSessionId === s.id)}`}
+            >
+              <SIcon size={14} />
+              {s.name}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {linkedSession && (
+        <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-fg-muted">What you'll do</p>
+            <motion.button
+              onClick={() => {
+                openWorkoutSession(linkedSession.id);
+                onClose();
+              }}
+              whileTap={tap}
+              className="flex items-center gap-1 text-xs font-medium"
+              style={{ color }}
+            >
+              Open in Workout
+              <ArrowUpRight size={14} />
+            </motion.button>
+          </div>
+          {linkedSession.exercises.length === 0 ? (
+            <p className="text-sm text-fg-faint">No exercises added to this session yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {linkedSession.exercises.map((ex, i) => (
+                <div key={ex.id} className="flex items-baseline gap-2">
+                  <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">{i + 1}.</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-fg leading-tight">{ex.name}</p>
+                    {exerciseSummary(ex, linkedSession.type) && (
+                      <p className="text-xs text-fg-faint">
+                        {exerciseSummary(ex, linkedSession.type)}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
-        </>
+        </div>
       )}
+    </div>
+  );
 
-      {recipes.length > 0 && (
-        <>
-          <label className="text-xs font-medium text-fg-muted mb-2 mt-4 flex items-center gap-1.5">
-            <ChefHat size={13} />
-            Link a recipe (optional)
-          </label>
-          <div
-            className="wheel-col flex gap-2 overflow-x-auto pb-1"
-            style={{ scrollbarWidth: "none" }}
+  const recipeLinkBody = recipes.length > 0 && (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-2 flex items-center gap-1.5">
+        <ChefHat size={13} />
+        Link a recipe (optional)
+      </label>
+      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        <motion.button
+          onClick={() => linkRecipe(undefined)}
+          whileTap={tap}
+          className={chipCls(!recipeId)}
+        >
+          None
+        </motion.button>
+        {recipes.map((r) => (
+          <motion.button
+            key={r.id}
+            onClick={() => linkRecipe(r.id)}
+            whileTap={tap}
+            className={`flex items-center gap-1.5 ${chipCls(recipeId === r.id)}`}
           >
+            <ChefHat size={14} />
+            {r.name}
+          </motion.button>
+        ))}
+      </div>
+
+      {linkedRecipe && (
+        <div className="mt-3 rounded-2xl bg-surface-alt p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-fg-muted">What to make</p>
             <motion.button
-              onClick={() => linkRecipe(undefined)}
+              onClick={() => {
+                openRecipe(linkedRecipe.id);
+                onClose();
+              }}
               whileTap={tap}
-              className={chipCls(!recipeId)}
+              className="flex items-center gap-1 text-xs font-medium"
+              style={{ color }}
             >
-              None
+              Open in Recipes
+              <ArrowUpRight size={14} />
             </motion.button>
-            {recipes.map((r) => (
-              <motion.button
-                key={r.id}
-                onClick={() => linkRecipe(r.id)}
-                whileTap={tap}
-                className={`flex items-center gap-1.5 ${chipCls(recipeId === r.id)}`}
-              >
-                <ChefHat size={14} />
-                {r.name}
-              </motion.button>
-            ))}
           </div>
 
-          {linkedRecipe && (
-            <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-fg-muted">What to make</p>
-                <motion.button
-                  onClick={() => {
-                    openRecipe(linkedRecipe.id);
-                    onClose();
-                  }}
-                  whileTap={tap}
-                  className="flex items-center gap-1 text-xs font-medium"
-                  style={{ color }}
-                >
-                  Open in Recipes
-                  <ArrowUpRight size={14} />
-                </motion.button>
-              </div>
+          {linkedRecipe.ingredients.length > 0 && (
+            <p className="text-sm text-fg mb-2">
+              {linkedRecipe.ingredients
+                .map((ing) => {
+                  const item = catalog[ing.itemId];
+                  if (!item) return null;
+                  return `${item.name} (${formatAmount(item, ing.servings)})`;
+                })
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          )}
 
-              {linkedRecipe.ingredients.length > 0 && (
-                <p className="text-sm text-fg mb-2">
-                  {linkedRecipe.ingredients
-                    .map((ing) => {
-                      const item = catalog[ing.itemId];
-                      if (!item) return null;
-                      return `${item.name} (${formatAmount(item, ing.servings)})`;
-                    })
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-              )}
-
-              {linkedRecipe.steps.length === 0 ? (
-                <p className="text-sm text-fg-faint">No steps added to this recipe yet.</p>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  {linkedRecipe.steps.map((step, i) => (
-                    <div key={i} className="flex items-baseline gap-2">
-                      <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
-                        {i + 1}.
-                      </span>
-                      <p className="text-sm text-fg leading-snug">{step}</p>
-                    </div>
-                  ))}
+          {linkedRecipe.steps.length === 0 ? (
+            <p className="text-sm text-fg-faint">No steps added to this recipe yet.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {linkedRecipe.steps.map((step, i) => (
+                <div key={i} className="flex items-baseline gap-2">
+                  <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">{i + 1}.</span>
+                  <p className="text-sm text-fg leading-snug">{step}</p>
                 </div>
-              )}
+              ))}
             </div>
           )}
-        </>
+        </div>
       )}
+    </div>
+  );
 
+  const repeatDaysBody = (
+    <div className="flex gap-2">
+      {DAY_OPTIONS.map(({ label, value }) => (
+        <motion.button
+          key={value}
+          onClick={() => toggleDay(value)}
+          whileTap={tap}
+          className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
+        >
+          {label}
+        </motion.button>
+      ))}
+    </div>
+  );
+
+  // Wizard step 3 stacks the same pieces the edit sheet splits into rows.
+  const typeLinksBody = (
+    <div>
+      {typeCards}
+      {mode === "task" && (
+        <div className="mt-4">
+          <label className="text-xs font-medium text-fg-muted mb-2 block">Priority</label>
+          {priorityButtons}
+        </div>
+      )}
+      {workoutLinkBody && <div className="mt-4">{workoutLinkBody}</div>}
+      {recipeLinkBody && <div className="mt-4">{recipeLinkBody}</div>}
       {mode === "habit" && (
-        <>
-          <label className="text-xs font-medium text-fg-muted mb-2 block mt-4">Repeat on</label>
-          <div className="flex gap-2">
-            {DAY_OPTIONS.map(({ label, value }) => (
-              <motion.button
-                key={value}
-                onClick={() => toggleDay(value)}
-                whileTap={tap}
-                className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
-              >
-                {label}
-              </motion.button>
-            ))}
-          </div>
-        </>
+        <div className="mt-4">
+          <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat on</label>
+          {repeatDaysBody}
+        </div>
       )}
     </div>
   );
@@ -1051,73 +1187,24 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                 >
                   <X size={20} />
                 </motion.button>
-                <div className="flex items-center gap-2">
-                  {isEditing && linkedSession && (
-                    <motion.button
-                      onClick={() => {
-                        openWorkoutSession(linkedSession.id);
-                        onClose();
-                      }}
-                      whileTap={tap}
-                      className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
-                      style={{
-                        backgroundColor: isLightColor(color)
-                          ? "rgba(0,0,0,0.12)"
-                          : "rgba(0,0,0,0.25)",
-                        color: onColor,
-                      }}
-                    >
-                      <Dumbbell size={15} />
-                      Workout
-                    </motion.button>
-                  )}
-                  {isEditing && linkedRecipe && (
-                    <motion.button
-                      onClick={() => {
-                        openRecipe(linkedRecipe.id);
-                        onClose();
-                      }}
-                      whileTap={tap}
-                      className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
-                      style={{
-                        backgroundColor: isLightColor(color)
-                          ? "rgba(0,0,0,0.12)"
-                          : "rgba(0,0,0,0.25)",
-                        color: onColor,
-                      }}
-                    >
-                      <ChefHat size={15} />
-                      Recipe
-                    </motion.button>
-                  )}
-                  {isEditing && (
-                    <motion.button
-                      onClick={handleDelete}
-                      whileTap={tap}
-                      className="w-9 h-9 rounded-full flex items-center justify-center"
-                      style={{
-                        backgroundColor: isLightColor(color)
-                          ? "rgba(0,0,0,0.12)"
-                          : "rgba(0,0,0,0.25)",
-                        color: onColor,
-                      }}
-                    >
-                      <Trash2 size={18} />
-                    </motion.button>
-                  )}
-                </div>
               </div>
 
               <div className="flex items-center gap-4 mt-3">
-                {/* In edit mode the avatar doubles as the way into the
-                    color/icon pickers. */}
+                {/* In edit mode the avatar becomes a tall pill (echoing the
+                    timeline pills) and doubles as the way into the color/icon
+                    pickers; the corner palette badge advertises it. */}
                 <motion.button
                   onClick={() => isEditing && setStyleOpen((v) => !v)}
                   whileTap={isEditing ? tap : undefined}
-                  className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
+                  className={`relative w-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0 ${isEditing ? "h-28" : "h-16"}`}
                   style={{ backgroundColor: "#2f2f33" }}
                 >
                   <HeaderIcon size={28} style={{ color }} />
+                  {isEditing && (
+                    <span className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-white text-[#2f2f33] flex items-center justify-center shadow-sm">
+                      {styleOpen ? <X size={14} /> : <Palette size={14} />}
+                    </span>
+                  )}
                 </motion.button>
                 <div className="flex-1 min-w-0">
                   {(isEditing || step > 1) && (
@@ -1147,15 +1234,57 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                         : "rgba(255,255,255,0.5)",
                     }}
                   />
+                  {isEditing && mode === "habit" && (
+                    <Repeat
+                      size={15}
+                      className="mt-2"
+                      style={{
+                        color: isLightColor(color)
+                          ? "rgba(17,24,39,0.7)"
+                          : "rgba(255,255,255,0.85)",
+                      }}
+                    />
+                  )}
                 </div>
+                {isEditing && (
+                  <motion.button
+                    onClick={toggleDone}
+                    whileTap={tap}
+                    aria-label={done ? "Mark as not completed" : "Mark as completed"}
+                    className="w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0"
+                    style={{
+                      borderColor: onColor,
+                      backgroundColor: done
+                        ? isLightColor(color)
+                          ? "rgba(0,0,0,0.12)"
+                          : "rgba(0,0,0,0.25)"
+                        : "transparent",
+                      color: onColor,
+                    }}
+                  >
+                    <AnimatePresence initial={false}>
+                      {done && (
+                        <motion.span
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          exit={{ scale: 0 }}
+                          transition={spring.pop}
+                          className="flex"
+                        >
+                          <Check size={16} />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                )}
               </div>
             </div>
 
             {/* Sheet body */}
             <div className="p-4 pb-6">
               {isEditing ? (
-                /* ---- EDIT — one scrollable form, no steps, no confirm ---- */
-                <div className="flex flex-col gap-6">
+                /* ---- EDIT — value rows; tapping a row expands its editor ---- */
+                <div className="flex flex-col gap-4">
                   <AnimatePresence initial={false}>
                     {styleOpen && (
                       <motion.div
@@ -1164,14 +1293,69 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="overflow-hidden -mb-6"
+                        className="overflow-hidden -mb-4"
                       >
-                        <div className="pb-6">{detailsBody}</div>
+                        <div className="pb-4">{detailsBody}</div>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {scheduleBody}
+                  {/* When it happens */}
+                  <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
+                    {mode === "task" && (
+                      <FieldRow
+                        icon={Calendar}
+                        value={formatFullDate(date)}
+                        hint={relativeDayLabel(date)}
+                        onPress={() => setOpenRow("date")}
+                      />
+                    )}
+
+                    <FieldRow
+                      icon={Clock}
+                      value={rangeLabel(startMin, duration)}
+                      hint={durationWords(duration)}
+                      onPress={() => setOpenRow("time")}
+                    />
+
+                    <FieldRow
+                      icon={Repeat}
+                      value={mode === "task" ? "One-time" : repeatSummary(daysOfWeek)}
+                      onPress={() => setOpenRow("repeat")}
+                    />
+
+                    <FieldRow
+                      icon={Bell}
+                      value={reminder === null ? "No alert" : reminderLabel(reminder)}
+                      muted={reminder === null}
+                      onPress={() => setOpenRow("alert")}
+                    />
+                  </div>
+
+                  {/* Extras */}
+                  {(mode === "task" || workoutSessions.length > 0 || recipes.length > 0) && (
+                    <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
+                      {mode === "task" && (
+                        <FieldRow
+                          icon={Flag}
+                          value={
+                            priority ? `${PRIORITY_META[priority].label} priority` : "No priority"
+                          }
+                          muted={!priority}
+                          onPress={() => setOpenRow("priority")}
+                        />
+                      )}
+                      {(workoutSessions.length > 0 || recipes.length > 0) && (
+                        <FieldRow
+                          icon={Link2}
+                          value={linkedSession?.name ?? linkedRecipe?.name ?? "No link"}
+                          hint={linkedSession ? "Workout" : linkedRecipe ? "Recipe" : undefined}
+                          muted={!linkedSession && !linkedRecipe}
+                          onPress={() => setOpenRow("links")}
+                        />
+                      )}
+                    </div>
+                  )}
 
                   {linkSuggestion && !suggestDismissed && (
                     <div className="rounded-2xl bg-surface-alt p-3">
@@ -1228,51 +1412,23 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                     </div>
                   )}
 
-                  {/* Everything beyond title/date/time/duration lives behind
-                      this fold to keep the common edit path short. */}
-                  <div>
-                    <motion.button
-                      onClick={() => setAdvancedOpen((v) => !v)}
-                      whileTap={tap}
-                      className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-3"
-                    >
-                      <span className="flex items-center gap-2 text-sm font-medium text-fg-muted">
-                        <SlidersHorizontal size={15} />
-                        Advanced settings
-                      </span>
-                      <ChevronRight
-                        size={16}
-                        className={`text-fg-faint transition-transform ${advancedOpen ? "rotate-90" : ""}`}
-                      />
-                    </motion.button>
-
-                    <AnimatePresence initial={false}>
-                      {advancedOpen && (
-                        <motion.div
-                          key="advanced"
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="flex flex-col gap-6 pt-5">
-                            {reminderBody}
-                            {typeLinksBody}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
                   <motion.button
                     onClick={handleSubmit}
                     whileTap={tap}
                     disabled={saveDisabled}
-                    className="w-full rounded-2xl py-3.5 font-medium disabled:opacity-40"
+                    className="w-full rounded-full py-4 font-semibold disabled:opacity-40"
                     style={{ backgroundColor: color, color: onColor }}
                   >
-                    Save changes
+                    {mode === "task" ? "Update Task" : "Update Habit"}
+                  </motion.button>
+
+                  <motion.button
+                    onClick={handleDelete}
+                    whileTap={tap}
+                    className="mx-auto flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-red-400"
+                  >
+                    <Trash2 size={15} />
+                    Delete
                   </motion.button>
                 </div>
               ) : (
@@ -1405,8 +1561,219 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               )}
             </div>
           </motion.div>
+
+          {/* Field editor panel — tapping a value row slides this up over the
+              sheet; edits apply live, Done just dismisses it. */}
+          <AnimatePresence>
+            {isEditing && openRow && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/30 z-60"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setOpenRow(null)}
+                />
+                <motion.div
+                  key={openRow}
+                  className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-70 shadow-xl max-h-[80vh] overflow-y-auto"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={spring.snappy}
+                >
+                  <div className="sticky top-0 bg-surface rounded-t-2xl flex items-center justify-between px-4 pt-3 pb-2">
+                    <h3 className="text-base font-semibold text-fg">
+                      {FIELD_PANEL_TITLES[openRow]}
+                    </h3>
+                    <motion.button
+                      onClick={() => setOpenRow(null)}
+                      whileTap={tap}
+                      className="h-8 px-3.5 rounded-full text-sm font-medium"
+                      style={{ backgroundColor: color, color: onColor }}
+                    >
+                      Done
+                    </motion.button>
+                  </div>
+                  <div className="px-4 pb-8 pt-1">
+                    {openRow === "date" && (
+                      <CalendarMonth
+                        value={date}
+                        color={color}
+                        onChange={setDate}
+                        markers={dayMarkers}
+                      />
+                    )}
+                    {openRow === "time" && (
+                      <div>
+                        <TimeWheel
+                          value={time}
+                          durationMinutes={duration}
+                          color={color}
+                          onChange={handleTimeChange}
+                          visibleRows={5}
+                        />
+                        <p className="text-base font-semibold text-fg mt-5 mb-2">Duration</p>
+                        {durationField}
+                      </div>
+                    )}
+                    {openRow === "repeat" && (
+                      <div>
+                        {typeCards}
+                        {mode === "habit" && (
+                          <div className="mt-4">
+                            <label className="text-xs font-medium text-fg-muted mb-2 block">
+                              Repeat on
+                            </label>
+                            {repeatDaysBody}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {openRow === "alert" && reminderChips}
+                    {openRow === "priority" && priorityButtons}
+                    {openRow === "links" && (
+                      <div className="flex flex-col gap-4">
+                        {workoutLinkBody}
+                        {recipeLinkBody}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// Month-grid date picker for the edit sheet's Date panel: month navigation,
+// the selected day filled in the item's color, today tinted in it, and up to
+// three dots per day marking items already scheduled there.
+function CalendarMonth({
+  value,
+  color,
+  onChange,
+  markers,
+}: {
+  value: string;
+  color: string;
+  onChange: (iso: string) => void;
+  markers: (iso: string) => string[];
+}) {
+  const selected = isoToDate(value);
+  const [view, setView] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
+  const todayIso = toISODate(new Date());
+  const y = view.getFullYear();
+  const m = view.getMonth();
+  const firstWeekday = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const onSelColor = isLightColor(color) ? "#111827" : "#ffffff";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xl font-bold text-fg">
+          {MONTH_NAMES[m]} <span style={{ color }}>{y}</span>
+        </p>
+        <div className="flex gap-2">
+          <motion.button
+            onClick={() => setView(new Date(y, m - 1, 1))}
+            whileTap={tap}
+            aria-label="Previous month"
+            className="w-9 h-9 rounded-full bg-surface-raised flex items-center justify-center text-fg-muted"
+          >
+            <ChevronLeft size={18} />
+          </motion.button>
+          <motion.button
+            onClick={() => setView(new Date(y, m + 1, 1))}
+            whileTap={tap}
+            aria-label="Next month"
+            className="w-9 h-9 rounded-full bg-surface-raised flex items-center justify-center text-fg-muted"
+          >
+            <ChevronRight size={18} />
+          </motion.button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_NAMES.map((d) => (
+          <span key={d} className="text-center text-sm text-fg-faint">
+            {d}
+          </span>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-y-1">
+        {Array.from({ length: firstWeekday }, (_, i) => (
+          <span key={`pad-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const iso = toISODate(new Date(y, m, i + 1));
+          const isSelected = iso === value;
+          const isToday = iso === todayIso;
+          const dots = markers(iso).slice(0, 3);
+          return (
+            <button
+              key={iso}
+              onClick={() => onChange(iso)}
+              className="flex flex-col items-center gap-1 py-0.5"
+            >
+              <span
+                className="w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold"
+                style={
+                  isSelected
+                    ? { backgroundColor: color, color: onSelColor }
+                    : { color: isToday ? color : "var(--fg)" }
+                }
+              >
+                {i + 1}
+              </span>
+              <span className="flex gap-0.5 h-1.5">
+                {dots.map((c, j) => (
+                  <span
+                    key={j}
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// One tappable value row of the edit sheet: icon, current value, optional
+// hint on the right, and a chevron; tapping slides that field's editor panel
+// up from the bottom.
+function FieldRow({
+  icon: IconComp,
+  value,
+  hint,
+  muted = false,
+  onPress,
+}: {
+  icon: typeof Calendar;
+  value: string;
+  hint?: string;
+  muted?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button onClick={onPress} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+      <IconComp size={18} className="text-fg-muted shrink-0" />
+      <span
+        className={`flex-1 min-w-0 truncate text-[15px] font-medium ${muted ? "text-fg-faint" : "text-fg"}`}
+      >
+        {value}
+      </span>
+      {hint && <span className="text-sm text-fg-faint shrink-0">{hint}</span>}
+      <ChevronRight size={16} className="text-fg-faint shrink-0" />
+    </button>
   );
 }
