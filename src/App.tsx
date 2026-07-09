@@ -231,7 +231,7 @@ function App() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: dir > 0 ? -24 : 24, opacity: 0 }}
                   transition={spring.snappy}
-                  className={`${activePage === "schedule" ? "text-2xl" : "text-2xl"} font-bold whitespace-nowrap text-fg`}
+                  className={`${activePage === "schedule" ? "text-2xl" : "text-1xl"} font-bold whitespace-nowrap text-fg`}
                 >
                   {pageTitle}
                 </motion.h1>
