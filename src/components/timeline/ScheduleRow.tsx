@@ -233,7 +233,7 @@ export default function ScheduleRow({
               </span>
             )}
           </div>
-          <p className="text-sm text-fg-faint mt-0.5">
+          <p className="text-sm text-fg-faint mt-0.5 truncate">
             {formatTimeRange(startMinutes, durationMinutes)}
           </p>
         </div>
