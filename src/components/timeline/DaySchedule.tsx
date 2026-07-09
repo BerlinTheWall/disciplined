@@ -9,7 +9,6 @@ import type { EditItem } from "./Timeline";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { computeCompressedLayout, getPillHeight, minutesToPx } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
-import { useScheduleEditStore } from "@/store/scheduleEditStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
 
@@ -162,11 +161,10 @@ function buildLineStops(
 interface DayScheduleProps {
   date: string; // ISO date this panel shows
   active: boolean; // center panel — only it auto-scrolls to "now"
-  onEdit: (item: EditItem) => void;
   onDetail: (item: EditItem) => void;
 }
 
-export default function DaySchedule({ date, active, onEdit, onDetail }: DayScheduleProps) {
+export default function DaySchedule({ date, active, onDetail }: DayScheduleProps) {
   const [tasks, toggleTaskCompleted] = useTaskStore(
     useShallow((state) => [state.tasks, state.toggleTaskCompleted])
   );
@@ -270,15 +268,14 @@ export default function DaySchedule({ date, active, onEdit, onDetail }: DaySched
   }, [date, active]);
 
   function handleEdit(id: string) {
-    // Editing mode opens the editor; a normal tap shows the read-only detail popup.
-    const open = useScheduleEditStore.getState().editMode ? onEdit : onDetail;
+    // A tap opens the read-only detail popup; editing goes through its Edit button.
     const task = tasks.find((t) => t.id === id);
     if (task) {
-      open({ type: "task", data: task });
+      onDetail({ type: "task", data: task });
       return;
     }
     const habit = habits.find((h) => h.id === id);
-    if (habit) open({ type: "habit", data: habit });
+    if (habit) onDetail({ type: "habit", data: habit });
   }
 
   function handleToggle(id: string) {

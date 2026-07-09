@@ -6,8 +6,8 @@ import DaySchedule from "./DaySchedule";
 import DayScheduleCards from "./DayScheduleCards";
 import QuickAddBar from "./QuickAddBar";
 import { WeekSwipeContext } from "./swipeController";
-import TaskDetailSheet from "./TaskDetailSheet";
 import SwipePager from "./SwipePager";
+import TaskDetailSheet from "./TaskDetailSheet";
 import WeeklyTimeline from "./WeeklyTimeline";
 import type { ViewMode } from "@/App";
 import { addDays, toISODate } from "@/lib/date";
@@ -32,7 +32,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
   const sharedController = useContext(WeekSwipeContext);
 
   const [editItem, setEditItem] = useState<EditItem | null>(null);
-  // Read-only detail popup, opened by tapping a row outside editing mode.
+  // Read-only detail popup, opened by tapping a row; its Edit button opens the editor.
   const [detailItem, setDetailItem] = useState<EditItem | null>(null);
 
   const selectedDateObj = new Date(selectedDate + "T00:00:00");
@@ -71,19 +71,9 @@ export default function Timeline({ viewMode }: TimelineProps) {
         renderPage={(offset) => {
           const d = toISODate(addDays(selectedDateObj, offset));
           return altStyle ? (
-            <DayScheduleCards
-              date={d}
-              active={offset === 0}
-              onEdit={setEditItem}
-              onDetail={setDetailItem}
-            />
+            <DayScheduleCards date={d} active={offset === 0} onDetail={setDetailItem} />
           ) : (
-            <DaySchedule
-              date={d}
-              active={offset === 0}
-              onEdit={setEditItem}
-              onDetail={setDetailItem}
-            />
+            <DaySchedule date={d} active={offset === 0} onDetail={setDetailItem} />
           );
         }}
       />

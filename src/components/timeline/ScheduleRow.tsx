@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/refs */
 import { useDraggable } from "@dnd-kit/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame, Pencil } from "lucide-react";
+import { Flame } from "lucide-react";
 
 import { ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -16,7 +16,6 @@ import {
   pxToMinutes,
   snapToGrid,
 } from "@/lib/time";
-import { useScheduleEditStore } from "@/store/scheduleEditStore";
 import { useThemeStore } from "@/store/themeStore";
 import type { Priority } from "@/types/task";
 
@@ -74,9 +73,6 @@ export default function ScheduleRow({
 }: ScheduleRowProps) {
   const move = useDraggable({ id });
   const resize = useDraggable({ id: `resize-${id}` });
-
-  // Page-level editing mode: rows slide aside to reveal a per-row edit button.
-  const editMode = useScheduleEditStore((s) => s.editMode);
 
   const theme = useThemeStore((s) => s.theme);
   const colors = themeColors[theme];
@@ -162,8 +158,8 @@ export default function ScheduleRow({
       </div>
 
       {/* min-w-0: without it this wrapper's min-content (title's max-w cap +
-          pill + toggle + edit rail) can exceed the row and push the toggle and
-          edit button off-screen instead of truncating the title further. */}
+          pill + toggle) can exceed the row and push the toggle off-screen
+          instead of truncating the title further. */}
       <div className="flex-1 min-w-0 flex items-center gap-3 pl-4">
         <motion.div
           ref={move.setNodeRef}
@@ -283,28 +279,6 @@ export default function ScheduleRow({
             )}
           </AnimatePresence>
         </motion.button>
-
-        {/* Edit-mode rail: grows in from the right, nudging the row content
-            aside, and is the row's edit entry point. */}
-        <AnimatePresence initial={false}>
-          {editMode && (
-            <motion.button
-              key="edit"
-              onClick={() => onEdit(id)}
-              whileTap={tap}
-              // marginLeft cancels the container's gap-3 while collapsed, so
-              // the rail's footprint animates all the way to 0 — otherwise the
-              // 12px gap vanishes only on unmount and the toggle jumps.
-              initial={{ width: 0, opacity: 0, marginLeft: -12 }}
-              animate={{ width: 34, opacity: 1, marginLeft: 0 }}
-              exit={{ width: 0, opacity: 0, marginLeft: -12 }}
-              transition={spring.snappy}
-              className="h-8 rounded-full bg-surface-raised flex items-center justify-center shrink-0 overflow-hidden"
-            >
-              <Pencil size={15} className="text-fg-muted shrink-0" />
-            </motion.button>
-          )}
-        </AnimatePresence>
       </div>
     </motion.div>
   );

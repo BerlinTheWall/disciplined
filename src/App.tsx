@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlignLeft, CalendarPlus, LayoutGrid, Menu, Pencil } from "lucide-react";
+import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 
 import BottomNav, { type Page } from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
@@ -15,7 +15,6 @@ import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, toISODate } from "./lib/date";
-import { isHabitActiveOnDate } from "./lib/habits";
 import { spring, tap } from "./lib/motion";
 import ExpensesPage from "./pages/ExpensesPage";
 import FoodPage from "./pages/FoodPage";
@@ -25,9 +24,7 @@ import MealsPage from "./pages/MealsPage";
 import ProfilePage from "./pages/ProfilePage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
-import { useHabitStore } from "./store/habitStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
-import { useScheduleEditStore } from "./store/scheduleEditStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
@@ -103,30 +100,8 @@ function App() {
     () => shiftWeek(1)
   );
 
-  const editMode = useScheduleEditStore((s) => s.editMode);
-  const toggleEditMode = useScheduleEditStore((s) => s.toggleEditMode);
-
-  // The edit button only exists while the selected day still has something to
-  // do — no items, or everything checked off, hides it (and drops the mode).
-  const tasks = useTaskStore((s) => s.tasks);
-  const selectedDate = useTaskStore((s) => s.selectedDate);
-  const habits = useHabitStore((s) => s.habits);
-  const selectedDateObj = new Date(selectedDate + "T00:00:00");
-  const hasEditableItems =
-    tasks.some((t) => t.date === selectedDate && !t.completed) ||
-    habits.some(
-      (h) => isHabitActiveOnDate(h, selectedDateObj) && !h.completedDates.includes(selectedDate)
-    );
-  useEffect(() => {
-    if (!hasEditableItems && editMode) {
-      useScheduleEditStore.getState().setEditMode(false);
-    }
-  }, [hasEditableItems, editMode]);
-
   function go(p: Page) {
     if (p === activePage) return;
-    // Leaving the schedule drops editing mode so it never lingers unseen.
-    if (p !== "schedule") useScheduleEditStore.getState().setEditMode(false);
     const from = PAGE_ORDER.indexOf(activePage);
     setPage([p, PAGE_ORDER.indexOf(p) > from ? 1 : -1]);
   }
@@ -248,18 +223,6 @@ function App() {
                 transition={spring.snappy}
                 className="flex items-center gap-2"
               >
-                {hasEditableItems && (
-                  <motion.button
-                    onClick={toggleEditMode}
-                    whileTap={tap}
-                    aria-label="Edit tasks"
-                    className={`p-2 rounded-lg ${
-                      editMode ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg"
-                    }`}
-                  >
-                    <Pencil size={17} />
-                  </motion.button>
-                )}
                 <motion.button
                   onClick={() => setIsPlanOpen(true)}
                   whileTap={tap}
