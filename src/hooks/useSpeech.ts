@@ -138,6 +138,9 @@ export function speak(
     utterance.lang = navigator.language || "en-US";
   }
   window.speechSynthesis.speak(utterance);
+  // Chromium sometimes leaves the queue in a paused state for hidden tabs —
+  // nudging resume() is harmless when playing and un-sticks it when not.
+  window.speechSynthesis.resume();
 }
 
 export function stopSpeaking() {
