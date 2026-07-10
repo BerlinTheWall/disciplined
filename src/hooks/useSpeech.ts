@@ -97,9 +97,12 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
   return { supported: speechInputSupported, listening, start, stop };
 }
 
-export function speak(text: string) {
+// interrupt (default) replaces whatever is currently being spoken — right for
+// chat replies. Pass interrupt: false to queue behind the current utterance
+// instead, so back-to-back reminders don't cut each other off.
+export function speak(text: string, { interrupt = true }: { interrupt?: boolean } = {}) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
+  if (interrupt) window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = navigator.language || "en-US";
   window.speechSynthesis.speak(utterance);

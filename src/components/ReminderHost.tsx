@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BellRing, X } from "lucide-react";
 
+import { speak } from "@/hooks/useSpeech";
 import { todayISODate } from "@/lib/date";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -86,6 +87,13 @@ function collectDue(now: number): ReminderAlert[] {
   return due;
 }
 
+// Read a delivered reminder aloud (when the setting is on). Queued rather than
+// interrupting, so several reminders due at once are spoken back to back.
+function speakReminder(reminder: ReminderAlert) {
+  if (!useSettingsStore.getState().speakReminders) return;
+  speak(`${reminder.title}. ${reminder.body}.`, { interrupt: false });
+}
+
 function tick() {
   if (!useSettingsStore.getState().remindersEnabled) return;
   const { fired, markFired, pushAlert } = useReminderStore.getState();
@@ -95,12 +103,16 @@ function tick() {
     if (document.visibilityState === "visible") {
       markFired(reminder.key);
       pushAlert(reminder);
+      speakReminder(reminder);
     } else {
       void showSystemNotification(reminder.title, reminder.body, reminder.key).then((shown) => {
         // Only mark delivered notifications: without permission the reminder
         // stays armed and shows as a banner when the user returns (while
         // still inside the grace window).
-        if (shown) useReminderStore.getState().markFired(reminder.key);
+        if (shown) {
+          useReminderStore.getState().markFired(reminder.key);
+          speakReminder(reminder);
+        }
       });
     }
   }

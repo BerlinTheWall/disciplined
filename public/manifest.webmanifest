@@ -1,0 +1,17 @@
+{
+  "name": "Disciplined",
+  "short_name": "Disciplined",
+  "description": "Day planner for tasks, habits, meals, workouts and expenses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

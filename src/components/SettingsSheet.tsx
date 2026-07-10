@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
+import { speak, stopSpeaking } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { spring, tap } from "@/lib/motion";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
@@ -80,6 +81,18 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setDefaultReminderMinutes,
       ])
     );
+  const [speakReminders, setSpeakReminders] = useSettingsStore(
+    useShallow((state) => [state.speakReminders, state.setSpeakReminders])
+  );
+
+  function toggleSpeakReminders() {
+    const next = !speakReminders;
+    setSpeakReminders(next);
+    // Speaking from this tap doubles as the browser's audio unlock and shows
+    // immediately what the feature sounds like.
+    if (next) speak("Reminders will be read aloud, like this.");
+    else stopSpeaking();
+  }
   const { theme, toggleTheme } = useThemeStore();
   // Browser notification permission — refreshed after we ask for it, so the
   // subtitle below reflects the outcome.
@@ -148,6 +161,18 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           on={remindersEnabled}
           onToggle={() => void toggleReminders()}
         />
+        {remindersEnabled && (
+          <Row
+            title="Speak reminders"
+            subtitle={
+              speakReminders
+                ? "Reminders are read aloud when they appear"
+                : "Reads the reminder text aloud when it appears"
+            }
+            on={speakReminders}
+            onToggle={toggleSpeakReminders}
+          />
+        )}
         {remindersEnabled && (
           <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">
             <p className="font-medium text-fg">Default reminder</p>

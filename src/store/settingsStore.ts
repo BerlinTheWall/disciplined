@@ -3,9 +3,8 @@ import { persist } from "zustand/middleware";
 
 import { DEFAULT_BACKGROUND, type BackgroundKey } from "@/lib/backgrounds";
 
-// App-wide preferences that should survive reloads. Right now just the schedule
-// view style (the daily timeline vs the weekly grid), toggled from Settings and
-// the schedule header.
+// App-wide preferences that should survive reloads: schedule view style,
+// visual options, and the reminder behavior toggles.
 export type ScheduleView = "daily" | "weekly";
 
 interface SettingsState {
@@ -25,6 +24,10 @@ interface SettingsState {
   // Reminder lead time pre-selected for newly created items; null = none.
   defaultReminderMinutes: number | null;
   setDefaultReminderMinutes: (minutes: number | null) => void;
+  // Read reminders aloud (text-to-speech) when they fire, in addition to the
+  // banner/notification. Opt-in — unexpected audio is worse than none.
+  speakReminders: boolean;
+  setSpeakReminders: (on: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -40,6 +43,8 @@ export const useSettingsStore = create<SettingsState>()(
       setRemindersEnabled: (on) => set({ remindersEnabled: on }),
       defaultReminderMinutes: null,
       setDefaultReminderMinutes: (minutes) => set({ defaultReminderMinutes: minutes }),
+      speakReminders: false,
+      setSpeakReminders: (on) => set({ speakReminders: on }),
     }),
     { name: "disciplined-settings" }
   )
