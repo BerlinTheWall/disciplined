@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useSettingsStore } from "@/store/settingsStore";
+
 // Browser-native voice: SpeechRecognition (speech-to-text) and speechSynthesis
 // (text-to-speech). Both are free and on-device/OS-provided — no backend.
 // SpeechRecognition is missing from TypeScript's DOM lib, so the minimal
@@ -97,14 +99,44 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
   return { supported: speechInputSupported, listening, start, stop };
 }
 
+export const speechOutputSupported = typeof window !== "undefined" && "speechSynthesis" in window;
+
+// The OS-provided voices. They load asynchronously in Chrome — empty on first
+// call, then voiceschanged fires — so UI should use the useVoices hook below.
+export function useVoices() {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (!speechOutputSupported) return;
+    const update = () => setVoices(window.speechSynthesis.getVoices());
+    update();
+    window.speechSynthesis.addEventListener("voiceschanged", update);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", update);
+  }, []);
+  return voices;
+}
+
 // interrupt (default) replaces whatever is currently being spoken — right for
 // chat replies. Pass interrupt: false to queue behind the current utterance
 // instead, so back-to-back reminders don't cut each other off.
-export function speak(text: string, { interrupt = true }: { interrupt?: boolean } = {}) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+// The voice is the user's choice from Settings (voiceURI overrides it; the
+// system default is used when unset or when the saved voice no longer exists).
+export function speak(
+  text: string,
+  { interrupt = true, voiceURI }: { interrupt?: boolean; voiceURI?: string | null } = {}
+) {
+  if (!speechOutputSupported) return;
   if (interrupt) window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = navigator.language || "en-US";
+  const uri = voiceURI !== undefined ? voiceURI : useSettingsStore.getState().voiceURI;
+  const voice = uri
+    ? window.speechSynthesis.getVoices().find((v) => v.voiceURI === uri)
+    : undefined;
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  } else {
+    utterance.lang = navigator.language || "en-US";
+  }
   window.speechSynthesis.speak(utterance);
 }
 

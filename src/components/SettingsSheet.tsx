@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
-import { speak, stopSpeaking } from "@/hooks/useSpeech";
+import { speak, stopSpeaking, useVoices } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { spring, tap } from "@/lib/motion";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
@@ -14,6 +14,15 @@ import { useThemeStore } from "@/store/themeStore";
 interface SettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+// "Microsoft David - English (United States)" → "David"; "Google US English"
+// → "US English". Keeps the voice chips short enough to scan.
+function voiceLabel(v: SpeechSynthesisVoice) {
+  return v.name
+    .replace(/^(Microsoft|Google|Apple) /, "")
+    .replace(/ ?[-–—] .*$/, "")
+    .replace(/ \(.*\)$/, "");
 }
 
 // An iOS-style toggle switch.
@@ -81,9 +90,26 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setDefaultReminderMinutes,
       ])
     );
-  const [speakReminders, setSpeakReminders] = useSettingsStore(
-    useShallow((state) => [state.speakReminders, state.setSpeakReminders])
+  const [speakReminders, setSpeakReminders, voiceURI, setVoiceURI] = useSettingsStore(
+    useShallow((state) => [
+      state.speakReminders,
+      state.setSpeakReminders,
+      state.voiceURI,
+      state.setVoiceURI,
+    ])
   );
+
+  // Voices for the picker: prefer the ones matching the UI language so the
+  // list stays scannable; fall back to everything the OS offers.
+  const voices = useVoices();
+  const langPrefix = (navigator.language || "en").slice(0, 2).toLowerCase();
+  const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(langPrefix));
+  const voiceOptions = langVoices.length > 0 ? langVoices : voices;
+
+  function pickVoice(uri: string | null) {
+    setVoiceURI(uri);
+    speak("This is how reminders will sound.", { voiceURI: uri });
+  }
 
   function toggleSpeakReminders() {
     const next = !speakReminders;
@@ -172,6 +198,42 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             on={speakReminders}
             onToggle={toggleSpeakReminders}
           />
+        )}
+        {remindersEnabled && speakReminders && voiceOptions.length > 0 && (
+          <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">
+            <p className="font-medium text-fg">Voice</p>
+            <p className="text-sm text-fg-faint mt-0.5 mb-3">Tap a voice to preview it</p>
+            <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+              <motion.button
+                onClick={() => pickVoice(null)}
+                whileTap={tap}
+                className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${
+                  voiceURI === null
+                    ? "bg-surface-inverse text-fg-inverse"
+                    : "bg-surface-raised text-fg-muted"
+                }`}
+              >
+                Default
+              </motion.button>
+              {voiceOptions.map((v) => {
+                const selected = voiceURI === v.voiceURI;
+                return (
+                  <motion.button
+                    key={v.voiceURI}
+                    onClick={() => pickVoice(v.voiceURI)}
+                    whileTap={tap}
+                    className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${
+                      selected
+                        ? "bg-surface-inverse text-fg-inverse"
+                        : "bg-surface-raised text-fg-muted"
+                    }`}
+                  >
+                    {voiceLabel(v)}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
         )}
         {remindersEnabled && (
           <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">

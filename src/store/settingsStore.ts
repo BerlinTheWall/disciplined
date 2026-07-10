@@ -28,6 +28,10 @@ interface SettingsState {
   // banner/notification. Opt-in — unexpected audio is worse than none.
   speakReminders: boolean;
   setSpeakReminders: (on: boolean) => void;
+  // voiceURI of the chosen speech voice; null = the system default. Applies to
+  // everything the app speaks (reminders and chat replies).
+  voiceURI: string | null;
+  setVoiceURI: (uri: string | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -45,6 +49,8 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultReminderMinutes: (minutes) => set({ defaultReminderMinutes: minutes }),
       speakReminders: false,
       setSpeakReminders: (on) => set({ speakReminders: on }),
+      voiceURI: null,
+      setVoiceURI: (uri) => set({ voiceURI: uri }),
     }),
     { name: "disciplined-settings" }
   )

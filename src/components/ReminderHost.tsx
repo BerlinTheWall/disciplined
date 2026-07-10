@@ -87,10 +87,18 @@ function collectDue(now: number): ReminderAlert[] {
   return due;
 }
 
-// Read a delivered reminder aloud (when the setting is on). Queued rather than
-// interrupting, so several reminders due at once are spoken back to back.
+// Keys already read aloud this session. Speech is its own delivery channel —
+// it happens even when the system notification couldn't be shown — so a
+// reminder that later re-surfaces as a banner must not be spoken twice.
+const spokenKeys = new Set<string>();
+
+// Read a due reminder aloud (when the setting is on), once per occurrence.
+// Queued rather than interrupting, so several reminders due at the same time
+// are spoken back to back.
 function speakReminder(reminder: ReminderAlert) {
   if (!useSettingsStore.getState().speakReminders) return;
+  if (spokenKeys.has(reminder.key)) return;
+  spokenKeys.add(reminder.key);
   speak(`${reminder.title}. ${reminder.body}.`, { interrupt: false });
 }
 
@@ -100,19 +108,16 @@ function tick() {
   const now = Date.now();
   for (const reminder of collectDue(now)) {
     if (fired[reminder.key]) continue;
+    speakReminder(reminder);
     if (document.visibilityState === "visible") {
       markFired(reminder.key);
       pushAlert(reminder);
-      speakReminder(reminder);
     } else {
       void showSystemNotification(reminder.title, reminder.body, reminder.key).then((shown) => {
         // Only mark delivered notifications: without permission the reminder
         // stays armed and shows as a banner when the user returns (while
         // still inside the grace window).
-        if (shown) {
-          useReminderStore.getState().markFired(reminder.key);
-          speakReminder(reminder);
-        }
+        if (shown) useReminderStore.getState().markFired(reminder.key);
       });
     }
   }
