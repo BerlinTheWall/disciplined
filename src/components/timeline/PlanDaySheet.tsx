@@ -10,7 +10,7 @@ import { isLightColor } from "@/lib/color";
 import { parseISODate, relativeDayLabel } from "@/lib/date";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
-import { formatDuration, formatTimeLabel, timeStringToMinutes } from "@/lib/time";
+import { formatDuration, formatTimeLabel, rangeLabel, timeStringToMinutes } from "@/lib/time";
 import { useTaskStore } from "@/store/taskStore";
 import BottomSheet from "../BottomSheet";
 import { useConfirm } from "../ConfirmDialog";
@@ -33,9 +33,6 @@ const DEFAULT_START = 8 * 60;
 
 /* ---- helpers ----------------------------------------------------- */
 
-function rangeLabel(start: number, dur: number) {
-  return `${formatTimeLabel(start)}–${formatTimeLabel(start + dur)}`;
-}
 function fullDateLabel(iso: string) {
   return parseISODate(iso).toLocaleDateString(undefined, {
     weekday: "short",

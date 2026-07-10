@@ -1,10 +1,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowUpRight,
   Bell,
   Calendar,
   Check,
@@ -23,13 +22,23 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import {
+  chipCls,
+  COLOR_OPTIONS,
+  DAY_OPTIONS,
+  DURATION_OPTIONS,
+  durationTrackLabel,
+  MINUTES_PER_DAY,
+  repeatSummary,
+} from "./addItemOptions";
 import CalendarMonth from "./CalendarMonth";
+import { FieldPanel, FieldRow, type EditRowKey } from "./FieldPanel";
+import { RecipeLinkSection, WorkoutLinkSection } from "./LinkSections";
 import type { EditItem } from "./Timeline";
+import TimeWheel from "./TimeWheel";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import { isLightColor } from "@/lib/color";
-import { DAY_NAMES, formatFullDate, relativeDayLabel } from "@/lib/date";
-import { formatAmount, indexItems } from "@/lib/grocery";
+import { formatFullDate, relativeDayLabel } from "@/lib/date";
 import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
@@ -39,189 +48,23 @@ import {
   reminderLabel,
   requestNotifyPermission,
 } from "@/lib/reminders";
-import { durationWords, formatDuration, formatTimeLabel, timeStringToMinutes } from "@/lib/time";
-import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
-import { useGroceryStore } from "@/store/groceryStore";
+import {
+  durationWords,
+  formatDuration,
+  formatTimeLabel,
+  rangeLabel,
+  timeStringToMinutes,
+} from "@/lib/time";
+import { WORKOUT_TYPE_META } from "@/lib/workout";
 import { useHabitStore } from "@/store/habitStore";
-import { useRecipeFocusStore } from "@/store/recipeFocusStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
-import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 import type { Priority } from "@/types/task";
+import BottomSheet from "../BottomSheet";
 import Collapse from "../Collapse";
 import { useChoose, useConfirm } from "../ConfirmDialog";
-
-const COLOR_OPTIONS = [
-  "#34d399",
-  "#fb7185",
-  "#fb923c",
-  "#fbbf24",
-  "#a3e635",
-  "#60a5fa",
-  "#22d3ee",
-  "#a78bfa",
-  "#f472b6",
-  "#f87171",
-];
-const DURATION_OPTIONS = [15, 30, 45, 60, 90];
-
-// Labels in the duration track: bare minutes when idle ("30"), the unit only
-// on the selected pill ("30min"), hours always spelled ("1h", "1.5h").
-function durationTrackLabel(d: number, selected: boolean) {
-  if (d < 60) return selected ? `${d}min` : `${d}`;
-  const h = d / 60;
-  return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
-}
-const DAY_OPTIONS = [
-  { label: "S", value: 0 },
-  { label: "M", value: 1 },
-  { label: "T", value: 2 },
-  { label: "W", value: 3 },
-  { label: "T", value: 4 },
-  { label: "F", value: 5 },
-  { label: "S", value: 6 },
-];
-
-const MINUTES_PER_DAY = 1440;
-
-// Rows of the edit sheet; tapping one slides its editor up from the bottom.
-type EditRowKey = "date" | "time" | "repeat" | "alert" | "priority" | "links";
-
-const FIELD_PANEL_TITLES: Record<EditRowKey, string> = {
-  date: "Date",
-  time: "Time",
-  repeat: "Repeat",
-  alert: "Alert",
-  priority: "Priority",
-  links: "Links",
-};
-
-function repeatSummary(days: number[]) {
-  if (days.length === 7) return "Every day";
-  if (days.length === 0) return "No days picked";
-  const sorted = [...days].sort((a, b) => a - b);
-  if (sorted.length === 5 && sorted[0] === 1 && sorted[4] === 5) return "Weekdays";
-  if (sorted.length === 2 && sorted[0] === 0 && sorted[1] === 6) return "Weekends";
-  return sorted.map((d) => DAY_NAMES[d]).join(", ");
-}
-
-/* ---- helpers ----------------------------------------------------- */
-
-function rangeLabel(startMin: number, dur: number) {
-  return `${formatTimeLabel(startMin)}–${formatTimeLabel(startMin + dur)}`;
-}
-
-/* ---- single-column time wheel ------------------------------------ */
-
-const WHEEL_ITEM_H = 40;
-const WHEEL_VISIBLE = 3;
-
-function TimeWheel({
-  value,
-  durationMinutes,
-  color,
-  onChange,
-  visibleRows = WHEEL_VISIBLE,
-}: {
-  value: string;
-  durationMinutes: number;
-  color: string;
-  onChange: (next: string) => void;
-  visibleRows?: number;
-}) {
-  const wheelPad = ((visibleRows - 1) / 2) * WHEEL_ITEM_H;
-  const ref = useRef<HTMLDivElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const didMount = useRef(false);
-
-  // The wheel steps by the chosen duration so short tasks sit back-to-back — a
-  // 1-min task offers every minute (6:00, 6:01, …), a 5-min task every fifth
-  // (6:00, 6:05, …) — but never coarser than 15 min, so a 1-hour task still
-  // steps every 15 (6:00, 6:15, …) instead of only on the hour.
-  const step = Math.max(1, Math.min(durationMinutes, 15));
-  const steps = useMemo(() => {
-    const arr: number[] = [];
-    for (let m = 0; m < MINUTES_PER_DAY; m += step) arr.push(m);
-    return arr;
-  }, [step]);
-
-  const selectedIndex = Math.max(
-    0,
-    Math.min(steps.length - 1, Math.round(timeStringToMinutes(value) / step))
-  );
-  const [active, setActive] = useState(selectedIndex);
-
-  // Park the wheel on the current value. Runs on mount, when the value changes
-  // from outside (opening the sheet to edit an existing task), and when the step
-  // changes (the user picked a new duration). The distance guard avoids fighting
-  // a user scroll that has already settled at the target.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const target = selectedIndex * WHEEL_ITEM_H;
-    if (Math.abs(el.scrollTop - target) > WHEEL_ITEM_H / 2) {
-      el.scrollTop = target;
-    }
-    setActive(selectedIndex);
-    // Keep the stored start time on the grid so what's shown matches what's
-    // saved: a task loaded at 6:15 with a 30-min duration (no 6:15 slot) snaps to
-    // the nearest slot. The guard skips the first, pre-populate render so we don't
-    // write back the stale default time the sheet still holds from last time.
-    if (didMount.current) {
-      const aligned = formatTimeLabel(steps[selectedIndex]);
-      if (aligned !== value) onChange(aligned);
-    } else {
-      didMount.current = true;
-    }
-  }, [selectedIndex, step]);
-
-  function handleScroll() {
-    const el = ref.current;
-    if (!el) return;
-    const idx = Math.max(0, Math.min(steps.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_H)));
-    setActive(idx);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      if (idx !== selectedIndex) onChange(formatTimeLabel(steps[idx]));
-    }, 110);
-  }
-
-  return (
-    <div className="bg-surface-raised rounded-2xl py-2">
-      <div
-        ref={ref}
-        onScroll={handleScroll}
-        className="wheel-col overflow-y-scroll snap-y snap-mandatory"
-        style={{ height: visibleRows * WHEEL_ITEM_H, scrollbarWidth: "none" }}
-      >
-        <div style={{ height: wheelPad }} />
-        {steps.map((min, i) => (
-          <div
-            key={min}
-            className="flex items-center justify-center snap-center"
-            style={{ height: WHEEL_ITEM_H }}
-          >
-            {i === active ? (
-              <span
-                className="px-4 py-1.5 rounded-full font-semibold text-base tabular-nums"
-                style={{ backgroundColor: color, color: isLightColor(color) ? "#111827" : "#fff" }}
-              >
-                {rangeLabel(min, durationMinutes)}
-              </span>
-            ) : (
-              <span className="text-base tabular-nums text-fg-disabled">
-                {formatTimeLabel(min)}
-              </span>
-            )}
-          </div>
-        ))}
-        <div style={{ height: wheelPad }} />
-      </div>
-    </div>
-  );
-}
 
 /* ---- step slide animation ---------------------------------------- */
 
@@ -258,16 +101,11 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       ])
     );
   const workoutSessions = useWorkoutStore((s) => s.sessions);
-  const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);
-  const openRecipe = useRecipeFocusStore((s) => s.openRecipe);
-  const groceryItems = useGroceryStore((s) => s.groceryItems);
-  const catalog = indexItems(groceryItems);
   const confirm = useConfirm();
   const choose = useChoose();
 
   const isEditing = !!editItem;
-  useScrollLock(isOpen);
   const titleRef = useRef<HTMLInputElement>(null);
   useAutoFocus(titleRef, isOpen);
 
@@ -601,8 +439,6 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       : guessedKind === "meal" && !recipeId && recipes.length > 0
         ? ("meal" as const)
         : null;
-  const chipCls = (selected: boolean) =>
-    `px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`;
 
   /* ---- field sections — shared by the wizard (create) and the single
      scrollable form (edit) ----------------------------------------- */
@@ -891,160 +727,6 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     </div>
   );
 
-  const workoutLinkBody = workoutSessions.length > 0 && (
-    <div>
-      <label className="text-xs font-medium text-fg-muted mb-2 flex items-center gap-1.5">
-        <Dumbbell size={13} />
-        Link a workout (optional)
-      </label>
-      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-        <motion.button
-          onClick={() => linkWorkout(undefined)}
-          whileTap={tap}
-          className={chipCls(!workoutSessionId)}
-        >
-          None
-        </motion.button>
-        {workoutSessions.map((s) => {
-          const SIcon = WORKOUT_TYPE_META[s.type].icon;
-          return (
-            <motion.button
-              key={s.id}
-              onClick={() => linkWorkout(s.id)}
-              whileTap={tap}
-              className={`flex items-center gap-1.5 ${chipCls(workoutSessionId === s.id)}`}
-            >
-              <SIcon size={14} />
-              {s.name}
-            </motion.button>
-          );
-        })}
-      </div>
-
-      <Collapse open={!!linkedSession}>
-        {linkedSession && (
-          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-fg-muted">What you'll do</p>
-              <motion.button
-                onClick={() => {
-                  openWorkoutSession(linkedSession.id);
-                  onClose();
-                }}
-                whileTap={tap}
-                className="flex items-center gap-1 text-xs font-medium"
-                style={{ color }}
-              >
-                Open in Workout
-                <ArrowUpRight size={14} />
-              </motion.button>
-            </div>
-            {linkedSession.exercises.length === 0 ? (
-              <p className="text-sm text-fg-faint">No exercises added to this session yet.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {linkedSession.exercises.map((ex, i) => (
-                  <div key={ex.id} className="flex items-baseline gap-2">
-                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
-                      {i + 1}.
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-fg leading-tight">{ex.name}</p>
-                      {exerciseSummary(ex, linkedSession.type) && (
-                        <p className="text-xs text-fg-faint">
-                          {exerciseSummary(ex, linkedSession.type)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Collapse>
-    </div>
-  );
-
-  const recipeLinkBody = recipes.length > 0 && (
-    <div>
-      <label className="text-xs font-medium text-fg-muted mb-2 flex items-center gap-1.5">
-        <ChefHat size={13} />
-        Link a recipe (optional)
-      </label>
-      <div className="wheel-col flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-        <motion.button
-          onClick={() => linkRecipe(undefined)}
-          whileTap={tap}
-          className={chipCls(!recipeId)}
-        >
-          None
-        </motion.button>
-        {recipes.map((r) => (
-          <motion.button
-            key={r.id}
-            onClick={() => linkRecipe(r.id)}
-            whileTap={tap}
-            className={`flex items-center gap-1.5 ${chipCls(recipeId === r.id)}`}
-          >
-            <ChefHat size={14} />
-            {r.name}
-          </motion.button>
-        ))}
-      </div>
-
-      <Collapse open={!!linkedRecipe}>
-        {linkedRecipe && (
-          <div className="mt-3 rounded-2xl bg-surface-alt p-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-fg-muted">What to make</p>
-              <motion.button
-                onClick={() => {
-                  openRecipe(linkedRecipe.id);
-                  onClose();
-                }}
-                whileTap={tap}
-                className="flex items-center gap-1 text-xs font-medium"
-                style={{ color }}
-              >
-                Open in Recipes
-                <ArrowUpRight size={14} />
-              </motion.button>
-            </div>
-
-            {linkedRecipe.ingredients.length > 0 && (
-              <p className="text-sm text-fg mb-2">
-                {linkedRecipe.ingredients
-                  .map((ing) => {
-                    const item = catalog[ing.itemId];
-                    if (!item) return null;
-                    return `${item.name} (${formatAmount(item, ing.servings)})`;
-                  })
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
-            )}
-
-            {linkedRecipe.steps.length === 0 ? (
-              <p className="text-sm text-fg-faint">No steps added to this recipe yet.</p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {linkedRecipe.steps.map((step, i) => (
-                  <div key={i} className="flex items-baseline gap-2">
-                    <span className="text-xs text-fg-faint tabular-nums shrink-0 w-4">
-                      {i + 1}.
-                    </span>
-                    <p className="text-sm text-fg leading-snug">{step}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Collapse>
-    </div>
-  );
-
   const repeatDaysBody = (
     <div className="flex gap-2">
       {DAY_OPTIONS.map(({ label, value }) => (
@@ -1070,8 +752,26 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           {priorityButtons}
         </div>
       </Collapse>
-      {workoutLinkBody && <div className="mt-4">{workoutLinkBody}</div>}
-      {recipeLinkBody && <div className="mt-4">{recipeLinkBody}</div>}
+      {workoutSessions.length > 0 && (
+        <div className="mt-4">
+          <WorkoutLinkSection
+            workoutSessionId={workoutSessionId}
+            onLink={linkWorkout}
+            color={color}
+            onSheetClose={onClose}
+          />
+        </div>
+      )}
+      {recipes.length > 0 && (
+        <div className="mt-4">
+          <RecipeLinkSection
+            recipeId={recipeId}
+            onLink={linkRecipe}
+            color={color}
+            onSheetClose={onClose}
+          />
+        </div>
+      )}
       <Collapse open={mode === "habit"}>
         <div className="mt-4">
           <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat on</label>
@@ -1085,528 +785,452 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     !title.trim() || duration < 1 || (mode === "habit" && daysOfWeek.length === 0);
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <style>{".wheel-col::-webkit-scrollbar{display:none}"}</style>
-          <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 shadow-xl max-h-[92vh] overflow-y-auto"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={spring.snappy}
-          >
-            {/* Colored header — persists across steps */}
-            <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
-              <div className="flex items-center justify-between">
-                <motion.button
-                  onClick={onClose}
-                  whileTap={tap}
-                  className="w-9 h-9 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
-                    color: onColor,
-                  }}
-                >
-                  <X size={20} />
-                </motion.button>
-              </div>
+    <>
+      <BottomSheet
+        isOpen={isOpen}
+        onClose={onClose}
+        className="bg-surface max-h-[92vh] overflow-y-auto"
+      >
+        <style>{".wheel-col::-webkit-scrollbar{display:none}"}</style>
+        {/* Colored header — persists across steps */}
+        <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
+          <div className="flex items-center justify-between">
+            <motion.button
+              onClick={onClose}
+              whileTap={tap}
+              className="w-9 h-9 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
+                color: onColor,
+              }}
+            >
+              <X size={20} />
+            </motion.button>
+          </div>
 
-              <div className="flex items-center gap-4 mt-3">
-                {/* In edit mode the avatar becomes a tall pill (echoing the
+          <div className="flex items-center gap-4 mt-3">
+            {/* In edit mode the avatar becomes a tall pill (echoing the
                     timeline pills) and doubles as the way into the color/icon
                     pickers; the corner palette badge advertises it. */}
-                <motion.button
-                  onClick={() => isEditing && setStyleOpen((v) => !v)}
-                  whileTap={isEditing ? tap : undefined}
-                  className={`relative w-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0 ${isEditing ? "h-28" : "h-16"}`}
-                  style={{ backgroundColor: "#2f2f33" }}
+            <motion.button
+              onClick={() => isEditing && setStyleOpen((v) => !v)}
+              whileTap={isEditing ? tap : undefined}
+              className={`relative w-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0 ${isEditing ? "h-28" : "h-16"}`}
+              style={{ backgroundColor: "#2f2f33" }}
+            >
+              <HeaderIcon size={28} style={{ color }} />
+              {isEditing && (
+                <span className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-white text-[#2f2f33] flex items-center justify-center shadow-sm">
+                  {styleOpen ? <X size={14} /> : <Palette size={14} />}
+                </span>
+              )}
+            </motion.button>
+            <div className="flex-1 min-w-0">
+              {(isEditing || step > 1) && (
+                <p
+                  className="text-sm mb-0.5 truncate"
+                  style={{
+                    color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)",
+                  }}
                 >
-                  <HeaderIcon size={28} style={{ color }} />
-                  {isEditing && (
-                    <span className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-white text-[#2f2f33] flex items-center justify-center shadow-sm">
-                      {styleOpen ? <X size={14} /> : <Palette size={14} />}
-                    </span>
-                  )}
-                </motion.button>
-                <div className="flex-1 min-w-0">
-                  {(isEditing || step > 1) && (
-                    <p
-                      className="text-sm mb-0.5 truncate"
-                      style={{
-                        color: isLightColor(color)
-                          ? "rgba(17,24,39,0.7)"
-                          : "rgba(255,255,255,0.85)",
-                      }}
-                    >
-                      {rangeLabel(startMin, duration)} ({durationWords(duration)})
-                    </p>
-                  )}
-                  <input
-                    ref={titleRef}
-                    type="text"
-                    value={title}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder={mode === "task" ? "Task title" : "Habit title"}
-                    className={`w-full bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
-                    style={{
-                      color: onColor,
-                      caretColor: onColor,
-                      borderColor: isLightColor(color)
-                        ? "rgba(17,24,39,0.3)"
-                        : "rgba(255,255,255,0.5)",
-                    }}
-                  />
-                  {isEditing && mode === "habit" && (
-                    <Repeat
-                      size={15}
-                      className="mt-2"
-                      style={{
-                        color: isLightColor(color)
-                          ? "rgba(17,24,39,0.7)"
-                          : "rgba(255,255,255,0.85)",
-                      }}
-                    />
-                  )}
-                </div>
-                {isEditing && (
-                  <motion.button
-                    onClick={toggleDone}
-                    whileTap={tap}
-                    aria-label={done ? "Mark as not completed" : "Mark as completed"}
-                    className="w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0"
-                    style={{
-                      borderColor: onColor,
-                      backgroundColor: done
-                        ? isLightColor(color)
-                          ? "rgba(0,0,0,0.12)"
-                          : "rgba(0,0,0,0.25)"
-                        : "transparent",
-                      color: onColor,
-                    }}
-                  >
-                    <AnimatePresence initial={false}>
-                      {done && (
-                        <motion.span
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          exit={{ scale: 0 }}
-                          transition={spring.pop}
-                          className="flex"
-                        >
-                          <Check size={16} />
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </motion.button>
-                )}
-              </div>
-            </div>
-
-            {/* Sheet body */}
-            <div className="p-4 pb-6">
-              {isEditing ? (
-                /* ---- EDIT — value rows; tapping a row expands its editor ---- */
-                <div className="flex flex-col gap-4">
-                  <AnimatePresence initial={false}>
-                    {styleOpen && (
-                      <motion.div
-                        key="style"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden -mb-4"
-                      >
-                        <div className="pb-4">{detailsBody}</div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* When it happens */}
-                  <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
-                    {mode === "task" && (
-                      <FieldRow
-                        icon={Calendar}
-                        value={formatFullDate(date)}
-                        hint={relativeDayLabel(date)}
-                        onPress={() => setOpenRow("date")}
-                      />
-                    )}
-
-                    <FieldRow
-                      icon={Clock}
-                      value={rangeLabel(startMin, duration)}
-                      hint={durationWords(duration)}
-                      onPress={() => setOpenRow("time")}
-                    />
-
-                    <FieldRow
-                      icon={Repeat}
-                      value={mode === "task" ? "One-time" : repeatSummary(daysOfWeek)}
-                      onPress={() => setOpenRow("repeat")}
-                    />
-
-                    <FieldRow
-                      icon={Bell}
-                      value={reminder === null ? "No alert" : reminderLabel(reminder)}
-                      muted={reminder === null}
-                      onPress={() => setOpenRow("alert")}
-                    />
-                  </div>
-
-                  {/* Extras */}
-                  {(mode === "task" || workoutSessions.length > 0 || recipes.length > 0) && (
-                    <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
-                      {mode === "task" && (
-                        <FieldRow
-                          icon={Flag}
-                          value={
-                            priority ? `${PRIORITY_META[priority].label} priority` : "No priority"
-                          }
-                          muted={!priority}
-                          onPress={() => setOpenRow("priority")}
-                        />
-                      )}
-                      {(workoutSessions.length > 0 || recipes.length > 0) && (
-                        <FieldRow
-                          icon={Link2}
-                          value={linkedSession?.name ?? linkedRecipe?.name ?? "No link"}
-                          hint={linkedSession ? "Workout" : linkedRecipe ? "Recipe" : undefined}
-                          muted={!linkedSession && !linkedRecipe}
-                          onPress={() => setOpenRow("links")}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {/* -mb-4/pb-4 cancel the stack's gap while collapsed so the
-                      card's disappearance doesn't end with a spacing jump. */}
-                  <Collapse
-                    open={!!linkSuggestion && !suggestDismissed}
-                    outerClassName="-mb-4"
-                    className="pb-4"
-                  >
-                    <div className="rounded-2xl bg-surface-alt p-3">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
-                          {linkSuggestion === "workout" ? (
-                            <Dumbbell size={13} />
-                          ) : (
-                            <ChefHat size={13} />
-                          )}
-                          {linkSuggestion === "workout"
-                            ? "This looks like a workout — link a session?"
-                            : "This looks like a meal — link a recipe?"}
-                        </p>
-                        <motion.button
-                          onClick={() => setSuggestDismissed(true)}
-                          whileTap={tap}
-                          className="shrink-0 text-fg-faint"
-                        >
-                          <X size={15} />
-                        </motion.button>
-                      </div>
-                      <div
-                        className="wheel-col flex gap-2 overflow-x-auto"
-                        style={{ scrollbarWidth: "none" }}
-                      >
-                        {linkSuggestion === "workout"
-                          ? workoutSessions.map((s) => {
-                              const SIcon = WORKOUT_TYPE_META[s.type].icon;
-                              return (
-                                <motion.button
-                                  key={s.id}
-                                  onClick={() => linkWorkout(s.id)}
-                                  whileTap={tap}
-                                  className={`flex items-center gap-1.5 ${chipCls(false)}`}
-                                >
-                                  <SIcon size={14} />
-                                  {s.name}
-                                </motion.button>
-                              );
-                            })
-                          : recipes.map((r) => (
-                              <motion.button
-                                key={r.id}
-                                onClick={() => linkRecipe(r.id)}
-                                whileTap={tap}
-                                className={`flex items-center gap-1.5 ${chipCls(false)}`}
-                              >
-                                <ChefHat size={14} />
-                                {r.name}
-                              </motion.button>
-                            ))}
-                      </div>
-                    </div>
-                  </Collapse>
-
-                  <motion.button
-                    onClick={handleSubmit}
-                    whileTap={tap}
-                    disabled={saveDisabled}
-                    className="w-full rounded-full py-4 font-semibold disabled:opacity-40"
-                    style={{ backgroundColor: color, color: onColor }}
-                  >
-                    {mode === "task" ? "Update Task" : "Update Habit"}
-                  </motion.button>
-
-                  <motion.button
-                    onClick={handleDelete}
-                    whileTap={tap}
-                    className="mx-auto flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-red-400"
-                  >
-                    <Trash2 size={15} />
-                    Delete
-                  </motion.button>
-                </div>
-              ) : (
-                /* ---- CREATE — guided 3-step wizard ---- */
-                <>
-                  {/* Step dots */}
-                  <div className="flex gap-1.5 justify-center mb-4">
-                    {[1, 2, 3].map((s) => (
-                      <span
-                        key={s}
-                        className={`h-1 rounded-full transition-all ${step === s ? "w-5 bg-surface-inverse" : "w-2 bg-surface-subtle"}`}
-                      />
-                    ))}
-                  </div>
-
-                  <AnimatePresence mode="wait" custom={dir} initial={false}>
-                    {/* ---------------- STEP 1 — DETAILS ---------------- */}
-                    {step === 1 && (
-                      <motion.div
-                        key="step1"
-                        custom={dir}
-                        variants={stepVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.18 }}
-                      >
-                        {detailsBody}
-
-                        <motion.button
-                          onClick={() => goTo(2)}
-                          whileTap={tap}
-                          disabled={!title.trim()}
-                          className="w-full rounded-2xl py-3.5 mt-6 font-medium disabled:opacity-40"
-                          style={{ backgroundColor: color, color: onColor }}
-                        >
-                          Continue
-                        </motion.button>
-                      </motion.div>
-                    )}
-
-                    {/* ---------------- STEP 2 — SCHEDULE ---------------- */}
-                    {step === 2 && (
-                      <motion.div
-                        key="step2"
-                        custom={dir}
-                        variants={stepVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.18 }}
-                      >
-                        {scheduleBody}
-                        <div className="mt-4">{reminderBody}</div>
-
-                        <div className="flex gap-2 mt-6">
-                          <motion.button
-                            onClick={() => goTo(1)}
-                            whileTap={tap}
-                            className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
-                          >
-                            Back
-                          </motion.button>
-                          <motion.button
-                            onClick={() => goTo(3)}
-                            whileTap={tap}
-                            disabled={duration < 1 || startMin + duration > MINUTES_PER_DAY}
-                            className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
-                            style={{ backgroundColor: color, color: onColor }}
-                          >
-                            Continue
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* ---------------- STEP 3 — CONFIRM ---------------- */}
-                    {step === 3 && (
-                      <motion.div
-                        key="step3"
-                        custom={dir}
-                        variants={stepVariants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.18 }}
-                      >
-                        {/* Summary preview */}
-                        <div className="flex items-center gap-3 bg-surface-alt rounded-2xl p-3 mb-5">
-                          <div
-                            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: color, color: onColor }}
-                          >
-                            <HeaderIcon size={18} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs text-fg-faint">
-                              {rangeLabel(startMin, duration)} · {relativeDayLabel(date)}
-                            </p>
-                            <p className="font-semibold text-fg truncate">
-                              {title.trim() || "Untitled"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {typeLinksBody}
-
-                        <div className="flex gap-2 mt-6">
-                          <motion.button
-                            onClick={() => goTo(2)}
-                            whileTap={tap}
-                            className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
-                          >
-                            Back
-                          </motion.button>
-                          <motion.button
-                            onClick={handleSubmit}
-                            whileTap={tap}
-                            disabled={saveDisabled}
-                            className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
-                            style={{ backgroundColor: color, color: onColor }}
-                          >
-                            {mode === "task" ? "Add task" : "Add habit"}
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </>
+                  {rangeLabel(startMin, duration)} ({durationWords(duration)})
+                </p>
+              )}
+              <input
+                ref={titleRef}
+                type="text"
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder={mode === "task" ? "Task title" : "Habit title"}
+                className={`w-full bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
+                style={{
+                  color: onColor,
+                  caretColor: onColor,
+                  borderColor: isLightColor(color) ? "rgba(17,24,39,0.3)" : "rgba(255,255,255,0.5)",
+                }}
+              />
+              {isEditing && mode === "habit" && (
+                <Repeat
+                  size={15}
+                  className="mt-2"
+                  style={{
+                    color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)",
+                  }}
+                />
               )}
             </div>
-          </motion.div>
-
-          {/* Field editor panel — tapping a value row slides this up over the
-              sheet; edits apply live, Done just dismisses it. */}
-          <AnimatePresence>
-            {isEditing && openRow && (
-              <>
-                <motion.div
-                  className="fixed inset-0 bg-black/30 z-60"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
-                  onClick={() => setOpenRow(null)}
-                />
-                <motion.div
-                  key={openRow}
-                  className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-70 shadow-xl max-h-[80vh] overflow-y-auto"
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
-                  transition={spring.gentle}
-                >
-                  <div className="sticky top-0 bg-surface rounded-t-2xl flex items-center justify-between px-4 pt-3 pb-2">
-                    <h3 className="text-base font-semibold text-fg">
-                      {FIELD_PANEL_TITLES[openRow]}
-                    </h3>
-                    <motion.button
-                      onClick={() => setOpenRow(null)}
-                      whileTap={tap}
-                      className="h-8 px-3.5 rounded-full text-sm font-medium"
-                      style={{ backgroundColor: color, color: onColor }}
+            {isEditing && (
+              <motion.button
+                onClick={toggleDone}
+                whileTap={tap}
+                aria-label={done ? "Mark as not completed" : "Mark as completed"}
+                className="w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0"
+                style={{
+                  borderColor: onColor,
+                  backgroundColor: done
+                    ? isLightColor(color)
+                      ? "rgba(0,0,0,0.12)"
+                      : "rgba(0,0,0,0.25)"
+                    : "transparent",
+                  color: onColor,
+                }}
+              >
+                <AnimatePresence initial={false}>
+                  {done && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      transition={spring.pop}
+                      className="flex"
                     >
-                      Done
+                      <Check size={16} />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            )}
+          </div>
+        </div>
+
+        {/* Sheet body */}
+        <div className="p-4 pb-6">
+          {isEditing ? (
+            /* ---- EDIT — value rows; tapping a row expands its editor ---- */
+            <div className="flex flex-col gap-4">
+              <AnimatePresence initial={false}>
+                {styleOpen && (
+                  <motion.div
+                    key="style"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden -mb-4"
+                  >
+                    <div className="pb-4">{detailsBody}</div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* When it happens */}
+              <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
+                {mode === "task" && (
+                  <FieldRow
+                    icon={Calendar}
+                    value={formatFullDate(date)}
+                    hint={relativeDayLabel(date)}
+                    onPress={() => setOpenRow("date")}
+                  />
+                )}
+
+                <FieldRow
+                  icon={Clock}
+                  value={rangeLabel(startMin, duration)}
+                  hint={durationWords(duration)}
+                  onPress={() => setOpenRow("time")}
+                />
+
+                <FieldRow
+                  icon={Repeat}
+                  value={mode === "task" ? "One-time" : repeatSummary(daysOfWeek)}
+                  onPress={() => setOpenRow("repeat")}
+                />
+
+                <FieldRow
+                  icon={Bell}
+                  value={reminder === null ? "No alert" : reminderLabel(reminder)}
+                  muted={reminder === null}
+                  onPress={() => setOpenRow("alert")}
+                />
+              </div>
+
+              {/* Extras */}
+              {(mode === "task" || workoutSessions.length > 0 || recipes.length > 0) && (
+                <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
+                  {mode === "task" && (
+                    <FieldRow
+                      icon={Flag}
+                      value={priority ? `${PRIORITY_META[priority].label} priority` : "No priority"}
+                      muted={!priority}
+                      onPress={() => setOpenRow("priority")}
+                    />
+                  )}
+                  {(workoutSessions.length > 0 || recipes.length > 0) && (
+                    <FieldRow
+                      icon={Link2}
+                      value={linkedSession?.name ?? linkedRecipe?.name ?? "No link"}
+                      hint={linkedSession ? "Workout" : linkedRecipe ? "Recipe" : undefined}
+                      muted={!linkedSession && !linkedRecipe}
+                      onPress={() => setOpenRow("links")}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* -mb-4/pb-4 cancel the stack's gap while collapsed so the
+                      card's disappearance doesn't end with a spacing jump. */}
+              <Collapse
+                open={!!linkSuggestion && !suggestDismissed}
+                outerClassName="-mb-4"
+                className="pb-4"
+              >
+                <div className="rounded-2xl bg-surface-alt p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
+                      {linkSuggestion === "workout" ? (
+                        <Dumbbell size={13} />
+                      ) : (
+                        <ChefHat size={13} />
+                      )}
+                      {linkSuggestion === "workout"
+                        ? "This looks like a workout — link a session?"
+                        : "This looks like a meal — link a recipe?"}
+                    </p>
+                    <motion.button
+                      onClick={() => setSuggestDismissed(true)}
+                      whileTap={tap}
+                      className="shrink-0 text-fg-faint"
+                    >
+                      <X size={15} />
                     </motion.button>
                   </div>
-                  <div className="px-4 pb-8 pt-1">
-                    {openRow === "date" && (
-                      <CalendarMonth value={date} color={color} onChange={setDate} />
-                    )}
-                    {openRow === "time" && (
-                      <div>
-                        <TimeWheel
-                          value={time}
-                          durationMinutes={duration}
-                          color={color}
-                          onChange={handleTimeChange}
-                          visibleRows={5}
-                        />
-                        <p className="text-base font-semibold text-fg mt-5 mb-2">Duration</p>
-                        {durationField}
-                      </div>
-                    )}
-                    {openRow === "repeat" && (
-                      <div>
-                        {typeCards}
-                        <Collapse open={mode === "habit"}>
-                          <div className="mt-4">
-                            <label className="text-xs font-medium text-fg-muted mb-2 block">
-                              Repeat on
-                            </label>
-                            {repeatDaysBody}
-                          </div>
-                        </Collapse>
-                      </div>
-                    )}
-                    {openRow === "alert" && reminderChips}
-                    {openRow === "priority" && priorityButtons}
-                    {openRow === "links" && (
-                      <div className="flex flex-col gap-4">
-                        {workoutLinkBody}
-                        {recipeLinkBody}
-                      </div>
-                    )}
+                  <div
+                    className="wheel-col flex gap-2 overflow-x-auto"
+                    style={{ scrollbarWidth: "none" }}
+                  >
+                    {linkSuggestion === "workout"
+                      ? workoutSessions.map((s) => {
+                          const SIcon = WORKOUT_TYPE_META[s.type].icon;
+                          return (
+                            <motion.button
+                              key={s.id}
+                              onClick={() => linkWorkout(s.id)}
+                              whileTap={tap}
+                              className={`flex items-center gap-1.5 ${chipCls(false)}`}
+                            >
+                              <SIcon size={14} />
+                              {s.name}
+                            </motion.button>
+                          );
+                        })
+                      : recipes.map((r) => (
+                          <motion.button
+                            key={r.id}
+                            onClick={() => linkRecipe(r.id)}
+                            whileTap={tap}
+                            className={`flex items-center gap-1.5 ${chipCls(false)}`}
+                          >
+                            <ChefHat size={14} />
+                            {r.name}
+                          </motion.button>
+                        ))}
                   </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
+                </div>
+              </Collapse>
 
-// One tappable value row of the edit sheet: icon, current value, optional
-// hint on the right, and a chevron; tapping slides that field's editor panel
-// up from the bottom.
-function FieldRow({
-  icon: IconComp,
-  value,
-  hint,
-  muted = false,
-  onPress,
-}: {
-  icon: typeof Calendar;
-  value: string;
-  hint?: string;
-  muted?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <button onClick={onPress} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
-      <IconComp size={18} className="text-fg-muted shrink-0" />
-      <span
-        className={`flex-1 min-w-0 truncate text-[15px] font-medium ${muted ? "text-fg-faint" : "text-fg"}`}
+              <motion.button
+                onClick={handleSubmit}
+                whileTap={tap}
+                disabled={saveDisabled}
+                className="w-full rounded-full py-4 font-semibold disabled:opacity-40"
+                style={{ backgroundColor: color, color: onColor }}
+              >
+                {mode === "task" ? "Update Task" : "Update Habit"}
+              </motion.button>
+
+              <motion.button
+                onClick={handleDelete}
+                whileTap={tap}
+                className="mx-auto flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-red-400"
+              >
+                <Trash2 size={15} />
+                Delete
+              </motion.button>
+            </div>
+          ) : (
+            /* ---- CREATE — guided 3-step wizard ---- */
+            <>
+              {/* Step dots */}
+              <div className="flex gap-1.5 justify-center mb-4">
+                {[1, 2, 3].map((s) => (
+                  <span
+                    key={s}
+                    className={`h-1 rounded-full transition-all ${step === s ? "w-5 bg-surface-inverse" : "w-2 bg-surface-subtle"}`}
+                  />
+                ))}
+              </div>
+
+              <AnimatePresence mode="wait" custom={dir} initial={false}>
+                {/* ---------------- STEP 1 — DETAILS ---------------- */}
+                {step === 1 && (
+                  <motion.div
+                    key="step1"
+                    custom={dir}
+                    variants={stepVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ duration: 0.18 }}
+                  >
+                    {detailsBody}
+
+                    <motion.button
+                      onClick={() => goTo(2)}
+                      whileTap={tap}
+                      disabled={!title.trim()}
+                      className="w-full rounded-2xl py-3.5 mt-6 font-medium disabled:opacity-40"
+                      style={{ backgroundColor: color, color: onColor }}
+                    >
+                      Continue
+                    </motion.button>
+                  </motion.div>
+                )}
+
+                {/* ---------------- STEP 2 — SCHEDULE ---------------- */}
+                {step === 2 && (
+                  <motion.div
+                    key="step2"
+                    custom={dir}
+                    variants={stepVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ duration: 0.18 }}
+                  >
+                    {scheduleBody}
+                    <div className="mt-4">{reminderBody}</div>
+
+                    <div className="flex gap-2 mt-6">
+                      <motion.button
+                        onClick={() => goTo(1)}
+                        whileTap={tap}
+                        className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
+                      >
+                        Back
+                      </motion.button>
+                      <motion.button
+                        onClick={() => goTo(3)}
+                        whileTap={tap}
+                        disabled={duration < 1 || startMin + duration > MINUTES_PER_DAY}
+                        className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
+                        style={{ backgroundColor: color, color: onColor }}
+                      >
+                        Continue
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ---------------- STEP 3 — CONFIRM ---------------- */}
+                {step === 3 && (
+                  <motion.div
+                    key="step3"
+                    custom={dir}
+                    variants={stepVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ duration: 0.18 }}
+                  >
+                    {/* Summary preview */}
+                    <div className="flex items-center gap-3 bg-surface-alt rounded-2xl p-3 mb-5">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: color, color: onColor }}
+                      >
+                        <HeaderIcon size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-fg-faint">
+                          {rangeLabel(startMin, duration)} · {relativeDayLabel(date)}
+                        </p>
+                        <p className="font-semibold text-fg truncate">
+                          {title.trim() || "Untitled"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {typeLinksBody}
+
+                    <div className="flex gap-2 mt-6">
+                      <motion.button
+                        onClick={() => goTo(2)}
+                        whileTap={tap}
+                        className="px-5 rounded-2xl py-3.5 font-medium bg-surface-raised text-fg-muted"
+                      >
+                        Back
+                      </motion.button>
+                      <motion.button
+                        onClick={handleSubmit}
+                        whileTap={tap}
+                        disabled={saveDisabled}
+                        className="flex-1 rounded-2xl py-3.5 font-medium disabled:opacity-40"
+                        style={{ backgroundColor: color, color: onColor }}
+                      >
+                        {mode === "task" ? "Add task" : "Add habit"}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* Field editor panel - tapping a value row slides this up over the
+          sheet; edits apply live, Done just dismisses it. */}
+      <FieldPanel
+        openKey={isOpen && isEditing ? openRow : null}
+        color={color}
+        onColor={onColor}
+        onClose={() => setOpenRow(null)}
       >
-        {value}
-      </span>
-      {hint && <span className="text-sm text-fg-faint shrink-0">{hint}</span>}
-      <ChevronRight size={16} className="text-fg-faint shrink-0" />
-    </button>
+        {openRow === "date" && <CalendarMonth value={date} color={color} onChange={setDate} />}
+        {openRow === "time" && (
+          <div>
+            <TimeWheel
+              value={time}
+              durationMinutes={duration}
+              color={color}
+              onChange={handleTimeChange}
+              visibleRows={5}
+            />
+            <p className="text-base font-semibold text-fg mt-5 mb-2">Duration</p>
+            {durationField}
+          </div>
+        )}
+        {openRow === "repeat" && (
+          <div>
+            {typeCards}
+            <Collapse open={mode === "habit"}>
+              <div className="mt-4">
+                <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat on</label>
+                {repeatDaysBody}
+              </div>
+            </Collapse>
+          </div>
+        )}
+        {openRow === "alert" && reminderChips}
+        {openRow === "priority" && priorityButtons}
+        {openRow === "links" && (
+          <div className="flex flex-col gap-4">
+            <WorkoutLinkSection
+              workoutSessionId={workoutSessionId}
+              onLink={linkWorkout}
+              color={color}
+              onSheetClose={onClose}
+            />
+            <RecipeLinkSection
+              recipeId={recipeId}
+              onLink={linkRecipe}
+              color={color}
+              onSheetClose={onClose}
+            />
+          </div>
+        )}
+      </FieldPanel>
+    </>
   );
 }

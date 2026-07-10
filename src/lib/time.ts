@@ -36,6 +36,11 @@ export function timeStringToMinutes(t: string) {
   return h * 60 + m;
 }
 
+// "09:00–10:30" — the compact range label used on pills and field rows.
+export function rangeLabel(startMinutes: number, durationMinutes: number) {
+  return `${formatTimeLabel(startMinutes)}–${formatTimeLabel(startMinutes + durationMinutes)}`;
+}
+
 // "45 mins" / "1 hr, 30 mins" — the wordy form used in detail rows.
 export function durationWords(d: number) {
   if (d < 60) return `${d} mins`;
