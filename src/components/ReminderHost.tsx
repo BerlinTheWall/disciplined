@@ -8,6 +8,7 @@ import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { REMINDER_GRACE_MS, showSystemNotification } from "@/lib/reminders";
 import { formatTimeLabel } from "@/lib/time";
+import { setWorkerTimeout } from "@/lib/workerTimer";
 import { useHabitStore } from "@/store/habitStore";
 import { useReminderStore, type ReminderAlert } from "@/store/reminderStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -173,18 +174,18 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
   // Precise scheduling: after each pass, aim a timer exactly at the next fire
   // time (capped by the heartbeat). Creating/editing an item re-aims right
   // away via the store subscriptions, so a reminder due in 10 seconds fires in
-  // 10 seconds — not at the next poll. Background tabs still get throttled by
-  // the browser (up to ~a minute); the heartbeat catches anything missed.
+  // 10 seconds — not at the next poll. The timer waits inside a worker (see
+  // workerTimer) because browsers throttle main-thread timers of hidden tabs.
   useEffect(() => {
-    let timer: number | undefined;
+    let cancelTimer: (() => void) | undefined;
 
     function scheduleNext() {
-      window.clearTimeout(timer);
+      cancelTimer?.();
       const now = Date.now();
       const next = nextFireAt(now);
       const delay =
         next === null ? HEARTBEAT_MS : Math.min(next - now + FIRE_SLACK_MS, HEARTBEAT_MS);
-      timer = window.setTimeout(run, delay);
+      cancelTimer = setWorkerTimeout(run, delay);
     }
 
     function run() {
@@ -200,7 +201,7 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.clearTimeout(timer);
+      cancelTimer?.();
       unsubTasks();
       unsubHabits();
       document.removeEventListener("visibilitychange", onVisible);
