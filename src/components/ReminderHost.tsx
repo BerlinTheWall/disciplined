@@ -12,12 +12,51 @@ import { useHabitStore } from "@/store/habitStore";
 import { useReminderStore, type ReminderAlert } from "@/store/reminderStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
+import type { Habit } from "@/types/habits";
 
-// How often the scheduler looks for due reminders. Reminder precision is
-// "within half a minute", which is plenty for a day planner.
-const CHECK_INTERVAL_MS = 30_000;
+// Safety heartbeat between precisely-aimed wakeups (see scheduleNext): the
+// scheduler sets an exact timer for the next fire time, and this caps how far
+// apart wakeups can drift (clock changes, throttled timers, missed events).
+const HEARTBEAT_MS = 30_000;
+// Aim slightly past the fire time so the wakeup lands just inside the window,
+// never a hair before it.
+const FIRE_SLACK_MS = 200;
 // Foreground banners dismiss themselves after a while.
 const AUTO_DISMISS_MS = 12_000;
+
+// Habits that can still fire a reminder today.
+function activeHabitsToday(today: string, weekday: number) {
+  return useHabitStore
+    .getState()
+    .habits.filter(
+      (h): h is Habit & { reminderMinutesBefore: number } =>
+        h.reminderMinutesBefore != null &&
+        h.daysOfWeek.includes(weekday) &&
+        !h.completedDates.includes(today) &&
+        !h.skippedDates?.includes(today)
+    );
+}
+
+// Earliest upcoming fire time (start - lead) strictly after `now`, or null.
+// Only looks ahead — items already inside their window are collectDue's job.
+function nextFireAt(now: number): number | null {
+  let next: number | null = null;
+  const consider = (date: string, startMinutes: number, minutesBefore: number) => {
+    const fireAt = new Date(date + "T00:00:00").getTime() + (startMinutes - minutesBefore) * 60_000;
+    if (fireAt > now && (next === null || fireAt < next)) next = fireAt;
+  };
+
+  for (const t of useTaskStore.getState().tasks) {
+    if (t.reminderMinutesBefore == null || t.completed) continue;
+    consider(t.date, t.startMinutes, t.reminderMinutesBefore);
+  }
+  const today = todayISODate();
+  const weekday = new Date().getDay();
+  for (const h of activeHabitsToday(today, weekday)) {
+    consider(today, h.startMinutes, h.reminderMinutesBefore);
+  }
+  return next;
+}
 
 // All reminders currently inside their delivery window:
 // [start - reminderMinutesBefore, start + grace].
@@ -68,10 +107,7 @@ function collectDue(now: number): ReminderAlert[] {
 
   const today = todayISODate();
   const weekday = new Date().getDay();
-  for (const h of useHabitStore.getState().habits) {
-    if (h.reminderMinutesBefore == null) continue;
-    if (!h.daysOfWeek.includes(weekday)) continue;
-    if (h.completedDates.includes(today) || h.skippedDates?.includes(today)) continue;
+  for (const h of activeHabitsToday(today, weekday)) {
     pushIfDue(
       "habit",
       h.id,
@@ -134,15 +170,39 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
   const alerts = useReminderStore((s) => s.alerts);
   const dismissAlert = useReminderStore((s) => s.dismissAlert);
 
+  // Precise scheduling: after each pass, aim a timer exactly at the next fire
+  // time (capped by the heartbeat). Creating/editing an item re-aims right
+  // away via the store subscriptions, so a reminder due in 10 seconds fires in
+  // 10 seconds — not at the next poll. Background tabs still get throttled by
+  // the browser (up to ~a minute); the heartbeat catches anything missed.
   useEffect(() => {
-    tick();
-    const id = window.setInterval(tick, CHECK_INTERVAL_MS);
+    let timer: number | undefined;
+
+    function scheduleNext() {
+      window.clearTimeout(timer);
+      const now = Date.now();
+      const next = nextFireAt(now);
+      const delay =
+        next === null ? HEARTBEAT_MS : Math.min(next - now + FIRE_SLACK_MS, HEARTBEAT_MS);
+      timer = window.setTimeout(run, delay);
+    }
+
+    function run() {
+      tick();
+      scheduleNext();
+    }
+
+    run();
+    const unsubTasks = useTaskStore.subscribe(run);
+    const unsubHabits = useHabitStore.subscribe(run);
     const onVisible = () => {
-      if (document.visibilityState === "visible") tick();
+      if (document.visibilityState === "visible") run();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.clearInterval(id);
+      window.clearTimeout(timer);
+      unsubTasks();
+      unsubHabits();
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
