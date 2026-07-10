@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
@@ -13,9 +13,12 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import { buildDayRows } from "./dayRows";
 import type { ScheduleRowData } from "./ScheduleRow";
 import type { EditItem } from "./Timeline";
-import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
+import { useNow } from "@/hooks/useNow";
+import { hexToRgba } from "@/lib/color";
+import { relativeDayLabel, toISODate } from "@/lib/date";
 import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
@@ -56,31 +59,6 @@ function fmt12(min: number) {
   };
 }
 
-// hex → rgba string, for the pulsing ring around the current task's icon.
-function hexToRgba(hex: string, alpha: number) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function localDateString(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function relativeDayLabel(iso: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(iso + "T00:00:00");
-  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long" });
-}
-
 export default function DayScheduleCards({ date, active, onDetail }: DayScheduleCardsProps) {
   const [tasks, toggleTaskCompleted] = useTaskStore(
     useShallow((state) => [state.tasks, state.toggleTaskCompleted])
@@ -89,32 +67,12 @@ export default function DayScheduleCards({ date, active, onDetail }: DaySchedule
     useShallow((state) => [state.habits, state.toggleHabitCompleted])
   );
 
-  const dateObj = new Date(date + "T00:00:00");
-
-  const taskItems: ScheduleRowData[] = tasks.filter((t) => t.date === date);
-  const habitItems: ScheduleRowData[] = habits
-    .filter((h) => isHabitActiveOnDate(h, dateObj))
-    .map((h) => ({
-      id: h.id,
-      title: h.title,
-      startMinutes: h.startMinutes,
-      durationMinutes: h.durationMinutes,
-      color: h.color,
-      icon: h.icon,
-      completed: h.completedDates.includes(date),
-      streak: getHabitStreak(h, dateObj),
-    }));
-
-  const items = [...taskItems, ...habitItems].sort((a, b) => a.startMinutes - b.startMinutes);
+  const items = buildDayRows(tasks, habits, date);
 
   // Live clock so the pulse follows real time (only matters for today).
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const isToday = date === localDateString(now);
+  const isToday = date === toISODate(now);
   let currentId: string | null = null;
   if (isToday) {
     for (const it of items) {

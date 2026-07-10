@@ -6,6 +6,7 @@ import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
 import { spring, tap } from "@/lib/motion";
 import { fieldMeta, WORKOUT_TYPE_META, WORKOUT_TYPE_ORDER } from "@/lib/workout";
 import type { WorkoutFieldKey } from "@/lib/workout";
@@ -25,14 +26,6 @@ const COLOR_OPTIONS = [
   "#f472b6",
   "#f87171",
 ];
-
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
 
 // True if the user has entered anything into this exercise — a name, any metric,
 // or notes. Untouched blank rows return false so they can be dropped on save,

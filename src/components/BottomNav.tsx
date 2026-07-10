@@ -4,17 +4,7 @@ import { CalendarDays, Home, Plus, UtensilsCrossed, Wallet } from "lucide-react"
 import type { LucideIcon } from "lucide-react";
 
 import { spring, tap } from "@/lib/motion";
-
-export type Page =
-  | "home"
-  | "meals"
-  | "recipes"
-  | "food"
-  | "workout"
-  | "schedule"
-  | "habits"
-  | "expenses"
-  | "profile";
+import type { Page } from "@/lib/pages";
 
 interface BottomNavProps {
   active: Page;

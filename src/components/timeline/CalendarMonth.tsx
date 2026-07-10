@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { toISODate } from "@/lib/date";
+import { isLightColor } from "@/lib/color";
+import { parseISODate, toISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { tap } from "@/lib/motion";
 import { useHabitStore } from "@/store/habitStore";
@@ -32,18 +33,6 @@ const monthVariants = {
   center: { x: 0, opacity: 1 },
   exit: (d: number) => ({ x: d > 0 ? -56 : d < 0 ? 56 : 0, opacity: 0 }),
 };
-
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
-
-function isoToDate(iso: string) {
-  return new Date(iso + "T00:00:00");
-}
 
 /* ---- month/year scroll wheels ------------------------------------ */
 
@@ -144,7 +133,7 @@ export default function CalendarMonth({
   const tasks = useTaskStore((s) => s.tasks);
   const habits = useHabitStore((s) => s.habits);
 
-  const selected = isoToDate(value);
+  const selected = parseISODate(value);
   const [view, setView] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
   // +1 sliding forward, -1 back — drives which side the next month enters from.
   const [dir, setDir] = useState(0);
@@ -159,7 +148,7 @@ export default function CalendarMonth({
 
   // Colors of the items already scheduled on a given day, for the dot row.
   function dayMarkers(iso: string) {
-    const d = isoToDate(iso);
+    const d = parseISODate(iso);
     return [
       ...habits.filter((h) => isHabitActiveOnDate(h, d)).map((h) => h.color),
       ...tasks.filter((t) => t.date === iso).map((t) => t.color),

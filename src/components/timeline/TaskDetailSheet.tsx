@@ -14,46 +14,20 @@ import {
 
 import type { EditItem } from "./Timeline";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
+import { formatFullDate } from "@/lib/date";
 import { getHabitStreak } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
 import { reminderLabel } from "@/lib/reminders";
+import { durationWords, formatTimeLabel } from "@/lib/time";
 import { useRecipeFocusStore } from "@/store/recipeFocusStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
-
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
-
-function label24(min: number) {
-  const m = ((min % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
-
-function durationWords(d: number) {
-  if (d < 60) return `${d} mins`;
-  const h = Math.floor(d / 60);
-  const m = d % 60;
-  return m ? `${h} hr, ${m} mins` : `${h} hr`;
-}
-
-function formatFullDate(iso: string) {
-  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 interface TaskDetailSheetProps {
   item: EditItem | null;
@@ -131,7 +105,9 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
                 <div className="flex-1 min-w-0">
                   <p
                     className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide"
-                    style={{ color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)" }}
+                    style={{
+                      color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)",
+                    }}
                   >
                     {item.type === "task" ? <CheckCircle2 size={12} /> : <Repeat size={12} />}
                     {item.type === "task" ? "One-time task" : "Repeating habit"}
@@ -144,10 +120,13 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
                   </h2>
                   <p
                     className="text-sm mt-0.5 tabular-nums"
-                    style={{ color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)" }}
+                    style={{
+                      color: isLightColor(color) ? "rgba(17,24,39,0.7)" : "rgba(255,255,255,0.85)",
+                    }}
                   >
-                    {label24(data.startMinutes)}–{label24(data.startMinutes + data.durationMinutes)}{" "}
-                    ({durationWords(data.durationMinutes)})
+                    {formatTimeLabel(data.startMinutes)}–
+                    {formatTimeLabel(data.startMinutes + data.durationMinutes)} (
+                    {durationWords(data.durationMinutes)})
                   </p>
                 </div>
               </div>

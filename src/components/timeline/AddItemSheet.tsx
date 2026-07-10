@@ -27,6 +27,8 @@ import CalendarMonth from "./CalendarMonth";
 import type { EditItem } from "./Timeline";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
+import { DAY_NAMES, formatFullDate, relativeDayLabel } from "@/lib/date";
 import { formatAmount, indexItems } from "@/lib/grocery";
 import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -37,6 +39,7 @@ import {
   reminderLabel,
   requestNotifyPermission,
 } from "@/lib/reminders";
+import { durationWords, formatDuration, formatTimeLabel, timeStringToMinutes } from "@/lib/time";
 import { exerciseSummary, WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
@@ -95,8 +98,6 @@ const FIELD_PANEL_TITLES: Record<EditRowKey, string> = {
   links: "Links",
 };
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 function repeatSummary(days: number[]) {
   if (days.length === 7) return "Every day";
   if (days.length === 0) return "No days picked";
@@ -108,63 +109,8 @@ function repeatSummary(days: number[]) {
 
 /* ---- helpers ----------------------------------------------------- */
 
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
-
-function minutesToTimeString(minutes: number) {
-  const m = ((minutes % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
-function timeStringToMinutes(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-function label24(min: number) {
-  const m = ((min % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
 function rangeLabel(startMin: number, dur: number) {
-  return `${label24(startMin)}–${label24(startMin + dur)}`;
-}
-function durationWords(d: number) {
-  if (d < 60) return `${d} mins`;
-  const h = Math.floor(d / 60);
-  const m = d % 60;
-  return m ? `${h} hr, ${m} mins` : `${h} hr`;
-}
-function formatDuration(d: number) {
-  if (d < 60) return `${d}m`;
-  const h = Math.floor(d / 60);
-  const m = d % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-
-function isoToDate(iso: string) {
-  return new Date(iso + "T00:00:00");
-}
-function formatFullDate(iso: string) {
-  return isoToDate(iso).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-function relativeDayLabel(iso: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = isoToDate(iso);
-  d.setHours(0, 0, 0, 0);
-  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long" });
+  return `${formatTimeLabel(startMin)}–${formatTimeLabel(startMin + dur)}`;
 }
 
 /* ---- single-column time wheel ------------------------------------ */
@@ -224,7 +170,7 @@ function TimeWheel({
     // the nearest slot. The guard skips the first, pre-populate render so we don't
     // write back the stale default time the sheet still holds from last time.
     if (didMount.current) {
-      const aligned = minutesToTimeString(steps[selectedIndex]);
+      const aligned = formatTimeLabel(steps[selectedIndex]);
       if (aligned !== value) onChange(aligned);
     } else {
       didMount.current = true;
@@ -238,7 +184,7 @@ function TimeWheel({
     setActive(idx);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      if (idx !== selectedIndex) onChange(minutesToTimeString(steps[idx]));
+      if (idx !== selectedIndex) onChange(formatTimeLabel(steps[idx]));
     }, 110);
   }
 
@@ -265,7 +211,9 @@ function TimeWheel({
                 {rangeLabel(min, durationMinutes)}
               </span>
             ) : (
-              <span className="text-base tabular-nums text-fg-disabled">{label24(min)}</span>
+              <span className="text-base tabular-nums text-fg-disabled">
+                {formatTimeLabel(min)}
+              </span>
             )}
           </div>
         ))}
@@ -362,7 +310,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setMode(editItem.type);
       setTitle(editItem.data.title);
       setDate(editItem.type === "task" ? editItem.data.date : selectedDate);
-      setTime(minutesToTimeString(editItem.data.startMinutes));
+      setTime(formatTimeLabel(editItem.data.startMinutes));
       const loadedDuration = Math.min(
         editItem.data.durationMinutes,
         MINUTES_PER_DAY - editItem.data.startMinutes
@@ -638,7 +586,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const startMin = timeStringToMinutes(time);
   const maxDuration = MINUTES_PER_DAY - startMin;
   const endMin = startMin + duration;
-  const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : label24(endMin);
+  const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : formatTimeLabel(endMin);
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
   const linkedSession = workoutSessions.find((s) => s.id === workoutSessionId);

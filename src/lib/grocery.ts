@@ -7,6 +7,11 @@ import type { ShoppingList } from "@/types/shopping";
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// "$4.75" — the app-wide currency format.
+export function money(n: number) {
+  return `$${n.toFixed(2)}`;
+}
+
 // Scale a catalog item's nutrition by a multiplier — e.g. 2 packs of an item,
 // or 0.4 of a serving in a meal. This is what lets a single catalog entry feed
 // both a shopping trip and a meal at different amounts.

@@ -6,6 +6,7 @@ import { todayISODate } from "@/lib/date";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { REMINDER_GRACE_MS, showSystemNotification } from "@/lib/reminders";
+import { formatTimeLabel } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
 import { useReminderStore, type ReminderAlert } from "@/store/reminderStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -16,11 +17,6 @@ import { useTaskStore } from "@/store/taskStore";
 const CHECK_INTERVAL_MS = 30_000;
 // Foreground banners dismiss themselves after a while.
 const AUTO_DISMISS_MS = 12_000;
-
-function timeLabel(startMinutes: number) {
-  const m = ((startMinutes % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
 
 // All reminders currently inside their delivery window:
 // [start - reminderMinutesBefore, start + grace].
@@ -47,8 +43,8 @@ function collectDue(now: number): ReminderAlert[] {
       title,
       body:
         now >= startAt
-          ? `Starting now (${timeLabel(startMinutes)})`
-          : `Starts at ${timeLabel(startMinutes)}`,
+          ? `Starting now (${formatTimeLabel(startMinutes)})`
+          : `Starts at ${formatTimeLabel(startMinutes)}`,
       color,
       icon,
       date,

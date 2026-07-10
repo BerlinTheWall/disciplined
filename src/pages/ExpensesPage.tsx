@@ -10,7 +10,7 @@ import CatalogPickerSheet from "@/components/expenses/CatalogPickerSheet";
 import { CATEGORIES } from "@/lib/categories";
 import { todayISODate } from "@/lib/date";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
-import { formatAmount, indexItems, lineCost, listTotals } from "@/lib/grocery";
+import { formatAmount, indexItems, lineCost, listTotals, money } from "@/lib/grocery";
 import { press, spring, tap } from "@/lib/motion";
 import { useExpenseStore } from "@/store/expenseStore";
 import { useGroceryStore } from "@/store/groceryStore";
@@ -18,10 +18,6 @@ import { useShoppingListStore } from "@/store/shoppingListStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Expense } from "@/types/expense";
 import type { GroceryItem } from "@/types/grocery";
-
-function money(n: number) {
-  return `$${n.toFixed(2)}`;
-}
 
 export default function ExpensesPage() {
   const expenses = useExpenseStore((s) => s.expenses);

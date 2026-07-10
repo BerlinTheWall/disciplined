@@ -27,9 +27,29 @@ export function snapToGrid(minutes: number) {
 }
 
 export function formatTimeLabel(totalMinutes: number) {
-  const h = Math.floor(totalMinutes / 60) % 24;
-  const m = totalMinutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const m = ((totalMinutes % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+export function timeStringToMinutes(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// "45 mins" / "1 hr, 30 mins" — the wordy form used in detail rows.
+export function durationWords(d: number) {
+  if (d < 60) return `${d} mins`;
+  const h = Math.floor(d / 60);
+  const m = d % 60;
+  return m ? `${h} hr, ${m} mins` : `${h} hr`;
+}
+
+// "45m" / "1h 30m" — the compact form used on pills and pickers.
+export function formatDuration(d: number) {
+  if (d < 60) return `${d}m`;
+  const h = Math.floor(d / 60);
+  const m = d % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 export function formatTimeRange(startMinutes: number, durationMinutes: number) {

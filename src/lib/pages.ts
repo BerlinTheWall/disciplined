@@ -32,8 +32,6 @@ export const PAGE_ORDER: Page[] = [
   "profile",
 ];
 
-export const FAB_PAGES: Page[] = ["schedule", "expenses"];
-
 export const ALL_TABS: { id: Page; icon: LucideIcon; label: string }[] = [
   { id: "meals", icon: UtensilsCrossed, label: "Meals" },
   { id: "recipes", icon: ChefHat, label: "Recipes" },

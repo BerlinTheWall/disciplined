@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, ClipboardList, Clock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { useNow } from "@/hooks/useNow";
 import { todayISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
@@ -162,11 +162,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
       })),
   ].sort((a, b) => a.startMinutes - b.startMinutes);
 
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const inSpan = (i: DayItem) =>
     nowMin >= i.startMinutes && nowMin < i.startMinutes + i.durationMinutes;

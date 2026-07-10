@@ -14,10 +14,11 @@ import {
   type Command,
   type CommandItem,
 } from "@/lib/command";
+import { DAY_NAMES, relativeDayLabel } from "@/lib/date";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { parseQuickAdd } from "@/lib/quickAdd";
-import { formatTimeLabel, formatTimeRange } from "@/lib/time";
+import { formatDuration, formatTimeLabel, formatTimeRange } from "@/lib/time";
 import { useChatStore } from "@/store/chatStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useRecipeStore } from "@/store/recipeStore";
@@ -27,7 +28,6 @@ import { useChoose, useConfirm, usePrompt, type ConfirmOptions } from "../Confir
 
 // Color a quick-added item gets until the user opens "edit details" to pick one.
 const DEFAULT_COLOR = "#34d399";
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const PLACEHOLDER = 'Add, command or ask — "gym mon 6am", "move lunch to 1pm", "what\'s tomorrow?"';
 
 // Verb used in the "couldn't find …" message for each action.
@@ -44,24 +44,6 @@ const ACTION_VERB: Record<Command["action"], string> = {
   toHabit: "convert",
   toTask: "convert",
 };
-
-function fmtDur(d: number) {
-  if (d < 60) return `${d}m`;
-  const h = Math.floor(d / 60);
-  const m = d % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-
-function relativeDayLabel(iso: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(iso + "T00:00:00");
-  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long" });
-}
 
 interface QuickAddBarProps {
   onEditDetails: (item: EditItem) => void;
@@ -226,7 +208,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         return ok(
           {
             title: "Resize it?",
-            message: `Set "${item.title}" to ${fmtDur(next)}.`,
+            message: `Set "${item.title}" to ${formatDuration(next)}.`,
             confirmLabel: "Set",
           },
           () => {
@@ -236,7 +218,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
               icon: item.icon,
               color: item.color,
               title: `Resized ${item.title}`,
-              context: fmtDur(next),
+              context: formatDuration(next),
             };
           }
         );

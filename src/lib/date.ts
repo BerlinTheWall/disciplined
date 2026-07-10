@@ -1,5 +1,14 @@
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+// Sunday-first short names, indexed by Date#getDay() / daysOfWeek values.
+export const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Local midnight for a YYYY-MM-DD string — never `new Date(iso)`, which parses
+// as UTC and shifts the day in western timezones.
+export function parseISODate(iso: string) {
+  return new Date(iso + "T00:00:00");
+}
+
 export function toISODate(date: Date) {
   // Local calendar date — never toISOString(), which converts to UTC and is
   // off by one from evening/early-morning depending on the timezone.
@@ -48,10 +57,28 @@ export function isSameDay(a: Date, b: Date) {
 export function relativeDayName(iso: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const d = new Date(iso + "T00:00:00");
+  const d = parseISODate(iso);
   const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
   if (diff === -1) return "Yesterday";
   return null;
+}
+
+// Like relativeDayName, but falls back to the weekday name ("Friday") so it
+// always yields something to show.
+export function relativeDayLabel(iso: string) {
+  return (
+    relativeDayName(iso) ?? parseISODate(iso).toLocaleDateString(undefined, { weekday: "long" })
+  );
+}
+
+// "Mon, Jan 5, 2026" — the spelled-out form used by the detail/edit sheets.
+export function formatFullDate(iso: string) {
+  return parseISODate(iso).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }

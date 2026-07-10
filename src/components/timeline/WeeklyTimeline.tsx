@@ -6,6 +6,7 @@ import { useShallow } from "zustand/shallow";
 import AddItemSheet from "./AddItemSheet";
 import type { EditItem } from "./Timeline";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
 import { getWeekDates, toISODate } from "@/lib/date";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
@@ -19,14 +20,6 @@ import type { Task } from "@/types/task";
 const DEFAULT_START_MINUTES = 6 * 60;
 const MIN_COL_HEIGHT = 400;
 const WEEKLY_PILL_WIDTH = 34;
-
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
 
 function formatDateLabel(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {

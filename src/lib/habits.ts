@@ -18,8 +18,11 @@ export function getHabitStreak(habit: Habit, referenceDate: Date = new Date()) {
     cursor = addDays(cursor, -1);
   }
 
+  // Guard on iterations (not the streak count) so a habit with no active days
+  // can't spin this loop forever.
   let streak = 0;
-  while (streak < 3650) {
+  let guard = 0;
+  while (guard++ < 3650) {
     if (isHabitActiveOnDate(habit, cursor)) {
       if (habit.completedDates.includes(toISODate(cursor))) {
         streak++;

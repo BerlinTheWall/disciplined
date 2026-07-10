@@ -6,6 +6,7 @@ import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
 import { formatAmount, indexItems, lineNutrition } from "@/lib/grocery";
 import { fileToResizedDataUrl } from "@/lib/image";
@@ -37,14 +38,6 @@ const COLOR_OPTIONS = [
   "#fb7185",
   "#f87171",
 ];
-
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
 
 interface RecipeSheetProps {
   isOpen: boolean;

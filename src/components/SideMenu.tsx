@@ -1,11 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { LogOut, Palette, Settings, X } from "lucide-react";
 
-import type { Page } from "./BottomNav";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { tap } from "@/lib/motion";
-import { ALL_TABS } from "@/lib/pages";
+import { ALL_TABS, type Page } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
 

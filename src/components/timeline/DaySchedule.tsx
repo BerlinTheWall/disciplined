@@ -1,12 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import { buildDayRows } from "./dayRows";
 import DoneTray from "./DoneTray";
 import ScheduleRow, { MIN_ROW_HEIGHT, type ScheduleRowData } from "./ScheduleRow";
 import type { EditItem } from "./Timeline";
-import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
+import { useNow } from "@/hooks/useNow";
+import { toISODate } from "@/lib/date";
 import { computeCompressedLayout, getPillHeight, minutesToPx } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
@@ -41,12 +43,6 @@ const BOTTOM_SCROLL_SPACE = 90;
 // Where the focused "now" item lands in the viewport on open: a fraction of the
 // way down from the top (slightly above center so upcoming items stay visible).
 const FOCUS_VIEWPORT_RATIO = 0.3;
-
-// Local YYYY-MM-DD for the given date (matches how selectedDate is stored).
-function localDateString(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 // Picks the item the user should be on "right now": the one whose time span
 // contains nowMinutes (most recently started wins when several overlap, so a
@@ -172,24 +168,7 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
     useShallow((state) => [state.habits, state.toggleHabitCompleted])
   );
 
-  const dateObj = new Date(date + "T00:00:00");
-
-  const taskItems: ScheduleRowData[] = tasks.filter((t) => t.date === date);
-
-  const habitItems: ScheduleRowData[] = habits
-    .filter((h) => isHabitActiveOnDate(h, dateObj))
-    .map((h) => ({
-      id: h.id,
-      title: h.title,
-      startMinutes: h.startMinutes,
-      durationMinutes: h.durationMinutes,
-      color: h.color,
-      icon: h.icon,
-      completed: h.completedDates.includes(date),
-      streak: getHabitStreak(h, dateObj),
-    }));
-
-  const items = [...taskItems, ...habitItems].sort((a, b) => a.startMinutes - b.startMinutes);
+  const items = buildDayRows(tasks, habits, date);
 
   // Completed items leave the timeline and collapse into the Done tray below, so
   // the schedule only lays out (and draws connectors between) what's still to do.
@@ -209,13 +188,9 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
 
   // Live clock so the "happening now" highlight follows real time and hops to
   // the next task as the day progresses (only matters when viewing today).
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow();
   const currentItemId =
-    date === localDateString(now)
+    date === toISODate(now)
       ? findActiveItemId(activeItems, now.getHours() * 60 + now.getMinutes())
       : null;
 
@@ -248,7 +223,7 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
     } else {
       const now = new Date();
       focusId =
-        date === localDateString(now)
+        date === toISODate(now)
           ? findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes())
           : null;
     }

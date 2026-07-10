@@ -3,6 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { AnimatePresence, motion } from "framer-motion";
 import { Flame } from "lucide-react";
 
+import { hexToRgba } from "@/lib/color";
 import { ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
@@ -20,16 +21,6 @@ import { useThemeStore } from "@/store/themeStore";
 import type { Priority } from "@/types/task";
 
 export const MIN_ROW_HEIGHT = 84;
-
-// hex (#rrggbb) → rgba string at the given alpha. Used to tint the current
-// task's highlight card with a faint wash of its own color.
-function hexToRgba(hex: string, alpha: number) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 export interface ScheduleRowData {
   id: string;

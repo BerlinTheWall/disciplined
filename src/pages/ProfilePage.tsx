@@ -7,6 +7,7 @@ import { useShallow } from "zustand/shallow";
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
 import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
+import { money } from "@/lib/grocery";
 import { ICONS } from "@/lib/icons";
 import {
   averageNutrition,
@@ -32,10 +33,6 @@ import { useTaskStore } from "@/store/taskStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 
 const ACCENT = "#9ec06a"; // the app's soft-green progress accent
-
-function money(n: number) {
-  return `$${n.toFixed(2)}`;
-}
 
 // ── Small shared pieces ──────────────────────────────────────────────────────
 

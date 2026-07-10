@@ -7,8 +7,11 @@ import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
+import { parseISODate, relativeDayLabel } from "@/lib/date";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
+import { formatDuration, formatTimeLabel, timeStringToMinutes } from "@/lib/time";
 import { useTaskStore } from "@/store/taskStore";
 import { useConfirm } from "../ConfirmDialog";
 
@@ -30,54 +33,15 @@ const DEFAULT_START = 8 * 60;
 
 /* ---- helpers ----------------------------------------------------- */
 
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
-function minutesToTimeString(min: number) {
-  const m = ((min % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
-function timeStringToMinutes(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-function label24(min: number) {
-  const m = ((min % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
 function rangeLabel(start: number, dur: number) {
-  return `${label24(start)}–${label24(start + dur)}`;
-}
-function formatDuration(d: number) {
-  if (d < 60) return `${d}m`;
-  const h = Math.floor(d / 60);
-  const m = d % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-function isoToDate(iso: string) {
-  return new Date(iso + "T00:00:00");
+  return `${formatTimeLabel(start)}–${formatTimeLabel(start + dur)}`;
 }
 function fullDateLabel(iso: string) {
-  return isoToDate(iso).toLocaleDateString(undefined, {
+  return parseISODate(iso).toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
-}
-function relativeDayLabel(iso: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = isoToDate(iso);
-  d.setHours(0, 0, 0, 0);
-  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return "today";
-  if (diff === 1) return "tomorrow";
-  if (diff === -1) return "yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long" });
 }
 
 interface PlanDaySheetProps {
@@ -100,7 +64,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   useScrollLock(isOpen);
 
   const [title, setTitle] = useState("");
-  const [time, setTime] = useState(minutesToTimeString(DEFAULT_START));
+  const [time, setTime] = useState(formatTimeLabel(DEFAULT_START));
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
@@ -146,7 +110,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     setDuration(30);
     setColorIndex(0);
     setShowCopyPicker(false);
-    setTime(minutesToTimeString(nextStartMinutes()));
+    setTime(formatTimeLabel(nextStartMinutes()));
   }, [isOpen, selectedDate]);
 
   const startMin = timeStringToMinutes(time);
@@ -166,7 +130,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     });
     // Chain the next task right after this one, but the user can still retime it.
     const nextStart = Math.min(startMin + duration, MINUTES_PER_DAY - 15);
-    setTime(minutesToTimeString(nextStart));
+    setTime(formatTimeLabel(nextStart));
     setColorIndex((i) => i + 1);
     setTitle("");
     inputRef.current?.focus();
@@ -384,7 +348,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                     <label className="relative flex items-center gap-1.5 bg-surface-raised rounded-full pl-3 pr-2 py-2 shrink-0">
                       <Clock size={15} className="text-fg-faint" />
                       <span className="text-sm font-medium text-fg tabular-nums">
-                        {label24(startMin)}
+                        {formatTimeLabel(startMin)}
                       </span>
                       <input
                         type="time"

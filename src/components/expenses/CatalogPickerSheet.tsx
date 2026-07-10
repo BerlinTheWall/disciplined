@@ -4,14 +4,10 @@ import { useShallow } from "zustand/shallow";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
-import { formatUnit } from "@/lib/grocery";
+import { formatUnit, money } from "@/lib/grocery";
 import { spring, tap } from "@/lib/motion";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useShoppingListStore } from "@/store/shoppingListStore";
-
-function money(n: number) {
-  return `$${n.toFixed(2)}`;
-}
 
 interface CatalogPickerSheetProps {
   isOpen: boolean;

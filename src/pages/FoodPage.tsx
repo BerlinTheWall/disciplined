@@ -4,14 +4,10 @@ import { Minus, Package, Plus } from "lucide-react";
 
 import AddGroceryItemSheet from "@/components/expenses/AddGroceryItemSheet";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
-import { formatUnit } from "@/lib/grocery";
+import { formatUnit, money } from "@/lib/grocery";
 import { press, spring, tap } from "@/lib/motion";
 import { useGroceryStore } from "@/store/groceryStore";
 import type { GroceryItem } from "@/types/grocery";
-
-function money(n: number) {
-  return `$${n.toFixed(2)}`;
-}
 
 export default function FoodPage() {
   const groceryItems = useGroceryStore((s) => s.groceryItems);

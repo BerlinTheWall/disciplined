@@ -77,9 +77,7 @@ export default function MealsPage() {
   }
 
   function clearRecent() {
-    clearLogAgain(
-      Object.fromEntries(recent.map((m) => [m.name.trim().toLowerCase(), m.date]))
-    );
+    clearLogAgain(Object.fromEntries(recent.map((m) => [m.name.trim().toLowerCase(), m.date])));
   }
 
   function logAgain(m: Meal) {

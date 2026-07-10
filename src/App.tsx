@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 
-import BottomNav, { type Page } from "./components/BottomNav";
+import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
 import ReminderHost from "./components/ReminderHost";
@@ -16,6 +16,7 @@ import WeekHeader from "./components/timeline/WeekHeader";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
+import { PAGE_ORDER, type Page } from "./lib/pages";
 import ExpensesPage from "./pages/ExpensesPage";
 import FoodPage from "./pages/FoodPage";
 import HabitsPage from "./pages/HabitsPage";
@@ -45,18 +46,6 @@ const PAGE_TITLES: Record<Page, string> = {
 };
 
 export type ViewMode = "daily" | "weekly";
-
-const PAGE_ORDER: Page[] = [
-  "home",
-  "meals",
-  "recipes",
-  "food",
-  "workout",
-  "schedule",
-  "habits",
-  "expenses",
-  "profile",
-];
 
 const pageVariants = {
   enter: (d: number) => ({ x: d > 0 ? 28 : -28, opacity: 0 }),

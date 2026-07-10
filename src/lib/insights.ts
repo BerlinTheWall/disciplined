@@ -1,6 +1,6 @@
 import { addDays, toISODate } from "./date";
 import { dayNutrition, indexItems } from "./grocery";
-import { isHabitActiveOnDate } from "./habits";
+import { getHabitStreak, isHabitActiveOnDate } from "./habits";
 import type { Nutrition } from "./nutritions";
 import type { Expense } from "@/types/expense";
 import type { GroceryItem } from "@/types/grocery";
@@ -114,24 +114,6 @@ function longestStreak(habit: Habit): number {
   return best;
 }
 
-function currentStreak(habit: Habit, end: Date = new Date()): number {
-  let cursor = new Date(end);
-  cursor.setHours(0, 0, 0, 0);
-  if (isHabitActiveOnDate(habit, cursor) && !habit.completedDates.includes(toISODate(cursor))) {
-    cursor = addDays(cursor, -1);
-  }
-  let streak = 0;
-  let guard = 0;
-  while (guard++ < 3650) {
-    if (isHabitActiveOnDate(habit, cursor)) {
-      if (habit.completedDates.includes(toISODate(cursor))) streak++;
-      else break;
-    }
-    cursor = addDays(cursor, -1);
-  }
-  return streak;
-}
-
 // Completion rate over the last `window` active occurrences of the habit.
 function recentRate(habit: Habit, window: number, end: Date = new Date()): number {
   let cursor = new Date(end);
@@ -153,7 +135,7 @@ export function habitStats(habits: Habit[], end: Date = new Date()): HabitStat[]
   return habits
     .map((habit) => ({
       habit,
-      current: currentStreak(habit, end),
+      current: getHabitStreak(habit, end),
       longest: longestStreak(habit),
       rate7: recentRate(habit, 7, end),
     }))

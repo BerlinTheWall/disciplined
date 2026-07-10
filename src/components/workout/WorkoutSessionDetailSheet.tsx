@@ -2,17 +2,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Pencil, X } from "lucide-react";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isLightColor } from "@/lib/color";
 import { spring, tap } from "@/lib/motion";
 import { exerciseMetrics, sessionSummary, WORKOUT_TYPE_META } from "@/lib/workout";
 import type { WorkoutSession } from "@/types/workout";
-
-function isLightColor(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
 
 interface WorkoutSessionDetailSheetProps {
   session: WorkoutSession | null;
