@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useScrollLock } from "@/hooks/useScrollLock";
+import BottomSheet from "./BottomSheet";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { spring, tap } from "@/lib/motion";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
@@ -60,8 +60,6 @@ function Row({
 }
 
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
-  useScrollLock(isOpen);
-
   const [scheduleView, setScheduleView, altStyle, setAltStyle, background, setBackground] =
     useSettingsStore(
       useShallow((state) => [
@@ -108,138 +106,116 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         : "In-app banners before tasks and habits start";
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-surface-alt rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[90vh] overflow-y-auto"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={spring.snappy}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-fg">Settings</h2>
-              <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-                <X size={22} />
-              </motion.button>
-            </div>
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      className="bg-surface-alt p-5 pb-8 max-h-[90vh] overflow-y-auto"
+    >
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-xl font-bold text-fg">Settings</h2>
+        <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
+          <X size={22} />
+        </motion.button>
+      </div>
 
-            {/* Schedule */}
-            <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
-              Schedule
-            </p>
-            <div className="mb-6 flex flex-col gap-2">
-              <Row
-                title="Weekly view"
-                subtitle={
-                  isWeekly ? "Showing the whole week as a grid" : "Showing one day as a timeline"
-                }
-                on={isWeekly}
-                onToggle={() => setScheduleView(isWeekly ? "daily" : "weekly")}
-              />
-              <Row
-                title="Alternate style"
-                subtitle="A different look for the calendar and tasks"
-                on={altStyle}
-                onToggle={() => setAltStyle(!altStyle)}
-              />
-            </div>
+      {/* Schedule */}
+      <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
+        Schedule
+      </p>
+      <div className="mb-6 flex flex-col gap-2">
+        <Row
+          title="Weekly view"
+          subtitle={isWeekly ? "Showing the whole week as a grid" : "Showing one day as a timeline"}
+          on={isWeekly}
+          onToggle={() => setScheduleView(isWeekly ? "daily" : "weekly")}
+        />
+        <Row
+          title="Alternate style"
+          subtitle="A different look for the calendar and tasks"
+          on={altStyle}
+          onToggle={() => setAltStyle(!altStyle)}
+        />
+      </div>
 
-            {/* Notifications */}
-            <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
-              Notifications
+      {/* Notifications */}
+      <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
+        Notifications
+      </p>
+      <div className="mb-6 flex flex-col gap-2">
+        <Row
+          title="Reminders"
+          subtitle={reminderSubtitle}
+          on={remindersEnabled}
+          onToggle={() => void toggleReminders()}
+        />
+        {remindersEnabled && (
+          <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">
+            <p className="font-medium text-fg">Default reminder</p>
+            <p className="text-sm text-fg-faint mt-0.5 mb-3">
+              Pre-selected for new tasks and habits
             </p>
-            <div className="mb-6 flex flex-col gap-2">
-              <Row
-                title="Reminders"
-                subtitle={reminderSubtitle}
-                on={remindersEnabled}
-                onToggle={() => void toggleReminders()}
-              />
-              {remindersEnabled && (
-                <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">
-                  <p className="font-medium text-fg">Default reminder</p>
-                  <p className="text-sm text-fg-faint mt-0.5 mb-3">
-                    Pre-selected for new tasks and habits
-                  </p>
-                  <div
-                    className="flex gap-2 overflow-x-auto pb-0.5"
-                    style={{ scrollbarWidth: "none" }}
-                  >
-                    {REMINDER_OPTIONS.map((opt) => {
-                      const selected = defaultReminderMinutes === opt.value;
-                      return (
-                        <motion.button
-                          key={String(opt.value)}
-                          onClick={() => setDefaultReminderMinutes(opt.value)}
-                          whileTap={tap}
-                          className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${
-                            selected
-                              ? "bg-surface-inverse text-fg-inverse"
-                              : "bg-surface-raised text-fg-muted"
-                          }`}
-                        >
-                          {opt.label}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Appearance */}
-            <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
-              Appearance
-            </p>
-            <Row
-              title="Dark mode"
-              subtitle={theme === "dark" ? "Dark theme is on" : "Light theme is on"}
-              on={theme === "dark"}
-              onToggle={toggleTheme}
-            />
-
-            {/* Background */}
-            <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2 mt-6">
-              Background
-            </p>
-            <div className="flex gap-3">
-              {BACKGROUNDS.map((bg) => {
-                const selected = background === bg.key;
+            <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+              {REMINDER_OPTIONS.map((opt) => {
+                const selected = defaultReminderMinutes === opt.value;
                 return (
                   <motion.button
-                    key={bg.key}
-                    onClick={() => setBackground(bg.key)}
+                    key={String(opt.value)}
+                    onClick={() => setDefaultReminderMinutes(opt.value)}
                     whileTap={tap}
-                    className="flex-1 flex flex-col items-center gap-2"
+                    className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${
+                      selected
+                        ? "bg-surface-inverse text-fg-inverse"
+                        : "bg-surface-raised text-fg-muted"
+                    }`}
                   >
-                    <span
-                      className="w-full h-16 rounded-2xl border-2 transition-colors"
-                      style={{
-                        background: bg.swatch,
-                        borderColor: selected ? "var(--fg)" : "var(--border-strong)",
-                      }}
-                    />
-                    <span
-                      className={`text-xs font-medium ${selected ? "text-fg" : "text-fg-muted"}`}
-                    >
-                      {bg.label}
-                    </span>
+                    {opt.label}
                   </motion.button>
                 );
               })}
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+          </div>
+        )}
+      </div>
+
+      {/* Appearance */}
+      <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2">
+        Appearance
+      </p>
+      <Row
+        title="Dark mode"
+        subtitle={theme === "dark" ? "Dark theme is on" : "Light theme is on"}
+        on={theme === "dark"}
+        onToggle={toggleTheme}
+      />
+
+      {/* Background */}
+      <p className="text-xs font-semibold text-fg-faint uppercase tracking-wide px-1 mb-2 mt-6">
+        Background
+      </p>
+      <div className="flex gap-3">
+        {BACKGROUNDS.map((bg) => {
+          const selected = background === bg.key;
+          return (
+            <motion.button
+              key={bg.key}
+              onClick={() => setBackground(bg.key)}
+              whileTap={tap}
+              className="flex-1 flex flex-col items-center gap-2"
+            >
+              <span
+                className="w-full h-16 rounded-2xl border-2 transition-colors"
+                style={{
+                  background: bg.swatch,
+                  borderColor: selected ? "var(--fg)" : "var(--border-strong)",
+                }}
+              />
+              <span className={`text-xs font-medium ${selected ? "text-fg" : "text-fg-muted"}`}>
+                {bg.label}
+              </span>
+            </motion.button>
+          );
+        })}
+      </div>
+    </BottomSheet>
   );
 }

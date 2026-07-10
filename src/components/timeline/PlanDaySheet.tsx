@@ -6,13 +6,13 @@ import { CalendarDays, ChevronLeft, Clock, Copy, Plus, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import { isLightColor } from "@/lib/color";
 import { parseISODate, relativeDayLabel } from "@/lib/date";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { formatDuration, formatTimeLabel, timeStringToMinutes } from "@/lib/time";
 import { useTaskStore } from "@/store/taskStore";
+import BottomSheet from "../BottomSheet";
 import { useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
@@ -61,7 +61,6 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   );
 
   const confirm = useConfirm();
-  useScrollLock(isOpen);
 
   const [title, setTitle] = useState("");
   const [time, setTime] = useState(formatTimeLabel(DEFAULT_START));
@@ -144,246 +143,225 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   }
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 shadow-xl max-h-[92vh] flex flex-col"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={spring.snappy}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 pt-4 pb-3">
-              <div className="flex items-center gap-2 min-w-0">
-                {showCopyPicker && (
-                  <motion.button
-                    onClick={() => setShowCopyPicker(false)}
-                    whileTap={tap}
-                    className="w-9 h-9 -ml-1.5 rounded-full text-fg-muted flex items-center justify-center shrink-0"
-                    aria-label="Back"
-                  >
-                    <ChevronLeft size={22} />
-                  </motion.button>
-                )}
-                <div className="min-w-0">
-                  <h2 className="text-xl font-bold text-fg">
-                    {showCopyPicker ? "Copy from a day" : "Plan your day"}
-                  </h2>
-                  {showCopyPicker ? (
-                    <p className="text-sm text-fg-faint">
-                      {dayTasks.length > 0
-                        ? "Replaces this day's tasks"
-                        : "Pick a day to copy its tasks"}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-fg-faint">
-                      <span className="capitalize">{relativeDayLabel(selectedDate)}</span> ·{" "}
-                      {dayTasks.length} {dayTasks.length === 1 ? "task" : "tasks"}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {!showCopyPicker && otherDays.length > 0 && (
-                  <motion.button
-                    onClick={() => setShowCopyPicker(true)}
-                    whileTap={tap}
-                    className="h-9 px-3 rounded-full bg-surface-raised text-fg-muted flex items-center gap-1.5 text-sm font-medium"
-                  >
-                    <Copy size={15} /> Copy day
-                  </motion.button>
-                )}
-                <motion.button
-                  onClick={onClose}
-                  whileTap={tap}
-                  className="w-9 h-9 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-                >
-                  <X size={20} />
-                </motion.button>
-              </div>
-            </div>
-
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      className="bg-surface max-h-[92vh] flex flex-col"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {showCopyPicker && (
+            <motion.button
+              onClick={() => setShowCopyPicker(false)}
+              whileTap={tap}
+              className="w-9 h-9 -ml-1.5 rounded-full text-fg-muted flex items-center justify-center shrink-0"
+              aria-label="Back"
+            >
+              <ChevronLeft size={22} />
+            </motion.button>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-fg">
+              {showCopyPicker ? "Copy from a day" : "Plan your day"}
+            </h2>
             {showCopyPicker ? (
-              /* Day picker */
-              <div className="flex-1 overflow-y-auto px-4 py-1">
-                <div className="flex flex-col gap-2 py-1">
-                  {otherDays.map((day) => (
-                    <motion.button
-                      key={day.date}
-                      onClick={() => handleCopyFrom(day.date)}
-                      whileTap={tap}
-                      className="w-full flex items-center gap-3 bg-surface-raised rounded-2xl px-3 py-3 text-left"
-                    >
-                      <div className="w-9 h-9 rounded-full bg-surface flex items-center justify-center shrink-0">
-                        <CalendarDays size={17} className="text-fg-muted" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-fg truncate">
-                          <span className="capitalize">{relativeDayLabel(day.date)}</span>
-                          <span className="text-fg-faint font-normal">
-                            {" "}
-                            · {fullDateLabel(day.date)}
-                          </span>
-                        </p>
-                        <p className="text-xs text-fg-faint truncate">
-                          {day.count} {day.count === 1 ? "task" : "tasks"}
-                          {day.preview ? ` · ${day.preview}` : ""}
-                        </p>
-                      </div>
-                      <Copy size={16} className="text-fg-faint shrink-0" />
-                    </motion.button>
-                  ))}
+              <p className="text-sm text-fg-faint">
+                {dayTasks.length > 0 ? "Replaces this day's tasks" : "Pick a day to copy its tasks"}
+              </p>
+            ) : (
+              <p className="text-sm text-fg-faint">
+                <span className="capitalize">{relativeDayLabel(selectedDate)}</span> ·{" "}
+                {dayTasks.length} {dayTasks.length === 1 ? "task" : "tasks"}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {!showCopyPicker && otherDays.length > 0 && (
+            <motion.button
+              onClick={() => setShowCopyPicker(true)}
+              whileTap={tap}
+              className="h-9 px-3 rounded-full bg-surface-raised text-fg-muted flex items-center gap-1.5 text-sm font-medium"
+            >
+              <Copy size={15} /> Copy day
+            </motion.button>
+          )}
+          <motion.button
+            onClick={onClose}
+            whileTap={tap}
+            className="w-9 h-9 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+          >
+            <X size={20} />
+          </motion.button>
+        </div>
+      </div>
+
+      {showCopyPicker ? (
+        /* Day picker */
+        <div className="flex-1 overflow-y-auto px-4 py-1">
+          <div className="flex flex-col gap-2 py-1">
+            {otherDays.map((day) => (
+              <motion.button
+                key={day.date}
+                onClick={() => handleCopyFrom(day.date)}
+                whileTap={tap}
+                className="w-full flex items-center gap-3 bg-surface-raised rounded-2xl px-3 py-3 text-left"
+              >
+                <div className="w-9 h-9 rounded-full bg-surface flex items-center justify-center shrink-0">
+                  <CalendarDays size={17} className="text-fg-muted" />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-fg truncate">
+                    <span className="capitalize">{relativeDayLabel(day.date)}</span>
+                    <span className="text-fg-faint font-normal"> · {fullDateLabel(day.date)}</span>
+                  </p>
+                  <p className="text-xs text-fg-faint truncate">
+                    {day.count} {day.count === 1 ? "task" : "tasks"}
+                    {day.preview ? ` · ${day.preview}` : ""}
+                  </p>
+                </div>
+                <Copy size={16} className="text-fg-faint shrink-0" />
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Running plan list */}
+          <div className="flex-1 overflow-y-auto px-4 min-h-[80px]">
+            {dayTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-sm text-fg-faint">
+                  Type a task below and hit{" "}
+                  <span className="font-semibold text-fg-muted">Enter</span> to stack your day.
+                </p>
               </div>
             ) : (
-              <>
-                {/* Running plan list */}
-                <div className="flex-1 overflow-y-auto px-4 min-h-[80px]">
-                  {dayTasks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <p className="text-sm text-fg-faint">
-                        Type a task below and hit{" "}
-                        <span className="font-semibold text-fg-muted">Enter</span> to stack your
-                        day.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 py-1">
-                      <AnimatePresence initial={false}>
-                        {dayTasks.map((t) => {
-                          const Icon = ICONS[t.icon] ?? ICONS.default;
-                          return (
-                            <motion.div
-                              key={t.id}
-                              layout
-                              initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.96 }}
-                              transition={spring.pop}
-                              className="flex items-center gap-3 bg-surface-raised rounded-2xl px-3 py-2.5"
-                            >
-                              <div
-                                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                                style={{
-                                  backgroundColor: t.color,
-                                  color: isLightColor(t.color) ? "#111827" : "#fff",
-                                }}
-                              >
-                                <Icon size={17} />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-fg truncate">{t.title}</p>
-                                <p className="text-xs text-fg-faint tabular-nums">
-                                  {rangeLabel(t.startMinutes, t.durationMinutes)}
-                                </p>
-                              </div>
-                              <motion.button
-                                onClick={async () => {
-                                  const ok = await confirm({
-                                    title: "Delete task?",
-                                    message: `"${t.title}" will be permanently removed.`,
-                                    confirmLabel: "Delete",
-                                    destructive: true,
-                                  });
-                                  if (ok) deleteTask(t.id);
-                                }}
-                                whileTap={tap}
-                                className="w-7 h-7 rounded-full text-fg-faint hover:text-fg flex items-center justify-center shrink-0"
-                                aria-label="Remove task"
-                              >
-                                <X size={16} />
-                              </motion.button>
-                            </motion.div>
-                          );
-                        })}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </div>
-
-                {/* Composer */}
-                <div
-                  className="border-t border-border-strong bg-surface px-4 pt-3"
-                  style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}
-                >
-                  {/* Title + add */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Add a task…"
-                      className="flex-1 bg-surface-raised rounded-2xl px-4 py-3 text-base text-fg placeholder-fg-faint focus:outline-none"
-                    />
-                    <motion.button
-                      onClick={handleAdd}
-                      whileTap={canAdd ? tap : undefined}
-                      disabled={!canAdd}
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 disabled:opacity-40"
-                      style={{
-                        backgroundColor: color,
-                        color: isLightColor(color) ? "#111827" : "#fff",
-                      }}
-                    >
-                      <Plus size={24} strokeWidth={2.5} />
-                    </motion.button>
-                  </div>
-
-                  {/* Quick time + duration */}
-                  <div
-                    className="flex items-center gap-2 overflow-x-auto pb-1"
-                    style={{ scrollbarWidth: "none" }}
-                  >
-                    <label className="relative flex items-center gap-1.5 bg-surface-raised rounded-full pl-3 pr-2 py-2 shrink-0">
-                      <Clock size={15} className="text-fg-faint" />
-                      <span className="text-sm font-medium text-fg tabular-nums">
-                        {formatTimeLabel(startMin)}
-                      </span>
-                      <input
-                        type="time"
-                        value={time}
-                        onChange={(e) => e.target.value && setTime(e.target.value)}
-                        className="absolute inset-0 opacity-0 w-full h-full"
-                      />
-                    </label>
-                    <span className="text-fg-faint shrink-0">·</span>
-                    {DURATION_OPTIONS.map((d) => {
-                      const tooLong = d > maxDuration;
-                      const selected = duration === d;
-                      return (
-                        <motion.button
-                          key={d}
-                          onClick={() => !tooLong && setDuration(d)}
-                          whileTap={tooLong ? undefined : tap}
-                          disabled={tooLong}
-                          className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 disabled:opacity-30 ${
-                            selected
-                              ? "bg-surface-inverse text-fg-inverse"
-                              : "bg-surface-raised text-fg-muted"
-                          }`}
+              <div className="flex flex-col gap-2 py-1">
+                <AnimatePresence initial={false}>
+                  {dayTasks.map((t) => {
+                    const Icon = ICONS[t.icon] ?? ICONS.default;
+                    return (
+                      <motion.div
+                        key={t.id}
+                        layout
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.96 }}
+                        transition={spring.pop}
+                        className="flex items-center gap-3 bg-surface-raised rounded-2xl px-3 py-2.5"
+                      >
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                          style={{
+                            backgroundColor: t.color,
+                            color: isLightColor(t.color) ? "#111827" : "#fff",
+                          }}
                         >
-                          {formatDuration(d)}
+                          <Icon size={17} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-fg truncate">{t.title}</p>
+                          <p className="text-xs text-fg-faint tabular-nums">
+                            {rangeLabel(t.startMinutes, t.durationMinutes)}
+                          </p>
+                        </div>
+                        <motion.button
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: "Delete task?",
+                              message: `"${t.title}" will be permanently removed.`,
+                              confirmLabel: "Delete",
+                              destructive: true,
+                            });
+                            if (ok) deleteTask(t.id);
+                          }}
+                          whileTap={tap}
+                          className="w-7 h-7 rounded-full text-fg-faint hover:text-fg flex items-center justify-center shrink-0"
+                          aria-label="Remove task"
+                        >
+                          <X size={16} />
                         </motion.button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
             )}
-          </motion.div>
+          </div>
+
+          {/* Composer */}
+          <div
+            className="border-t border-border-strong bg-surface px-4 pt-3"
+            style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}
+          >
+            {/* Title + add */}
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                ref={inputRef}
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Add a task…"
+                className="flex-1 bg-surface-raised rounded-2xl px-4 py-3 text-base text-fg placeholder-fg-faint focus:outline-none"
+              />
+              <motion.button
+                onClick={handleAdd}
+                whileTap={canAdd ? tap : undefined}
+                disabled={!canAdd}
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 disabled:opacity-40"
+                style={{
+                  backgroundColor: color,
+                  color: isLightColor(color) ? "#111827" : "#fff",
+                }}
+              >
+                <Plus size={24} strokeWidth={2.5} />
+              </motion.button>
+            </div>
+
+            {/* Quick time + duration */}
+            <div
+              className="flex items-center gap-2 overflow-x-auto pb-1"
+              style={{ scrollbarWidth: "none" }}
+            >
+              <label className="relative flex items-center gap-1.5 bg-surface-raised rounded-full pl-3 pr-2 py-2 shrink-0">
+                <Clock size={15} className="text-fg-faint" />
+                <span className="text-sm font-medium text-fg tabular-nums">
+                  {formatTimeLabel(startMin)}
+                </span>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => e.target.value && setTime(e.target.value)}
+                  className="absolute inset-0 opacity-0 w-full h-full"
+                />
+              </label>
+              <span className="text-fg-faint shrink-0">·</span>
+              {DURATION_OPTIONS.map((d) => {
+                const tooLong = d > maxDuration;
+                const selected = duration === d;
+                return (
+                  <motion.button
+                    key={d}
+                    onClick={() => !tooLong && setDuration(d)}
+                    whileTap={tooLong ? undefined : tap}
+                    disabled={tooLong}
+                    className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 disabled:opacity-30 ${
+                      selected
+                        ? "bg-surface-inverse text-fg-inverse"
+                        : "bg-surface-raised text-fg-muted"
+                    }`}
+                  >
+                    {formatDuration(d)}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
         </>
       )}
-    </AnimatePresence>
+    </BottomSheet>
   );
 }

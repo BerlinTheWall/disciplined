@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Check, Plus, SlidersHorizontal, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useScrollLock } from "@/hooks/useScrollLock";
-import { spring, tap } from "@/lib/motion";
+import { tap } from "@/lib/motion";
 import { usePreferenceStore } from "@/store/preferenceStore";
 import { useRecipeStore } from "@/store/recipeStore";
+import BottomSheet from "../BottomSheet";
 
 interface PreferencesSheetProps {
   isOpen: boolean;
@@ -14,7 +14,6 @@ interface PreferencesSheetProps {
 }
 
 export default function PreferencesSheet({ isOpen, onClose }: PreferencesSheetProps) {
-  useScrollLock(isOpen);
   const [maxCookMinutes, likedTags, avoidTags, toggleLikedTag, toggleAvoidTag, setMaxCookMinutes] =
     usePreferenceStore(
       useShallow((state) => [
@@ -45,86 +44,69 @@ export default function PreferencesSheet({ isOpen, onClose }: PreferencesSheetPr
   }
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      className="bg-surface max-h-[92vh] overflow-y-auto"
+    >
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={18} className="text-fg-muted" />
+          <h2 className="text-lg font-semibold text-fg">Suggestion preferences</h2>
+        </div>
+        <motion.button
+          onClick={onClose}
+          whileTap={tap}
+          className="w-9 h-9 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+        >
+          <X size={20} />
+        </motion.button>
+      </div>
+
+      <div className="p-4 pt-2 pb-8 flex flex-col gap-6">
+        <p className="text-sm text-fg-faint -mt-1">
+          Tune what we suggest for each meal. Tags match your recipes' tags.
+        </p>
+
+        <TagSection
+          label="Prefer"
+          hint="Boost recipes with these tags"
+          value={likedInput}
+          onChange={setLikedInput}
+          onSubmit={() => commit(likedInput, toggleLikedTag, () => setLikedInput(""))}
+          selected={likedTags}
+          onToggle={toggleLikedTag}
+          suggestions={knownTags}
+          tone="positive"
+        />
+
+        <TagSection
+          label="Avoid"
+          hint="Never suggest recipes with these tags"
+          value={avoidInput}
+          onChange={setAvoidInput}
+          onSubmit={() => commit(avoidInput, toggleAvoidTag, () => setAvoidInput(""))}
+          selected={avoidTags}
+          onToggle={toggleAvoidTag}
+          suggestions={knownTags}
+          tone="negative"
+        />
+
+        <div>
+          <label className="text-xs font-medium text-fg-muted mb-2 block">
+            Max cook time (min)
+          </label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={maxCookMinutes ?? ""}
+            onChange={(e) => setMaxCookMinutes(e.target.value ? Number(e.target.value) : undefined)}
+            placeholder="No limit"
+            className="w-full bg-surface-raised rounded-2xl px-4 py-2.5 text-base font-semibold text-fg placeholder-fg-faint focus:outline-none tabular-nums"
           />
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 shadow-xl max-h-[92vh] overflow-y-auto"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={spring.snappy}
-          >
-            <div className="flex items-center justify-between px-4 pt-4 pb-2">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal size={18} className="text-fg-muted" />
-                <h2 className="text-lg font-semibold text-fg">Suggestion preferences</h2>
-              </div>
-              <motion.button
-                onClick={onClose}
-                whileTap={tap}
-                className="w-9 h-9 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-              >
-                <X size={20} />
-              </motion.button>
-            </div>
-
-            <div className="p-4 pt-2 pb-8 flex flex-col gap-6">
-              <p className="text-sm text-fg-faint -mt-1">
-                Tune what we suggest for each meal. Tags match your recipes' tags.
-              </p>
-
-              <TagSection
-                label="Prefer"
-                hint="Boost recipes with these tags"
-                value={likedInput}
-                onChange={setLikedInput}
-                onSubmit={() => commit(likedInput, toggleLikedTag, () => setLikedInput(""))}
-                selected={likedTags}
-                onToggle={toggleLikedTag}
-                suggestions={knownTags}
-                tone="positive"
-              />
-
-              <TagSection
-                label="Avoid"
-                hint="Never suggest recipes with these tags"
-                value={avoidInput}
-                onChange={setAvoidInput}
-                onSubmit={() => commit(avoidInput, toggleAvoidTag, () => setAvoidInput(""))}
-                selected={avoidTags}
-                onToggle={toggleAvoidTag}
-                suggestions={knownTags}
-                tone="negative"
-              />
-
-              <div>
-                <label className="text-xs font-medium text-fg-muted mb-2 block">
-                  Max cook time (min)
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={maxCookMinutes ?? ""}
-                  onChange={(e) =>
-                    setMaxCookMinutes(e.target.value ? Number(e.target.value) : undefined)
-                  }
-                  placeholder="No limit"
-                  className="w-full bg-surface-raised rounded-2xl px-4 py-2.5 text-base font-semibold text-fg placeholder-fg-faint focus:outline-none tabular-nums"
-                />
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+        </div>
+      </div>
+    </BottomSheet>
   );
 }
 

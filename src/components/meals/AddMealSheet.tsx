@@ -1,22 +1,22 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Check, ChefHat, Minus, Plus, Search, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import { todayISODate } from "@/lib/date";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
 import { formatAmount, indexItems, lineNutrition } from "@/lib/grocery";
-import { spring, tap } from "@/lib/motion";
+import { tap } from "@/lib/motion";
 import { addNutrition, emptyNutrition } from "@/lib/nutritions";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useMealStore } from "@/store/mealStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import type { Meal, MealComponent, MealType } from "@/types/meal";
 import type { Recipe } from "@/types/recipe";
+import BottomSheet from "../BottomSheet";
 import { useConfirm } from "../ConfirmDialog";
 import AddGroceryItemSheet from "../expenses/AddGroceryItemSheet";
 
@@ -55,7 +55,6 @@ export default function AddMealSheet({ isOpen, onClose, editMeal }: AddMealSheet
   const [newItemOpen, setNewItemOpen] = useState(false);
 
   const isEditing = !!editMeal;
-  useScrollLock(isOpen);
   const nameRef = useRef<HTMLInputElement>(null);
   useAutoFocus(nameRef, isOpen);
   const items = indexItems(groceryItems);
@@ -190,267 +189,252 @@ export default function AddMealSheet({ isOpen, onClose, editMeal }: AddMealSheet
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
+      <BottomSheet
+        isOpen={isOpen}
+        onClose={onClose}
+        className="bg-surface p-5 pb-8 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-fg">
+            {isEditing ? "Edit meal" : "Log a meal"}
+          </h2>
+          <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
+            <X size={22} />
+          </motion.button>
+        </div>
+
+        {/* Name */}
+        <label className="text-sm text-fg-muted mb-1 block">Name</label>
+        <input
+          ref={nameRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Chicken and rice"
+          className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
+        />
+
+        {/* From a recipe */}
+        {recipes.length > 0 && (
           <>
-            <motion.div
-              className="fixed inset-0 bg-black/40 z-40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onClose}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 p-5 pb-8 shadow-xl max-h-[90vh] overflow-y-auto"
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={spring.snappy}
+            <label className="text-sm text-fg-muted mb-2 flex items-center gap-1.5">
+              <ChefHat size={14} />
+              From a recipe
+            </label>
+            <div
+              className="flex gap-2 overflow-x-auto pb-1 mb-4"
+              style={{ scrollbarWidth: "none" }}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-fg">
-                  {isEditing ? "Edit meal" : "Log a meal"}
-                </h2>
-                <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-                  <X size={22} />
-                </motion.button>
-              </div>
-
-              {/* Name */}
-              <label className="text-sm text-fg-muted mb-1 block">Name</label>
-              <input
-                ref={nameRef}
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Chicken and rice"
-                className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
-              />
-
-              {/* From a recipe */}
-              {recipes.length > 0 && (
-                <>
-                  <label className="text-sm text-fg-muted mb-2 flex items-center gap-1.5">
-                    <ChefHat size={14} />
-                    From a recipe
-                  </label>
-                  <div
-                    className="flex gap-2 overflow-x-auto pb-1 mb-4"
-                    style={{ scrollbarWidth: "none" }}
-                  >
-                    <motion.button
-                      onClick={() => setRecipeId(undefined)}
-                      whileTap={tap}
-                      className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${!recipeId ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
-                    >
-                      None
-                    </motion.button>
-                    {recipes.map((r) => (
-                      <motion.button
-                        key={r.id}
-                        onClick={() => applyRecipe(r.id)}
-                        whileTap={tap}
-                        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${recipeId === r.id ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
-                      >
-                        <ChefHat size={14} />
-                        {r.name}
-                      </motion.button>
-                    ))}
-                  </div>
-
-                  {/* How much of the recipe you actually ate — scales the nutrition. */}
-                  {recipeId && (
-                    <div className="flex items-center justify-between bg-surface-alt rounded-2xl px-4 py-2.5 mb-4">
-                      <span className="text-sm text-fg-muted">Servings eaten</span>
-                      <div className="flex items-center gap-1.5">
-                        <motion.button
-                          onClick={() => changeServingsEaten(servingsEaten - 0.5)}
-                          whileTap={tap}
-                          className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-                          aria-label="Fewer servings"
-                        >
-                          <Minus size={14} />
-                        </motion.button>
-                        <span className="w-9 text-center text-sm font-medium text-fg tabular-nums">
-                          {servingsEaten}
-                        </span>
-                        <motion.button
-                          onClick={() => changeServingsEaten(servingsEaten + 0.5)}
-                          whileTap={tap}
-                          className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-                          aria-label="More servings"
-                        >
-                          <Plus size={14} />
-                        </motion.button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Type */}
-              <label className="text-sm text-fg-muted mb-2 block">Meal</label>
-              <div className="flex gap-2 flex-wrap mb-4">
-                {MEAL_TYPES.map(({ key, label }) => (
-                  <motion.button
-                    key={key}
-                    onClick={() => setType(key)}
-                    whileTap={tap}
-                    className={`px-3.5 py-2 rounded-full text-sm font-medium ${
-                      type === key
-                        ? "bg-surface-inverse text-fg-inverse"
-                        : "bg-surface-raised text-fg-muted"
-                    }`}
-                  >
-                    {label}
-                  </motion.button>
-                ))}
-              </div>
-
-              {/* Date */}
-              <label className="text-sm text-fg-muted mb-1 block">Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
-              />
-
-              {/* Components from catalog */}
-              <label className="text-sm text-fg-muted mb-2 block">What's in it</label>
               <motion.button
-                onClick={() => setNewItemOpen(true)}
+                onClick={() => setRecipeId(undefined)}
                 whileTap={tap}
-                className="flex items-center gap-2 w-full mb-2 px-4 py-2.5 rounded-xl border border-dashed border-border-strong text-fg-muted text-sm font-medium"
+                className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${!recipeId ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
               >
-                <Plus size={16} />
-                New item
+                None
               </motion.button>
-              {groceryItems.length === 0 ? (
-                <p className="text-sm text-fg-faint mb-4">
-                  No foods yet — add your first one above, then it's reusable everywhere.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2 mb-4">
-                  {groceryItems.length > 6 && (
-                    <div className="flex items-center gap-2 bg-surface-alt rounded-xl px-3 py-2">
-                      <Search size={15} className="text-fg-faint shrink-0" />
-                      <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search items…"
-                        className="flex-1 min-w-0 bg-transparent text-sm text-fg placeholder-fg-faint focus:outline-none"
-                      />
-                    </div>
-                  )}
-                  {shownItems.length === 0 && (
-                    <p className="text-sm text-fg-faint py-2">No items match "{query}".</p>
-                  )}
-                  {shownItems.map((item) => {
-                    const cat = FOOD_CATEGORIES[item.category];
-                    const Icon = cat.icon ?? FALLBACK_FOOD_ICON;
-                    const selected = chosen.has(item.id);
-                    const servings = chosen.get(item.id) ?? 1;
-                    return (
-                      <div
-                        key={item.id}
-                        className={`flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${
-                          selected ? "bg-surface-inverse" : "bg-surface-alt"
-                        }`}
-                      >
-                        <motion.button
-                          onClick={() => toggleItem(item.id)}
-                          whileTap={tap}
-                          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
-                        >
-                          <span
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-white shrink-0"
-                            style={{ backgroundColor: cat.color }}
-                          >
-                            {selected ? <Check size={15} strokeWidth={3} /> : <Icon size={14} />}
-                          </span>
-                          <span className="min-w-0">
-                            <span
-                              className={`block font-medium leading-tight truncate ${
-                                selected ? "text-fg-inverse" : "text-fg"
-                              }`}
-                            >
-                              {item.name}
-                            </span>
-                            <span
-                              className={`block text-xs mt-0.5 ${
-                                selected ? "text-fg-muted-inverse" : "text-fg-faint"
-                              }`}
-                            >
-                              {selected
-                                ? `${formatAmount(item, servings)} · ${lineNutrition(item, servings).calories} kcal`
-                                : `${item.nutrition.calories} kcal per ${formatAmount(item, 1)}`}
-                            </span>
-                          </span>
-                        </motion.button>
-
-                        {selected && (
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <motion.button
-                              onClick={() => bumpServings(item.id, -0.25)}
-                              whileTap={tap}
-                              className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-                              aria-label="Less"
-                            >
-                              <Minus size={14} />
-                            </motion.button>
-                            <span className="w-9 text-center text-sm font-medium text-fg-inverse">
-                              ×{servings}
-                            </span>
-                            <motion.button
-                              onClick={() => bumpServings(item.id, 0.25)}
-                              whileTap={tap}
-                              className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
-                              aria-label="More"
-                            >
-                              <Plus size={14} />
-                            </motion.button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Live nutrition preview */}
-              {components.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-5">
-                  <NutriChip label={`${total.calories} kcal`} />
-                  <NutriChip label={`${total.protein}g protein`} />
-                  <NutriChip label={`${total.fat}g fat`} />
-                  <NutriChip label={`${total.carbs}g carbs`} />
-                </div>
-              )}
-
-              <motion.button
-                onClick={handleSubmit}
-                whileTap={tap}
-                disabled={!canSave}
-                className="w-full bg-surface-inverse text-fg-inverse rounded-xl py-3.5 font-medium disabled:opacity-40"
-              >
-                {isEditing ? "Save changes" : "Log meal"}
-              </motion.button>
-
-              {isEditing && (
+              {recipes.map((r) => (
                 <motion.button
-                  onClick={handleDelete}
+                  key={r.id}
+                  onClick={() => applyRecipe(r.id)}
                   whileTap={tap}
-                  className="w-full mt-3 py-3.5 rounded-xl text-red-500 font-medium bg-red-50"
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${recipeId === r.id ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
                 >
-                  Delete meal
+                  <ChefHat size={14} />
+                  {r.name}
                 </motion.button>
-              )}
-            </motion.div>
+              ))}
+            </div>
+
+            {/* How much of the recipe you actually ate — scales the nutrition. */}
+            {recipeId && (
+              <div className="flex items-center justify-between bg-surface-alt rounded-2xl px-4 py-2.5 mb-4">
+                <span className="text-sm text-fg-muted">Servings eaten</span>
+                <div className="flex items-center gap-1.5">
+                  <motion.button
+                    onClick={() => changeServingsEaten(servingsEaten - 0.5)}
+                    whileTap={tap}
+                    className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+                    aria-label="Fewer servings"
+                  >
+                    <Minus size={14} />
+                  </motion.button>
+                  <span className="w-9 text-center text-sm font-medium text-fg tabular-nums">
+                    {servingsEaten}
+                  </span>
+                  <motion.button
+                    onClick={() => changeServingsEaten(servingsEaten + 0.5)}
+                    whileTap={tap}
+                    className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+                    aria-label="More servings"
+                  >
+                    <Plus size={14} />
+                  </motion.button>
+                </div>
+              </div>
+            )}
           </>
         )}
-      </AnimatePresence>
+
+        {/* Type */}
+        <label className="text-sm text-fg-muted mb-2 block">Meal</label>
+        <div className="flex gap-2 flex-wrap mb-4">
+          {MEAL_TYPES.map(({ key, label }) => (
+            <motion.button
+              key={key}
+              onClick={() => setType(key)}
+              whileTap={tap}
+              className={`px-3.5 py-2 rounded-full text-sm font-medium ${
+                type === key
+                  ? "bg-surface-inverse text-fg-inverse"
+                  : "bg-surface-raised text-fg-muted"
+              }`}
+            >
+              {label}
+            </motion.button>
+          ))}
+        </div>
+
+        {/* Date */}
+        <label className="text-sm text-fg-muted mb-1 block">Date</label>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
+        />
+
+        {/* Components from catalog */}
+        <label className="text-sm text-fg-muted mb-2 block">What's in it</label>
+        <motion.button
+          onClick={() => setNewItemOpen(true)}
+          whileTap={tap}
+          className="flex items-center gap-2 w-full mb-2 px-4 py-2.5 rounded-xl border border-dashed border-border-strong text-fg-muted text-sm font-medium"
+        >
+          <Plus size={16} />
+          New item
+        </motion.button>
+        {groceryItems.length === 0 ? (
+          <p className="text-sm text-fg-faint mb-4">
+            No foods yet — add your first one above, then it's reusable everywhere.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2 mb-4">
+            {groceryItems.length > 6 && (
+              <div className="flex items-center gap-2 bg-surface-alt rounded-xl px-3 py-2">
+                <Search size={15} className="text-fg-faint shrink-0" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search items…"
+                  className="flex-1 min-w-0 bg-transparent text-sm text-fg placeholder-fg-faint focus:outline-none"
+                />
+              </div>
+            )}
+            {shownItems.length === 0 && (
+              <p className="text-sm text-fg-faint py-2">No items match "{query}".</p>
+            )}
+            {shownItems.map((item) => {
+              const cat = FOOD_CATEGORIES[item.category];
+              const Icon = cat.icon ?? FALLBACK_FOOD_ICON;
+              const selected = chosen.has(item.id);
+              const servings = chosen.get(item.id) ?? 1;
+              return (
+                <div
+                  key={item.id}
+                  className={`flex items-center gap-3 p-2.5 pr-3 rounded-2xl ${
+                    selected ? "bg-surface-inverse" : "bg-surface-alt"
+                  }`}
+                >
+                  <motion.button
+                    onClick={() => toggleItem(item.id)}
+                    whileTap={tap}
+                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                  >
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white shrink-0"
+                      style={{ backgroundColor: cat.color }}
+                    >
+                      {selected ? <Check size={15} strokeWidth={3} /> : <Icon size={14} />}
+                    </span>
+                    <span className="min-w-0">
+                      <span
+                        className={`block font-medium leading-tight truncate ${
+                          selected ? "text-fg-inverse" : "text-fg"
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                      <span
+                        className={`block text-xs mt-0.5 ${
+                          selected ? "text-fg-muted-inverse" : "text-fg-faint"
+                        }`}
+                      >
+                        {selected
+                          ? `${formatAmount(item, servings)} · ${lineNutrition(item, servings).calories} kcal`
+                          : `${item.nutrition.calories} kcal per ${formatAmount(item, 1)}`}
+                      </span>
+                    </span>
+                  </motion.button>
+
+                  {selected && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <motion.button
+                        onClick={() => bumpServings(item.id, -0.25)}
+                        whileTap={tap}
+                        className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+                        aria-label="Less"
+                      >
+                        <Minus size={14} />
+                      </motion.button>
+                      <span className="w-9 text-center text-sm font-medium text-fg-inverse">
+                        ×{servings}
+                      </span>
+                      <motion.button
+                        onClick={() => bumpServings(item.id, 0.25)}
+                        whileTap={tap}
+                        className="w-7 h-7 rounded-full bg-surface-raised text-fg-muted flex items-center justify-center"
+                        aria-label="More"
+                      >
+                        <Plus size={14} />
+                      </motion.button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Live nutrition preview */}
+        {components.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-5">
+            <NutriChip label={`${total.calories} kcal`} />
+            <NutriChip label={`${total.protein}g protein`} />
+            <NutriChip label={`${total.fat}g fat`} />
+            <NutriChip label={`${total.carbs}g carbs`} />
+          </div>
+        )}
+
+        <motion.button
+          onClick={handleSubmit}
+          whileTap={tap}
+          disabled={!canSave}
+          className="w-full bg-surface-inverse text-fg-inverse rounded-xl py-3.5 font-medium disabled:opacity-40"
+        >
+          {isEditing ? "Save changes" : "Log meal"}
+        </motion.button>
+
+        {isEditing && (
+          <motion.button
+            onClick={handleDelete}
+            whileTap={tap}
+            className="w-full mt-3 py-3.5 rounded-xl text-red-500 font-medium bg-red-50"
+          >
+            Delete meal
+          </motion.button>
+        )}
+      </BottomSheet>
 
       {/* Create a food inline and auto-select it, without leaving the meal. */}
       <AddGroceryItemSheet

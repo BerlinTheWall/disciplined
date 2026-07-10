@@ -5,13 +5,13 @@ import { Plus, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import { isLightColor } from "@/lib/color";
 import { spring, tap } from "@/lib/motion";
 import { fieldMeta, WORKOUT_TYPE_META, WORKOUT_TYPE_ORDER } from "@/lib/workout";
 import type { WorkoutFieldKey } from "@/lib/workout";
 import { blankExercise, useWorkoutStore } from "@/store/workoutStore";
 import type { WorkoutExercise, WorkoutSession, WorkoutType } from "@/types/workout";
+import BottomSheet from "../BottomSheet";
 import { useConfirm } from "../ConfirmDialog";
 
 const COLOR_OPTIONS = [
@@ -63,7 +63,6 @@ export default function WorkoutSessionSheet({
   const confirm = useConfirm();
 
   const isEditing = !!editSession;
-  useScrollLock(isOpen);
   const nameRef = useRef<HTMLInputElement>(null);
   useAutoFocus(nameRef, isOpen && !isEditing);
 
@@ -146,219 +145,195 @@ export default function WorkoutSessionSheet({
   const canSave = !!name.trim();
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      className="bg-surface max-h-[92vh] overflow-y-auto"
+    >
+      {/* Colored header */}
+      <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
+        <div className="flex items-center justify-between">
+          <motion.button
             onClick={onClose}
-          />
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-50 shadow-xl max-h-[92vh] overflow-y-auto"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={spring.snappy}
+            whileTap={tap}
+            className="w-9 h-9 rounded-full flex items-center justify-center"
+            style={{
+              backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
+              color: onColor,
+            }}
           >
-            {/* Colored header */}
-            <div className="px-4 pt-3 pb-5 rounded-t-2xl" style={{ backgroundColor: color }}>
-              <div className="flex items-center justify-between">
-                <motion.button
-                  onClick={onClose}
-                  whileTap={tap}
-                  className="w-9 h-9 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
-                    color: onColor,
-                  }}
-                >
-                  <X size={20} />
-                </motion.button>
-                {isEditing && (
-                  <motion.button
-                    onClick={handleDelete}
-                    whileTap={tap}
-                    className="w-9 h-9 rounded-full flex items-center justify-center"
-                    style={{
-                      backgroundColor: isLightColor(color)
-                        ? "rgba(0,0,0,0.12)"
-                        : "rgba(0,0,0,0.25)",
-                      color: onColor,
-                    }}
-                  >
-                    <Trash2 size={18} />
-                  </motion.button>
-                )}
-              </div>
+            <X size={20} />
+          </motion.button>
+          {isEditing && (
+            <motion.button
+              onClick={handleDelete}
+              whileTap={tap}
+              className="w-9 h-9 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
+                color: onColor,
+              }}
+            >
+              <Trash2 size={18} />
+            </motion.button>
+          )}
+        </div>
 
-              <div className="flex items-center gap-4 mt-3">
-                <div
-                  className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "#2f2f33" }}
-                >
-                  <HeaderIcon size={28} style={{ color }} />
-                </div>
-                <input
-                  ref={nameRef}
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Session name"
-                  className={`flex-1 min-w-0 bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
-                  style={{
-                    color: onColor,
-                    caretColor: onColor,
-                    borderColor: isLightColor(color)
-                      ? "rgba(17,24,39,0.3)"
-                      : "rgba(255,255,255,0.5)",
-                  }}
-                />
-              </div>
-            </div>
+        <div className="flex items-center gap-4 mt-3">
+          <div
+            className="w-16 h-16 rounded-full border-[3px] border-white flex items-center justify-center shrink-0"
+            style={{ backgroundColor: "#2f2f33" }}
+          >
+            <HeaderIcon size={28} style={{ color }} />
+          </div>
+          <input
+            ref={nameRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Session name"
+            className={`flex-1 min-w-0 bg-transparent text-2xl font-semibold border-b pb-1 focus:outline-none ${isLightColor(color) ? "placeholder-black/40" : "placeholder-white/50"}`}
+            style={{
+              color: onColor,
+              caretColor: onColor,
+              borderColor: isLightColor(color) ? "rgba(17,24,39,0.3)" : "rgba(255,255,255,0.5)",
+            }}
+          />
+        </div>
+      </div>
 
-            {/* Body */}
-            <div className="p-4 pb-6">
-              {/* Type */}
-              <label className="text-xs font-medium text-fg-muted mb-2 block">Type</label>
-              <div
-                className="flex gap-2 overflow-x-auto pb-1 mb-5"
-                style={{ scrollbarWidth: "none" }}
-              >
-                {WORKOUT_TYPE_ORDER.map((t) => {
-                  const m = WORKOUT_TYPE_META[t];
-                  const TIcon = m.icon;
-                  const selected = type === t;
-                  return (
-                    <motion.button
-                      key={t}
-                      onClick={() => pickType(t)}
-                      whileTap={tap}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
-                    >
-                      <TIcon size={15} />
-                      {m.label}
-                    </motion.button>
-                  );
-                })}
-              </div>
-
-              {/* Color */}
-              <label className="text-xs font-medium text-fg-muted mb-2 block">Color</label>
-              <div
-                className="flex gap-3 overflow-x-auto bg-surface-raised rounded-full p-1.5 mb-6"
-                style={{ scrollbarWidth: "none" }}
-              >
-                {COLOR_OPTIONS.map((c) => (
-                  <motion.button
-                    key={c}
-                    onClick={() => {
-                      setColor(c);
-                      setColorTouched(true);
-                    }}
-                    whileTap={tap}
-                    className="w-8 h-8 rounded-full shrink-0"
-                    style={{
-                      backgroundColor: c,
-                      outline: color === c ? "2px solid var(--fg)" : "none",
-                      outlineOffset: 2,
-                    }}
-                  />
-                ))}
-              </div>
-
-              {/* Exercises */}
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-fg-muted">
-                  {meta.fields.includes("distance") && !meta.fields.includes("sets")
-                    ? "Segments"
-                    : "Exercises"}
-                </label>
-                <span className="text-xs text-fg-faint">{exercises.length}</span>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <AnimatePresence initial={false}>
-                  {exercises.map((ex, i) => (
-                    <motion.div
-                      key={ex.id}
-                      layout
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.97 }}
-                      transition={spring.snappy}
-                      className="rounded-2xl bg-surface-raised p-3"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                          style={{ backgroundColor: color, color: onColor }}
-                        >
-                          {i + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={ex.name}
-                          onChange={(e) => setExercise(ex.id, { name: e.target.value })}
-                          placeholder="Exercise name"
-                          className="flex-1 min-w-0 bg-transparent font-medium text-fg placeholder-fg-faint focus:outline-none"
-                        />
-                        <motion.button
-                          onClick={() => removeExercise(ex.id)}
-                          whileTap={tap}
-                          className="w-7 h-7 rounded-full text-fg-faint hover:text-fg flex items-center justify-center shrink-0"
-                          aria-label="Remove exercise"
-                        >
-                          <X size={16} />
-                        </motion.button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 pl-8">
-                        {meta.fields.map((key) => (
-                          <ExerciseField
-                            key={key}
-                            fieldKey={key}
-                            type={type}
-                            value={ex[key as keyof WorkoutExercise]}
-                            onChange={(v) =>
-                              setExercise(ex.id, { [key]: v } as Partial<WorkoutExercise>)
-                            }
-                          />
-                        ))}
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                <motion.button
-                  onClick={addExercise}
-                  whileTap={tap}
-                  className="flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border-strong py-3 text-sm font-medium text-fg-muted"
-                >
-                  <Plus size={16} />
-                  Add{" "}
-                  {meta.fields.includes("distance") && !meta.fields.includes("sets")
-                    ? "segment"
-                    : "exercise"}
-                </motion.button>
-              </div>
-
+      {/* Body */}
+      <div className="p-4 pb-6">
+        {/* Type */}
+        <label className="text-xs font-medium text-fg-muted mb-2 block">Type</label>
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-5" style={{ scrollbarWidth: "none" }}>
+          {WORKOUT_TYPE_ORDER.map((t) => {
+            const m = WORKOUT_TYPE_META[t];
+            const TIcon = m.icon;
+            const selected = type === t;
+            return (
               <motion.button
-                onClick={handleSave}
-                whileTap={canSave ? tap : undefined}
-                disabled={!canSave}
-                className="w-full rounded-2xl py-3.5 font-medium mt-6 disabled:opacity-40"
-                style={{ backgroundColor: color, color: onColor }}
+                key={t}
+                onClick={() => pickType(t)}
+                whileTap={tap}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium shrink-0 ${selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"}`}
               >
-                {isEditing ? "Save session" : "Create session"}
+                <TIcon size={15} />
+                {m.label}
               </motion.button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+            );
+          })}
+        </div>
+
+        {/* Color */}
+        <label className="text-xs font-medium text-fg-muted mb-2 block">Color</label>
+        <div
+          className="flex gap-3 overflow-x-auto bg-surface-raised rounded-full p-1.5 mb-6"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {COLOR_OPTIONS.map((c) => (
+            <motion.button
+              key={c}
+              onClick={() => {
+                setColor(c);
+                setColorTouched(true);
+              }}
+              whileTap={tap}
+              className="w-8 h-8 rounded-full shrink-0"
+              style={{
+                backgroundColor: c,
+                outline: color === c ? "2px solid var(--fg)" : "none",
+                outlineOffset: 2,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Exercises */}
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium text-fg-muted">
+            {meta.fields.includes("distance") && !meta.fields.includes("sets")
+              ? "Segments"
+              : "Exercises"}
+          </label>
+          <span className="text-xs text-fg-faint">{exercises.length}</span>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <AnimatePresence initial={false}>
+            {exercises.map((ex, i) => (
+              <motion.div
+                key={ex.id}
+                layout
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97 }}
+                transition={spring.snappy}
+                className="rounded-2xl bg-surface-raised p-3"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                    style={{ backgroundColor: color, color: onColor }}
+                  >
+                    {i + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={ex.name}
+                    onChange={(e) => setExercise(ex.id, { name: e.target.value })}
+                    placeholder="Exercise name"
+                    className="flex-1 min-w-0 bg-transparent font-medium text-fg placeholder-fg-faint focus:outline-none"
+                  />
+                  <motion.button
+                    onClick={() => removeExercise(ex.id)}
+                    whileTap={tap}
+                    className="w-7 h-7 rounded-full text-fg-faint hover:text-fg flex items-center justify-center shrink-0"
+                    aria-label="Remove exercise"
+                  >
+                    <X size={16} />
+                  </motion.button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pl-8">
+                  {meta.fields.map((key) => (
+                    <ExerciseField
+                      key={key}
+                      fieldKey={key}
+                      type={type}
+                      value={ex[key as keyof WorkoutExercise]}
+                      onChange={(v) => setExercise(ex.id, { [key]: v } as Partial<WorkoutExercise>)}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          <motion.button
+            onClick={addExercise}
+            whileTap={tap}
+            className="flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border-strong py-3 text-sm font-medium text-fg-muted"
+          >
+            <Plus size={16} />
+            Add{" "}
+            {meta.fields.includes("distance") && !meta.fields.includes("sets")
+              ? "segment"
+              : "exercise"}
+          </motion.button>
+        </div>
+
+        <motion.button
+          onClick={handleSave}
+          whileTap={canSave ? tap : undefined}
+          disabled={!canSave}
+          className="w-full rounded-2xl py-3.5 font-medium mt-6 disabled:opacity-40"
+          style={{ backgroundColor: color, color: onColor }}
+        >
+          {isEditing ? "Save session" : "Create session"}
+        </motion.button>
+      </div>
+    </BottomSheet>
   );
 }
 
