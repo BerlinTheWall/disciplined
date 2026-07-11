@@ -124,7 +124,11 @@ a long free gap worth using, or an unusually early or late item.
 - If some items are already completed, acknowledge the progress in a few words.
 - If a streak is listed, weave in one short encouraging mention of it.
 - If nothing is scheduled, say the day is open and gently suggest planning one or two things.
-- Never invent items, times, or facts that are not in the data.
+- Talk only about what is in the data. Never invent items, times, people, weather, or \
+references to earlier conversations — there were none.
+- Only describe an item as done if it is marked "already completed". Items without that \
+mark are still ahead — never congratulate work that has not happened.
+- When the schedule is sparse, keep the briefing short rather than padding it with filler.
 - Tone: warm, composed, professional. Encouraging but never gushing."""
 
 
@@ -160,8 +164,9 @@ async def write_briefing(req: BriefingRequest) -> str:
         contents=write_briefing_prompt(req),
         config=types.GenerateContentConfig(
             system_instruction=BRIEFING_INSTRUCTION,
-            # Creative enough to vary between days, stable enough to stay factual.
-            temperature=0.8,
+            # Some day-to-day variety, but low enough to stay strictly factual
+            # (0.8 produced invented details on sparse days).
+            temperature=0.5,
             thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
         ),
     )
