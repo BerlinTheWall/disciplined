@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, ClipboardList, Clock, Square, Volume2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -7,8 +7,9 @@ import { useNow } from "@/hooks/useNow";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
+import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
-import { isHabitActiveOnDate } from "@/lib/habits";
+import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
@@ -167,12 +168,41 @@ export default function HomePage({ onViewAll }: HomePageProps) {
       })),
   ].sort((a, b) => a.startMinutes - b.startMinutes);
 
-  // Warm up the briefing audio in the background so "Read my day" starts
-  // instantly. Debounced so rapid task edits don't fire synthesis each time.
+  // The briefing the button reads: an LLM-written script when the backend can
+  // provide one, the local template otherwise. Fetched and voice-prefetched in
+  // the background (debounced) so playback starts instantly. The template
+  // string doubles as the change signal — it varies exactly when the day does.
   const briefing = assistantDayBriefing(items, "Today");
+  const [script, setScript] = useState<string | null>(null);
   useEffect(() => {
-    const id = window.setTimeout(() => prefetchAssistantVoice(briefing), 800);
-    return () => window.clearTimeout(id);
+    let cancelled = false;
+    const id = window.setTimeout(async () => {
+      const streaks = habits
+        .filter((h) => isHabitActiveOnDate(h, todayObj))
+        .map((h) => ({ title: h.title, days: getHabitStreak(h, todayObj) }))
+        .filter((s) => s.days >= 3)
+        .sort((a, b) => b.days - a.days)
+        .slice(0, 3);
+      const s = await fetchBriefingScript(
+        "today",
+        items.map((i) => ({
+          title: i.title,
+          startMinutes: i.startMinutes,
+          durationMinutes: i.durationMinutes,
+          completed: i.completed,
+          kind: i.kind,
+        })),
+        streaks
+      );
+      if (cancelled) return;
+      setScript(s);
+      prefetchAssistantVoice(s ?? briefing);
+    }, 800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [briefing]);
 
   const now = useNow();
@@ -262,7 +292,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
 
         {/* Hear the whole day, assistant-style, before diving into what's next. */}
         <motion.button
-          onClick={() => toggleRead(briefing)}
+          onClick={() => toggleRead(script ?? briefing)}
           whileTap={tap}
           className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 text-left ${
             reading ? "bg-surface-inverse" : "bg-surface-alt border border-border-strong"

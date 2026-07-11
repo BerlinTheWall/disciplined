@@ -117,6 +117,21 @@ export interface ChatResponse {
   actions: ChatAction[];
 }
 
+export interface BriefingItemPayload {
+  title: string;
+  startMinutes: number;
+  durationMinutes: number;
+  completed: boolean;
+  kind: "task" | "habit";
+}
+
+export interface BriefingPayload {
+  dayLabel: string;
+  name: string;
+  items: BriefingItemPayload[];
+  streaks: { title: string; days: number }[];
+}
+
 // Chat tools that change the schedule server-side — when a chat turn ran any of
 // these, the events store must be refreshed from the server.
 export const MUTATING_CHAT_TOOLS = new Set([
@@ -151,6 +166,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message, history, clientDate: todayISODate() }),
     }),
+  // LLM-written spoken briefing for a day's schedule.
+  briefing: (payload: BriefingPayload): Promise<{ script: string }> =>
+    request("/api/briefing", { method: "POST", body: JSON.stringify(payload) }),
   // Natural-voice audio (WAV) for a spoken line. Binary, so it bypasses the
   // JSON `request` helper; callers treat any failure as "fall back to the
   // device voice". The abort keeps a slow server from stalling a reminder —

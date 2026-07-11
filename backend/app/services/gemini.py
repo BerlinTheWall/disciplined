@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Event
-from app.schemas import ChatAction, ChatMessage, ChatResponse
+from app.schemas import BriefingRequest, ChatAction, ChatMessage, ChatResponse
 from app.services.tools import (
     FUNCTION_DECLARATIONS,
     event_to_dict,
@@ -107,6 +107,68 @@ Rules:
 - For events outside the 7 days shown above, use list_events to look them up first.
 - Do not ask clarifying questions when a default works. Missing title: derive it from the message ("add a meeting tomorrow" -> "Meeting"). Missing time or duration: simply omit those arguments when calling create_event — it auto-picks a free slot and defaults to 60 minutes; report back what was picked. Create right away; the user will correct you if needed. Only ask when the request is truly ambiguous (e.g. which of two matching events to delete).
 - Keep replies short and conversational. Confirm what you did after making changes."""
+
+
+BRIEFING_INSTRUCTION = """You are the user's personal assistant inside their day-planner app. \
+Write the short briefing you will SAY OUT LOUD about their schedule — like a trusted \
+chief of staff briefing a manager they like working for.
+
+Rules:
+- Spoken prose only: no markdown, no bullet points, no emojis, no headings, no stage directions.
+- At most 110 words; prefer 60 to 90.
+- If a name is given, address them by it once, near the start.
+- Say times like "9 AM" or "2:30 PM". Never use 24-hour times.
+- Walk through the remaining items in time order, but do not robotically recite every \
+detail — group and summarize, and call out what actually matters: back-to-back stretches, \
+a long free gap worth using, or an unusually early or late item.
+- If some items are already completed, acknowledge the progress in a few words.
+- If a streak is listed, weave in one short encouraging mention of it.
+- If nothing is scheduled, say the day is open and gently suggest planning one or two things.
+- Never invent items, times, or facts that are not in the data.
+- Tone: warm, composed, professional. Encouraging but never gushing."""
+
+
+def write_briefing_prompt(req: BriefingRequest) -> str:
+    lines = [f"Day being briefed: {req.day_label}"]
+    lines.append(f"User's name: {req.name or '(not given)'}")
+    if req.items:
+        lines.append("Schedule (in start-time order):")
+        for item in sorted(req.items, key=lambda i: i.start_minutes):
+            end = item.start_minutes + item.duration_minutes
+            flags = []
+            if item.kind == "habit":
+                flags.append("daily habit")
+            if item.completed:
+                flags.append("already completed")
+            suffix = f" ({', '.join(flags)})" if flags else ""
+            lines.append(
+                f"- {fmt_minutes(item.start_minutes)}-{fmt_minutes(end)}: {item.title}{suffix}"
+            )
+    else:
+        lines.append("Schedule: (nothing scheduled)")
+    if req.streaks:
+        lines.append("Active streaks:")
+        for s in req.streaks:
+            lines.append(f"- {s.title}: {s.days} days in a row")
+    return "\n".join(lines)
+
+
+async def write_briefing(req: BriefingRequest) -> str:
+    client = get_client()
+    response = await client.aio.models.generate_content(
+        model=settings.gemini_model,
+        contents=write_briefing_prompt(req),
+        config=types.GenerateContentConfig(
+            system_instruction=BRIEFING_INSTRUCTION,
+            # Creative enough to vary between days, stable enough to stay factual.
+            temperature=0.8,
+            thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
+        ),
+    )
+    script = _response_text(response)
+    if not script:
+        raise RuntimeError("empty briefing from the model")
+    return script
 
 
 def _to_contents(history: list[ChatMessage], message: str) -> list[types.Content]:

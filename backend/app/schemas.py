@@ -39,6 +39,34 @@ class AuthResponse(CamelModel):
     user: UserOut
 
 
+# ---- Briefing ----
+
+
+class BriefingItem(CamelModel):
+    title: str = Field(max_length=200)
+    start_minutes: int = Field(ge=0, lt=24 * 60)
+    duration_minutes: int = Field(gt=0)
+    completed: bool = False
+    kind: Literal["task", "habit"] = "task"
+
+
+class BriefingStreak(CamelModel):
+    title: str = Field(max_length=200)
+    days: int = Field(ge=1)
+
+
+class BriefingRequest(CamelModel):
+    # "today", "tomorrow" or a weekday name — used verbatim in the script.
+    day_label: str = Field(max_length=40)
+    name: str = Field(default="", max_length=80)
+    items: list[BriefingItem] = Field(max_length=60)
+    streaks: list[BriefingStreak] = Field(default_factory=list, max_length=10)
+
+
+class BriefingResponse(CamelModel):
+    script: str
+
+
 # ---- Events (frontend: Task) ----
 
 Priority = Literal["low", "medium", "high"]

@@ -9,6 +9,7 @@ import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
+import { fetchBriefingScript } from "@/lib/briefing";
 import { isLightColor } from "@/lib/color";
 import { parseISODate, relativeDayLabel } from "@/lib/date";
 import { guessIcon, ICONS } from "@/lib/icons";
@@ -97,12 +98,14 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   }
 
   // Read the whole day out loud, assistant-style; tap again to stop. Also
-  // stops when the sheet closes. The audio is prefetched while the sheet is
-  // open so playback starts instantly.
+  // stops when the sheet closes. While the sheet is open, an LLM-written
+  // script (and its audio) is prepared in the background; the local template
+  // stays as the fallback when the backend can't deliver.
   const briefing = assistantDayBriefing(dayTasks, relativeDayLabel(selectedDate));
+  const [script, setScript] = useState<string | null>(null);
 
   function toggleRead() {
-    toggle(briefing);
+    toggle(script ?? briefing);
   }
 
   useEffect(() => {
@@ -110,8 +113,26 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
       stopReading();
       return;
     }
-    const id = window.setTimeout(() => prefetchAssistantVoice(briefing), 500);
-    return () => window.clearTimeout(id);
+    let cancelled = false;
+    const id = window.setTimeout(async () => {
+      const s = await fetchBriefingScript(
+        relativeDayLabel(selectedDate),
+        dayTasks.map((t) => ({
+          title: t.title,
+          startMinutes: t.startMinutes,
+          durationMinutes: t.durationMinutes,
+          completed: t.completed,
+          kind: "task" as const,
+        }))
+      );
+      if (cancelled) return;
+      setScript(s);
+      prefetchAssistantVoice(s ?? briefing);
+    }, 500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
   }, [isOpen, briefing, stopReading]);
 
   // Next free start = end of the latest task on this day (rounded), else default.
