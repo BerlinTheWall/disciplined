@@ -236,6 +236,14 @@ async function playNaturalVoice(
   }
 }
 
+// Natural voice only, reporting whether audio actually started. Auto-play
+// attempts (no user gesture) need this: Audio.play() rejects when the browser
+// blocks unprompted sound, while the device-voice path fails silently.
+export function speakNaturalOnly(text: string, onDone?: () => void): Promise<boolean> {
+  if (!useSettingsStore.getState().naturalVoice) return Promise.resolve(false);
+  return playNaturalVoice(text, onDone, 30_000);
+}
+
 // Assistant speech: the natural (server) voice when enabled and reachable, the
 // local device voice otherwise. Queued, so stacked reminders don't collide.
 export async function speakAssistant(

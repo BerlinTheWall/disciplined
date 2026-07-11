@@ -101,6 +101,9 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setNaturalVoice,
       ])
     );
+  const [morningBriefing, setMorningBriefing] = useSettingsStore(
+    useShallow((state) => [state.morningBriefing, state.setMorningBriefing])
+  );
 
   function toggleNaturalVoice() {
     const next = !naturalVoice;
@@ -211,6 +214,16 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             onToggle={toggleSpeakReminders}
           />
         )}
+        <Row
+          title="Morning briefing"
+          subtitle={
+            morningBriefing
+              ? "Your day is read aloud on the first open each day"
+              : "Hear your day when you first open the app"
+          }
+          on={morningBriefing}
+          onToggle={() => setMorningBriefing(!morningBriefing)}
+        />
         {remindersEnabled && speakReminders && (
           <Row
             title="Natural voice"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { speakAssistant, stopSpeaking } from "./useSpeech";
+import { speakAssistant, speakNaturalOnly, stopSpeaking } from "./useSpeech";
 
 // Play/stop state for "read this aloud" buttons. toggle() starts reading the
 // given text with the assistant voice (or stops, when already reading);
@@ -35,6 +35,15 @@ export function useReadAloud() {
     setBoth(false);
   }, []);
 
+  // Gesture-less playback attempt (morning briefing). Resolves false when the
+  // browser blocks it — the caller then shows a tap-to-listen prompt instead.
+  const tryAutoPlay = useCallback(async (text: string): Promise<boolean> => {
+    if (readingRef.current) return true;
+    const ok = await speakNaturalOnly(text, () => setBoth(false));
+    if (ok) setBoth(true);
+    return ok;
+  }, []);
+
   // Cut playback off if the hosting view unmounts mid-read.
   useEffect(() => {
     return () => {
@@ -42,5 +51,5 @@ export function useReadAloud() {
     };
   }, []);
 
-  return { reading, toggle, stop };
+  return { reading, toggle, stop, tryAutoPlay };
 }

@@ -15,6 +15,7 @@ import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
 import { useHabitStore } from "@/store/habitStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Priority } from "@/types/task";
 
@@ -135,7 +136,10 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
   const focusScheduleItem = useScheduleFocusStore((s) => s.focusItem);
-  const { reading, toggle: toggleRead } = useReadAloud();
+  const { reading, toggle: toggleRead, tryAutoPlay } = useReadAloud();
+  // Morning ritual: highlights the read-my-day row when the browser blocked
+  // the automatic playback, inviting the one tap it needs.
+  const [briefingPrompt, setBriefingPrompt] = useState(false);
 
   const today = todayISODate();
   const todayObj = new Date(today + "T00:00:00");
@@ -197,6 +201,20 @@ export default function HomePage({ onViewAll }: HomePageProps) {
       if (cancelled) return;
       setScript(s);
       prefetchAssistantVoice(s ?? briefing);
+
+      // Morning ritual: on the first open of the day, speak the briefing —
+      // or, when the browser blocks gesture-less audio, invite the tap.
+      const { morningBriefing, lastMorningBriefingDate, setLastMorningBriefingDate } =
+        useSettingsStore.getState();
+      if (
+        morningBriefing &&
+        lastMorningBriefingDate !== today &&
+        document.visibilityState === "visible"
+      ) {
+        setLastMorningBriefingDate(today);
+        const played = await tryAutoPlay(s ?? briefing);
+        if (!played && !cancelled) setBriefingPrompt(true);
+      }
     }, 800);
     return () => {
       cancelled = true;
@@ -290,23 +308,40 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           <Chip count={done} label="Done" />
         </div>
 
-        {/* Hear the whole day, assistant-style, before diving into what's next. */}
+        {/* Hear the whole day, assistant-style, before diving into what's next.
+            When the morning briefing was blocked by the browser, this row
+            becomes the invitation to tap. */}
         <motion.button
-          onClick={() => toggleRead(script ?? briefing)}
+          onClick={() => {
+            setBriefingPrompt(false);
+            toggleRead(script ?? briefing);
+          }}
           whileTap={tap}
+          animate={briefingPrompt && !reading ? { scale: [1, 1.02, 1] } : { scale: 1 }}
+          transition={briefingPrompt && !reading ? { repeat: Infinity, duration: 1.6 } : undefined}
           className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 text-left ${
-            reading ? "bg-surface-inverse" : "bg-surface-alt border border-border-strong"
+            reading || briefingPrompt
+              ? "bg-surface-inverse"
+              : "bg-surface-alt border border-border-strong"
           }`}
         >
           <span
             className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-              reading ? "bg-white/15 text-fg-inverse" : "bg-surface-raised text-fg-muted"
+              reading || briefingPrompt
+                ? "bg-white/15 text-fg-inverse"
+                : "bg-surface-raised text-fg-muted"
             }`}
           >
             {reading ? <Square size={14} /> : <Volume2 size={17} />}
           </span>
-          <span className={`font-medium ${reading ? "text-fg-inverse" : "text-fg"}`}>
-            {reading ? "Stop reading" : "Read my day"}
+          <span
+            className={`font-medium ${reading || briefingPrompt ? "text-fg-inverse" : "text-fg"}`}
+          >
+            {reading
+              ? "Stop reading"
+              : briefingPrompt
+                ? "Your morning briefing is ready — tap to listen"
+                : "Read my day"}
           </span>
         </motion.button>
 

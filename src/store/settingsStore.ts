@@ -36,6 +36,14 @@ interface SettingsState {
   // back to the device voice when the server is unreachable.
   naturalVoice: boolean;
   setNaturalVoice: (on: boolean) => void;
+  // Speak the day briefing on the first app open of each day (opt-in). When
+  // the browser blocks unprompted audio, the Home page shows a tap-to-listen
+  // prompt instead.
+  morningBriefing: boolean;
+  setMorningBriefing: (on: boolean) => void;
+  // Date (ISO) the morning briefing last ran/prompted — prevents repeats.
+  lastMorningBriefingDate: string | null;
+  setLastMorningBriefingDate: (date: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -57,6 +65,10 @@ export const useSettingsStore = create<SettingsState>()(
       setVoiceURI: (uri) => set({ voiceURI: uri }),
       naturalVoice: true,
       setNaturalVoice: (on) => set({ naturalVoice: on }),
+      morningBriefing: false,
+      setMorningBriefing: (on) => set({ morningBriefing: on }),
+      lastMorningBriefingDate: null,
+      setLastMorningBriefingDate: (date) => set({ lastMorningBriefingDate: date }),
     }),
     { name: "disciplined-settings" }
   )
