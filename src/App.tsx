@@ -13,6 +13,7 @@ import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
 import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
+import VoiceAssistant from "./components/VoiceAssistant";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
@@ -332,6 +333,9 @@ function App() {
       />
 
       <BottomNav active={activePage} onChange={go} onAdd={openFab} fabOpen={fabOpen} />
+
+      {/* Global push-to-talk — floats above the nav on every page */}
+      <VoiceAssistant />
     </div>
   );
 }

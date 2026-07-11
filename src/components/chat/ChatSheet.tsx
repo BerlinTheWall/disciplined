@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowUp, Mic, Sparkles, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { speak, stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
+import { speakAssistant, stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore, type ChatBubble } from "@/store/chatStore";
 import BottomSheet from "../BottomSheet";
@@ -79,7 +79,7 @@ export default function ChatSheet() {
     onFinal: (transcript) => {
       setText("");
       void send(transcript)
-        .then((res) => speak(res.reply))
+        .then((res) => speakAssistant(res.reply))
         .catch(() => {});
     },
   });
