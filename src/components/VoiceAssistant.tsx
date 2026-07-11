@@ -45,10 +45,9 @@ export default function VoiceAssistant() {
       const res = await send(transcript);
       setPhase("reply");
       setText(res.reply);
-      // Linger a moment after the spoken reply ends; long safety timeout in
-      // case speech never starts (muted device).
-      scheduleDismiss(30_000);
-      void speakAssistant(res.reply, { onDone: () => scheduleDismiss(2_500) });
+      // The chat store speaks the reply; keep the card up roughly as long as
+      // the reading takes, then a beat longer.
+      scheduleDismiss(Math.min(4_000 + res.reply.length * 60, 25_000));
     } catch (e) {
       const message =
         e instanceof Error && e.message
@@ -133,34 +132,30 @@ export default function VoiceAssistant() {
         )}
       </AnimatePresence>
 
-      {/* The mic — mirrors the schedule page's plus button, on the left */}
-      <div
-        className="fixed left-4 right-4 z-30 pointer-events-none"
-        style={{ bottom: "calc(24px + env(safe-area-inset-bottom))" }}
+      {/* The mic — its own circle beside the nav pill, not a fourth tab */}
+      <motion.button
+        onClick={onMicTap}
+        whileTap={tap}
+        aria-label={listening ? "Stop listening" : "Talk to the assistant"}
+        className={`fixed right-4 z-30 w-16 h-16 rounded-full shadow-xl flex items-center justify-center border ${
+          listening
+            ? "bg-[#f87171] text-white border-transparent"
+            : "bg-surface text-fg border-border-strong"
+        }`}
+        style={{ bottom: "calc(26px + env(safe-area-inset-bottom))" }}
       >
-        <motion.button
-          onClick={onMicTap}
-          whileTap={tap}
-          aria-label={listening ? "Stop listening" : "Talk to the assistant"}
-          className={`pointer-events-auto absolute -top-17 left-1 w-14 h-14 rounded-full shadow-xl flex items-center justify-center border ${
-            listening
-              ? "bg-[#f87171] text-white border-transparent"
-              : "bg-surface text-fg border-border-strong"
-          }`}
-        >
-          {listening ? (
-            <motion.span
-              animate={{ scale: [1, 1.25, 1] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-              className="flex"
-            >
-              <Mic size={24} />
-            </motion.span>
-          ) : (
+        {listening ? (
+          <motion.span
+            animate={{ scale: [1, 1.25, 1] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            className="flex"
+          >
             <Mic size={24} />
-          )}
-        </motion.button>
-      </div>
+          </motion.span>
+        ) : (
+          <Mic size={24} />
+        )}
+      </motion.button>
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
 import { api, MUTATING_CHAT_TOOLS, type ChatMessage, type ChatResponse } from "@/lib/api";
 import { refreshEvents } from "@/lib/sync";
 
@@ -59,6 +60,10 @@ export const useChatStore = create<State & Actions>()((set, get) => ({
         messages: [...state.messages, { role: "model", content: res.reply }],
       }));
       if (res.actions.some((a) => MUTATING_CHAT_TOOLS.has(a.tool))) await refreshEvents();
+      // The assistant always says its reply out loud — typed or spoken input
+      // alike. A new reply cuts off whatever was still being read.
+      stopSpeaking();
+      void speakAssistant(res.reply);
       return res;
     } catch (e) {
       set((state) => ({

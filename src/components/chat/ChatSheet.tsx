@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowUp, Mic, Sparkles, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { speakAssistant, stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
+import { stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore, type ChatBubble } from "@/store/chatStore";
 import BottomSheet from "../BottomSheet";
@@ -68,7 +68,7 @@ export default function ChatSheet() {
   const listRef = useRef<HTMLDivElement | null>(null);
 
   // Voice input: live transcript shows in the input; a finished utterance is
-  // sent right away, and the reply to a spoken message is read aloud.
+  // sent right away. The reply is spoken by the chat store itself.
   const {
     supported: voiceSupported,
     listening,
@@ -78,9 +78,7 @@ export default function ChatSheet() {
     onInterim: setText,
     onFinal: (transcript) => {
       setText("");
-      void send(transcript)
-        .then((res) => speakAssistant(res.reply))
-        .catch(() => {});
+      void send(transcript).catch(() => {});
     },
   });
 

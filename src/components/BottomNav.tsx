@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, Home, Plus, UtensilsCrossed, Wallet } from "lucide-react";
+import { CalendarDays, CircleUser, Home, Plus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { spring, tap } from "@/lib/motion";
@@ -53,27 +53,23 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
       onSelect: () => onChange("schedule"),
     },
     {
-      key: "meals",
-      label: "Meals",
-      icon: UtensilsCrossed,
-      isActive: active === "meals",
-      onSelect: () => onChange("meals"),
-    },
-    {
-      key: "expenses",
-      label: "Wallet",
-      icon: Wallet,
-      isActive: active === "expenses",
-      onSelect: () => onChange("expenses"),
+      key: "profile",
+      label: "Profile",
+      icon: CircleUser,
+      isActive: active === "profile",
+      onSelect: () => onChange("profile"),
     },
   ];
 
   return (
+    // Ends short of the right edge — the voice assistant's circle sits there,
+    // a deliberate sibling to the pill rather than a fourth tab.
     <div
-      className="fixed left-4 right-4 z-30"
+      className="fixed left-4 right-24 z-30"
       style={{ bottom: "calc(24px + env(safe-area-inset-bottom))" }}
     >
-      {/* Plus circle — only on schedule, floats above the pill on the right */}
+      {/* Plus circle — only on schedule, stacked directly above the voice
+          assistant's mic at the right edge */}
       <AnimatePresence>
         {active === "schedule" && (
           <motion.button
@@ -83,7 +79,8 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
             animate={{ opacity: isScrolling ? 0.4 : 1, scale: 1, y: 0, rotate: fabOpen ? 135 : 0 }}
             exit={{ opacity: 0, scale: 0.6, y: 8 }}
             transition={spring.snappy}
-            className="absolute -top-17 right-1 w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl"
+            className="fixed right-5 z-30 w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl"
+            style={{ bottom: "calc(102px + env(safe-area-inset-bottom))" }}
           >
             <Plus size={26} strokeWidth={2.5} />
           </motion.button>
@@ -102,9 +99,14 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
               className="flex flex-col items-center gap-0.5 flex-1"
             >
               <span className="relative flex items-center justify-center w-12 h-8">
+                {/* Plain mount animation, deliberately not a layoutId morph:
+                    shared layout animations inside position:fixed measure
+                    against the page and yanked the whole pill downward when a
+                    tab switch coincided with the page transition. */}
                 {t.isActive && (
                   <motion.span
-                    layoutId="navActive"
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
                     transition={spring.snappy}
                     className="absolute inset-0 bg-fg rounded-2xl"
                   />
