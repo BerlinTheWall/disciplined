@@ -12,6 +12,7 @@ export interface ReminderAlert {
   color: string;
   icon: IconKey;
   date: string; // ISO date of the item, for jump-to-schedule
+  startMinutes: number; // item start, for the spoken phrasing
 }
 
 interface ReminderState {

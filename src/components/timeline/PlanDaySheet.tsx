@@ -2,10 +2,13 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, ChevronLeft, Clock, Copy, Plus, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, Clock, Copy, Plus, Square, Volume2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { useReadAloud } from "@/hooks/useReadAloud";
+import { prefetchAssistantVoice } from "@/hooks/useSpeech";
+import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { isLightColor } from "@/lib/color";
 import { parseISODate, relativeDayLabel } from "@/lib/date";
 import { guessIcon, ICONS } from "@/lib/icons";
@@ -64,6 +67,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
+  const { reading, toggle, stop: stopReading } = useReadAloud();
   const inputRef = useRef<HTMLInputElement>(null);
   useAutoFocus(inputRef, isOpen && !showCopyPicker);
 
@@ -91,6 +95,24 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     copyTasksToDate(fromDate, selectedDate);
     setShowCopyPicker(false);
   }
+
+  // Read the whole day out loud, assistant-style; tap again to stop. Also
+  // stops when the sheet closes. The audio is prefetched while the sheet is
+  // open so playback starts instantly.
+  const briefing = assistantDayBriefing(dayTasks, relativeDayLabel(selectedDate));
+
+  function toggleRead() {
+    toggle(briefing);
+  }
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopReading();
+      return;
+    }
+    const id = window.setTimeout(() => prefetchAssistantVoice(briefing), 500);
+    return () => window.clearTimeout(id);
+  }, [isOpen, briefing, stopReading]);
 
   // Next free start = end of the latest task on this day (rounded), else default.
   function nextStartMinutes() {
@@ -225,6 +247,28 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
         </div>
       ) : (
         <>
+          {/* Hear the whole plan — the sheet's headline action besides adding. */}
+          <div className="px-4 pb-2">
+            <motion.button
+              onClick={toggleRead}
+              whileTap={tap}
+              className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left ${
+                reading ? "bg-surface-inverse" : "bg-surface-alt"
+              }`}
+            >
+              <span
+                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                  reading ? "bg-white/15 text-fg-inverse" : "bg-surface-raised text-fg-muted"
+                }`}
+              >
+                {reading ? <Square size={14} /> : <Volume2 size={17} />}
+              </span>
+              <span className={`font-medium ${reading ? "text-fg-inverse" : "text-fg"}`}>
+                {reading ? "Stop reading" : "Read my day"}
+              </span>
+            </motion.button>
+          </div>
+
           {/* Running plan list */}
           <div className="flex-1 overflow-y-auto px-4 min-h-[80px]">
             {dayTasks.length === 0 ? (

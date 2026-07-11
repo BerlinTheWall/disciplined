@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BellRing, X } from "lucide-react";
 
-import { speak } from "@/hooks/useSpeech";
-import { todayISODate } from "@/lib/date";
+import { speakAssistant } from "@/hooks/useSpeech";
+import { assistantReminderLine } from "@/lib/assistantSpeech";
+import { parseISODate, todayISODate } from "@/lib/date";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { REMINDER_GRACE_MS, showSystemNotification } from "@/lib/reminders";
@@ -89,6 +90,7 @@ function collectDue(now: number): ReminderAlert[] {
       color,
       icon,
       date,
+      startMinutes,
     });
   }
 
@@ -129,14 +131,16 @@ function collectDue(now: number): ReminderAlert[] {
 // reminder that later re-surfaces as a banner must not be spoken twice.
 const spokenKeys = new Set<string>();
 
-// Read a due reminder aloud (when the setting is on), once per occurrence.
-// Queued rather than interrupting, so several reminders due at the same time
-// are spoken back to back.
+// Read a due reminder aloud (when the setting is on), once per occurrence,
+// phrased like a personal assistant and spoken with the natural voice when
+// the server can provide it.
 function speakReminder(reminder: ReminderAlert) {
   if (!useSettingsStore.getState().speakReminders) return;
   if (spokenKeys.has(reminder.key)) return;
   spokenKeys.add(reminder.key);
-  speak(`${reminder.title}. ${reminder.body}.`, { interrupt: false });
+  const startAt = parseISODate(reminder.date).getTime() + reminder.startMinutes * 60_000;
+  const minutesUntil = Math.round((startAt - Date.now()) / 60_000);
+  void speakAssistant(assistantReminderLine(reminder.title, reminder.startMinutes, minutesUntil));
 }
 
 function tick() {

@@ -137,6 +137,7 @@ async def run_chat(
         tools=[types.Tool(function_declarations=FUNCTION_DECLARATIONS)],
         # Tool selection needs to be dependable more than creative.
         temperature=0.2,
+        thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
     )
     contents = _to_contents(history, message)
     actions: list[ChatAction] = []
@@ -189,7 +190,11 @@ async def run_chat(
             model=settings.gemini_model,
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=config.system_instruction, temperature=0.2
+                system_instruction=config.system_instruction,
+                temperature=0.2,
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=settings.gemini_thinking_budget
+                ),
             ),
         )
         reply = _response_text(response)

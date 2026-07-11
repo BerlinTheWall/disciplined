@@ -6,6 +6,14 @@ class Settings(BaseSettings):
     # flash rather than flash-lite: lite kept asking for details instead of
     # calling tools, and claimed changes it never made (see chat history).
     gemini_model: str = "gemini-2.5-flash"
+    # 2.5 Flash "thinks" by default and bills thinking as output tokens — for
+    # this tool-calling workload it adds cost, not quality. 0 disables; raise
+    # (or set -1 for dynamic) if scheduling answers ever get noticeably worse.
+    gemini_thinking_budget: int = 0
+    # Natural-voice reminders. Voice names: Zephyr (bright), Puck (upbeat),
+    # Aoede (breezy), Kore (firm), Leda (youthful), Charon (informative), …
+    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
+    gemini_tts_voice: str = "Zephyr"
     database_url: str = "sqlite+aiosqlite:///./disciplined.db"
     # Signs auth tokens — set a long random value in .env for anything public.
     jwt_secret: str = "dev-secret-change-me"

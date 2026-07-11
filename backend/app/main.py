@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import auth, chat, events, habits, meals, workouts
+from app.routers import auth, chat, events, habits, meals, tts, workouts
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app.include_router(habits.router)
 app.include_router(workouts.router)
 app.include_router(meals.router)
 app.include_router(chat.router)
+app.include_router(tts.router)
 
 
 @app.get("/api/health")

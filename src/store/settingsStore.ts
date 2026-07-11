@@ -32,6 +32,10 @@ interface SettingsState {
   // everything the app speaks (reminders and chat replies).
   voiceURI: string | null;
   setVoiceURI: (uri: string | null) => void;
+  // Prefer the human-like AI voice from the backend for reminders, falling
+  // back to the device voice when the server is unreachable.
+  naturalVoice: boolean;
+  setNaturalVoice: (on: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -51,6 +55,8 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeakReminders: (on) => set({ speakReminders: on }),
       voiceURI: null,
       setVoiceURI: (uri) => set({ voiceURI: uri }),
+      naturalVoice: true,
+      setNaturalVoice: (on) => set({ naturalVoice: on }),
     }),
     { name: "disciplined-settings" }
   )

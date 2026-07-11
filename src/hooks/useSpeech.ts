@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { api } from "@/lib/api";
 import { useSettingsStore } from "@/store/settingsStore";
 
 // Browser-native voice: SpeechRecognition (speech-to-text) and speechSynthesis
@@ -122,9 +123,16 @@ export function useVoices() {
 // system default is used when unset or when the saved voice no longer exists).
 export function speak(
   text: string,
-  { interrupt = true, voiceURI }: { interrupt?: boolean; voiceURI?: string | null } = {}
+  {
+    interrupt = true,
+    voiceURI,
+    onDone,
+  }: { interrupt?: boolean; voiceURI?: string | null; onDone?: () => void } = {}
 ) {
-  if (!speechOutputSupported) return;
+  if (!speechOutputSupported) {
+    onDone?.();
+    return;
+  }
   if (interrupt) window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   const uri = voiceURI !== undefined ? voiceURI : useSettingsStore.getState().voiceURI;
@@ -137,14 +145,108 @@ export function speak(
   } else {
     utterance.lang = navigator.language || "en-US";
   }
+  if (onDone) {
+    utterance.onend = onDone;
+    utterance.onerror = onDone;
+  }
   window.speechSynthesis.speak(utterance);
   // Chromium sometimes leaves the queue in a paused state for hidden tabs —
   // nudging resume() is harmless when playing and un-sticks it when not.
   window.speechSynthesis.resume();
 }
 
+// The natural-voice clip currently playing, so stopSpeaking can cut it off.
+let currentAudio: HTMLAudioElement | null = null;
+
 export function stopSpeaking() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+}
+
+// Recently synthesized clips, keyed by their exact text, so replays and
+// prefetched briefings start instantly instead of waiting on generation.
+const ttsCache = new Map<string, Blob>();
+const ttsInFlight = new Map<string, Promise<Blob | null>>();
+const TTS_CACHE_MAX = 8;
+
+async function fetchSpeech(text: string, timeoutMs?: number): Promise<Blob | null> {
+  const cached = ttsCache.get(text);
+  if (cached) return cached;
+  const inFlight = ttsInFlight.get(text);
+  if (inFlight) return inFlight;
+
+  const promise = api
+    .tts(text, timeoutMs)
+    .then((blob) => {
+      ttsCache.set(text, blob);
+      // Evict oldest entries; Maps iterate in insertion order.
+      while (ttsCache.size > TTS_CACHE_MAX) {
+        const oldest = ttsCache.keys().next().value!;
+        ttsCache.delete(oldest);
+      }
+      return blob;
+    })
+    .catch(() => null)
+    .finally(() => {
+      ttsInFlight.delete(text);
+    });
+  ttsInFlight.set(text, promise);
+  return promise;
+}
+
+// Warm the cache for text that's about to be spoken (e.g. the day briefing,
+// generated while the page is still being looked at). No-op when the natural
+// voice is off or the audio is already cached/being fetched.
+export function prefetchAssistantVoice(text: string, timeoutMs = 30_000) {
+  if (!useSettingsStore.getState().naturalVoice) return;
+  void fetchSpeech(text, timeoutMs);
+}
+
+// Fetches the human-like AI voice from the backend and plays it. Resolves true
+// only once playback has started; any failure (offline server, missing key,
+// blocked autoplay) resolves false so the caller can fall back. onDone fires
+// when playback finishes (not when it's stopped early via stopSpeaking —
+// callers that stop handle their own state).
+async function playNaturalVoice(
+  text: string,
+  onDone?: () => void,
+  timeoutMs?: number
+): Promise<boolean> {
+  try {
+    const blob = await fetchSpeech(text, timeoutMs);
+    if (!blob) return false;
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    const finish = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      onDone?.();
+    };
+    audio.onended = finish;
+    await audio.play();
+    currentAudio = audio;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Assistant speech: the natural (server) voice when enabled and reachable, the
+// local device voice otherwise. Queued, so stacked reminders don't collide.
+export async function speakAssistant(
+  text: string,
+  { onDone, timeoutMs }: { onDone?: () => void; timeoutMs?: number } = {}
+) {
+  if (
+    useSettingsStore.getState().naturalVoice &&
+    (await playNaturalVoice(text, onDone, timeoutMs))
+  ) {
+    return;
+  }
+  speak(text, { interrupt: false, onDone });
 }

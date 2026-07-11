@@ -151,5 +151,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message, history, clientDate: todayISODate() }),
     }),
+  // Natural-voice audio (WAV) for a spoken line. Binary, so it bypasses the
+  // JSON `request` helper; callers treat any failure as "fall back to the
+  // device voice". The abort keeps a slow server from stalling a reminder —
+  // longer, user-initiated reads (day briefings) pass a more patient timeout,
+  // since synthesis time grows with text length.
+  tts: async (text: string, timeoutMs = 10_000): Promise<Blob> => {
+    const token = getToken();
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${BASE_URL}/api/tts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ text }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new ApiError(res.status, "text-to-speech failed");
+      return await res.blob();
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  },
   health: () => request<{ status: string }>("/api/health"),
 };

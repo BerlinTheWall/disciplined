@@ -1,8 +1,12 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowUpRight, CheckCircle2, ClipboardList, Clock } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, ClipboardList, Clock, Square, Volume2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useNow } from "@/hooks/useNow";
+import { useReadAloud } from "@/hooks/useReadAloud";
+import { prefetchAssistantVoice } from "@/hooks/useSpeech";
+import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { todayISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
@@ -130,6 +134,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
   const focusScheduleItem = useScheduleFocusStore((s) => s.focusItem);
+  const { reading, toggle: toggleRead } = useReadAloud();
 
   const today = todayISODate();
   const todayObj = new Date(today + "T00:00:00");
@@ -161,6 +166,14 @@ export default function HomePage({ onViewAll }: HomePageProps) {
         completed: h.completedDates.includes(today),
       })),
   ].sort((a, b) => a.startMinutes - b.startMinutes);
+
+  // Warm up the briefing audio in the background so "Read my day" starts
+  // instantly. Debounced so rapid task edits don't fire synthesis each time.
+  const briefing = assistantDayBriefing(items, "Today");
+  useEffect(() => {
+    const id = window.setTimeout(() => prefetchAssistantVoice(briefing), 800);
+    return () => window.clearTimeout(id);
+  }, [briefing]);
 
   const now = useNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -246,6 +259,26 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           <Chip count={inProgress} label="In Progress" />
           <Chip count={done} label="Done" />
         </div>
+
+        {/* Hear the whole day, assistant-style, before diving into what's next. */}
+        <motion.button
+          onClick={() => toggleRead(briefing)}
+          whileTap={tap}
+          className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 text-left ${
+            reading ? "bg-surface-inverse" : "bg-surface-alt border border-border-strong"
+          }`}
+        >
+          <span
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+              reading ? "bg-white/15 text-fg-inverse" : "bg-surface-raised text-fg-muted"
+            }`}
+          >
+            {reading ? <Square size={14} /> : <Volume2 size={17} />}
+          </span>
+          <span className={`font-medium ${reading ? "text-fg-inverse" : "text-fg"}`}>
+            {reading ? "Stop reading" : "Read my day"}
+          </span>
+        </motion.button>
 
         {focus && fStart && fEnd ? (
           <motion.button

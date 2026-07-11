@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
-import { speak, stopSpeaking, useVoices } from "@/hooks/useSpeech";
+import { speak, speakAssistant, stopSpeaking, useVoices } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { spring, tap } from "@/lib/motion";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
@@ -90,14 +90,26 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setDefaultReminderMinutes,
       ])
     );
-  const [speakReminders, setSpeakReminders, voiceURI, setVoiceURI] = useSettingsStore(
-    useShallow((state) => [
-      state.speakReminders,
-      state.setSpeakReminders,
-      state.voiceURI,
-      state.setVoiceURI,
-    ])
-  );
+  const [speakReminders, setSpeakReminders, voiceURI, setVoiceURI, naturalVoice, setNaturalVoice] =
+    useSettingsStore(
+      useShallow((state) => [
+        state.speakReminders,
+        state.setSpeakReminders,
+        state.voiceURI,
+        state.setVoiceURI,
+        state.naturalVoice,
+        state.setNaturalVoice,
+      ])
+    );
+
+  function toggleNaturalVoice() {
+    const next = !naturalVoice;
+    setNaturalVoice(next);
+    // Preview through the real path — hearing the fallback voice here means
+    // the server isn't reachable, which is exactly what the user should know.
+    if (next) void speakAssistant("Hi! I'll be reading your reminders from now on.");
+    else stopSpeaking();
+  }
 
   // Voices for the picker: prefer the ones matching the UI language so the
   // list stays scannable; fall back to everything the OS offers.
@@ -199,9 +211,21 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             onToggle={toggleSpeakReminders}
           />
         )}
-        {remindersEnabled && speakReminders && voiceOptions.length > 0 && (
+        {remindersEnabled && speakReminders && (
+          <Row
+            title="Natural voice"
+            subtitle={
+              naturalVoice
+                ? "Human-like AI voice — falls back to the device voice offline"
+                : "Using the plain device voice"
+            }
+            on={naturalVoice}
+            onToggle={toggleNaturalVoice}
+          />
+        )}
+        {remindersEnabled && speakReminders && !naturalVoice && voiceOptions.length > 0 && (
           <div className="bg-surface rounded-2xl shadow-soft px-4 py-3.5">
-            <p className="font-medium text-fg">Voice</p>
+            <p className="font-medium text-fg">Device voice</p>
             <p className="text-sm text-fg-faint mt-0.5 mb-3">Tap a voice to preview it</p>
             <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
               <motion.button
