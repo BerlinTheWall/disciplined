@@ -1,55 +1,64 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { speakAssistant, speakNaturalOnly, stopSpeaking } from "./useSpeech";
+import { primeAudioChannel, speakAssistant, speakNaturalOnly, stopSpeaking } from "./useSpeech";
+
+type ReadState = "idle" | "loading" | "reading";
 
 // Play/stop state for "read this aloud" buttons. toggle() starts reading the
-// given text with the assistant voice (or stops, when already reading);
-// `reading` drives the button's icon/label. toggle and stop are stable, so
-// they're safe in effect deps. The ref mirrors `reading` so the callbacks
-// never act on other audio (e.g. a reminder speaking) by mistake.
+// given text with the assistant voice (or stops, when already active);
+// `loading` covers the stretch between the tap and the first audible word
+// (synthesis + network), so buttons can show a spinner instead of pretending
+// to play. toggle/stop are stable, safe in effect deps.
 export function useReadAloud() {
-  const [reading, setReading] = useState(false);
-  const readingRef = useRef(false);
+  const [state, setState] = useState<ReadState>("idle");
+  const stateRef = useRef<ReadState>("idle");
 
-  const setBoth = (value: boolean) => {
-    readingRef.current = value;
-    setReading(value);
+  const set = (value: ReadState) => {
+    stateRef.current = value;
+    setState(value);
   };
 
   const toggle = useCallback((text: string) => {
-    if (readingRef.current) {
+    if (stateRef.current !== "idle") {
       stopSpeaking();
-      setBoth(false);
+      set("idle");
       return;
     }
     stopSpeaking();
-    setBoth(true);
+    // toggle() runs in a tap — unlock audio for the playback that starts
+    // after synthesis finishes, outside the mobile gesture window.
+    primeAudioChannel();
+    set("loading");
     // Briefings are long — give synthesis more room than a one-line reminder
     // before falling back to the device voice.
-    void speakAssistant(text, { onDone: () => setBoth(false), timeoutMs: 30_000 });
+    void speakAssistant(text, {
+      onStart: () => set("reading"),
+      onDone: () => set("idle"),
+      timeoutMs: 30_000,
+    });
   }, []);
 
   const stop = useCallback(() => {
-    if (!readingRef.current) return;
+    if (stateRef.current === "idle") return;
     stopSpeaking();
-    setBoth(false);
+    set("idle");
   }, []);
 
   // Gesture-less playback attempt (morning briefing). Resolves false when the
   // browser blocks it — the caller then shows a tap-to-listen prompt instead.
   const tryAutoPlay = useCallback(async (text: string): Promise<boolean> => {
-    if (readingRef.current) return true;
-    const ok = await speakNaturalOnly(text, () => setBoth(false));
-    if (ok) setBoth(true);
+    if (stateRef.current !== "idle") return true;
+    const ok = await speakNaturalOnly(text, () => set("idle"));
+    if (ok) set("reading");
     return ok;
   }, []);
 
   // Cut playback off if the hosting view unmounts mid-read.
   useEffect(() => {
     return () => {
-      if (readingRef.current) stopSpeaking();
+      if (stateRef.current !== "idle") stopSpeaking();
     };
   }, []);
 
-  return { reading, toggle, stop, tryAutoPlay };
+  return { reading: state === "reading", loading: state === "loading", toggle, stop, tryAutoPlay };
 }

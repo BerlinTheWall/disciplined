@@ -7,6 +7,8 @@ import type { IconKey } from "@/lib/icons";
 // in-app banner by ReminderHost until dismissed (or auto-expired).
 export interface ReminderAlert {
   key: string;
+  kind: "task" | "habit";
+  id: string; // the underlying item, for notification actions
   title: string;
   body: string;
   color: string;
@@ -19,9 +21,14 @@ interface ReminderState {
   // Reminder key -> when it fired (ms). Persisted so a reload doesn't re-fire
   // the same reminder; pruned so it doesn't grow forever.
   fired: Record<string, number>;
+  // Reminder key -> when a snoozed reminder should fire again (ms). Snoozing
+  // un-fires the key so the scheduler delivers it a second time.
+  snoozes: Record<string, number>;
   // Foreground banners currently on screen. Not persisted.
   alerts: ReminderAlert[];
   markFired: (key: string) => void;
+  snooze: (key: string, untilMs: number) => void;
+  clearSnooze: (key: string) => void;
   pushAlert: (alert: ReminderAlert) => void;
   dismissAlert: (key: string) => void;
 }
@@ -43,9 +50,29 @@ export const useReminderStore = create<ReminderState>()(
   persist(
     (set) => ({
       fired: {},
+      snoozes: {},
       alerts: [],
 
       markFired: (key) => set((state) => ({ fired: { ...prune(state.fired), [key]: Date.now() } })),
+
+      snooze: (key, untilMs) =>
+        set((state) => {
+          const fired = { ...state.fired };
+          delete fired[key];
+          // Also drop any on-screen banner for it — it's been answered.
+          return {
+            fired,
+            snoozes: { ...prune(state.snoozes), [key]: untilMs },
+            alerts: state.alerts.filter((a) => a.key !== key),
+          };
+        }),
+
+      clearSnooze: (key) =>
+        set((state) => {
+          const snoozes = { ...state.snoozes };
+          delete snoozes[key];
+          return { snoozes };
+        }),
 
       pushAlert: (alert) =>
         set((state) =>
@@ -59,7 +86,7 @@ export const useReminderStore = create<ReminderState>()(
     }),
     {
       name: "disciplined-reminders",
-      partialize: (state) => ({ fired: state.fired }),
+      partialize: (state) => ({ fired: state.fired, snoozes: state.snoozes }),
     }
   )
 );

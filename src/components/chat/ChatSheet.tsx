@@ -3,7 +3,12 @@ import { motion } from "framer-motion";
 import { ArrowUp, Mic, Sparkles, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
+import {
+  primeAudioChannel,
+  stopSpeaking,
+  useSpeechRecognition,
+  useSpeechState,
+} from "@/hooks/useSpeech";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore, type ChatBubble } from "@/store/chatStore";
 import BottomSheet from "../BottomSheet";
@@ -66,6 +71,9 @@ export default function ChatSheet() {
 
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  // Keep the typing dots up while the spoken reply is still being prepared,
+  // so there's a visible loader until the assistant is heard.
+  const voicePending = useSpeechState((s) => s.pending);
 
   // Voice input: live transcript shows in the input; a finished utterance is
   // sent right away. The reply is spoken by the chat store itself.
@@ -101,6 +109,9 @@ export default function ChatSheet() {
     const raw = text.trim();
     if (!raw || busy) return;
     setText("");
+    // Unlock audio during the submit gesture so the spoken reply (arriving
+    // after the network round trip) is allowed to play on mobile.
+    primeAudioChannel();
     // Errors already surface as a bubble in the thread.
     await send(raw).catch(() => {});
   }
@@ -148,7 +159,7 @@ export default function ChatSheet() {
         {messages.map((m, i) => (
           <Bubble key={i} message={m} />
         ))}
-        {busy && <TypingDots />}
+        {(busy || (isOpen && voicePending)) && <TypingDots />}
       </div>
 
       {/* Input */}
@@ -166,7 +177,14 @@ export default function ChatSheet() {
         {voiceSupported && (
           <motion.button
             type="button"
-            onClick={listening ? stopListening : startListening}
+            onClick={() => {
+              if (listening) {
+                stopListening();
+                return;
+              }
+              primeAudioChannel();
+              startListening();
+            }}
             whileTap={tap}
             aria-label={listening ? "Stop listening" : "Speak"}
             className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${

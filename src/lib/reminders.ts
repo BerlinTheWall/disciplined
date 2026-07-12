@@ -42,15 +42,47 @@ export async function requestNotifyPermission(): Promise<NotifyPermission> {
   }
 }
 
+// How long a snoozed reminder waits before firing again.
+export const SNOOZE_MS = 10 * 60 * 1000;
+
+// Structured payload attached to a notification so the service worker can
+// route button clicks (Done / Snooze) back to the app.
+export interface ReminderNotificationData {
+  key: string;
+  kind: "task" | "habit";
+  id: string;
+  date: string;
+}
+
+// Action buttons are a service-worker-notification feature; the plain
+// constructor ignores them. TS's page-side NotificationOptions lacks `actions`.
+interface ActionNotificationOptions extends NotificationOptions {
+  actions?: { action: string; title: string }[];
+  data?: ReminderNotificationData;
+}
+
 // Show a system notification. Prefers the service worker registration —
-// required on Android, where `new Notification()` throws — and falls back to
-// the constructor on browsers without a worker. Returns whether it was shown.
-export async function showSystemNotification(title: string, body: string, tag: string) {
+// required on Android (where `new Notification()` throws) and for action
+// buttons — and falls back to the constructor on browsers without a worker.
+// Returns whether it was shown.
+export async function showSystemNotification(
+  title: string,
+  body: string,
+  tag: string,
+  data?: ReminderNotificationData
+) {
   if (notifyPermission() !== "granted") return false;
-  const options: NotificationOptions = { body, tag, icon: "/favicon.svg" };
+  const options: ActionNotificationOptions = { body, tag, icon: "/favicon.svg" };
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) {
+      if (data) {
+        options.data = data;
+        options.actions = [
+          { action: "done", title: "Done" },
+          { action: "snooze", title: "Snooze 10 min" },
+        ];
+      }
       await reg.showNotification(title, options);
       return true;
     }

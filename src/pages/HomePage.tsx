@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowUpRight, CheckCircle2, ClipboardList, Clock, Square, Volume2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Loader2,
+  Square,
+  Volume2,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useNow } from "@/hooks/useNow";
@@ -136,7 +144,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
   const focusScheduleItem = useScheduleFocusStore((s) => s.focusItem);
-  const { reading, toggle: toggleRead, tryAutoPlay } = useReadAloud();
+  const { reading, loading, toggle: toggleRead, tryAutoPlay } = useReadAloud();
   // Morning ritual: highlights the read-my-day row when the browser blocked
   // the automatic playback, inviting the one tap it needs.
   const [briefingPrompt, setBriefingPrompt] = useState(false);
@@ -320,28 +328,44 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           animate={briefingPrompt && !reading ? { scale: [1, 1.02, 1] } : { scale: 1 }}
           transition={briefingPrompt && !reading ? { repeat: Infinity, duration: 1.6 } : undefined}
           className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 text-left ${
-            reading || briefingPrompt
+            reading || loading || briefingPrompt
               ? "bg-surface-inverse"
               : "bg-surface-alt border border-border-strong"
           }`}
         >
           <span
             className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-              reading || briefingPrompt
+              reading || loading || briefingPrompt
                 ? "bg-white/15 text-fg-inverse"
                 : "bg-surface-raised text-fg-muted"
             }`}
           >
-            {reading ? <Square size={14} /> : <Volume2 size={17} />}
+            {loading ? (
+              <motion.span
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="flex"
+              >
+                <Loader2 size={16} />
+              </motion.span>
+            ) : reading ? (
+              <Square size={14} />
+            ) : (
+              <Volume2 size={17} />
+            )}
           </span>
           <span
-            className={`font-medium ${reading || briefingPrompt ? "text-fg-inverse" : "text-fg"}`}
+            className={`font-medium ${
+              reading || loading || briefingPrompt ? "text-fg-inverse" : "text-fg"
+            }`}
           >
-            {reading
-              ? "Stop reading"
-              : briefingPrompt
-                ? "Your morning briefing is ready — tap to listen"
-                : "Read my day"}
+            {loading
+              ? "Preparing your briefing…"
+              : reading
+                ? "Stop reading"
+                : briefingPrompt
+                  ? "Your morning briefing is ready — tap to listen"
+                  : "Read my day"}
           </span>
         </motion.button>
 

@@ -7,7 +7,12 @@ import { assistantReminderLine } from "@/lib/assistantSpeech";
 import { parseISODate, todayISODate } from "@/lib/date";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
-import { REMINDER_GRACE_MS, showSystemNotification } from "@/lib/reminders";
+import {
+  REMINDER_GRACE_MS,
+  showSystemNotification,
+  SNOOZE_MS,
+  type ReminderNotificationData,
+} from "@/lib/reminders";
 import { formatTimeLabel } from "@/lib/time";
 import { setWorkerTimeout } from "@/lib/workerTimer";
 import { useHabitStore } from "@/store/habitStore";
@@ -43,9 +48,11 @@ function activeHabitsToday(today: string, weekday: number) {
 // Only looks ahead — items already inside their window are collectDue's job.
 function nextFireAt(now: number): number | null {
   let next: number | null = null;
-  const consider = (date: string, startMinutes: number, minutesBefore: number) => {
-    const fireAt = new Date(date + "T00:00:00").getTime() + (startMinutes - minutesBefore) * 60_000;
+  const push = (fireAt: number) => {
     if (fireAt > now && (next === null || fireAt < next)) next = fireAt;
+  };
+  const consider = (date: string, startMinutes: number, minutesBefore: number) => {
+    push(new Date(date + "T00:00:00").getTime() + (startMinutes - minutesBefore) * 60_000);
   };
 
   for (const t of useTaskStore.getState().tasks) {
@@ -57,13 +64,19 @@ function nextFireAt(now: number): number | null {
   for (const h of activeHabitsToday(today, weekday)) {
     consider(today, h.startMinutes, h.reminderMinutesBefore);
   }
+  // Snoozed reminders re-fire at their snooze time.
+  for (const until of Object.values(useReminderStore.getState().snoozes)) {
+    push(until);
+  }
   return next;
 }
 
 // All reminders currently inside their delivery window:
-// [start - reminderMinutesBefore, start + grace].
+// [start - reminderMinutesBefore, start + grace] — or, when snoozed, from the
+// snooze expiry onward (a snoozed reminder outlives the grace window).
 function collectDue(now: number): ReminderAlert[] {
   const due: ReminderAlert[] = [];
+  const snoozes = useReminderStore.getState().snoozes;
 
   function pushIfDue(
     kind: "task" | "habit",
@@ -77,11 +90,19 @@ function collectDue(now: number): ReminderAlert[] {
   ) {
     const startAt = new Date(date + "T00:00:00").getTime() + startMinutes * 60_000;
     const fireAt = startAt - minutesBefore * 60_000;
-    if (now < fireAt || now > startAt + REMINDER_GRACE_MS) return;
+    // startMinutes + lead time are part of the key so rescheduling an item
+    // re-arms its reminder.
+    const key = `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`;
+    const snoozedUntil = snoozes[key];
+    if (snoozedUntil !== undefined) {
+      if (now < snoozedUntil) return;
+    } else if (now < fireAt || now > startAt + REMINDER_GRACE_MS) {
+      return;
+    }
     due.push({
-      // startMinutes + lead time are part of the key so rescheduling an item
-      // re-arms its reminder.
-      key: `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`,
+      key,
+      kind,
+      id,
       title,
       body:
         now >= startAt
@@ -145,21 +166,62 @@ function speakReminder(reminder: ReminderAlert) {
 
 function tick() {
   if (!useSettingsStore.getState().remindersEnabled) return;
-  const { fired, markFired, pushAlert } = useReminderStore.getState();
+  const { fired, markFired, clearSnooze, pushAlert } = useReminderStore.getState();
   const now = Date.now();
   for (const reminder of collectDue(now)) {
     if (fired[reminder.key]) continue;
     speakReminder(reminder);
+    const data: ReminderNotificationData = {
+      key: reminder.key,
+      kind: reminder.kind,
+      id: reminder.id,
+      date: reminder.date,
+    };
     if (document.visibilityState === "visible") {
       markFired(reminder.key);
+      clearSnooze(reminder.key);
       pushAlert(reminder);
     } else {
-      void showSystemNotification(reminder.title, reminder.body, reminder.key).then((shown) => {
-        // Only mark delivered notifications: without permission the reminder
-        // stays armed and shows as a banner when the user returns (while
-        // still inside the grace window).
-        if (shown) useReminderStore.getState().markFired(reminder.key);
-      });
+      void showSystemNotification(reminder.title, reminder.body, reminder.key, data).then(
+        (shown) => {
+          // Only mark delivered notifications: without permission the reminder
+          // stays armed and shows as a banner when the user returns (while
+          // still inside the grace window).
+          if (shown) {
+            useReminderStore.getState().markFired(reminder.key);
+            useReminderStore.getState().clearSnooze(reminder.key);
+          }
+        }
+      );
+    }
+  }
+}
+
+// Handles Done / Snooze taps on a notification, forwarded by the service
+// worker. Done completes the underlying item; Snooze re-arms the reminder.
+function handleReminderAction(action: string, data: ReminderNotificationData) {
+  const { markFired, snooze, clearSnooze } = useReminderStore.getState();
+  if (action === "done") {
+    markFired(data.key);
+    clearSnooze(data.key);
+    if (data.kind === "task") {
+      const task = useTaskStore.getState().tasks.find((t) => t.id === data.id);
+      if (task && !task.completed) useTaskStore.getState().toggleTaskCompleted(data.id);
+    } else {
+      const habit = useHabitStore.getState().habits.find((h) => h.id === data.id);
+      if (habit && !habit.completedDates.includes(data.date)) {
+        useHabitStore.getState().toggleHabitCompleted(data.id, data.date);
+      }
+    }
+    if (useSettingsStore.getState().speakReminders) {
+      void speakAssistant("Nice — marked as done.");
+    }
+  } else if (action === "snooze") {
+    snooze(data.key, Date.now() + SNOOZE_MS);
+    // A snoozed reminder should speak again when it comes back.
+    spokenKeys.delete(data.key);
+    if (useSettingsStore.getState().speakReminders) {
+      void speakAssistant("Okay — I'll remind you again in 10 minutes.");
     }
   }
 }
@@ -200,15 +262,30 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
     run();
     const unsubTasks = useTaskStore.subscribe(run);
     const unsubHabits = useHabitStore.subscribe(run);
+    // A new snooze means a new wakeup to aim for.
+    const unsubSnoozes = useReminderStore.subscribe((state, prev) => {
+      if (state.snoozes !== prev.snoozes) run();
+    });
     const onVisible = () => {
       if (document.visibilityState === "visible") run();
     };
     document.addEventListener("visibilitychange", onVisible);
+    // Done/Snooze buttons on system notifications arrive via the worker.
+    const onSwMessage = (event: MessageEvent) => {
+      const msg = event.data as
+        { type?: string; action?: string; data?: ReminderNotificationData } | undefined;
+      if (msg?.type === "reminder-action" && msg.action && msg.data) {
+        handleReminderAction(msg.action, msg.data);
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", onSwMessage);
     return () => {
       cancelTimer?.();
       unsubTasks();
       unsubHabits();
+      unsubSnoozes();
       document.removeEventListener("visibilitychange", onVisible);
+      navigator.serviceWorker?.removeEventListener("message", onSwMessage);
     };
   }, []);
 

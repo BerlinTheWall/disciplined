@@ -2,7 +2,13 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Mic, Sparkles, X } from "lucide-react";
 
-import { speakAssistant, stopSpeaking, useSpeechRecognition } from "@/hooks/useSpeech";
+import {
+  primeAudioChannel,
+  speakAssistant,
+  stopSpeaking,
+  useSpeechRecognition,
+  useSpeechState,
+} from "@/hooks/useSpeech";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore } from "@/store/chatStore";
 
@@ -24,6 +30,9 @@ const PHASE_LABEL: Record<Exclude<Phase, "idle">, string> = {
 
 export default function VoiceAssistant() {
   const send = useChatStore((s) => s.send);
+  // Voice synthesis still in flight — keep the spinner up after the reply
+  // text arrives, until the assistant is actually heard.
+  const voicePending = useSpeechState((s) => s.pending);
   const [phase, setPhase] = useState<Phase>("idle");
   // What the card shows: live transcript while listening, then the reply.
   const [text, setText] = useState("");
@@ -73,6 +82,9 @@ export default function VoiceAssistant() {
     }
     clearDismiss();
     stopSpeaking();
+    // Unlock audio playback while we're inside the tap — the reply that needs
+    // it arrives seconds from now, past the mobile gesture window.
+    primeAudioChannel();
     setText("");
     setPhase("listening");
     start();
@@ -101,7 +113,7 @@ export default function VoiceAssistant() {
           >
             <div className="flex items-start gap-3 bg-surface rounded-2xl shadow-xl border border-border-strong px-4 py-3">
               <span className="w-8 h-8 rounded-full bg-[#a78bfa] text-[#111827] flex items-center justify-center shrink-0">
-                {phase === "thinking" ? (
+                {phase === "thinking" || (phase === "reply" && voicePending) ? (
                   <motion.span
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}

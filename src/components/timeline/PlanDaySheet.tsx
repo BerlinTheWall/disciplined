@@ -2,7 +2,17 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, ChevronLeft, Clock, Copy, Plus, Square, Volume2, X } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  Clock,
+  Copy,
+  Loader2,
+  Plus,
+  Square,
+  Volume2,
+  X,
+} from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useAutoFocus } from "@/hooks/useAutoFocus";
@@ -68,7 +78,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
-  const { reading, toggle, stop: stopReading } = useReadAloud();
+  const { reading, loading, toggle, stop: stopReading } = useReadAloud();
   const inputRef = useRef<HTMLInputElement>(null);
   useAutoFocus(inputRef, isOpen && !showCopyPicker);
 
@@ -274,18 +284,32 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
               onClick={toggleRead}
               whileTap={tap}
               className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left ${
-                reading ? "bg-surface-inverse" : "bg-surface-alt"
+                reading || loading ? "bg-surface-inverse" : "bg-surface-alt"
               }`}
             >
               <span
                 className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                  reading ? "bg-white/15 text-fg-inverse" : "bg-surface-raised text-fg-muted"
+                  reading || loading
+                    ? "bg-white/15 text-fg-inverse"
+                    : "bg-surface-raised text-fg-muted"
                 }`}
               >
-                {reading ? <Square size={14} /> : <Volume2 size={17} />}
+                {loading ? (
+                  <motion.span
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="flex"
+                  >
+                    <Loader2 size={16} />
+                  </motion.span>
+                ) : reading ? (
+                  <Square size={14} />
+                ) : (
+                  <Volume2 size={17} />
+                )}
               </span>
-              <span className={`font-medium ${reading ? "text-fg-inverse" : "text-fg"}`}>
-                {reading ? "Stop reading" : "Read my day"}
+              <span className={`font-medium ${reading || loading ? "text-fg-inverse" : "text-fg"}`}>
+                {loading ? "Preparing your briefing…" : reading ? "Stop reading" : "Read my day"}
               </span>
             </motion.button>
           </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { create } from "zustand";
 
 import { api } from "@/lib/api";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -127,7 +128,13 @@ export function speak(
     interrupt = true,
     voiceURI,
     onDone,
-  }: { interrupt?: boolean; voiceURI?: string | null; onDone?: () => void } = {}
+    onStart,
+  }: {
+    interrupt?: boolean;
+    voiceURI?: string | null;
+    onDone?: () => void;
+    onStart?: () => void;
+  } = {}
 ) {
   if (!speechOutputSupported) {
     onDone?.();
@@ -145,6 +152,7 @@ export function speak(
   } else {
     utterance.lang = navigator.language || "en-US";
   }
+  if (onStart) utterance.onstart = onStart;
   if (onDone) {
     utterance.onend = onDone;
     utterance.onerror = onDone;
@@ -158,6 +166,32 @@ export function speak(
 // The natural-voice clip currently playing, so stopSpeaking can cut it off.
 let currentAudio: HTMLAudioElement | null = null;
 
+// A reusable audio element unlocked inside a user gesture. iOS (and strict
+// mobile browsers) reject audio.play() outside a gesture on fresh elements —
+// but an element that already played during a tap may be reused for playback
+// that arrives seconds later (an assistant reply after its network round
+// trip). primeAudioChannel() must be called synchronously from tap handlers
+// that lead to delayed speech.
+let audioChannel: HTMLAudioElement | null = null;
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+export function primeAudioChannel() {
+  if (typeof window === "undefined") return;
+  if (!audioChannel) audioChannel = new Audio();
+  // Only unlock when idle — don't cut off something already playing.
+  if (audioChannel.paused) {
+    audioChannel.src = SILENT_WAV;
+    void audioChannel.play().catch(() => {});
+  }
+  // Unlock the fallback voice the same way (silent, zero-length utterance).
+  if ("speechSynthesis" in window && !window.speechSynthesis.speaking) {
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  }
+}
+
 export function stopSpeaking() {
   if (currentAudio) {
     currentAudio.pause();
@@ -166,6 +200,7 @@ export function stopSpeaking() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
+  useSpeechState.setState({ pending: false, speaking: false });
 }
 
 // Recently synthesized clips, keyed by their exact text, so replays and
@@ -207,29 +242,46 @@ export function prefetchAssistantVoice(text: string, timeoutMs = 30_000) {
   void fetchSpeech(text, timeoutMs);
 }
 
+interface SpeakCallbacks {
+  // Fired the moment audio is actually audible (playback started).
+  onStart?: () => void;
+  // Fired when playback finishes (not when stopped early via stopSpeaking).
+  onDone?: () => void;
+  timeoutMs?: number;
+}
+
+// Whether assistant speech is being prepared (synthesis/network) or playing —
+// lets any component show a loader between "reply arrived" and "voice heard".
+export const useSpeechState = create<{ pending: boolean; speaking: boolean }>(() => ({
+  pending: false,
+  speaking: false,
+}));
+
 // Fetches the human-like AI voice from the backend and plays it. Resolves true
 // only once playback has started; any failure (offline server, missing key,
-// blocked autoplay) resolves false so the caller can fall back. onDone fires
-// when playback finishes (not when it's stopped early via stopSpeaking —
-// callers that stop handle their own state).
+// blocked autoplay) resolves false so the caller can fall back.
 async function playNaturalVoice(
   text: string,
-  onDone?: () => void,
-  timeoutMs?: number
+  { onStart, onDone, timeoutMs }: SpeakCallbacks = {}
 ): Promise<boolean> {
   try {
     const blob = await fetchSpeech(text, timeoutMs);
     if (!blob) return false;
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
+    // Prefer the gesture-unlocked channel so playback works when this runs
+    // long after the tap (mobile browsers block fresh elements there).
+    const audio = audioChannel ?? new Audio();
+    audio.src = url;
     const finish = () => {
       URL.revokeObjectURL(url);
       if (currentAudio === audio) currentAudio = null;
+      audio.onended = null;
       onDone?.();
     };
     audio.onended = finish;
     await audio.play();
     currentAudio = audio;
+    onStart?.();
     return true;
   } catch {
     return false;
@@ -241,20 +293,28 @@ async function playNaturalVoice(
 // blocks unprompted sound, while the device-voice path fails silently.
 export function speakNaturalOnly(text: string, onDone?: () => void): Promise<boolean> {
   if (!useSettingsStore.getState().naturalVoice) return Promise.resolve(false);
-  return playNaturalVoice(text, onDone, 30_000);
+  return playNaturalVoice(text, { onDone, timeoutMs: 30_000 });
 }
 
 // Assistant speech: the natural (server) voice when enabled and reachable, the
 // local device voice otherwise. Queued, so stacked reminders don't collide.
-export async function speakAssistant(
-  text: string,
-  { onDone, timeoutMs }: { onDone?: () => void; timeoutMs?: number } = {}
-) {
+// Updates useSpeechState so UIs can show "preparing voice" / "speaking".
+export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {}) {
+  const { onStart, onDone, timeoutMs } = callbacks;
+  useSpeechState.setState({ pending: true });
+  const wrapStart = () => {
+    useSpeechState.setState({ pending: false, speaking: true });
+    onStart?.();
+  };
+  const wrapDone = () => {
+    useSpeechState.setState({ pending: false, speaking: false });
+    onDone?.();
+  };
   if (
     useSettingsStore.getState().naturalVoice &&
-    (await playNaturalVoice(text, onDone, timeoutMs))
+    (await playNaturalVoice(text, { onStart: wrapStart, onDone: wrapDone, timeoutMs }))
   ) {
     return;
   }
-  speak(text, { interrupt: false, onDone });
+  speak(text, { interrupt: false, onStart: wrapStart, onDone: wrapDone });
 }
