@@ -1,14 +1,10 @@
-from uuid import uuid4
+﻿from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, Float, Integer, String
+from sqlalchemy import Boolean, Float, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-
-# JSONB on Postgres (binary, indexable, queryable); plain JSON text elsewhere so
-# the models still work against SQLite for the one-off import script.
-JsonList = JSON().with_variant(JSONB(), "postgresql")
 
 
 def new_id() -> str:
@@ -58,9 +54,9 @@ class Habit(Base):
     duration_minutes: Mapped[int] = mapped_column(Integer)
     color: Mapped[str] = mapped_column(String, default="#6366f1")
     icon: Mapped[str] = mapped_column(String, default="default")
-    days_of_week: Mapped[list] = mapped_column(JsonList, default=list)  # 0 = Sunday ... 6 = Saturday
-    completed_dates: Mapped[list] = mapped_column(JsonList, default=list)  # ISO dates
-    skipped_dates: Mapped[list] = mapped_column(JsonList, default=list)
+    days_of_week: Mapped[list] = mapped_column(JSONB, default=list)  # 0 = Sunday ... 6 = Saturday
+    completed_dates: Mapped[list] = mapped_column(JSONB, default=list)  # ISO dates
+    skipped_dates: Mapped[list] = mapped_column(JSONB, default=list)
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
     workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -74,7 +70,7 @@ class WorkoutSession(Base):
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String, default="gym")  # gym|running|cycling|swimming|yoga|other
     color: Mapped[str] = mapped_column(String, default="#6366f1")
-    exercises: Mapped[list] = mapped_column(JsonList, default=list)  # list of WorkoutExercise dicts
+    exercises: Mapped[list] = mapped_column(JSONB, default=list)  # list of WorkoutExercise dicts
 
 
 class Meal(Base):
@@ -85,6 +81,6 @@ class Meal(Base):
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String)  # breakfast|lunch|dinner|snack
     date: Mapped[str] = mapped_column(String, index=True)
-    components: Mapped[list] = mapped_column(JsonList, default=list)  # [{itemId, servings}]
+    components: Mapped[list] = mapped_column(JSONB, default=list)  # [{itemId, servings}]
     recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
     servings_eaten: Mapped[float | None] = mapped_column(Float, nullable=True)

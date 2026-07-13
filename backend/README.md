@@ -42,18 +42,6 @@ Always read the generated migration before committing it — autogenerate is goo
 at added tables and columns, and unreliable at renames (it sees a drop plus an
 add, which silently destroys the data in that column).
 
-### Importing the old SQLite data
-
-One-off, for a database that predates Postgres. Run it after the tables exist:
-
-```sh
-python -m scripts.import_sqlite --dry-run   # report what it would copy
-python -m scripts.import_sqlite             # copy it
-```
-
-Re-running is safe: rows whose id is already in Postgres are skipped, not
-overwritten.
-
 ## API
 
 - `GET/POST /api/events`, `GET/PATCH/DELETE /api/events/{id}` — schedule blocks
