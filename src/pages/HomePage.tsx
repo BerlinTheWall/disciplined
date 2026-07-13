@@ -271,6 +271,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
     else toggleHabitCompleted(item.id, today);
   }
 
+  const focusLabel = current ? "Happening Now" : upcoming ? "Upcoming Task" : "Up Next";
   const fStart = focus ? fmt12(focus.startMinutes) : null;
   const fEnd = focus ? fmt12(focus.startMinutes + focus.durationMinutes) : null;
   const fPrio = focus?.priority ? PRIORITY_META[focus.priority] : null;
@@ -278,12 +279,47 @@ export default function HomePage({ onViewAll }: HomePageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Greeting */}
-      <h1 className="text-3xl font-bold leading-tight text-fg">
-        Everyday
-        <br />
-        Counts
-      </h1>
+      {/* Greeting, with the spoken day summary a compact pill beside it. When
+          the morning briefing was blocked by the browser, the pill pulses as
+          the invitation to tap. */}
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold leading-tight text-fg">
+          Everyday
+          <br />
+          Counts
+        </h1>
+        <motion.button
+          onClick={() => {
+            setBriefingPrompt(false);
+            toggleRead(script ?? briefing);
+          }}
+          whileTap={tap}
+          animate={briefingPrompt && !reading && !loading ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+          transition={
+            briefingPrompt && !reading && !loading ? { repeat: Infinity, duration: 1.6 } : undefined
+          }
+          className={`shrink-0 mt-1 flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-medium ${
+            reading || loading || briefingPrompt
+              ? "bg-surface-inverse text-fg-inverse"
+              : "bg-surface-alt border border-border-strong text-fg"
+          }`}
+        >
+          {loading ? (
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="flex"
+            >
+              <Loader2 size={14} />
+            </motion.span>
+          ) : reading ? (
+            <Square size={12} />
+          ) : (
+            <Volume2 size={15} />
+          )}
+          {loading ? "Preparing…" : reading ? "Stop" : "Day Summary"}
+        </motion.button>
+      </div>
 
       {/* Today's progress */}
       <div className="rounded-3xl bg-surface-feature text-white p-5 shadow-card">
@@ -304,7 +340,13 @@ export default function HomePage({ onViewAll }: HomePageProps) {
         <div className="flex items-baseline justify-between px-1 mb-3">
           <h2 className="text-lg font-bold text-fg">Today's Tasks</h2>
           {onViewAll && (
-            <button onClick={onViewAll} className="text-sm font-medium text-fg-muted">
+            <button
+              onClick={() => {
+                setSelectedDate(today);
+                onViewAll();
+              }}
+              className="text-sm font-medium text-fg-muted"
+            >
               View All
             </button>
           )}
@@ -316,60 +358,9 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           <Chip count={done} label="Done" />
         </div>
 
-        {/* Hear the whole day, assistant-style, before diving into what's next.
-            When the morning briefing was blocked by the browser, this row
-            becomes the invitation to tap. */}
-        <motion.button
-          onClick={() => {
-            setBriefingPrompt(false);
-            toggleRead(script ?? briefing);
-          }}
-          whileTap={tap}
-          animate={briefingPrompt && !reading ? { scale: [1, 1.02, 1] } : { scale: 1 }}
-          transition={briefingPrompt && !reading ? { repeat: Infinity, duration: 1.6 } : undefined}
-          className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 text-left ${
-            reading || loading || briefingPrompt
-              ? "bg-surface-inverse"
-              : "bg-surface-alt border border-border-strong"
-          }`}
-        >
-          <span
-            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-              reading || loading || briefingPrompt
-                ? "bg-white/15 text-fg-inverse"
-                : "bg-surface-raised text-fg-muted"
-            }`}
-          >
-            {loading ? (
-              <motion.span
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                className="flex"
-              >
-                <Loader2 size={16} />
-              </motion.span>
-            ) : reading ? (
-              <Square size={14} />
-            ) : (
-              <Volume2 size={17} />
-            )}
-          </span>
-          <span
-            className={`font-medium ${
-              reading || loading || briefingPrompt ? "text-fg-inverse" : "text-fg"
-            }`}
-          >
-            {loading
-              ? "Preparing your briefing…"
-              : reading
-                ? "Stop reading"
-                : briefingPrompt
-                  ? "Your morning briefing is ready — tap to listen"
-                  : "Read my day"}
-          </span>
-        </motion.button>
-
         {focus && fStart && fEnd ? (
+          <>
+          <h3 className="text-sm font-semibold text-fg-muted px-1 mb-2">{focusLabel}</h3>
           <motion.button
             onClick={() => openInSchedule(focus)}
             whileTap={press}
@@ -421,6 +412,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
               />
             </div>
           </motion.button>
+          </>
         ) : (
           <div className="rounded-3xl bg-surface-alt border border-border-strong shadow-soft p-6 text-center">
             <p className="font-medium text-fg">

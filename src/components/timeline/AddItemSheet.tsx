@@ -11,6 +11,7 @@ import {
   ChefHat,
   ChevronRight,
   Clock,
+  Copy,
   Dumbbell,
   Flag,
   Link2,
@@ -369,6 +370,29 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         });
       }
     }
+    onClose();
+  }
+
+  // Copies the task as currently shown in the form — including unsaved edits —
+  // as a new, uncompleted task, and closes the editor. The original keeps its
+  // saved state (the user chose Duplicate, not Update).
+  function handleDuplicate() {
+    if (!editItem || editItem.type !== "task" || mode !== "task") return;
+    if (!title.trim() || duration < 1) return;
+    const startMinutes = timeStringToMinutes(time);
+    if (startMinutes + duration > MINUTES_PER_DAY) return;
+    addTask({
+      title: title.trim(),
+      startMinutes,
+      durationMinutes: duration,
+      color,
+      icon,
+      date,
+      priority,
+      reminderMinutesBefore: reminder,
+      workoutSessionId,
+      recipeId,
+    });
     onClose();
   }
 
@@ -1039,14 +1063,27 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                 {mode === "task" ? "Update Task" : "Update Habit"}
               </motion.button>
 
-              <motion.button
-                onClick={handleDelete}
-                whileTap={tap}
-                className="mx-auto flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-red-400"
-              >
-                <Trash2 size={15} />
-                Delete
-              </motion.button>
+              <div className="flex items-center justify-center gap-6">
+                {editItem?.type === "task" && mode === "task" && (
+                  <motion.button
+                    onClick={handleDuplicate}
+                    whileTap={tap}
+                    disabled={saveDisabled}
+                    className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-fg-muted disabled:opacity-40"
+                  >
+                    <Copy size={15} />
+                    Duplicate
+                  </motion.button>
+                )}
+                <motion.button
+                  onClick={handleDelete}
+                  whileTap={tap}
+                  className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-red-400"
+                >
+                  <Trash2 size={15} />
+                  Delete
+                </motion.button>
+              </div>
             </div>
           ) : (
             /* ---- CREATE — guided 3-step wizard ---- */

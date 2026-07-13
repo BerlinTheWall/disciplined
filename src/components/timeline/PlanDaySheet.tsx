@@ -309,7 +309,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                 )}
               </span>
               <span className={`font-medium ${reading || loading ? "text-fg-inverse" : "text-fg"}`}>
-                {loading ? "Preparing your briefing…" : reading ? "Stop reading" : "Read my day"}
+                {loading ? "Preparing your summary…" : reading ? "Stop reading" : "Day Summary"}
               </span>
             </motion.button>
           </div>
