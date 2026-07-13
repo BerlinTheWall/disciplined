@@ -19,7 +19,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import JSON, Boolean, Column, select
 
 from app.config import settings
 from app.database import SessionLocal
@@ -27,29 +27,40 @@ from app.models import Event, Habit, Meal, User, WorkoutSession
 
 DEFAULT_SQLITE = Path(__file__).resolve().parent.parent / "disciplined.db"
 
-# Model -> the JSON-encoded text columns SQLite stored as strings. Postgres wants
-# real lists/dicts for its JSON(B) columns, so these get decoded on the way in.
-TABLES: list[tuple[type, str, tuple[str, ...]]] = [
-    # users first: everything else carries a user_id pointing at them.
-    (User, "users", ()),
-    (Event, "events", ()),
-    (Habit, "habits", ("days_of_week", "completed_dates", "skipped_dates")),
-    (WorkoutSession, "workout_sessions", ("exercises",)),
-    (Meal, "meals", ("components",)),
+# users first: every other row carries a user_id pointing at them.
+TABLES: list[tuple[type, str]] = [
+    (User, "users"),
+    (Event, "events"),
+    (Habit, "habits"),
+    (WorkoutSession, "workout_sessions"),
+    (Meal, "meals"),
 ]
 
 
-def read_rows(conn: sqlite3.Connection, table: str, json_columns: tuple[str, ...]) -> list[dict]:
+def coerce(column: Column, value: object) -> object:
+    """Re-type a raw SQLite value for the column the model declares.
+
+    SQLite is dynamically typed and stores what it likes: booleans as 0/1
+    integers, JSON as text. aiosqlite let that slide; asyncpg will not — it type-
+    checks every bind param, so an int reaching a BOOLEAN column is a DataError.
+    """
+    if value is None:
+        return None
+    if isinstance(column.type, Boolean):
+        return bool(value)
+    if isinstance(column.type, JSON) and isinstance(value, str):
+        return json.loads(value)
+    return value
+
+
+def read_rows(conn: sqlite3.Connection, model: type, table: str) -> list[dict]:
+    columns = {column.name: column for column in model.__table__.columns}
     cursor = conn.execute(f'SELECT * FROM "{table}"')
-    rows = []
-    for row in cursor.fetchall():
-        data = dict(row)
-        for column in json_columns:
-            value = data.get(column)
-            if isinstance(value, str):
-                data[column] = json.loads(value)
-        rows.append(data)
-    return rows
+    # Columns the old schema had and the models no longer do are dropped here.
+    return [
+        {key: coerce(columns[key], value) for key, value in dict(row).items() if key in columns}
+        for row in cursor.fetchall()
+    ]
 
 
 async def main() -> int:
@@ -74,23 +85,44 @@ async def main() -> int:
 
     imported, skipped = 0, 0
     async with SessionLocal() as db:
-        for model, table, json_columns in TABLES:
+        # An account that already registered on the server has the same email but
+        # a different, server-generated id. That is the same person, so map the
+        # old id onto the existing one and re-point their rows at it — otherwise
+        # the imported data would belong to a user id nobody can log in as.
+        id_map: dict[str, str] = {}
+        for row in read_rows(source, User, "users"):
+            existing_id = (
+                await db.execute(select(User.id).where(User.email == row["email"]))
+            ).scalar_one_or_none()
+            if existing_id is not None:
+                id_map[row["id"]] = existing_id
+                skipped += 1
+                print(f"users              — {row['email']} already registered, merging into it")
+                continue
+            db.add(User(**row))
+            imported += 1
+            print(f"users              + {row['email']}")
+
+        # Flush the new users before their rows arrive, and stop autoflush from
+        # firing mid-query below (which is what made the last failure so noisy).
+        await db.flush()
+
+        for model, table in TABLES[1:]:
             try:
-                rows = read_rows(source, table, json_columns)
+                rows = read_rows(source, model, table)
             except sqlite3.OperationalError:
                 print(f"{table:18} — not in the SQLite file, skipping")
                 continue
 
             existing = set((await db.execute(select(model.id))).scalars())
-            fields = {column.name for column in model.__table__.columns}
 
             new = 0
             for row in rows:
                 if row["id"] in existing:
                     skipped += 1
                     continue
-                # Drop columns the old schema had and the models no longer do.
-                db.add(model(**{k: v for k, v in row.items() if k in fields}))
+                row["user_id"] = id_map.get(row["user_id"], row["user_id"])
+                db.add(model(**row))
                 new += 1
 
             imported += new
