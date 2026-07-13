@@ -1,6 +1,6 @@
 # Disciplined backend
 
-FastAPI + async SQLAlchemy (SQLite) + Gemini scheduling assistant.
+FastAPI + async SQLAlchemy (Postgres) + Gemini scheduling assistant.
 
 ## Setup
 
@@ -9,7 +9,8 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
-copy .env.example .env        # then put your GEMINI_API_KEY in .env
+copy .env.example .env        # then put your GEMINI_API_KEY and JWT_SECRET in .env
+docker compose up -d          # Postgres on localhost:5432
 ```
 
 ## Run
@@ -18,8 +19,40 @@ copy .env.example .env        # then put your GEMINI_API_KEY in .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-Interactive docs at http://localhost:8000/docs. The SQLite file
-(`disciplined.db`) is created automatically on first start.
+Interactive docs at http://localhost:8000/docs. Migrations run automatically on
+startup, so the schema is created on first boot.
+
+## Database
+
+Postgres, reached over asyncpg. `DATABASE_URL` is the only knob — Railway
+injects its own in production, and the app rewrites the `postgresql://` form it
+hands out into the `postgresql+asyncpg://` one SQLAlchemy needs
+(`normalize_database_url` in `app/config.py`).
+
+Schema changes go through **Alembic**. After editing `app/models.py`:
+
+```sh
+alembic revision --autogenerate -m "add expenses"   # writes migrations/versions/…
+alembic upgrade head                                # apply (startup does this too)
+alembic downgrade -1                                # undo the last one
+alembic current                                     # what's applied
+```
+
+Always read the generated migration before committing it — autogenerate is good
+at added tables and columns, and unreliable at renames (it sees a drop plus an
+add, which silently destroys the data in that column).
+
+### Importing the old SQLite data
+
+One-off, for a database that predates Postgres. Run it after the tables exist:
+
+```sh
+python -m scripts.import_sqlite --dry-run   # report what it would copy
+python -m scripts.import_sqlite             # copy it
+```
+
+Re-running is safe: rows whose id is already in Postgres are skipped, not
+overwritten.
 
 ## API
 

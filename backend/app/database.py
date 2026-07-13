@@ -1,40 +1,40 @@
+import asyncio
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
-from sqlalchemy import inspect, text
+from alembic import command
+from alembic.config import Config
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url)
+# pool_pre_ping: hosted Postgres (and anything behind a proxy) silently drops
+# idle connections; without this the first request after a quiet spell fails.
+engine = create_async_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+_ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
 
 
 class Base(DeclarativeBase):
     pass
 
 
-def _add_missing_columns(sync_conn) -> None:
-    """Poor man's migrations: create_all never alters existing tables, so add
-    any nullable columns the models grew since the table was created."""
-    inspector = inspect(sync_conn)
-    for table in Base.metadata.tables.values():
-        if not inspector.has_table(table.name):
-            continue
-        existing = {col["name"] for col in inspector.get_columns(table.name)}
-        for column in table.columns:
-            if column.name in existing or not column.nullable:
-                continue
-            col_type = column.type.compile(sync_conn.dialect)
-            sync_conn.execute(
-                text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}')
-            )
+def _upgrade_to_head() -> None:
+    config = Config(_ALEMBIC_INI)
+    command.upgrade(config, "head")
 
 
 async def init_db() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(_add_missing_columns)
+    """Bring the schema up to date on startup.
+
+    Alembic is synchronous and blocking, so it runs in a worker thread rather
+    than stalling the event loop. Fine for a single instance; if this ever runs
+    with more than one replica, move it to a release/pre-deploy command instead
+    so concurrent boots can't race each other into the same migration.
+    """
+    await asyncio.to_thread(_upgrade_to_head)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

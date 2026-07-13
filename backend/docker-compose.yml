@@ -1,0 +1,26 @@
+# Local Postgres for development. Production runs Railway's managed Postgres.
+#   docker compose up -d      start
+#   docker compose down       stop (data survives)
+#   docker compose down -v    stop and wipe the volume
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: disciplined
+      POSTGRES_PASSWORD: disciplined
+      POSTGRES_DB: disciplined
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Lets `docker compose up --wait` (and the app) know when it can connect —
+    # the server briefly accepts and then drops connections while starting.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U disciplined -d disciplined"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
