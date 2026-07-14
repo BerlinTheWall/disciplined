@@ -53,11 +53,10 @@ class Settings(BaseSettings):
     # Signs auth tokens — set a long random value in .env for anything public.
     jwt_secret: str = "dev-secret-change-me"
     access_token_expire_minutes: int = 60 * 24 * 30  # 30 days; no refresh-token flow
-    # Vite dev server + Capacitor webview origins
+    # Vite dev server origins
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "capacitor://localhost",
         "http://localhost",
     ]
 

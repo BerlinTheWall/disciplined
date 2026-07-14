@@ -11,7 +11,7 @@ import type { WorkoutSession } from "@/types/workout";
 // Write-through sync between the zustand stores and the backend.
 //
 // The stores stay the synchronous source of truth for the UI (optimistic,
-// offline-capable — which is what we want for Capacitor). This module:
+// offline-capable). This module:
 //   1. hydrates each store from the backend on startup (server wins; an empty
 //      server is seeded from localStorage on first run),
 //   2. subscribes to store changes and diff-pushes creates/updates/deletes.

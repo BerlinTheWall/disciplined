@@ -360,58 +360,58 @@ export default function HomePage({ onViewAll }: HomePageProps) {
 
         {focus && fStart && fEnd ? (
           <>
-          <h3 className="text-sm font-semibold text-fg-muted px-1 mb-2">{focusLabel}</h3>
-          <motion.button
-            onClick={() => openInSchedule(focus)}
-            whileTap={press}
-            className="w-full text-left bg-surface-alt border border-border-strong rounded-3xl shadow-soft p-5"
-          >
-            <div className="flex items-start justify-between">
-              {fPrio ? (
-                <span
-                  className="flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1"
-                  style={{ color: fPrio.color, backgroundColor: `${fPrio.color}1f` }}
-                >
+            <h3 className="text-sm font-semibold text-fg-muted px-1 mb-2">{focusLabel}</h3>
+            <motion.button
+              onClick={() => openInSchedule(focus)}
+              whileTap={press}
+              className="w-full text-left bg-surface-alt border border-border-strong rounded-3xl shadow-soft p-5"
+            >
+              <div className="flex items-start justify-between">
+                {fPrio ? (
                   <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: fPrio.color }}
-                  />
-                  {fPrio.label} Priority
-                </span>
-              ) : (
-                <span />
-              )}
-              <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
-            </div>
-
-            <div className="flex items-center gap-2.5 mt-3">
-              <span
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: `${focus.color}1f` }}
-              >
-                {FocusIcon && <FocusIcon size={18} style={{ color: focus.color }} />}
-              </span>
-              <p className="text-xl font-bold text-fg leading-snug min-w-0 truncate">
-                {focus.title}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-1.5 text-sm text-fg-faint">
-                <Clock size={15} />
-                {fStart.time} – {fEnd.time} {fEnd.period}
+                    className="flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1"
+                    style={{ color: fPrio.color, backgroundColor: `${fPrio.color}1f` }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: fPrio.color }}
+                    />
+                    {fPrio.label} Priority
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
               </div>
-              <motion.span
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  toggle(focus);
-                }}
-                whileTap={tap}
-                className="w-8 h-8 rounded-full border-2 shrink-0"
-                style={{ borderColor: focus.color }}
-              />
-            </div>
-          </motion.button>
+
+              <div className="flex items-center gap-2.5 mt-3">
+                <span
+                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: `${focus.color}1f` }}
+                >
+                  {FocusIcon && <FocusIcon size={18} style={{ color: focus.color }} />}
+                </span>
+                <p className="text-xl font-bold text-fg leading-snug min-w-0 truncate">
+                  {focus.title}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center gap-1.5 text-sm text-fg-faint">
+                  <Clock size={15} />
+                  {fStart.time} – {fEnd.time} {fEnd.period}
+                </div>
+                <motion.span
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    toggle(focus);
+                  }}
+                  whileTap={tap}
+                  className="w-8 h-8 rounded-full border-2 shrink-0"
+                  style={{ borderColor: focus.color }}
+                />
+              </div>
+            </motion.button>
           </>
         ) : (
           <div className="rounded-3xl bg-surface-alt border border-border-strong shadow-soft p-6 text-center">

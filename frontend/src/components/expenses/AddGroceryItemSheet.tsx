@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp, Wand2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import BarcodeLookup from "./BarcodeLookup";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import {
   FALLBACK_FOOD_ICON,
@@ -22,6 +23,7 @@ import {
   type Nutrition,
   type Unit,
 } from "@/lib/nutritions";
+import type { ScannedProduct } from "@/lib/openFoodFacts";
 import { useGroceryStore } from "@/store/groceryStore";
 import type { GroceryItem } from "@/types/grocery";
 import BottomSheet from "../BottomSheet";
@@ -110,6 +112,28 @@ export default function AddGroceryItemSheet({
     setCategoryTouched(true);
   }
 
+  // A barcode matched on Open Food Facts: prefill the form with the product.
+  // Real label data beats the estimator, so auto turns off — unless OFF had no
+  // nutrition for this product, in which case the estimator stays in charge.
+  function applyScannedProduct(product: ScannedProduct) {
+    if (product.name) setName(product.name);
+    if (product.category) {
+      setCategory(product.category);
+      setCategoryTouched(true);
+    }
+    setQuantity(String(product.quantity));
+    setUnit(product.unit);
+    // A fresh scan usually means one package just came home.
+    if (!isEditing) setStock(String(product.quantity));
+    if (product.nutrition) {
+      setNutrition(product.nutrition);
+      setAuto(false);
+    } else {
+      setAuto(true);
+    }
+    setShowDetails(true);
+  }
+
   function setNutritionField(key: keyof Nutrition, raw: string) {
     const value = parseFloat(raw);
     setNutrition((prev) => ({ ...prev, [key]: isFinite(value) ? value : 0 }));
@@ -190,6 +214,10 @@ export default function AddGroceryItemSheet({
         placeholder="e.g. Chicken breast"
         className="w-full text-base border border-border-input rounded-xl px-4 py-3 mb-4 focus:outline-none focus:border-border-focus"
       />
+
+      {/* Barcode → Open Food Facts prefill. Keyed to the open/edit cycle so a
+          reopened sheet starts with a clean field and status. */}
+      <BarcodeLookup key={`${isOpen}-${editItem?.id ?? "new"}`} onProduct={applyScannedProduct} />
 
       {/* Category */}
       <label className="text-sm text-fg-muted mb-2 block">Category</label>
