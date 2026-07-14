@@ -183,11 +183,12 @@ export default function AddGroceryItemSheet({
     }
     setQuantity(String(product.quantity));
     setUnit(product.unit);
-    // A fresh scan usually means one package just came home — and in packs, so
-    // three bottles of the same drink is a "3", not 3 × the millilitres.
+    // A fresh scan means one package just came home — counted, not weighed. For
+    // a pack of pieces the amount above is ONE of them (one bun), so the pack of
+    // 8 is 8 in stock; for anything else it's simply the one package.
     if (!isEditing) {
       setStockMode("packs");
-      setStock("1");
+      setStock(String(product.pieces ?? 1));
     }
     if (product.nutrition) {
       setNutrition(product.nutrition);

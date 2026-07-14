@@ -24,6 +24,12 @@ type Status =
 
 function caveatsFor(product: ScannedProduct): string[] {
   const caveats: string[] = [];
+  if (product.pieces) {
+    caveats.push(
+      `A pack of ${product.pieces}. The amount and nutrition below are for ONE ` +
+        `(${product.quantity} ${product.unit}), with ${product.pieces} in stock.`
+    );
+  }
   if (product.amountSource === "serving") {
     caveats.push(
       `Only a serving size was on record — used ${product.quantity} ${product.unit}. ` +

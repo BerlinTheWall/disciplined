@@ -32,6 +32,11 @@ export interface ScannedProduct {
   // fields (a common contributor mistake on North American labels, which print
   // per serving). They were put back on a per-100 footing before scaling.
   nutritionRebased: boolean;
+  // How many of `quantity` the pack holds, when it holds countable pieces — 8
+  // buns, 6 cans. quantity/nutrition then describe ONE of them, and this is the
+  // stock you just brought home. Null for things measured rather than counted
+  // (rice, meat, protein powder), where the pack is one continuous amount.
+  pieces: number | null;
 }
 
 interface OffProduct {
@@ -207,9 +212,9 @@ function toAmount(base: number, liquid: boolean): Amount {
     : { quantity: round2(base), unit: "g", base };
 }
 
-// Any amount written as text: "1,5 L", "12 x 33 cl", "16 oz", "500g e",
-// "1 bottle (340 ml)". A parenthesised amount wins — that's where a serving
-// size keeps its real measure, next to a word like "bottle" we can't weigh.
+// Any amount written as text: "1,5 L", "16 oz", "500g e", "1 bottle (340 ml)".
+// A parenthesised amount wins — that's where a serving size keeps its real
+// measure, next to a word like "bottle" we can't weigh.
 function parseAmountText(raw: string | undefined): Amount | null {
   if (!raw) return null;
   const paren = /\(([^)]+)\)/.exec(raw);
@@ -220,26 +225,13 @@ function parseAmountText(raw: string | undefined): Amount | null {
   return parseMeasure(raw);
 }
 
+const NUMBER = "\\d+(?:\\.\\d+)?";
+
 function parseMeasure(raw: string): Amount | null {
   const text = raw.toLowerCase().replace(",", ".");
-  const number = "\\d+(?:\\.\\d+)?";
-
-  // Multipacks: the pack size is count × unit size.
-  const multi = new RegExp(`(${number})\\s*[x×*]\\s*(${number})\\s*([a-z. ]+)`).exec(text);
-  if (multi) {
-    const unit = normalizeUnit(multi[3]);
-    if (unit) {
-      const count = parseFloat(multi[1]);
-      const size = parseFloat(multi[2]);
-      if (isFinite(count) && isFinite(size) && count > 0 && size > 0) {
-        return toAmount(count * size * unit.base, unit.liquid);
-      }
-    }
-  }
-
-  // Otherwise the first number followed by a unit we recognise. Scanning
-  // onwards matters: "1 bottle 340 ml" must skip the bottle and find the ml.
-  const single = new RegExp(`(${number})\\s*([a-z. ]+)`, "g");
+  // The first number followed by a unit we recognise. Scanning onwards matters:
+  // "1 bottle 340 ml" must skip the bottle and find the ml.
+  const single = new RegExp(`(${NUMBER})\\s*([a-z. ]+)`, "g");
   let m: RegExpExecArray | null;
   while ((m = single.exec(text)) !== null) {
     const unit = normalizeUnit(m[2]);
@@ -247,6 +239,86 @@ function parseMeasure(raw: string): Amount | null {
     if (unit && isFinite(value) && value > 0) return toAmount(value * unit.base, unit.liquid);
   }
   return null;
+}
+
+// A pack that holds several of the same thing: "6 x 55 g", "12 × 33 cl".
+// The piece is what matters — one bun, one can — with the count kept alongside.
+function parseMultipack(raw: string | undefined): { piece: Amount; count: number } | null {
+  if (!raw) return null;
+  const text = raw.toLowerCase().replace(",", ".");
+  const m = new RegExp(`(${NUMBER})\\s*[x×*]\\s*(${NUMBER})\\s*([a-z. ]+)`).exec(text);
+  if (!m) return null;
+  const unit = normalizeUnit(m[3]);
+  const count = parseFloat(m[1]);
+  const size = parseFloat(m[2]);
+  if (!unit || !isFinite(count) || !isFinite(size) || count < 2 || size <= 0) return null;
+  return { piece: toAmount(size * unit.base, unit.liquid), count: Math.round(count) };
+}
+
+// Words that name a physical piece you can hold and count. A serving described
+// with one of these — "1 bun (77 g)", "1 can (330 ml)" — is a thing, not just a
+// suggested portion, which is the difference between a pack of 8 buns and a bag
+// of rice with a 75 g serving suggestion.
+const PIECE_WORDS = [
+  "bun",
+  "buns",
+  "roll",
+  "rolls",
+  "slice",
+  "slices",
+  "bottle",
+  "bottles",
+  "can",
+  "cans",
+  "bar",
+  "bars",
+  "piece",
+  "pieces",
+  "biscuit",
+  "biscuits",
+  "cookie",
+  "cookies",
+  "egg",
+  "eggs",
+  "pot",
+  "pots",
+  "tub",
+  "tubs",
+  "cup",
+  "cups",
+  "sachet",
+  "sachets",
+  "pouch",
+  "pouches",
+  "stick",
+  "sticks",
+  "wrap",
+  "wraps",
+  "tortilla",
+  "tortillas",
+  "muffin",
+  "muffins",
+  "croissant",
+  "croissants",
+  "yogurt",
+  "yoghurt",
+  "unit",
+  "units",
+  // OFF's contributors are heavily French; these show up constantly.
+  "pain",
+  "pains",
+  "tranche",
+  "tranches",
+  "pièce",
+  "pieces",
+  "pot",
+  "sachet",
+];
+
+function namesAPiece(servingSize: string | undefined): boolean {
+  if (!servingSize) return false;
+  const words = servingSize.toLowerCase().split(/[^a-zà-ÿ]+/);
+  return words.some((w) => PIECE_WORDS.includes(w));
 }
 
 // Ready-to-drink products (protein shakes, cans) are routinely recorded with no
@@ -261,31 +333,68 @@ function amountFromServing(p: OffProduct): Amount | null {
   return unit ? toAmount(qty * unit.base, unit.liquid) : null;
 }
 
+// A pack of N pieces, recovered from the package size and a serving that names
+// one piece: 308 g of "1 bun (77 g)" is 4 buns. The division has to come out
+// whole — a 500 g bag with a 75 g serving is 6.67 servings, i.e. not pieces.
+function piecesInPackage(p: OffProduct, pack: Amount): { piece: Amount; count: number } | null {
+  if (!namesAPiece(p.serving_size)) return null;
+  const piece = amountFromServing(p);
+  if (!piece || piece.base <= 0) return null;
+  const ratio = pack.base / piece.base;
+  const count = Math.round(ratio);
+  if (count < 2 || Math.abs(ratio - count) > 0.02) return null;
+  return { piece, count };
+}
+
 // The 100 g the nutrition is quoted against — a truthful reference amount when
 // the package size is unknowable, rather than a guess at the package.
 const FALLBACK_AMOUNT: Amount = { quantity: 100, unit: "g", base: 100 };
 
 export type AmountSource = "package" | "serving" | "unknown";
 
-function mapAmount(p: OffProduct): { amount: Amount; source: AmountSource } {
+interface MappedAmount {
+  amount: Amount;
+  source: AmountSource;
+  // How many of `amount` the pack holds, when it holds several countable pieces
+  // (8 buns, 6 cans). Null for things measured rather than counted — rice, meat,
+  // protein powder — where the pack is one continuous amount.
+  pieces: number | null;
+}
+
+// The package size as OFF records it, ignoring any piece structure.
+function packageAmount(p: OffProduct): Amount | null {
   const qty = num(p.product_quantity);
   const qtyUnit = p.product_quantity_unit ? normalizeUnit(p.product_quantity_unit) : null;
-
   // Best case: OFF normalized the size and said what unit it's in.
-  if (qty !== null && qty > 0 && qtyUnit) {
-    return { amount: toAmount(qty * qtyUnit.base, qtyUnit.liquid), source: "package" };
-  }
+  if (qty !== null && qty > 0 && qtyUnit) return toAmount(qty * qtyUnit.base, qtyUnit.liquid);
   // The label text. Tried before a unit-less product_quantity, because reading
   // that as grams invents a number ("12 x 325ml cans" is stored as a bare 11).
   const fromText = parseAmountText(p.quantity);
-  if (fromText) return { amount: fromText, source: "package" };
+  if (fromText) return fromText;
   // A bare product_quantity with no unit: OFF keeps those in grams.
-  if (qty !== null && qty > 0) return { amount: toAmount(qty, false), source: "package" };
+  if (qty !== null && qty > 0) return toAmount(qty, false);
+  return null;
+}
+
+function mapAmount(p: OffProduct): MappedAmount {
+  // A pack of several: the item is one of them, counted. This is what makes a
+  // pack of 8 buns eight buns rather than one 312 g lump of bread.
+  const multipack = parseMultipack(p.quantity);
+  if (multipack) {
+    return { amount: multipack.piece, source: "package", pieces: multipack.count };
+  }
+
+  const pack = packageAmount(p);
+  if (pack) {
+    const split = piecesInPackage(p, pack);
+    if (split) return { amount: split.piece, source: "package", pieces: split.count };
+    return { amount: pack, source: "package", pieces: null };
+  }
 
   const fromServing = amountFromServing(p);
-  if (fromServing) return { amount: fromServing, source: "serving" };
+  if (fromServing) return { amount: fromServing, source: "serving", pieces: null };
 
-  return { amount: FALLBACK_AMOUNT, source: "unknown" };
+  return { amount: FALLBACK_AMOUNT, source: "unknown", pieces: null };
 }
 
 // Atwater factors: the calories a gram of each macro carries. Used only when
@@ -406,7 +515,7 @@ function mapNutrition(
 
 // Exported for direct testing; lookupBarcode is the fetch wrapper around it.
 export function mapProduct(p: OffProduct): ScannedProduct {
-  const { amount, source } = mapAmount(p);
+  const { amount, source, pieces } = mapAmount(p);
   const liquid = amount.unit === "ml" || amount.unit === "l";
   const { nutrition, nutritionPer100, caloriesDerived, nutritionRebased } = mapNutrition(
     p,
@@ -424,6 +533,7 @@ export function mapProduct(p: OffProduct): ScannedProduct {
     nutritionPer100,
     caloriesDerived,
     nutritionRebased,
+    pieces,
   };
 }
 
