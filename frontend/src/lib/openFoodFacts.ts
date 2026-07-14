@@ -28,6 +28,10 @@ export interface ScannedProduct {
   // true = the label had no energy value, so calories were computed from the
   // macros (Atwater factors) instead of read off the product.
   caloriesDerived: boolean;
+  // true = the database held this product's per-serving figures in its per-100 g
+  // fields (a common contributor mistake on North American labels, which print
+  // per serving). They were put back on a per-100 footing before scaling.
+  nutritionRebased: boolean;
 }
 
 interface OffProduct {
@@ -304,10 +308,34 @@ function per100(
   return (serving / servingGrams) * 100;
 }
 
+// A label pasted into the wrong column. North American labels print their
+// figures per serving ("per 1 bottle (340 mL)"), and contributors routinely file
+// those numbers as if they were per 100 g. The row stays self-consistent — Open
+// Food Facts recomputes its per-serving fields from the bad per-100 ones, and
+// the energy still matches the macros — so the corruption is invisible except
+// as a physical impossibility.
+//
+// The bound that catches it: no drinkable liquid comes near 15 g of protein per
+// 100 ml. The densest protein shakes sit around 10, and the rich liquids that
+// might otherwise trip a calorie- or mass-based test (cream, condensed milk,
+// oils) are all far below it on protein specifically.
+function looksMisfiled(basis: Nutrition, liquid: boolean): boolean {
+  const macroMass = basis.protein + basis.fat + basis.carbs;
+  // Nothing can carry more macro mass than its own mass, or out-energise pure fat.
+  if (macroMass > 100 || basis.calories > 900) return true;
+  return liquid && basis.protein > 15;
+}
+
 function mapNutrition(
   p: OffProduct,
-  base: number
-): { nutrition: Nutrition | null; nutritionPer100: Nutrition | null; caloriesDerived: boolean } {
+  base: number,
+  liquid: boolean
+): {
+  nutrition: Nutrition | null;
+  nutritionPer100: Nutrition | null;
+  caloriesDerived: boolean;
+  nutritionRebased: boolean;
+} {
   const n = p.nutriments ?? {};
   const servingGrams = num(p.serving_quantity);
 
@@ -327,11 +355,16 @@ function mapNutrition(
   const kcal100 = labelKcal ?? macroKcal;
 
   if (kcal100 === null && protein100 === null && fat100 === null && carbs100 === null) {
-    return { nutrition: null, nutritionPer100: null, caloriesDerived: false };
+    return {
+      nutrition: null,
+      nutritionPer100: null,
+      caloriesDerived: false,
+      nutritionRebased: false,
+    };
   }
 
   // The label, per 100 g — the single basis everything else is scaled from.
-  const basis: Nutrition = {
+  let basis: Nutrition = {
     calories: kcal100 ?? 0,
     protein: protein100 ?? 0,
     fat: fat100 ?? 0,
@@ -339,6 +372,21 @@ function mapNutrition(
     sugar: per100(n, "sugars", servingGrams) ?? 0,
     fiber: per100(n, "fiber", servingGrams) ?? 0,
   };
+
+  // Values that can't be per 100 g are the serving's, misfiled. Put them back on
+  // a per-100 footing by dividing out the serving they were really measured over.
+  const misfiled = servingGrams !== null && servingGrams > 0 && looksMisfiled(basis, liquid);
+  if (misfiled) {
+    const perServing = servingGrams / 100;
+    basis = {
+      calories: basis.calories / perServing,
+      protein: basis.protein / perServing,
+      fat: basis.fat / perServing,
+      carbs: basis.carbs / perServing,
+      sugar: basis.sugar / perServing,
+      fiber: basis.fiber / perServing,
+    };
+  }
 
   const factor = base / 100;
   return {
@@ -352,13 +400,19 @@ function mapNutrition(
     },
     nutritionPer100: basis,
     caloriesDerived: labelKcal === null && macroKcal !== null,
+    nutritionRebased: misfiled,
   };
 }
 
 // Exported for direct testing; lookupBarcode is the fetch wrapper around it.
 export function mapProduct(p: OffProduct): ScannedProduct {
   const { amount, source } = mapAmount(p);
-  const { nutrition, nutritionPer100, caloriesDerived } = mapNutrition(p, amount.base);
+  const liquid = amount.unit === "ml" || amount.unit === "l";
+  const { nutrition, nutritionPer100, caloriesDerived, nutritionRebased } = mapNutrition(
+    p,
+    amount.base,
+    liquid
+  );
   const brand = (p.brands ?? "").split(",")[0].trim();
   return {
     name: (p.product_name ?? "").trim() || brand,
@@ -369,6 +423,7 @@ export function mapProduct(p: OffProduct): ScannedProduct {
     nutrition,
     nutritionPer100,
     caloriesDerived,
+    nutritionRebased,
   };
 }
 

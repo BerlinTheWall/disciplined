@@ -34,8 +34,16 @@ function caveatsFor(product: ScannedProduct): string[] {
   }
   if (!product.nutrition) {
     caveats.push("No nutrition on record — the values below are estimated.");
-  } else if (product.caloriesDerived) {
-    caveats.push("The label had no calorie figure — calculated from the macros.");
+  } else {
+    if (product.nutritionRebased) {
+      caveats.push(
+        "The database listed this product's per-serving figures as if they were " +
+          "per 100 g — corrected. Worth a glance against the label."
+      );
+    }
+    if (product.caloriesDerived) {
+      caveats.push("The label had no calorie figure — calculated from the macros.");
+    }
   }
   return caveats;
 }
