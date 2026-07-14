@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android blocks plaintext HTTP by default. The dev backend runs over http on
+  the LAN, so it is allowed here by host — a blanket usesCleartextTraffic would
+  also permit plaintext to the open internet, which the release build must not.
+  These entries can all go once the backend is on HTTPS.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- This machine on Wi-Fi, for a phone on the same network. -->
+        <domain includeSubdomains="false">192.168.2.35</domain>
+        <!-- The host machine, as seen from the Android emulator. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>
