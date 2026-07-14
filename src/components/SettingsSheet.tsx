@@ -5,9 +5,10 @@ import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
 import Collapse from "./Collapse";
+import Switch from "./Switch";
 import { speak, speakAssistant, stopSpeaking, useVoices } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
-import { spring, tap } from "@/lib/motion";
+import { tap } from "@/lib/motion";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -24,30 +25,6 @@ function voiceLabel(v: SpeechSynthesisVoice) {
     .replace(/^(Microsoft|Google|Apple) /, "")
     .replace(/ ?[-–—] .*$/, "")
     .replace(/ \(.*\)$/, "");
-}
-
-// An iOS-style toggle switch. The switch itself is the only hit target — a row
-// this dense is easy to brush while scrolling, and a stray tap on the label
-// should not flip a setting.
-function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
-  return (
-    <motion.button
-      onClick={onToggle}
-      whileTap={tap}
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      className={`w-10.5 h-6.5 rounded-full flex items-center px-0.5 shrink-0 transition-colors duration-200 ${
-        on ? "bg-fg" : "bg-surface-subtle"
-      }`}
-    >
-      <motion.span
-        className="w-5.5 h-5.5 rounded-full bg-surface shadow-sm"
-        animate={{ x: on ? 16 : 0 }}
-        transition={spring.snappy}
-      />
-    </motion.button>
-  );
 }
 
 // A titled group of rows rendered as one card, iOS-settings style: hairline

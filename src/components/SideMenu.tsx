@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { LogOut, Palette, Settings, X } from "lucide-react";
 
+import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { tap } from "@/lib/motion";
@@ -123,31 +124,13 @@ export default function SideMenu({
                 <Settings size={20} className="text-fg-muted" strokeWidth={1.8} />
                 <span className="font-medium text-fg-muted">Settings</span>
               </motion.button>
-              <motion.button
-                onClick={toggleTheme}
-                whileTap={tap}
-                className="flex items-center justify-between w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
-              >
+              <div className="flex items-center justify-between w-full px-4 py-3">
                 <div className="flex items-center gap-3">
                   <Palette size={20} className="text-fg-muted" strokeWidth={1.8} />
                   <span className="font-medium text-fg-muted">Theme</span>
                 </div>
-                <div
-                  className={`w-10 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 ${theme === "dark" ? "bg-fg" : "bg-surface-subtle"}`}
-                >
-                  <motion.div
-                    className="w-5 h-5 rounded-full bg-surface shadow-sm"
-                    animate={{
-                      x: theme === "dark" ? 16 : 0,
-                    }}
-                    transition={{
-                      type: "spring",
-                      damping: 25,
-                      stiffness: 400,
-                    }}
-                  />
-                </div>
-              </motion.button>
+                <Switch on={theme === "dark"} onToggle={toggleTheme} label="Dark mode" />
+              </div>
             </div>
 
             {/* Log out */}
