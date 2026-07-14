@@ -4,7 +4,7 @@ import { Minus, Package, Plus } from "lucide-react";
 
 import AddGroceryItemSheet from "@/components/expenses/AddGroceryItemSheet";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
-import { formatUnit, money } from "@/lib/grocery";
+import { formatStock, formatUnit, money } from "@/lib/grocery";
 import { press, spring, tap } from "@/lib/motion";
 import { useGroceryStore } from "@/store/groceryStore";
 import type { GroceryItem } from "@/types/grocery";
@@ -91,9 +91,9 @@ export default function FoodPage() {
                   <Minus size={14} />
                 </motion.button>
                 <span
-                  className={`min-w-16 text-center text-xs font-medium tabular-nums ${out ? "text-red-500" : "text-fg"}`}
+                  className={`min-w-20 text-center text-xs font-medium tabular-nums ${out ? "text-red-500" : "text-fg"}`}
                 >
-                  {out ? "Out" : formatUnit(Math.round(item.stock * 10) / 10, item.unit)}
+                  {formatStock(item)}
                 </span>
                 <motion.button
                   onClick={() => adjustStock(item.id, item.quantity)}

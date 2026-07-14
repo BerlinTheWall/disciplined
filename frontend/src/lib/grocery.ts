@@ -56,6 +56,18 @@ export function formatUnit(quantity: number, unit: Unit): string {
   return `${quantity} ${unit}`;
 }
 
+// On-hand stock, read the way you'd hold it: whole packs of a packaged item
+// count ("3 × 500 ml"), while a part-pack amount is just the amount ("750 g").
+export function formatStock(item: GroceryItem): string {
+  const stock = round1(item.stock);
+  if (stock <= 0) return "Out";
+  const packs = item.quantity > 0 ? stock / item.quantity : 0;
+  if (packs > 1 && Number.isInteger(packs)) {
+    return `${packs} × ${formatUnit(item.quantity, item.unit)}`;
+  }
+  return formatUnit(stock, item.unit);
+}
+
 export interface ListTotals {
   count: number;
   cost: number;

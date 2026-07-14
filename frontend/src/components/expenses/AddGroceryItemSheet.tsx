@@ -13,6 +13,7 @@ import {
   FOOD_CATEGORY_KEYS,
   type FoodCategoryKey,
 } from "@/lib/foodCategories";
+import { formatUnit } from "@/lib/grocery";
 import { spring, tap } from "@/lib/motion";
 import {
   emptyNutrition,
@@ -29,6 +30,13 @@ import type { GroceryItem } from "@/types/grocery";
 import BottomSheet from "../BottomSheet";
 import Collapse from "../Collapse";
 import { useConfirm } from "../ConfirmDialog";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// How many reference amounts (packs) a stock figure comes to.
+function toPacks(stockInUnit: number, quantity: number): number {
+  return quantity > 0 ? round2(stockInUnit / quantity) : 0;
+}
 
 interface AddGroceryItemSheetProps {
   isOpen: boolean;
@@ -59,7 +67,11 @@ export default function AddGroceryItemSheet({
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [quantity, setQuantity] = useState("100");
   const [unit, setUnit] = useState<Unit>("g");
-  const [stock, setStock] = useState("100");
+  // Stock is stored in `unit`, but entered either as a count of packs (the
+  // usual case — "three bottles") or as the raw amount. `stock` holds whatever
+  // the current mode means; handleSubmit converts it back.
+  const [stock, setStock] = useState("1");
+  const [stockMode, setStockMode] = useState<"packs" | "unit">("packs");
   const [price, setPrice] = useState("");
   const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition());
   const [auto, setAuto] = useState(true);
@@ -75,7 +87,12 @@ export default function AddGroceryItemSheet({
       setCategoryTouched(true);
       setQuantity(String(editItem.quantity));
       setUnit(editItem.unit);
-      setStock(String(editItem.stock));
+      // A whole number of packs reads naturally as a count; a part-pack amount
+      // (750 g of a 100 g reference) is clearer as the raw number.
+      const packs = toPacks(editItem.stock, editItem.quantity);
+      const asPacks = Number.isInteger(packs);
+      setStockMode(asPacks ? "packs" : "unit");
+      setStock(String(asPacks ? packs : editItem.stock));
       setPrice(String(editItem.price));
       setNutrition(editItem.nutrition);
       setAuto(editItem.autoNutrition);
@@ -85,7 +102,8 @@ export default function AddGroceryItemSheet({
       setCategoryTouched(false);
       setQuantity("100");
       setUnit("g");
-      setStock("100");
+      setStock("1");
+      setStockMode("packs");
       setPrice("");
       setNutrition(emptyNutrition());
       setAuto(true);
@@ -98,6 +116,29 @@ export default function AddGroceryItemSheet({
     if (!auto) return;
     setNutrition(estimateNutrition(name, category, qtyNum, unit));
   }, [auto, name, category, qtyNum, unit]);
+
+  // The typed stock, resolved to the amount actually stored (always in `unit`).
+  const stockValue = parseFloat(stock);
+  const stockInUnit = stockMode === "packs" ? round2(stockValue * qtyNum) : round2(stockValue);
+
+  // Spells the conversion out, so a count never hides what it means.
+  const stockHint = !isFinite(stockInUnit)
+    ? "Set how much you have on hand."
+    : stockInUnit <= 0
+      ? "Out of stock."
+      : stockMode === "packs"
+        ? `= ${formatUnit(stockInUnit, unit)} in stock`
+        : `= ${round2(toPacks(stockInUnit, qtyNum))} × ${formatUnit(qtyNum, unit)}`;
+
+  // Switching the mode keeps the amount you have — only how it's written changes.
+  function switchStockMode(next: "packs" | "unit") {
+    if (next === stockMode) return;
+    const value = parseFloat(stock);
+    if (isFinite(value) && isFinite(qtyNum) && qtyNum > 0) {
+      setStock(String(next === "packs" ? round2(value / qtyNum) : round2(value * qtyNum)));
+    }
+    setStockMode(next);
+  }
 
   function handleNameChange(value: string) {
     setName(value);
@@ -125,8 +166,12 @@ export default function AddGroceryItemSheet({
     }
     setQuantity(String(product.quantity));
     setUnit(product.unit);
-    // A fresh scan usually means one package just came home.
-    if (!isEditing) setStock(String(product.quantity));
+    // A fresh scan usually means one package just came home — and in packs, so
+    // three bottles of the same drink is a "3", not 3 × the millilitres.
+    if (!isEditing) {
+      setStockMode("packs");
+      setStock("1");
+    }
     if (product.nutrition) {
       setNutrition(product.nutrition);
       setAuto(false);
@@ -150,15 +195,14 @@ export default function AddGroceryItemSheet({
     if (!isFinite(qtyNum) || qtyNum <= 0) return;
     const priceNum = parseFloat(price);
 
-    const stockNum = parseFloat(stock);
-
     const payload = {
       name: name.trim() || FOOD_CATEGORIES[category].label,
       category,
       price: isFinite(priceNum) ? Math.round(priceNum * 100) / 100 : 0,
       quantity: qtyNum,
       unit,
-      stock: isFinite(stockNum) && stockNum > 0 ? stockNum : 0,
+      // Always the amount in `unit`, whichever way it was typed.
+      stock: isFinite(stockInUnit) && stockInUnit > 0 ? stockInUnit : 0,
       nutrition,
       autoNutrition: auto,
     };
@@ -221,9 +265,13 @@ export default function AddGroceryItemSheet({
           reopened sheet starts with a clean field and status. */}
       <BarcodeLookup key={`${isOpen}-${editItem?.id ?? "new"}`} onProduct={applyScannedProduct} />
 
-      {/* Category */}
-      <label className="text-sm text-fg-muted mb-2 block">Category</label>
-      <div className="flex gap-2 flex-wrap mb-4">
+      {/* Category — one row of colored icons rather than nine wrapped chips.
+          The name of the selected one rides on the label, so nothing is lost. */}
+      <div className="flex items-baseline justify-between mb-2">
+        <label className="text-sm text-fg-muted">Category</label>
+        <span className="text-sm font-medium text-fg pr-1">{FOOD_CATEGORIES[category].label}</span>
+      </div>
+      <div className="flex gap-1.5 mb-4 overflow-x-auto p-0.5" style={{ scrollbarWidth: "none" }}>
         {FOOD_CATEGORY_KEYS.map((key) => {
           const { icon, label, color } = FOOD_CATEGORIES[key];
           const Icon = icon ?? FALLBACK_FOOD_ICON;
@@ -233,17 +281,19 @@ export default function AddGroceryItemSheet({
               key={key}
               onClick={() => pickCategory(key)}
               whileTap={tap}
-              className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium ${
-                selected ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-muted"
-              }`}
+              title={label}
+              aria-label={label}
+              aria-pressed={selected}
+              animate={{ scale: selected ? 1 : 0.92 }}
+              transition={spring.snappy}
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+              style={{
+                backgroundColor: selected ? color : "var(--surface-raised)",
+                color: selected ? "#fff" : color,
+                boxShadow: selected ? "0 0 0 2px var(--fg)" : undefined,
+              }}
             >
-              <span
-                className="w-6 h-6 rounded-full flex items-center justify-center text-white shrink-0"
-                style={{ backgroundColor: color }}
-              >
-                <Icon size={13} />
-              </span>
-              {label}
+              <Icon size={16} />
             </motion.button>
           );
         })}
@@ -294,23 +344,50 @@ export default function AddGroceryItemSheet({
 
       <Collapse open={showDetails}>
         <>
-          {/* In stock */}
+          {/* In stock — counted in packs by default ("3 bottles of it"), since
+              that's how you actually hold it. The raw amount stays one tap away
+              for anything loose, like 750 g of chicken. */}
           <label className="text-sm text-fg-muted mb-1 block">
             In stock <span className="text-fg-faint">(how much you have now)</span>
           </label>
-          <div className="relative mb-4">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={stock}
-              onChange={(e) => setStock(e.target.value)}
-              placeholder="0"
-              className="w-full text-base border border-border-input rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-border-focus"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-fg-faint">
-              {unit}
-            </span>
+          <div className="flex gap-2">
+            <div className="relative flex-1 min-w-0">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                placeholder="0"
+                className="w-full text-base border border-border-input rounded-xl px-4 py-3 pr-10 focus:outline-none focus:border-border-focus"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-fg-faint">
+                {stockMode === "packs" ? "×" : unit}
+              </span>
+            </div>
+            <div className="flex bg-surface-raised rounded-xl p-1">
+              {(["packs", "unit"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => switchStockMode(m)}
+                  className="relative px-3 py-1.5 rounded-lg text-sm font-medium"
+                >
+                  {stockMode === m && (
+                    <motion.div
+                      layoutId="stockModeToggle"
+                      transition={spring.snappy}
+                      className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+                    />
+                  )}
+                  <span
+                    className={`relative z-10 ${stockMode === m ? "text-fg" : "text-fg-muted"}`}
+                  >
+                    {m === "packs" ? "packs" : unit}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
+          <p className="text-xs text-fg-faint mt-1.5 mb-4">{stockHint}</p>
 
           {/* Price */}
           <label className="text-sm text-fg-muted mb-1 block">Price</label>

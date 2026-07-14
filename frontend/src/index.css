@@ -118,4 +118,17 @@ body {
   textarea::placeholder {
     color: var(--fg-faint);
   }
+
+  /* Number fields here are typed or stepped by the app's own controls, and each
+     carries a suffix label ($, g, kcal, ×) that the native arrows sit on top of. */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
