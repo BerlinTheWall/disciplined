@@ -1,6 +1,14 @@
-// Camera barcode scanning through the browser's BarcodeDetector API. Chrome on
-// Android (and ChromeOS/macOS) supports it; where it's missing the Scan button
-// simply doesn't render and the barcode field accepts a typed code instead.
+// Camera barcode scanning. Two decoders, same interface:
+//
+//   1. The browser's own BarcodeDetector, when it exists (Chrome on Android /
+//      ChromeOS / macOS) — native speed, nothing to download.
+//   2. ZXing otherwise (Chrome on Windows, Firefox, Safari…), loaded on demand
+//      so its ~200 kB stays out of the main bundle until someone scans.
+//
+// So the Scan button shows wherever there's a camera. Note getUserMedia only
+// exists in a secure context: https, or localhost during development. Over
+// plain http on a LAN address the browser withholds the camera entirely, and
+// the button hides — the typed-barcode field still works.
 
 // BarcodeDetector is a draft spec, still absent from TypeScript's DOM lib.
 interface DetectedBarcode {
@@ -24,36 +32,44 @@ declare global {
 }
 
 // Retail product formats only — keeps the scanner from locking onto QR codes.
-const PRODUCT_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
+const DETECTOR_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 
 const DETECT_INTERVAL_MS = 150;
 
 export function canScanBarcodes(): boolean {
-  return !!window.BarcodeDetector && !!navigator.mediaDevices?.getUserMedia;
+  return !!navigator.mediaDevices?.getUserMedia;
 }
 
 export interface BarcodeScanSession {
   stop: () => void;
 }
 
-// Streams the back camera into `video` and polls for a product barcode.
-// Resolves through `onCode` exactly once, with the session already stopped.
-// Throws (from the getUserMedia call) when the camera can't be opened.
+// Streams the back camera into `video` and watches for a product barcode.
+// Calls `onCode` at most once, with the camera already released. Throws when
+// the camera can't be opened (no permission, no device).
 export async function startBarcodeScan(
   video: HTMLVideoElement,
   onCode: (code: string) => void
 ): Promise<BarcodeScanSession> {
-  const Detector = window.BarcodeDetector;
-  if (!Detector) throw new Error("Barcode scanning isn't supported in this browser.");
-
-  const supported = await Detector.getSupportedFormats();
-  const formats = PRODUCT_FORMATS.filter((f) => supported.includes(f));
-  const detector = new Detector({ formats: formats.length > 0 ? formats : supported });
-
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" },
     audio: false,
   });
+
+  return window.BarcodeDetector
+    ? scanWithDetector(window.BarcodeDetector, stream, video, onCode)
+    : scanWithZxing(stream, video, onCode);
+}
+
+async function scanWithDetector(
+  Detector: BarcodeDetectorCtor,
+  stream: MediaStream,
+  video: HTMLVideoElement,
+  onCode: (code: string) => void
+): Promise<BarcodeScanSession> {
+  const supported = await Detector.getSupportedFormats();
+  const formats = DETECTOR_FORMATS.filter((f) => supported.includes(f));
+  const detector = new Detector({ formats: formats.length > 0 ? formats : supported });
 
   let stopped = false;
   let timer: number | undefined;
@@ -67,14 +83,10 @@ export async function startBarcodeScan(
   };
 
   video.srcObject = stream;
-  await video.play().catch(() => {
-    // Autoplay rejection (e.g. the sheet closed mid-open) — treated as stopped.
-    stop();
-  });
+  await video.play().catch(stop); // autoplay rejected (sheet closed mid-open)
 
   async function poll() {
     if (stopped) return;
-    // Detection failures on an odd frame are par for the course — keep polling.
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       try {
         const barcodes = await detector.detect(video);
@@ -85,12 +97,55 @@ export async function startBarcodeScan(
           return;
         }
       } catch {
-        // ignore and retry on the next frame
+        // A bad frame is normal — keep watching.
       }
     }
     timer = window.setTimeout(() => void poll(), DETECT_INTERVAL_MS);
   }
 
   void poll();
+  return { stop };
+}
+
+async function scanWithZxing(
+  stream: MediaStream,
+  video: HTMLVideoElement,
+  onCode: (code: string) => void
+): Promise<BarcodeScanSession> {
+  const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
+    import("@zxing/browser"),
+    import("@zxing/library"),
+  ]);
+
+  const hints = new Map([
+    [
+      DecodeHintType.POSSIBLE_FORMATS,
+      [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E],
+    ],
+  ]);
+  const reader = new BrowserMultiFormatReader(hints);
+
+  let stopped = false;
+  // Boxed so `stop` can reach the controls that only exist after the call below.
+  const scanner: { controls?: { stop: () => void } } = {};
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    scanner.controls?.stop(); // releases the camera tracks too
+    for (const track of stream.getTracks()) track.stop();
+    video.srcObject = null;
+  };
+
+  // The callback fires on every frame — with a result only when one decodes.
+  // Errors on undecodable frames are the normal case, so they're ignored.
+  scanner.controls = await reader.decodeFromStream(stream, video, (result) => {
+    const code = result?.getText();
+    if (!code || stopped) return;
+    stop();
+    onCode(code);
+  });
+
+  if (stopped) scanner.controls.stop(); // closed while the decoder was loading
   return { stop };
 }

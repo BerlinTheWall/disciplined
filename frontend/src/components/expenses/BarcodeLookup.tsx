@@ -135,6 +135,7 @@ function ScannerOverlay({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(true);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -144,10 +145,21 @@ function ScannerOverlay({
     startBarcodeScan(video, onCode)
       .then((s) => {
         if (cancelled) s.stop();
-        else session = s;
+        else {
+          session = s;
+          setStarting(false);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setError("Couldn't open the camera — check the camera permission.");
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        // NotFoundError = no camera on this machine; NotAllowedError = blocked.
+        const name = e instanceof Error ? e.name : "";
+        setError(
+          name === "NotFoundError"
+            ? "No camera found on this device — type the barcode instead."
+            : "Couldn't open the camera — allow camera access and try again."
+        );
+        setStarting(false);
       });
     return () => {
       cancelled = true;
@@ -189,7 +201,10 @@ function ScannerOverlay({
             className="w-72 max-w-[80vw] h-40 rounded-2xl border-2 border-white/80"
             style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)" }}
           />
-          <p className="mt-4 text-sm font-medium text-white/85">Point the camera at a barcode</p>
+          <p className="mt-4 flex items-center gap-1.5 text-sm font-medium text-white/85">
+            {starting && <LoaderCircle size={14} className="animate-spin" />}
+            {starting ? "Starting camera…" : "Point the camera at a barcode"}
+          </p>
         </div>
       )}
 
