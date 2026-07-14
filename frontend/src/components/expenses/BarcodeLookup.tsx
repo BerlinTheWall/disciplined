@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 
 import { canScanBarcodes, startBarcodeScan, type BarcodeScanSession } from "@/lib/barcodeScanner";
 import { tap } from "@/lib/motion";
-import { lookupBarcode, type ScannedProduct } from "@/lib/openFoodFacts";
+import { lookupBarcode, RateLimitedError, type ScannedProduct } from "@/lib/openFoodFacts";
 import Collapse from "../Collapse";
 
 interface BarcodeLookupProps {
@@ -60,10 +60,13 @@ export default function BarcodeLookup({ onProduct }: BarcodeLookupProps) {
       } else {
         setStatus({ kind: "notFound" });
       }
-    } catch {
+    } catch (e) {
       setStatus({
         kind: "error",
-        message: "Couldn't reach the food database — check your connection.",
+        message:
+          e instanceof RateLimitedError
+            ? e.message
+            : "Couldn't reach the food database — check your connection.",
       });
     }
   }

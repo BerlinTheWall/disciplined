@@ -379,6 +379,22 @@ export function suggestCategory(name: string): FoodCategoryKey | null {
   return findKnownItem(name)?.category ?? null;
 }
 
+// The grams (≈ ml) an amount comes to — the basis every per-100g figure scales
+// against. Null for counted units, where no weight is implied on its own.
+export function amountInBase(quantity: number, unit: Unit): number | null {
+  if (!isFinite(quantity) || quantity <= 0) return null;
+  switch (unit) {
+    case "g":
+    case "ml":
+      return quantity;
+    case "kg":
+    case "l":
+      return quantity * 1000;
+    case "unit":
+      return null;
+  }
+}
+
 function toGrams(quantity: number, unit: Unit, gramsPerUnit: number): number {
   switch (unit) {
     case "g":

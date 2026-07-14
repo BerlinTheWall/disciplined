@@ -20,6 +20,10 @@ export interface ScannedProduct {
   // null = OFF has no nutrition for this product; leave the app's own estimator
   // in charge instead of writing zeros.
   nutrition: Nutrition | null;
+  // The label's own per-100 g (per-100 ml) figures — what `nutrition` above was
+  // scaled from. Kept so the form can re-scale if the amount is corrected: the
+  // values mean "per this amount", so they have to move with it.
+  nutritionPer100: Nutrition | null;
   // true = the label had no energy value, so calories were computed from the
   // macros (Atwater factors) instead of read off the product.
   caloriesDerived: boolean;
@@ -31,6 +35,7 @@ interface OffProduct {
   quantity?: string; // the raw label text, e.g. "12 x 33 cl", "16 oz"
   product_quantity?: number | string;
   product_quantity_unit?: string;
+  serving_quantity?: number | string; // grams in one serving
   nutriments?: Record<string, number | string | undefined>;
   pnns_groups_1?: string;
   pnns_groups_2?: string;
@@ -45,6 +50,9 @@ const FIELDS = [
   "quantity",
   "product_quantity",
   "product_quantity_unit",
+  // Lets nutrition be recovered from per-serving figures when a product was
+  // never recorded per 100 g.
+  "serving_quantity",
   "nutriments",
   "pnns_groups_1",
   "pnns_groups_2",
@@ -52,6 +60,8 @@ const FIELDS = [
 ].join(",");
 
 const LOOKUP_TIMEOUT_MS = 10_000;
+// Long enough for the throttle window to reopen, short enough not to feel stuck.
+const RETRY_DELAY_MS = 1_500;
 
 // Open Food Facts' top-level food groups (pnns_groups_1) → app category.
 // "Fruits and vegetables" is resolved via pnns_groups_2 below.
@@ -241,41 +251,68 @@ function mapAmount(p: OffProduct): { amount: Amount; known: boolean } {
 // the 0 kcal that reading a missing field would otherwise produce.
 const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
 
+// Each nutrient per 100 g, whichever way the label recorded it. OFF normally
+// publishes `*_100g`; when a product was only ever entered per serving, those
+// are absent, so the serving figures are rescaled instead of giving up.
+function per100(
+  n: Record<string, number | string | undefined>,
+  key: string,
+  servingGrams: number | null
+): number | null {
+  const direct = num(n[`${key}_100g`]);
+  if (direct !== null) return direct;
+  const serving = num(n[`${key}_serving`]);
+  if (serving === null || servingGrams === null || servingGrams <= 0) return null;
+  return (serving / servingGrams) * 100;
+}
+
 function mapNutrition(
   p: OffProduct,
   base: number
-): { nutrition: Nutrition | null; caloriesDerived: boolean } {
+): { nutrition: Nutrition | null; nutritionPer100: Nutrition | null; caloriesDerived: boolean } {
   const n = p.nutriments ?? {};
-  const protein100 = num(n["proteins_100g"]);
-  const fat100 = num(n["fat_100g"]);
-  const carbs100 = num(n["carbohydrates_100g"]);
+  const servingGrams = num(p.serving_quantity);
 
-  // Energy: kcal if the label has it, else the kJ figure converted, else
-  // computed from the macros.
-  const kj = num(n["energy_100g"]) ?? num(n["energy-kj_100g"]);
+  const protein100 = per100(n, "proteins", servingGrams);
+  const fat100 = per100(n, "fat", servingGrams);
+  const carbs100 = per100(n, "carbohydrates", servingGrams);
+
+  // Energy: the label's kcal, else its kJ converted, else computed from macros.
+  const kj = per100(n, "energy", servingGrams) ?? per100(n, "energy-kj", servingGrams);
   const macroKcal =
     protein100 === null && fat100 === null && carbs100 === null
       ? null
       : (protein100 ?? 0) * KCAL_PER_G.protein +
         (carbs100 ?? 0) * KCAL_PER_G.carbs +
         (fat100 ?? 0) * KCAL_PER_G.fat;
-  const labelKcal = num(n["energy-kcal_100g"]) ?? (kj === null ? null : kj / 4.184);
+  const labelKcal = per100(n, "energy-kcal", servingGrams) ?? (kj === null ? null : kj / 4.184);
   const kcal100 = labelKcal ?? macroKcal;
 
   if (kcal100 === null && protein100 === null && fat100 === null && carbs100 === null) {
-    return { nutrition: null, caloriesDerived: false };
+    return { nutrition: null, nutritionPer100: null, caloriesDerived: false };
   }
+
+  // The label, per 100 g — the single basis everything else is scaled from.
+  const basis: Nutrition = {
+    calories: kcal100 ?? 0,
+    protein: protein100 ?? 0,
+    fat: fat100 ?? 0,
+    carbs: carbs100 ?? 0,
+    sugar: per100(n, "sugars", servingGrams) ?? 0,
+    fiber: per100(n, "fiber", servingGrams) ?? 0,
+  };
 
   const factor = base / 100;
   return {
     nutrition: {
-      calories: Math.round((kcal100 ?? 0) * factor),
-      protein: round1((protein100 ?? 0) * factor),
-      fat: round1((fat100 ?? 0) * factor),
-      carbs: round1((carbs100 ?? 0) * factor),
-      sugar: round1((num(n["sugars_100g"]) ?? 0) * factor),
-      fiber: round1((num(n["fiber_100g"]) ?? 0) * factor),
+      calories: Math.round(basis.calories * factor),
+      protein: round1(basis.protein * factor),
+      fat: round1(basis.fat * factor),
+      carbs: round1(basis.carbs * factor),
+      sugar: round1(basis.sugar * factor),
+      fiber: round1(basis.fiber * factor),
     },
+    nutritionPer100: basis,
     caloriesDerived: labelKcal === null && macroKcal !== null,
   };
 }
@@ -283,7 +320,7 @@ function mapNutrition(
 // Exported for direct testing; lookupBarcode is the fetch wrapper around it.
 export function mapProduct(p: OffProduct): ScannedProduct {
   const { amount, known } = mapAmount(p);
-  const { nutrition, caloriesDerived } = mapNutrition(p, amount.base);
+  const { nutrition, nutritionPer100, caloriesDerived } = mapNutrition(p, amount.base);
   const brand = (p.brands ?? "").split(",")[0].trim();
   return {
     name: (p.product_name ?? "").trim() || brand,
@@ -292,28 +329,61 @@ export function mapProduct(p: OffProduct): ScannedProduct {
     unit: amount.unit,
     amountKnown: known,
     nutrition,
+    nutritionPer100,
     caloriesDerived,
   };
 }
 
-// Resolves to null when the barcode isn't in the database; throws on network
-// or server failures (the UI tells those cases apart).
-export async function lookupBarcode(code: string): Promise<ScannedProduct | null> {
-  const digits = code.replace(/\D/g, "");
-  if (!digits) return null;
+// Thrown when Open Food Facts turns us away for asking too fast, so the UI can
+// say "wait a moment" rather than blaming the connection.
+export class RateLimitedError extends Error {
+  constructor() {
+    super("The food database is busy — wait a few seconds and scan again.");
+    this.name = "RateLimitedError";
+  }
+}
+
+async function fetchProduct(digits: string): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
-  let res: Response;
   try {
-    res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${digits}?fields=${FIELDS}`, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    });
+    return await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${digits}?fields=${FIELDS}`,
+      { signal: controller.signal, headers: { Accept: "application/json" } }
+    );
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Resolves to null when the barcode isn't in the database; throws on network or
+// server failures (the UI tells those cases apart).
+//
+// Open Food Facts throttles hard: several lookups in quick succession get a 429
+// whose error page carries no CORS headers, so in the browser it doesn't even
+// arrive as a status — fetch just rejects. Both shapes are therefore retried
+// once after a pause, which is enough to ride out a burst of scans.
+export async function lookupBarcode(code: string): Promise<ScannedProduct | null> {
+  const digits = code.replace(/\D/g, "");
+  if (!digits) return null;
+
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    try {
+      res = await fetchProduct(digits);
+    } catch {
+      res = null; // network error, or a CORS-less 429 — worth one retry
+      continue;
+    }
+    if (res.status !== 429) break;
+  }
+
+  if (res === null) throw new RateLimitedError();
+  if (res.status === 429) throw new RateLimitedError();
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`product lookup failed (${res.status})`);
+
   // A malformed code can get an HTML error page with a 200 — treat anything
   // that isn't JSON as "no such product" rather than letting the parse throw.
   let body: { status?: number; product?: OffProduct };

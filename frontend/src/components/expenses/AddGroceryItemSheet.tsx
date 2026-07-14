@@ -13,9 +13,10 @@ import {
   FOOD_CATEGORY_KEYS,
   type FoodCategoryKey,
 } from "@/lib/foodCategories";
-import { formatUnit } from "@/lib/grocery";
+import { formatUnit, scaleNutrition } from "@/lib/grocery";
 import { spring, tap } from "@/lib/motion";
 import {
+  amountInBase,
   emptyNutrition,
   estimateNutrition,
   NUTRITION_FIELDS,
@@ -75,6 +76,11 @@ export default function AddGroceryItemSheet({
   const [price, setPrice] = useState("");
   const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition());
   const [auto, setAuto] = useState(true);
+  // The scanned label's per-100 g figures. While it's set, the nutrition below
+  // is the label's — so it must be re-scaled whenever the amount changes, or
+  // correcting a wrong package size would leave the calories behind. Cleared
+  // the moment the user takes the values over by hand.
+  const [scanBasis, setScanBasis] = useState<Nutrition | null>(null);
   // Price / stock / nutrition are tucked away by default so a quick add is just
   // name + amount; editing an existing item opens them expanded.
   const [showDetails, setShowDetails] = useState(false);
@@ -96,6 +102,7 @@ export default function AddGroceryItemSheet({
       setPrice(String(editItem.price));
       setNutrition(editItem.nutrition);
       setAuto(editItem.autoNutrition);
+      setScanBasis(null);
     } else {
       setName("");
       setCategory("protein");
@@ -107,6 +114,7 @@ export default function AddGroceryItemSheet({
       setPrice("");
       setNutrition(emptyNutrition());
       setAuto(true);
+      setScanBasis(null);
     }
   }, [editItem]);
 
@@ -116,6 +124,15 @@ export default function AddGroceryItemSheet({
     if (!auto) return;
     setNutrition(estimateNutrition(name, category, qtyNum, unit));
   }, [auto, name, category, qtyNum, unit]);
+
+  // Scanned values are "per the amount above" — so correcting a wrong package
+  // size (or switching g to kg) has to carry the label's numbers with it.
+  useEffect(() => {
+    if (auto || !scanBasis) return;
+    const base = amountInBase(qtyNum, unit);
+    if (base === null) return; // counted units imply no weight to scale by
+    setNutrition(scaleNutrition(scanBasis, base / 100));
+  }, [auto, scanBasis, qtyNum, unit]);
 
   // The typed stock, resolved to the amount actually stored (always in `unit`).
   const stockValue = parseFloat(stock);
@@ -174,8 +191,10 @@ export default function AddGroceryItemSheet({
     }
     if (product.nutrition) {
       setNutrition(product.nutrition);
+      setScanBasis(product.nutritionPer100);
       setAuto(false);
     } else {
+      setScanBasis(null);
       setAuto(true);
     }
     setShowDetails(true);
@@ -184,10 +203,13 @@ export default function AddGroceryItemSheet({
   function setNutritionField(key: keyof Nutrition, raw: string) {
     const value = parseFloat(raw);
     setNutrition((prev) => ({ ...prev, [key]: isFinite(value) ? value : 0 }));
+    // Hand-entered values are the user's own; stop re-scaling them from the label.
+    setScanBasis(null);
     setAuto(false);
   }
 
   function reEstimate() {
+    setScanBasis(null);
     setAuto(true);
   }
 
