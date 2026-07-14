@@ -113,8 +113,10 @@ export default function AddGroceryItemSheet({
   }
 
   // A barcode matched on Open Food Facts: prefill the form with the product.
-  // Real label data beats the estimator, so auto turns off — unless OFF had no
-  // nutrition for this product, in which case the estimator stays in charge.
+  // Label data beats the estimator, so auto turns off — unless the database had
+  // no nutrition, in which case the estimator stays in charge and re-runs
+  // against the scanned name/category/amount. Quantity and unit are always the
+  // basis the nutrition was scaled to, so the two can't drift apart.
   function applyScannedProduct(product: ScannedProduct) {
     if (product.name) setName(product.name);
     if (product.category) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { CircleCheck, LoaderCircle, ScanBarcode, Search, X } from "lucide-react";
+import { CircleCheck, LoaderCircle, ScanBarcode, Search, TriangleAlert, X } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import { canScanBarcodes, startBarcodeScan, type BarcodeScanSession } from "@/lib/barcodeScanner";
@@ -16,9 +16,24 @@ interface BarcodeLookupProps {
 type Status =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "found"; name: string }
+  // caveats: what the database didn't know, so the form doesn't present a
+  // default (100 g, an estimate) as if it came off the label.
+  | { kind: "found"; name: string; caveats: string[] }
   | { kind: "notFound" }
   | { kind: "error"; message: string };
+
+function caveatsFor(product: ScannedProduct): string[] {
+  const caveats: string[] = [];
+  if (!product.amountKnown) {
+    caveats.push("Package size isn't in the database — set the amount yourself.");
+  }
+  if (!product.nutrition) {
+    caveats.push("No nutrition on record — the values below are estimated.");
+  } else if (product.caloriesDerived) {
+    caveats.push("The label had no calorie figure — calculated from the macros.");
+  }
+  return caveats;
+}
 
 // Barcode row for the grocery item sheet: scan with the camera (where the
 // browser supports it) or type a code, and the product's name, category,
@@ -36,7 +51,11 @@ export default function BarcodeLookup({ onProduct }: BarcodeLookupProps) {
     try {
       const product = await lookupBarcode(digits);
       if (product) {
-        setStatus({ kind: "found", name: product.name || "product" });
+        setStatus({
+          kind: "found",
+          name: product.name || "product",
+          caveats: caveatsFor(product),
+        });
         onProduct(product);
       } else {
         setStatus({ kind: "notFound" });
@@ -104,11 +123,19 @@ export default function BarcodeLookup({ onProduct }: BarcodeLookupProps) {
             </p>
           )}
           {status.kind === "found" && (
-            <p className="flex items-center gap-1.5 text-sm text-fg-muted">
-              <CircleCheck size={14} className="text-[#34d399]" />
-              Found <span className="font-medium text-fg">{status.name}</span> — details filled in
-              below.
-            </p>
+            <>
+              <p className="flex items-center gap-1.5 text-sm text-fg-muted">
+                <CircleCheck size={14} className="text-[#34d399]" />
+                Found <span className="font-medium text-fg">{status.name}</span> — details filled in
+                below.
+              </p>
+              {status.caveats.map((caveat) => (
+                <p key={caveat} className="mt-1 flex items-start gap-1.5 text-xs text-fg-faint">
+                  <TriangleAlert size={12} className="mt-0.5 shrink-0" />
+                  {caveat}
+                </p>
+              ))}
+            </>
           )}
           {status.kind === "notFound" && (
             <p className="text-sm text-fg-faint">
