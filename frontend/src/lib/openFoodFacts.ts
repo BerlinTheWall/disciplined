@@ -13,10 +13,11 @@ export interface ScannedProduct {
   category: FoodCategoryKey | null; // null = no confident mapping
   quantity: number;
   unit: Unit;
-  // false = the package size couldn't be read, so quantity/unit are the 100 g
-  // fallback (which the nutrition below is scaled to). The UI says so rather
-  // than passing the default off as scanned data.
-  amountKnown: boolean;
+  // Where quantity/unit came from: the package size ("package"), the serving
+  // size of a single-serve item ("serving" — a good guess, worth checking), or
+  // nothing at all ("unknown", so it's the 100 g the nutrition is quoted per).
+  // The UI says which, rather than passing a default off as scanned data.
+  amountSource: AmountSource;
   // null = OFF has no nutrition for this product; leave the app's own estimator
   // in charge instead of writing zeros.
   nutrition: Nutrition | null;
@@ -35,7 +36,9 @@ interface OffProduct {
   quantity?: string; // the raw label text, e.g. "12 x 33 cl", "16 oz"
   product_quantity?: number | string;
   product_quantity_unit?: string;
-  serving_quantity?: number | string; // grams in one serving
+  serving_size?: string; // as printed: "1 bottle (340 ml)", "40 g"
+  serving_quantity?: number | string; // normalized size of one serving
+  serving_quantity_unit?: string;
   nutriments?: Record<string, number | string | undefined>;
   pnns_groups_1?: string;
   pnns_groups_2?: string;
@@ -50,9 +53,11 @@ const FIELDS = [
   "quantity",
   "product_quantity",
   "product_quantity_unit",
-  // Lets nutrition be recovered from per-serving figures when a product was
-  // never recorded per 100 g.
+  // Single-serve products (shakes, cans) often record their size only as a
+  // serving; these also let nutrition be recovered from per-serving figures.
+  "serving_size",
   "serving_quantity",
+  "serving_quantity_unit",
   "nutriments",
   "pnns_groups_1",
   "pnns_groups_2",
@@ -198,20 +203,20 @@ function toAmount(base: number, liquid: boolean): Amount {
     : { quantity: round2(base), unit: "g", base };
 }
 
-// OFF's own normalized size — present for ~98% of products, but its unit can
-// be anything the contributor typed.
-function amountFromProductQuantity(p: OffProduct): Amount | null {
-  const qty = num(p.product_quantity);
-  if (qty === null || qty <= 0) return null;
-  const unit = normalizeUnit(p.product_quantity_unit ?? "g");
-  if (!unit) return null;
-  return toAmount(qty * unit.base, unit.liquid);
+// Any amount written as text: "1,5 L", "12 x 33 cl", "16 oz", "500g e",
+// "1 bottle (340 ml)". A parenthesised amount wins — that's where a serving
+// size keeps its real measure, next to a word like "bottle" we can't weigh.
+function parseAmountText(raw: string | undefined): Amount | null {
+  if (!raw) return null;
+  const paren = /\(([^)]+)\)/.exec(raw);
+  if (paren) {
+    const inner = parseMeasure(paren[1]);
+    if (inner) return inner;
+  }
+  return parseMeasure(raw);
 }
 
-// The raw label text, for the products OFF never normalized: "1,5 L",
-// "12 x 33 cl", "16 oz", "500g e".
-function amountFromQuantityString(raw: string | undefined): Amount | null {
-  if (!raw) return null;
+function parseMeasure(raw: string): Amount | null {
   const text = raw.toLowerCase().replace(",", ".");
   const number = "\\d+(?:\\.\\d+)?";
 
@@ -228,22 +233,55 @@ function amountFromQuantityString(raw: string | undefined): Amount | null {
     }
   }
 
-  const single = new RegExp(`(${number})\\s*([a-z. ]+)`).exec(text);
-  if (single) {
-    const unit = normalizeUnit(single[2]);
-    const value = parseFloat(single[1]);
+  // Otherwise the first number followed by a unit we recognise. Scanning
+  // onwards matters: "1 bottle 340 ml" must skip the bottle and find the ml.
+  const single = new RegExp(`(${number})\\s*([a-z. ]+)`, "g");
+  let m: RegExpExecArray | null;
+  while ((m = single.exec(text)) !== null) {
+    const unit = normalizeUnit(m[2]);
+    const value = parseFloat(m[1]);
     if (unit && isFinite(value) && value > 0) return toAmount(value * unit.base, unit.liquid);
   }
   return null;
+}
+
+// Ready-to-drink products (protein shakes, cans) are routinely recorded with no
+// package size at all — only a serving, which for a single-serve item IS the
+// package. Better than defaulting to 100 g, but a guess, so it's flagged.
+function amountFromServing(p: OffProduct): Amount | null {
+  const fromText = parseAmountText(p.serving_size);
+  if (fromText) return fromText;
+  const qty = num(p.serving_quantity);
+  if (qty === null || qty <= 0) return null;
+  const unit = normalizeUnit(p.serving_quantity_unit ?? "g");
+  return unit ? toAmount(qty * unit.base, unit.liquid) : null;
 }
 
 // The 100 g the nutrition is quoted against — a truthful reference amount when
 // the package size is unknowable, rather than a guess at the package.
 const FALLBACK_AMOUNT: Amount = { quantity: 100, unit: "g", base: 100 };
 
-function mapAmount(p: OffProduct): { amount: Amount; known: boolean } {
-  const amount = amountFromProductQuantity(p) ?? amountFromQuantityString(p.quantity);
-  return amount ? { amount, known: true } : { amount: FALLBACK_AMOUNT, known: false };
+export type AmountSource = "package" | "serving" | "unknown";
+
+function mapAmount(p: OffProduct): { amount: Amount; source: AmountSource } {
+  const qty = num(p.product_quantity);
+  const qtyUnit = p.product_quantity_unit ? normalizeUnit(p.product_quantity_unit) : null;
+
+  // Best case: OFF normalized the size and said what unit it's in.
+  if (qty !== null && qty > 0 && qtyUnit) {
+    return { amount: toAmount(qty * qtyUnit.base, qtyUnit.liquid), source: "package" };
+  }
+  // The label text. Tried before a unit-less product_quantity, because reading
+  // that as grams invents a number ("12 x 325ml cans" is stored as a bare 11).
+  const fromText = parseAmountText(p.quantity);
+  if (fromText) return { amount: fromText, source: "package" };
+  // A bare product_quantity with no unit: OFF keeps those in grams.
+  if (qty !== null && qty > 0) return { amount: toAmount(qty, false), source: "package" };
+
+  const fromServing = amountFromServing(p);
+  if (fromServing) return { amount: fromServing, source: "serving" };
+
+  return { amount: FALLBACK_AMOUNT, source: "unknown" };
 }
 
 // Atwater factors: the calories a gram of each macro carries. Used only when
@@ -319,7 +357,7 @@ function mapNutrition(
 
 // Exported for direct testing; lookupBarcode is the fetch wrapper around it.
 export function mapProduct(p: OffProduct): ScannedProduct {
-  const { amount, known } = mapAmount(p);
+  const { amount, source } = mapAmount(p);
   const { nutrition, nutritionPer100, caloriesDerived } = mapNutrition(p, amount.base);
   const brand = (p.brands ?? "").split(",")[0].trim();
   return {
@@ -327,7 +365,7 @@ export function mapProduct(p: OffProduct): ScannedProduct {
     category: mapCategory(p),
     quantity: amount.quantity,
     unit: amount.unit,
-    amountKnown: known,
+    amountSource: source,
     nutrition,
     nutritionPer100,
     caloriesDerived,

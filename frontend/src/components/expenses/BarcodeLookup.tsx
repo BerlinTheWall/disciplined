@@ -24,7 +24,12 @@ type Status =
 
 function caveatsFor(product: ScannedProduct): string[] {
   const caveats: string[] = [];
-  if (!product.amountKnown) {
+  if (product.amountSource === "serving") {
+    caveats.push(
+      `Only a serving size was on record — used ${product.quantity} ${product.unit}. ` +
+        `Correct the amount if the pack holds more.`
+    );
+  } else if (product.amountSource === "unknown") {
     caveats.push("Package size isn't in the database — set the amount yourself.");
   }
   if (!product.nutrition) {
