@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowUpRight,
-  CheckCircle2,
-  ClipboardList,
+  Check,
+  ChevronRight,
   Clock,
   Loader2,
   Square,
+  UtensilsCrossed,
   Volume2,
+  Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -17,11 +19,18 @@ import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
+import { CALORIE_GOAL } from "@/lib/goals";
+import { dayNutrition, indexItems, money } from "@/lib/grocery";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
+import { monthStartISO, spendInRange } from "@/lib/insights";
 import { press, tap } from "@/lib/motion";
+import type { Page } from "@/lib/pages";
 import { PRIORITY_META } from "@/lib/priority";
+import { useExpenseStore } from "@/store/expenseStore";
+import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
+import { useMealStore } from "@/store/mealStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -29,6 +38,7 @@ import type { Priority } from "@/types/task";
 
 interface HomePageProps {
   onViewAll?: () => void;
+  onNavigate?: (page: Page) => void;
 }
 
 interface DayItem {
@@ -44,7 +54,10 @@ interface DayItem {
 }
 
 const PRIO_RANK: Record<Priority, number> = { high: 3, medium: 2, low: 1 };
-const RING = "#9ec06a"; // soft green progress
+// Ring accents, one per discipline pillar.
+const RING_TASKS = "#9ec06a"; // soft green
+const RING_HABITS = "#eab464"; // warm amber
+const RING_MOVE = "#60a5fa"; // blue
 
 function fmt12(min: number) {
   const h = Math.floor(min / 60) % 24;
@@ -55,65 +68,157 @@ function fmt12(min: number) {
   };
 }
 
-function ProgressRing({ percent }: { percent: number }) {
-  const size = 96;
+// Apple-Activity-style concentric rings: outer→inner is tasks, habits, movement.
+// Each ring's faint track is a dim tint of its own colour, so a pillar with
+// nothing planned still reads as "this ring exists, nothing done yet". The
+// centre shows the day's overall completion, or a check once every planned
+// ring is closed.
+function ActivityRings({
+  data,
+  centerLabel,
+  perfect,
+  size = 104,
+}: {
+  data: { pct: number; color: string; active: boolean }[];
+  centerLabel: number;
+  perfect: boolean;
+  size?: number;
+}) {
   const stroke = 10;
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - percent / 100);
+  const gap = 4;
+  const c = size / 2;
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="rgba(255,255,255,0.14)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={RING}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 0.5s ease" }}
-        />
+        {data.map((d, i) => {
+          const r = c - stroke / 2 - i * (stroke + gap);
+          const circ = 2 * Math.PI * r;
+          return (
+            <g key={i}>
+              <circle
+                cx={c}
+                cy={c}
+                r={r}
+                fill="none"
+                stroke={`${d.color}33`}
+                strokeWidth={stroke}
+              />
+              {d.active && d.pct > 0 && (
+                <circle
+                  cx={c}
+                  cy={c}
+                  r={r}
+                  fill="none"
+                  stroke={d.color}
+                  strokeWidth={stroke}
+                  strokeLinecap="round"
+                  strokeDasharray={circ}
+                  strokeDashoffset={circ * (1 - Math.min(d.pct, 1))}
+                  style={{ transition: "stroke-dashoffset 0.6s ease" }}
+                />
+              )}
+            </g>
+          );
+        })}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xl font-bold text-white tabular-nums">
-          {percent}
-          <span className="text-xs align-top">%</span>
-        </span>
+        {perfect ? (
+          <Check size={22} className="text-white" strokeWidth={3} />
+        ) : (
+          <span className="text-lg font-bold text-white tabular-nums">
+            {centerLabel}
+            <span className="text-[10px] align-top">%</span>
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-function ProgStat({
-  icon: Icon,
-  value,
+// One legend row beside the rings: a colour dot, the pillar name, and its
+// done/total — or a rest label when nothing's planned for that pillar today.
+function RingStat({
   label,
+  color,
+  done,
+  total,
+  rest,
 }: {
-  icon: LucideIcon;
-  value: number;
   label: string;
+  color: string;
+  done: number;
+  total: number;
+  rest: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-gray-300 shrink-0">
-        <Icon size={15} />
-      </span>
-      <div className="leading-tight">
-        <p className="text-sm font-bold text-white tabular-nums">{value}</p>
-        <p className="text-[11px] text-gray-400">{label}</p>
-      </div>
+    <div className="flex items-center gap-2.5">
+      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+      <p className="text-sm text-gray-300 flex-1 min-w-0 truncate">{label}</p>
+      <p className="text-sm font-bold text-white tabular-nums">
+        {total ? `${done}/${total}` : rest}
+      </p>
     </div>
+  );
+}
+
+// A compact tappable stat tile for a domain Home doesn't otherwise surface
+// (nutrition, spending): an icon, the headline number, a progress bar toward a
+// goal/budget, and a one-line caption. Tapping deep-links to that page.
+function GlanceTile({
+  icon: Icon,
+  color,
+  label,
+  value,
+  unit,
+  sub,
+  pct,
+  barColor,
+  onClick,
+}: {
+  icon: LucideIcon;
+  color: string;
+  label: string;
+  value: string;
+  unit?: string;
+  sub: string;
+  pct: number;
+  barColor: string;
+  onClick?: () => void;
+}) {
+  return (
+    <motion.button
+      onClick={onClick}
+      whileTap={press}
+      className="flex flex-col gap-2.5 text-left rounded-3xl bg-surface-alt border border-border-strong shadow-soft p-4"
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+          style={{ backgroundColor: `${color}1f` }}
+        >
+          <Icon size={16} style={{ color }} />
+        </span>
+        <ChevronRight size={16} className="text-fg-faint" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-fg-muted">{label}</p>
+        <p className="text-2xl font-bold text-fg tabular-nums leading-tight mt-0.5 truncate">
+          {value}
+          {unit && <span className="text-sm font-medium text-fg-faint">{unit}</span>}
+        </p>
+      </div>
+      <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.round(Math.min(Math.max(pct, 0), 1) * 100)}%`,
+            backgroundColor: barColor,
+            transition: "width 0.5s ease",
+          }}
+        />
+      </div>
+      <p className="text-[11px] text-fg-faint truncate">{sub}</p>
+    </motion.button>
   );
 }
 
@@ -137,13 +242,17 @@ function Chip({ count, label, active }: { count: number; label: string; active?:
   );
 }
 
-export default function HomePage({ onViewAll }: HomePageProps) {
+export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
   const focusScheduleItem = useScheduleFocusStore((s) => s.focusItem);
+  const meals = useMealStore((s) => s.meals);
+  const groceryItems = useGroceryStore((s) => s.groceryItems);
+  const expenses = useExpenseStore((s) => s.expenses);
+  const monthlyBudget = useExpenseStore((s) => s.monthlyBudget);
   const { reading, loading, toggle: toggleRead, tryAutoPlay } = useReadAloud();
   // Morning ritual: highlights the read-my-day row when the browser blocked
   // the automatic playback, inviting the one tap it needs.
@@ -243,6 +352,49 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   const todo = Math.max(0, pending - inProgress);
   const percent = total ? Math.round((done / total) * 100) : 0;
 
+  // Today's discipline rings: tasks, habits, and movement (workout-linked
+  // tasks), each filling with today's completion. A pillar with nothing
+  // scheduled shows an empty ring and sits out of the "perfect day" count.
+  const todayTasks = tasks.filter((t) => t.date === today);
+  const workoutTasks = todayTasks.filter((t) => t.workoutSessionId);
+  const plainTasks = todayTasks.filter((t) => !t.workoutSessionId);
+  const activeHabitsToday = habits.filter((h) => isHabitActiveOnDate(h, todayObj));
+  const habitsDoneToday = activeHabitsToday.filter((h) => h.completedDates.includes(today)).length;
+  const pillars = [
+    {
+      label: "Tasks",
+      color: RING_TASKS,
+      done: plainTasks.filter((t) => t.completed).length,
+      total: plainTasks.length,
+      rest: "—",
+    },
+    {
+      label: "Habits",
+      color: RING_HABITS,
+      done: habitsDoneToday,
+      total: activeHabitsToday.length,
+      rest: "—",
+    },
+    {
+      label: "Movement",
+      color: RING_MOVE,
+      done: workoutTasks.filter((t) => t.completed).length,
+      total: workoutTasks.length,
+      rest: "Rest",
+    },
+  ];
+  const ringsApplicable = pillars.filter((p) => p.total > 0).length;
+  const ringsClosed = pillars.filter((p) => p.total > 0 && p.done >= p.total).length;
+  const perfectDay = ringsApplicable > 0 && ringsClosed === ringsApplicable;
+
+  // Glance: the two domains Home doesn't otherwise surface — today's nutrition
+  // and spending — each tapping through to its own page.
+  const groceryIndex = useMemo(() => indexItems(groceryItems), [groceryItems]);
+  const todayMeals = meals.filter((m) => m.date === today);
+  const kcalToday = dayNutrition(todayMeals, groceryIndex).calories;
+  const spendToday = expenses.filter((e) => e.date === today).reduce((sum, e) => sum + e.amount, 0);
+  const spendMonth = spendInRange(expenses, monthStartISO(), today).total;
+
   // Focus: what's happening now, else the next thing, else the highest-priority
   // task still left today.
   const active = items.filter((i) => !i.completed);
@@ -321,18 +473,65 @@ export default function HomePage({ onViewAll }: HomePageProps) {
         </motion.button>
       </div>
 
-      {/* Today's progress */}
+      {/* Today's rings — tasks, habits, and movement, each filling with today's
+          completion. Close every ring that has something planned for a perfect day. */}
       <div className="rounded-3xl bg-surface-feature text-white p-5 shadow-card">
-        <p className="text-sm font-medium text-gray-300 mb-4">Today's Progress</p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-medium text-gray-300">Today's Progress</p>
+          <p className="text-xs font-medium text-gray-400">
+            {ringsApplicable === 0
+              ? "Nothing planned yet"
+              : perfectDay
+                ? "Perfect day 🎉"
+                : `${ringsClosed}/${ringsApplicable} rings closed`}
+          </p>
+        </div>
         <div className="flex items-center">
-          <ProgressRing percent={percent} />
+          <ActivityRings
+            data={pillars.map((p) => ({
+              pct: p.total ? p.done / p.total : 0,
+              color: p.color,
+              active: p.total > 0,
+            }))}
+            centerLabel={percent}
+            perfect={perfectDay}
+          />
           <div className="self-stretch w-px bg-white/10 mx-5" />
           <div className="flex-1 flex flex-col gap-3.5">
-            <ProgStat icon={ClipboardList} value={total} label="Total Task" />
-            <ProgStat icon={CheckCircle2} value={done} label="Completed Task" />
-            <ProgStat icon={Clock} value={pending} label="Pending Task" />
+            {pillars.map((p) => (
+              <RingStat key={p.label} {...p} />
+            ))}
           </div>
         </div>
+      </div>
+
+      {/* Glance — today's nutrition and spending, tapping through to their pages. */}
+      <div className="grid grid-cols-2 gap-3">
+        <GlanceTile
+          icon={UtensilsCrossed}
+          color={RING_TASKS}
+          label="Meals"
+          value={kcalToday.toLocaleString()}
+          unit=" kcal"
+          sub={
+            todayMeals.length
+              ? `${todayMeals.length} logged · goal ${CALORIE_GOAL.toLocaleString()}`
+              : "Nothing logged yet"
+          }
+          pct={kcalToday / CALORIE_GOAL}
+          barColor={kcalToday > CALORIE_GOAL ? "#f87171" : RING_TASKS}
+          onClick={() => onNavigate?.("meals")}
+        />
+        <GlanceTile
+          icon={Wallet}
+          color={RING_HABITS}
+          label="Spent today"
+          value={money(spendToday)}
+          sub={`${money(spendMonth)} of ${money(monthlyBudget)} this month`}
+          pct={spendMonth / (monthlyBudget || 1)}
+          barColor={spendMonth > monthlyBudget ? "#f87171" : RING_HABITS}
+          onClick={() => onNavigate?.("expenses")}
+        />
       </div>
 
       {/* Today's tasks */}
