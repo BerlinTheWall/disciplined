@@ -3,8 +3,10 @@ import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   Check,
-  ChevronRight,
   Clock,
+  Dumbbell,
+  Flame,
+  ListChecks,
   Loader2,
   Square,
   UtensilsCrossed,
@@ -19,11 +21,9 @@ import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
-import { CALORIE_GOAL } from "@/lib/goals";
 import { dayNutrition, indexItems, money } from "@/lib/grocery";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
-import { monthStartISO, spendInRange } from "@/lib/insights";
 import { press, tap } from "@/lib/motion";
 import type { Page } from "@/lib/pages";
 import { PRIORITY_META } from "@/lib/priority";
@@ -123,9 +123,9 @@ function ActivityRings({
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         {perfect ? (
-          <Check size={22} className="text-white" strokeWidth={3} />
+          <Check size={22} className="text-fg" strokeWidth={3} />
         ) : (
-          <span className="text-lg font-bold text-white tabular-nums">
+          <span className="text-lg font-bold text-fg tabular-nums">
             {centerLabel}
             <span className="text-[10px] align-top">%</span>
           </span>
@@ -153,71 +153,44 @@ function RingStat({
   return (
     <div className="flex items-center gap-2.5">
       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-      <p className="text-sm text-gray-300 flex-1 min-w-0 truncate">{label}</p>
-      <p className="text-sm font-bold text-white tabular-nums">
-        {total ? `${done}/${total}` : rest}
-      </p>
+      <p className="text-sm text-fg-muted flex-1 min-w-0 truncate">{label}</p>
+      <p className="text-sm font-bold text-fg tabular-nums">{total ? `${done}/${total}` : rest}</p>
     </div>
   );
 }
 
-// A compact tappable stat tile for a domain Home doesn't otherwise surface
-// (nutrition, spending): an icon, the headline number, a progress bar toward a
-// goal/budget, and a one-line caption. Tapping deep-links to that page.
-function GlanceTile({
+// One tile in the "Today at a glance" rollup: an icon, a headline stat, and a
+// short label. Deliberately compact so the whole strip of domains scans at a
+// glance and scrolls; tapping deep-links to that domain's page.
+function GlanceStat({
   icon: Icon,
   color,
-  label,
   value,
-  unit,
-  sub,
-  pct,
-  barColor,
+  label,
   onClick,
 }: {
   icon: LucideIcon;
   color: string;
-  label: string;
   value: string;
-  unit?: string;
-  sub: string;
-  pct: number;
-  barColor: string;
+  label: string;
   onClick?: () => void;
 }) {
   return (
     <motion.button
       onClick={onClick}
       whileTap={press}
-      className="flex flex-col gap-2.5 text-left rounded-3xl bg-surface-alt border border-border-strong shadow-soft p-4"
+      className="shrink-0 w-26 flex flex-col gap-2.5 text-left rounded-2xl bg-surface-alt border border-border-strong shadow-soft p-3.5"
     >
-      <div className="flex items-center justify-between">
-        <span
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: `${color}1f` }}
-        >
-          <Icon size={16} style={{ color }} />
-        </span>
-        <ChevronRight size={16} className="text-fg-faint" />
-      </div>
+      <span
+        className="w-8 h-8 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: `${color}1f` }}
+      >
+        <Icon size={16} style={{ color }} />
+      </span>
       <div className="min-w-0">
-        <p className="text-xs font-medium text-fg-muted">{label}</p>
-        <p className="text-2xl font-bold text-fg tabular-nums leading-tight mt-0.5 truncate">
-          {value}
-          {unit && <span className="text-sm font-medium text-fg-faint">{unit}</span>}
-        </p>
+        <p className="text-lg font-bold text-fg tabular-nums leading-none truncate">{value}</p>
+        <p className="text-xs font-medium text-fg-muted mt-1 truncate">{label}</p>
       </div>
-      <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${Math.round(Math.min(Math.max(pct, 0), 1) * 100)}%`,
-            backgroundColor: barColor,
-            transition: "width 0.5s ease",
-          }}
-        />
-      </div>
-      <p className="text-[11px] text-fg-faint truncate">{sub}</p>
     </motion.button>
   );
 }
@@ -252,11 +225,13 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
   const meals = useMealStore((s) => s.meals);
   const groceryItems = useGroceryStore((s) => s.groceryItems);
   const expenses = useExpenseStore((s) => s.expenses);
-  const monthlyBudget = useExpenseStore((s) => s.monthlyBudget);
   const { reading, loading, toggle: toggleRead, tryAutoPlay } = useReadAloud();
   // Morning ritual: highlights the read-my-day row when the browser blocked
   // the automatic playback, inviting the one tap it needs.
   const [briefingPrompt, setBriefingPrompt] = useState(false);
+  // The focus item mid check-off: we fill its circle first, hold briefly, then
+  // commit completion — so the tap reads as "checked" before the card moves on.
+  const [checkingId, setCheckingId] = useState<string | null>(null);
 
   const today = todayISODate();
   const todayObj = new Date(today + "T00:00:00");
@@ -387,13 +362,12 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
   const ringsClosed = pillars.filter((p) => p.total > 0 && p.done >= p.total).length;
   const perfectDay = ringsApplicable > 0 && ringsClosed === ringsApplicable;
 
-  // Glance: the two domains Home doesn't otherwise surface — today's nutrition
-  // and spending — each tapping through to its own page.
+  // Today at a glance: today's calories and spend, joining the three ring
+  // pillars in the rollup strip below. Each tile taps through to its own page.
   const groceryIndex = useMemo(() => indexItems(groceryItems), [groceryItems]);
   const todayMeals = meals.filter((m) => m.date === today);
   const kcalToday = dayNutrition(todayMeals, groceryIndex).calories;
   const spendToday = expenses.filter((e) => e.date === today).reduce((sum, e) => sum + e.amount, 0);
-  const spendMonth = spendInRange(expenses, monthStartISO(), today).total;
 
   // Focus: what's happening now, else the next thing, else the highest-priority
   // task still left today.
@@ -475,10 +449,10 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
 
       {/* Today's rings — tasks, habits, and movement, each filling with today's
           completion. Close every ring that has something planned for a perfect day. */}
-      <div className="rounded-3xl bg-surface-feature text-white p-5 shadow-card">
+      <div className="rounded-3xl bg-surface-alt border border-border-strong text-fg p-5 shadow-soft">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-gray-300">Today's Progress</p>
-          <p className="text-xs font-medium text-gray-400">
+          <p className="text-sm font-medium text-fg-muted">Today's Progress</p>
+          <p className="text-xs font-medium text-fg-faint">
             {ringsApplicable === 0
               ? "Nothing planned yet"
               : perfectDay
@@ -496,7 +470,7 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
             centerLabel={percent}
             perfect={perfectDay}
           />
-          <div className="self-stretch w-px bg-white/10 mx-5" />
+          <div className="self-stretch w-px bg-border-strong mx-5" />
           <div className="flex-1 flex flex-col gap-3.5">
             {pillars.map((p) => (
               <RingStat key={p.label} {...p} />
@@ -505,31 +479,45 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
         </div>
       </div>
 
-      {/* Glance — today's nutrition and spending, tapping through to their pages. */}
-      <div className="grid grid-cols-2 gap-3">
-        <GlanceTile
+      {/* Today at a glance — a compact, scrollable rollup across every domain,
+          each tile tapping through to its page. */}
+      <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        <GlanceStat
+          icon={ListChecks}
+          color="#9ec06a"
+          value={pillars[0].total ? `${pillars[0].done}/${pillars[0].total}` : "—"}
+          label="Tasks"
+          onClick={() => {
+            setSelectedDate(today);
+            onViewAll?.();
+          }}
+        />
+        <GlanceStat
+          icon={Flame}
+          color="#eab464"
+          value={pillars[1].total ? `${pillars[1].done}/${pillars[1].total}` : "—"}
+          label="Habits"
+          onClick={() => onNavigate?.("habits")}
+        />
+        <GlanceStat
+          icon={Dumbbell}
+          color="#fb7185"
+          value={pillars[2].total ? `${pillars[2].done}/${pillars[2].total}` : "Rest"}
+          label="Workout"
+          onClick={() => onNavigate?.("workout")}
+        />
+        <GlanceStat
           icon={UtensilsCrossed}
-          color={RING_TASKS}
-          label="Meals"
+          color="#34d399"
           value={kcalToday.toLocaleString()}
-          unit=" kcal"
-          sub={
-            todayMeals.length
-              ? `${todayMeals.length} logged · goal ${CALORIE_GOAL.toLocaleString()}`
-              : "Nothing logged yet"
-          }
-          pct={kcalToday / CALORIE_GOAL}
-          barColor={kcalToday > CALORIE_GOAL ? "#f87171" : RING_TASKS}
+          label="Calories"
           onClick={() => onNavigate?.("meals")}
         />
-        <GlanceTile
+        <GlanceStat
           icon={Wallet}
-          color={RING_HABITS}
-          label="Spent today"
+          color="#a78bfa"
           value={money(spendToday)}
-          sub={`${money(spendMonth)} of ${money(monthlyBudget)} this month`}
-          pct={spendMonth / (monthlyBudget || 1)}
-          barColor={spendMonth > monthlyBudget ? "#f87171" : RING_HABITS}
+          label="Spent"
           onClick={() => onNavigate?.("expenses")}
         />
       </div>
@@ -565,10 +553,10 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
               whileTap={press}
               className="w-full text-left bg-surface-alt border border-border-strong rounded-3xl shadow-soft p-5"
             >
-              <div className="flex items-start justify-between">
-                {fPrio ? (
+              {fPrio && (
+                <div className="mb-3">
                   <span
-                    className="flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1"
                     style={{ color: fPrio.color, backgroundColor: `${fPrio.color}1f` }}
                   >
                     <span
@@ -577,22 +565,20 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
                     />
                     {fPrio.label} Priority
                   </span>
-                ) : (
-                  <span />
-                )}
-                <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
-              </div>
+                </div>
+              )}
 
-              <div className="flex items-center gap-2.5 mt-3">
+              <div className="flex items-center gap-2.5">
                 <span
                   className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                   style={{ backgroundColor: `${focus.color}1f` }}
                 >
                   {FocusIcon && <FocusIcon size={18} style={{ color: focus.color }} />}
                 </span>
-                <p className="text-xl font-bold text-fg leading-snug min-w-0 truncate">
+                <p className="text-xl font-bold text-fg leading-snug flex-1 min-w-0 truncate">
                   {focus.title}
                 </p>
+                <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
               </div>
 
               <div className="flex items-center justify-between mt-3">
@@ -603,12 +589,33 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
                 <motion.span
                   onClick={(ev) => {
                     ev.stopPropagation();
-                    toggle(focus);
+                    const item = focus;
+                    if (checkingId === item.id) return;
+                    setCheckingId(item.id);
+                    window.setTimeout(() => {
+                      toggle(item);
+                      setCheckingId((cur) => (cur === item.id ? null : cur));
+                    }, 500);
                   }}
                   whileTap={tap}
-                  className="w-8 h-8 rounded-full border-2 shrink-0"
-                  style={{ borderColor: focus.color }}
-                />
+                  className="w-8 h-8 rounded-full border-2 shrink-0 flex items-center justify-center"
+                  style={{
+                    borderColor: focus.color,
+                    backgroundColor: checkingId === focus.id ? focus.color : "transparent",
+                    transition: "background-color 0.2s ease",
+                  }}
+                >
+                  {checkingId === focus.id && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                      className="flex"
+                    >
+                      <Check size={16} className="text-white" strokeWidth={3} />
+                    </motion.span>
+                  )}
+                </motion.span>
               </div>
             </motion.button>
           </>

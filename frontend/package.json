@@ -9,9 +9,13 @@
     "build:check": "npm run format && npm run lint && npm run build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "ios": "npm run build && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2",
     "@dnd-kit/core": "^6.3.1",
     "@tailwindcss/vite": "^4.3.1",
     "@zxing/browser": "^0.2.1",
