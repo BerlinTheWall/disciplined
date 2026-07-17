@@ -113,7 +113,10 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
                 )}
                 <Icon
                   size={23}
-                  strokeWidth={t.isActive ? 2.2 : 1.7}
+                  // Constant stroke width across active/inactive: a changing
+                  // stroke instantly re-thickens the glyph on selection, which
+                  // reads as a ~1px shift. Emphasis comes from the pill + color.
+                  strokeWidth={2}
                   className={`relative z-10 ${t.isActive ? "text-fg-inverse" : "text-fg-faint"}`}
                 />
               </span>
