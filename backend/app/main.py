@@ -25,8 +25,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     # Any localhost port: Vite hops to 5174+ when 5173 is busy and
-    # `vite preview` uses 4173.
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    # `vite preview` uses 4173. The capacitor/ionic schemes are the WebView
+    # origins the packaged native app sends (iOS uses capacitor://localhost).
+    allow_origin_regex=r"^(https?|capacitor|ionic)://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
