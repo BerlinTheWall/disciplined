@@ -102,12 +102,17 @@ function App() {
     activePage !== "schedule"
       ? PAGE_TITLES[activePage]
       : (relDayName ?? (
-          <>
-            <span className="text-rose-400">
-              {titleDate.toLocaleDateString(undefined, { month: "short" })}
-            </span>{" "}
-            {titleDate.getDate()}
-          </>
+          <span className="flex flex-col items-start">
+            <span className="leading-none">
+              <span className="text-rose-400">
+                {titleDate.toLocaleDateString(undefined, { month: "short" })}
+              </span>{" "}
+              {titleDate.getDate()}
+            </span>
+            <span className="mt-1 text-[10px] font-semibold leading-none tracking-wide text-fg-faint">
+              {titleDate.getFullYear()}
+            </span>
+          </span>
         ));
 
   // Initial-letter avatar in the home header — the way into the profile page.
@@ -225,7 +230,7 @@ function App() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: dir > 0 ? -24 : 24, opacity: 0 }}
                   transition={spring.snappy}
-                  className="text-2xl font-bold whitespace-nowrap text-fg"
+                  className={`${activePage === "schedule" ? "text-[23px]" : "text-2xl"} font-bold whitespace-nowrap text-fg`}
                 >
                   {pageTitle}
                 </motion.h1>
