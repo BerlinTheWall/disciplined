@@ -38,7 +38,7 @@ function Root() {
   // resuming never re-shows it.
   const [showSplash, setShowSplash] = useState(true);
   useEffect(() => {
-    const id = window.setTimeout(() => setShowSplash(false), 1400);
+    const id = window.setTimeout(() => setShowSplash(false), 930);
     return () => window.clearTimeout(id);
   }, []);
 
