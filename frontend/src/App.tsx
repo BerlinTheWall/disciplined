@@ -267,11 +267,13 @@ function App() {
               {activePage === "schedule" && (
                 <motion.div
                   key="schedule-controls"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
+                  // Opacity-only entrance/exit: a scale transform here made
+                  // WKWebView re-round the toggle icons' subpixel positions when
+                  // it finished (~1px hop on page open) — same fix as BottomNav.
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={spring.snappy}
-                  style={{ transformOrigin: "right center" }}
                   className="flex items-center gap-2"
                 >
                   <motion.button
@@ -279,7 +281,7 @@ function App() {
                     whileTap={tap}
                     className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
                   >
-                    <CalendarPlus size={17} />
+                    <CalendarPlus size={18} />
                     Day Plan
                   </motion.button>
                   <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
@@ -297,12 +299,16 @@ function App() {
                             className="absolute inset-0 bg-surface rounded-md shadow-sm"
                           />
                         )}
+                        {/* Even icon size (18) centers on whole pixels and
+                            transform-gpu isolates the icon's layer so the
+                            layoutId pill morphing next to it can't re-round its
+                            position (WKWebView subpixel quirk). */}
                         <span
-                          className={`relative z-10 block ${
+                          className={`relative z-10 block transform-gpu ${
                             viewMode === m ? "text-fg" : "text-fg-faint"
                           }`}
                         >
-                          {m === "daily" ? <AlignLeft size={17} /> : <LayoutGrid size={17} />}
+                          {m === "daily" ? <AlignLeft size={18} /> : <LayoutGrid size={18} />}
                         </span>
                       </button>
                     ))}
