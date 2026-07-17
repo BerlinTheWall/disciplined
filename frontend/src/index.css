@@ -59,8 +59,11 @@
 
 /* ── Tailwind v4 theme mappings ────────────────────────────────────── */
 @theme inline {
-  /* Neo-grotesque sans for the whole app (drives the default font + font-sans) */
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Neo-grotesque sans for the whole app (drives the default font + font-sans).
+     "Inter Variable" is the self-hosted family from @fontsource-variable/inter,
+     imported in main.tsx; "Inter" stays as a fallback name. */
+  --font-sans:
+    "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   /* Soft elevation for the "floating card" component style — cards sit on the
      surface with a gentle shadow rather than a flat fill. */

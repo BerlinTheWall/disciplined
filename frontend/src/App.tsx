@@ -266,7 +266,7 @@ function App() {
                 <motion.button
                   onClick={() => setIsPlanOpen(true)}
                   whileTap={tap}
-                  className="flex items-center gap-1.5 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
+                  className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
                 >
                   <CalendarPlus size={17} />
                   Day Plan

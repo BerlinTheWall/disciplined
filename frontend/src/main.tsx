@@ -2,6 +2,11 @@ import { StrictMode, useEffect } from "react";
 import { MotionConfig } from "framer-motion";
 import { createRoot } from "react-dom/client";
 
+// Self-hosted Inter (variable = all weights in one file), bundled into the app
+// so there's no network fetch or font-swap reflow on launch. Replaces the
+// Google Fonts <link> that used to live in index.html.
+import "@fontsource-variable/inter/index.css";
+
 import "./index.css";
 
 import App from "./App.tsx";
