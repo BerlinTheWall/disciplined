@@ -1,5 +1,5 @@
-import { StrictMode, useEffect } from "react";
-import { MotionConfig } from "framer-motion";
+import { StrictMode, useEffect, useState } from "react";
+import { AnimatePresence, MotionConfig } from "framer-motion";
 import { createRoot } from "react-dom/client";
 
 // Self-hosted Inter (variable = all weights in one file), bundled into the app
@@ -11,6 +11,7 @@ import "./index.css";
 
 import App from "./App.tsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.tsx";
+import SplashScreen from "./components/SplashScreen.tsx";
 import { startSync } from "./lib/sync.ts";
 import AuthPage from "./pages/AuthPage.tsx";
 import { useAuthStore } from "./store/authStore.ts";
@@ -32,6 +33,15 @@ function Root() {
   const userId = useAuthStore((s) => s.user?.id);
   const logout = useAuthStore((s) => s.logout);
 
+  // Cold-start splash over whatever renders first (app or login). Initial state
+  // true only on page load — backgrounding the app doesn't reload the page, so
+  // resuming never re-shows it.
+  const [showSplash, setShowSplash] = useState(true);
+  useEffect(() => {
+    const id = window.setTimeout(() => setShowSplash(false), 1400);
+    return () => window.clearTimeout(id);
+  }, []);
+
   // Hydrate stores from the backend and start write-through sync (no-op if the
   // backend is unreachable — the app then runs on localStorage alone).
   useEffect(() => {
@@ -46,7 +56,12 @@ function Root() {
     return () => window.removeEventListener("api-unauthorized", onUnauthorized);
   }, [logout]);
 
-  return userId ? <App /> : <AuthPage />;
+  return (
+    <>
+      {userId ? <App /> : <AuthPage />}
+      <AnimatePresence>{showSplash && <SplashScreen />}</AnimatePresence>
+    </>
+  );
 }
 
 // Service worker for reminder notifications (Android requires showing them
