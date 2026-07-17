@@ -234,10 +234,13 @@ function App() {
           {/* Right side of the header: profile avatar on Home, plan-day +
               daily/weekly toggle on the schedule page. Pinned to the right edge
               (absolute, out of the flex flow) so its position never depends on
-              the title width or the element animating out during a page change —
-              that transient layout used to place it, then it snapped right. */}
+              the title width. popLayout pops the exiting element out of the
+              layout immediately — otherwise, during a Home->Calendar switch, the
+              outgoing profile button still occupied space for a few frames and
+              pushed the incoming controls past the right edge until it
+              unmounted (they visibly snapped back in). */}
           <div className="absolute right-0 inset-y-0 flex items-center">
-            <AnimatePresence>
+            <AnimatePresence mode="popLayout">
               {activePage === "home" && (
                 <motion.button
                   key="profile"
