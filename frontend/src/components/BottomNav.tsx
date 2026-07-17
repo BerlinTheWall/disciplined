@@ -64,10 +64,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
   return (
     // Ends short of the right edge — the voice assistant's circle sits there,
     // a deliberate sibling to the pill rather than a fourth tab.
-    <div
-      className="fixed left-4 right-24 z-30"
-      style={{ bottom: "var(--nav-bottom)" }}
-    >
+    <div className="fixed left-4 right-24 z-30" style={{ bottom: "var(--nav-bottom)" }}>
       {/* Plus circle — only on schedule, stacked directly above the voice
           assistant's mic at the right edge */}
       <AnimatePresence>

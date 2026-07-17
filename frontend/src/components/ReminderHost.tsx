@@ -4,10 +4,17 @@ import { BellRing, X } from "lucide-react";
 
 import { speakAssistant } from "@/hooks/useSpeech";
 import { assistantReminderLine } from "@/lib/assistantSpeech";
-import { parseISODate, todayISODate } from "@/lib/date";
+import { parseISODate, todayISODate, toISODate } from "@/lib/date";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import {
+  initNativeReminders,
+  isNativeReminderPlatform,
+  syncNativeReminders,
+  type NativeReminder,
+} from "@/lib/nativeReminders";
+import {
+  notifyPermission,
   REMINDER_GRACE_MS,
   showSystemNotification,
   SNOOZE_MS,
@@ -147,6 +154,58 @@ function collectDue(now: number): ReminderAlert[] {
   return due;
 }
 
+// Upcoming reminders to pre-schedule with iOS (see nativeReminders): all
+// future task reminders plus the next week of habit occurrences, with snoozes
+// re-aimed at their expiry. The OS delivers these even when the app is
+// backgrounded or killed — which the web scheduler below cannot do there.
+const NATIVE_HORIZON_DAYS = 7;
+function collectUpcoming(now: number): NativeReminder[] {
+  const upcoming: NativeReminder[] = [];
+  const snoozes = useReminderStore.getState().snoozes;
+
+  const consider = (
+    kind: "task" | "habit",
+    id: string,
+    title: string,
+    date: string,
+    startMinutes: number,
+    minutesBefore: number
+  ) => {
+    const key = `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`;
+    const fireAt =
+      snoozes[key] ??
+      new Date(date + "T00:00:00").getTime() + (startMinutes - minutesBefore) * 60_000;
+    // Anything already due is the running scheduler's job, not a future schedule.
+    if (fireAt <= now + 1_000) return;
+    upcoming.push({
+      key,
+      title,
+      body: `Starts at ${formatTimeLabel(startMinutes)}`,
+      fireAt,
+      data: { key, kind, id, date },
+    });
+  };
+
+  for (const t of useTaskStore.getState().tasks) {
+    if (t.reminderMinutesBefore == null || t.completed) continue;
+    consider("task", t.id, t.title, t.date, t.startMinutes, t.reminderMinutesBefore);
+  }
+  for (let d = 0; d < NATIVE_HORIZON_DAYS; d++) {
+    const day = new Date();
+    day.setDate(day.getDate() + d);
+    const iso = toISODate(day);
+    const weekday = day.getDay();
+    for (const h of useHabitStore.getState().habits) {
+      if (h.reminderMinutesBefore == null || !h.daysOfWeek.includes(weekday)) continue;
+      if (h.completedDates.includes(iso) || h.skippedDates?.includes(iso)) continue;
+      consider("habit", h.id, h.title, iso, h.startMinutes, h.reminderMinutesBefore);
+    }
+  }
+
+  upcoming.sort((a, b) => a.fireAt - b.fireAt);
+  return upcoming;
+}
+
 // Keys already read aloud this session. Speech is its own delivery channel —
 // it happens even when the system notification couldn't be shown — so a
 // reminder that later re-surfaces as a banner must not be spoken twice.
@@ -168,6 +227,16 @@ function tick() {
   if (!useSettingsStore.getState().remindersEnabled) return;
   const { fired, markFired, clearSnooze, pushAlert } = useReminderStore.getState();
   const now = Date.now();
+
+  // Packaged iOS app with permission granted: the OS presents the
+  // pre-scheduled notification itself (foreground included), so the in-app
+  // banner would be a duplicate. Speech stays a foreground channel. Without
+  // permission, fall through — banners are all the user gets, same as web.
+  if (isNativeReminderPlatform && notifyPermission() === "granted") {
+    for (const reminder of collectDue(now)) speakReminder(reminder);
+    return;
+  }
+
   for (const reminder of collectDue(now)) {
     if (fired[reminder.key]) continue;
     speakReminder(reminder);
@@ -237,6 +306,12 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
   const alerts = useReminderStore((s) => s.alerts);
   const dismissAlert = useReminderStore((s) => s.dismissAlert);
 
+  // Native side: permission cache, Done/Snooze action routing, tap-to-open.
+  // Re-run when the onOpen prop changes so taps always use the live handler.
+  useEffect(() => {
+    void initNativeReminders({ onAction: handleReminderAction, onOpen });
+  }, [onOpen]);
+
   // Precise scheduling: after each pass, aim a timer exactly at the next fire
   // time (capped by the heartbeat). Creating/editing an item re-aims right
   // away via the store subscriptions, so a reminder due in 10 seconds fires in
@@ -257,6 +332,11 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
     function run() {
       tick();
       scheduleNext();
+      // Keep iOS's pre-scheduled notifications matching the current stores;
+      // an empty sync clears them all when reminders are switched off.
+      syncNativeReminders(
+        useSettingsStore.getState().remindersEnabled ? collectUpcoming(Date.now()) : []
+      );
     }
 
     run();
@@ -265,6 +345,10 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
     // A new snooze means a new wakeup to aim for.
     const unsubSnoozes = useReminderStore.subscribe((state, prev) => {
       if (state.snoozes !== prev.snoozes) run();
+    });
+    // Flipping the master switch re-syncs (or clears) the native schedule.
+    const unsubSettings = useSettingsStore.subscribe((state, prev) => {
+      if (state.remindersEnabled !== prev.remindersEnabled) run();
     });
     const onVisible = () => {
       if (document.visibilityState === "visible") run();
@@ -284,6 +368,7 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
       unsubTasks();
       unsubHabits();
       unsubSnoozes();
+      unsubSettings();
       document.removeEventListener("visibilitychange", onVisible);
       navigator.serviceWorker?.removeEventListener("message", onSwMessage);
     };

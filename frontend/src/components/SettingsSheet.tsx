@@ -9,6 +9,7 @@ import Switch from "./Switch";
 import { speak, speakAssistant, stopSpeaking, useVoices } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
+import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -186,10 +187,12 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   }
 
   // Only worth a second line when it says something the switch does not: that
-  // the browser blocked notifications, so these will be in-app banners only.
+  // notifications are blocked, so these will be in-app banners only.
   const reminderSubtitle =
     remindersEnabled && permission === "denied"
-      ? "In-app only — allow notifications in your browser for alerts when the app is closed"
+      ? isNativeReminderPlatform
+        ? "In-app only — allow notifications for Disciplined in iOS Settings for alerts when the app is closed"
+        : "In-app only — allow notifications in your browser for alerts when the app is closed"
       : undefined;
 
   return (

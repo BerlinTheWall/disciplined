@@ -6,7 +6,6 @@ import { createRoot } from "react-dom/client";
 // so there's no network fetch or font-swap reflow on launch. Replaces the
 // Google Fonts <link> that used to live in index.html.
 import "@fontsource-variable/inter/index.css";
-
 import "./index.css";
 
 import App from "./App.tsx";

@@ -4,6 +4,14 @@
 // the task/habit stores and fires when `start - reminderMinutesBefore` passes.
 // Delivery is a system notification when the app is backgrounded (and
 // permission was granted) or an in-app banner when it's in the foreground.
+// On the packaged iOS app, delivery is instead pre-scheduled with the OS —
+// see lib/nativeReminders.ts.
+
+import {
+  isNativeReminderPlatform,
+  nativeNotifyPermission,
+  requestNativeNotifyPermission,
+} from "./nativeReminders";
 
 export const REMINDER_OPTIONS: Array<{ value: number | null; label: string }> = [
   { value: null, label: "None" },
@@ -28,12 +36,17 @@ export const REMINDER_GRACE_MS = 5 * 60 * 1000;
 
 export type NotifyPermission = NotificationPermission | "unsupported";
 
+// In the packaged iOS app, permissions go through the LocalNotifications
+// plugin — WKWebView has no Notification API at all (it would report
+// "unsupported" and no prompt could ever be shown).
 export function notifyPermission(): NotifyPermission {
+  if (isNativeReminderPlatform) return nativeNotifyPermission();
   if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
   return Notification.permission;
 }
 
 export async function requestNotifyPermission(): Promise<NotifyPermission> {
+  if (isNativeReminderPlatform) return requestNativeNotifyPermission();
   if (notifyPermission() === "unsupported") return "unsupported";
   try {
     return await Notification.requestPermission();
