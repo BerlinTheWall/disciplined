@@ -99,18 +99,19 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
               className="flex flex-col items-center gap-0.5 flex-1"
             >
               <span className="relative flex items-center justify-center w-12 h-8">
-                {/* Plain mount animation, deliberately not a layoutId morph:
-                    shared layout animations inside position:fixed measure
-                    against the page and yanked the whole pill downward when a
-                    tab switch coincided with the page transition. */}
-                {t.isActive && (
-                  <motion.span
-                    initial={{ scale: 0.6, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={spring.snappy}
-                    className="absolute inset-0 bg-fg rounded-2xl"
-                  />
-                )}
+                {/* Always mounted; cross-faded via opacity only (no scale, no
+                    mount/unmount). A transform animating next to the icon made
+                    WKWebView re-round the icon's position ~1px on select; opacity
+                    doesn't transform the sibling, so the icon stays put. Not a
+                    layoutId morph either: shared layout animations inside
+                    position:fixed measured against the page and yanked the whole
+                    pill downward on tab switch. */}
+                <motion.span
+                  initial={false}
+                  animate={{ opacity: t.isActive ? 1 : 0 }}
+                  transition={spring.snappy}
+                  className="absolute inset-0 bg-fg rounded-2xl"
+                />
                 <Icon
                   // size 24 (even) centers on whole pixels in the 48x32 box, and
                   // transform-gpu keeps the icon on its own layer, so when the
