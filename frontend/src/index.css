@@ -3,10 +3,10 @@
 /* ── Theme tokens ──────────────────────────────────────────────────── */
 :root {
   /* Distance of the floating nav pill above the bottom edge (mic / plus button /
-     status card / scroll padding are all expressed relative to this). ~20px on
-     iPhone — about half the old gap — and 16px on non-notch devices. Change the
-     numbers here to move all the floating UI up or down together. */
-  --nav-bottom: max(16px, calc(env(safe-area-inset-bottom) - 14px));
+     status card / scroll padding are all expressed relative to this). ~26px on
+     iPhone and 16px on non-notch devices. Change the numbers here to move all
+     the floating UI up or down together. */
+  --nav-bottom: max(16px, calc(env(safe-area-inset-bottom) - 8px));
 
   --surface: #ffffff;
   --surface-alt: #f9fafb;
