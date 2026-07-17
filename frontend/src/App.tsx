@@ -246,7 +246,9 @@ function App() {
                   key="profile"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
+                  // Instant exit: the profile section vanishes as soon as the
+                  // page changes rather than lingering with a fade.
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={spring.snappy}
                   onClick={() => go("profile")}
                   whileTap={tap}
