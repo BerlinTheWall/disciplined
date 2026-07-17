@@ -199,7 +199,7 @@ function App() {
           iOS safe-area inset (0 on devices without a notch) so the header clears
           the status bar / Dynamic Island. */}
       <div className="px-4" style={{ paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
-        <div className="flex items-center justify-between mb-6">
+        <div className="relative flex items-center mb-6">
           <div className="flex items-center gap-3">
             {/* Hamburger */}
             <motion.button
@@ -232,73 +232,80 @@ function App() {
           </div>
 
           {/* Right side of the header: profile avatar on Home, plan-day +
-              daily/weekly toggle on the schedule page */}
-          <AnimatePresence>
-            {activePage === "home" && (
-              <motion.button
-                key="profile"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={spring.snappy}
-                onClick={() => go("profile")}
-                whileTap={tap}
-                aria-label="Open profile"
-                className="flex items-center gap-2.5"
-              >
-                <span className="text-base font-semibold text-fg max-w-36 truncate">
-                  {profileName}
-                </span>
-                <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
-                  <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
-                </span>
-              </motion.button>
-            )}
-            {activePage === "schedule" && (
-              <motion.div
-                key="schedule-controls"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={spring.snappy}
-                className="flex items-center gap-2"
-              >
+              daily/weekly toggle on the schedule page. Pinned to the right edge
+              (absolute, out of the flex flow) so its position never depends on
+              the title width or the element animating out during a page change —
+              that transient layout used to place it, then it snapped right. */}
+          <div className="absolute right-0 inset-y-0 flex items-center">
+            <AnimatePresence>
+              {activePage === "home" && (
                 <motion.button
-                  onClick={() => setIsPlanOpen(true)}
+                  key="profile"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={spring.snappy}
+                  onClick={() => go("profile")}
                   whileTap={tap}
-                  className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
+                  aria-label="Open profile"
+                  style={{ transformOrigin: "right center" }}
+                  className="flex items-center gap-2.5"
                 >
-                  <CalendarPlus size={17} />
-                  Day Plan
+                  <span className="text-base font-semibold text-fg max-w-36 truncate">
+                    {profileName}
+                  </span>
+                  <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
+                  </span>
                 </motion.button>
-                <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
-                  {(["daily", "weekly"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setViewMode(m)}
-                      className="relative h-full px-2 rounded-md flex items-center justify-center"
-                      aria-label={`${m} view`}
-                    >
-                      {viewMode === m && (
-                        <motion.div
-                          layoutId="viewToggle"
-                          transition={spring.snappy}
-                          className="absolute inset-0 bg-surface rounded-md shadow-sm"
-                        />
-                      )}
-                      <span
-                        className={`relative z-10 block ${
-                          viewMode === m ? "text-fg" : "text-fg-faint"
-                        }`}
+              )}
+              {activePage === "schedule" && (
+                <motion.div
+                  key="schedule-controls"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={spring.snappy}
+                  style={{ transformOrigin: "right center" }}
+                  className="flex items-center gap-2"
+                >
+                  <motion.button
+                    onClick={() => setIsPlanOpen(true)}
+                    whileTap={tap}
+                    className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
+                  >
+                    <CalendarPlus size={17} />
+                    Day Plan
+                  </motion.button>
+                  <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
+                    {(["daily", "weekly"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setViewMode(m)}
+                        className="relative h-full px-2 rounded-md flex items-center justify-center"
+                        aria-label={`${m} view`}
                       >
-                        {m === "daily" ? <AlignLeft size={17} /> : <LayoutGrid size={17} />}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                        {viewMode === m && (
+                          <motion.div
+                            layoutId="viewToggle"
+                            transition={spring.snappy}
+                            className="absolute inset-0 bg-surface rounded-md shadow-sm"
+                          />
+                        )}
+                        <span
+                          className={`relative z-10 block ${
+                            viewMode === m ? "text-fg" : "text-fg-faint"
+                          }`}
+                        >
+                          {m === "daily" ? <AlignLeft size={17} /> : <LayoutGrid size={17} />}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
