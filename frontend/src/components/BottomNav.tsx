@@ -112,12 +112,15 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
                   />
                 )}
                 <Icon
-                  size={23}
-                  // Constant stroke width across active/inactive: a changing
-                  // stroke instantly re-thickens the glyph on selection, which
-                  // reads as a ~1px shift. Emphasis comes from the pill + color.
+                  // size 24 (even) centers on whole pixels in the 48x32 box, and
+                  // transform-gpu keeps the icon on its own layer, so when the
+                  // active pill animates its scale next to it WKWebView can't
+                  // re-round the icon's position (~1px shift seen only on iOS).
+                  size={24}
+                  // Constant stroke width: a changing stroke re-thickens the
+                  // glyph on selection; emphasis comes from the pill + color.
                   strokeWidth={2}
-                  className={`relative z-10 ${t.isActive ? "text-fg-inverse" : "text-fg-faint"}`}
+                  className={`relative z-10 transform-gpu ${t.isActive ? "text-fg-inverse" : "text-fg-faint"}`}
                 />
               </span>
               <span
