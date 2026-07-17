@@ -2,10 +2,11 @@
 
 /* ── Theme tokens ──────────────────────────────────────────────────── */
 :root {
-  /* Floating UI (nav pill, mic, status cards) sits at `calc(base + --safe-bottom)`
-     above the bottom edge. Clears the iOS home indicator without the oversized
-     gap the full safe-area inset produced; 0 (unchanged) on non-notch devices. */
-  --safe-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px));
+  /* Distance of the floating nav pill above the bottom edge (mic / plus button /
+     status card / scroll padding are all expressed relative to this). ~20px on
+     iPhone — about half the old gap — and 16px on non-notch devices. Change the
+     numbers here to move all the floating UI up or down together. */
+  --nav-bottom: max(16px, calc(env(safe-area-inset-bottom) - 14px));
 
   --surface: #ffffff;
   --surface-alt: #f9fafb;

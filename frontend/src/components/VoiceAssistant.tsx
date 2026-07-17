@@ -109,7 +109,7 @@ export default function VoiceAssistant() {
             exit={{ y: 16, opacity: 0 }}
             transition={spring.snappy}
             className="fixed left-4 right-4 z-30"
-            style={{ bottom: "calc(116px + var(--safe-bottom))" }}
+            style={{ bottom: "calc(92px + var(--nav-bottom))" }}
           >
             <div className="flex items-start gap-3 bg-surface rounded-2xl shadow-xl border border-border-strong px-4 py-3">
               <span className="w-8 h-8 rounded-full bg-[#a78bfa] text-[#111827] flex items-center justify-center shrink-0">
@@ -154,7 +154,7 @@ export default function VoiceAssistant() {
             ? "bg-[#f87171] text-white border-transparent"
             : "bg-surface text-fg border-border-strong"
         }`}
-        style={{ bottom: "calc(26px + var(--safe-bottom))" }}
+        style={{ bottom: "calc(2px + var(--nav-bottom))" }}
       >
         {listening ? (
           <motion.span

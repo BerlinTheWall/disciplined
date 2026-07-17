@@ -316,9 +316,9 @@ function App() {
             data-scroll-lock
             className="absolute inset-0 overflow-y-auto px-4"
             // Clear the floating nav (its height + offset) plus a gap, so the
-            // last card never hides behind it. Uses --safe-bottom so the gap is
+            // last card never hides behind it. Uses --nav-bottom so the gap is
             // consistent across notch / non-notch devices.
-            style={{ paddingBottom: "calc(112px + var(--safe-bottom))" }}
+            style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
           >
             {renderPage()}
           </motion.div>

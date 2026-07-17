@@ -66,7 +66,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
     // a deliberate sibling to the pill rather than a fourth tab.
     <div
       className="fixed left-4 right-24 z-30"
-      style={{ bottom: "calc(24px + var(--safe-bottom))" }}
+      style={{ bottom: "var(--nav-bottom)" }}
     >
       {/* Plus circle — only on schedule, stacked directly above the voice
           assistant's mic at the right edge */}
@@ -80,7 +80,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
             exit={{ opacity: 0, scale: 0.6, y: 8 }}
             transition={spring.snappy}
             className="fixed right-5 z-30 w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-xl"
-            style={{ bottom: "calc(102px + var(--safe-bottom))" }}
+            style={{ bottom: "calc(78px + var(--nav-bottom))" }}
           >
             <Plus size={26} strokeWidth={2.5} />
           </motion.button>
