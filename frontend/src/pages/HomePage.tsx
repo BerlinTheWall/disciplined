@@ -1,19 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import {
-  ArrowUpRight,
-  Check,
-  Clock,
-  Dumbbell,
-  Flame,
-  ListChecks,
-  Loader2,
-  Square,
-  UtensilsCrossed,
-  Volume2,
-  Wallet,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ArrowUpRight, Check, Clock, Loader2, Square, Volume2 } from "lucide-react";
 
 import { useNow } from "@/hooks/useNow";
 import { useReadAloud } from "@/hooks/useReadAloud";
@@ -21,16 +8,11 @@ import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
-import { dayNutrition, indexItems, money } from "@/lib/grocery";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
-import type { Page } from "@/lib/pages";
 import { PRIORITY_META } from "@/lib/priority";
-import { useExpenseStore } from "@/store/expenseStore";
-import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
-import { useMealStore } from "@/store/mealStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -38,7 +20,6 @@ import type { Priority } from "@/types/task";
 
 interface HomePageProps {
   onViewAll?: () => void;
-  onNavigate?: (page: Page) => void;
 }
 
 interface DayItem {
@@ -159,42 +140,6 @@ function RingStat({
   );
 }
 
-// One tile in the "Today at a glance" rollup: an icon, a headline stat, and a
-// short label. Deliberately compact so the whole strip of domains scans at a
-// glance and scrolls; tapping deep-links to that domain's page.
-function GlanceStat({
-  icon: Icon,
-  color,
-  value,
-  label,
-  onClick,
-}: {
-  icon: LucideIcon;
-  color: string;
-  value: string;
-  label: string;
-  onClick?: () => void;
-}) {
-  return (
-    <motion.button
-      onClick={onClick}
-      whileTap={press}
-      className="shrink-0 w-26 flex flex-col gap-2.5 text-left rounded-2xl bg-surface-alt border border-border-strong shadow-soft p-3.5"
-    >
-      <span
-        className="w-8 h-8 rounded-full flex items-center justify-center"
-        style={{ backgroundColor: `${color}1f` }}
-      >
-        <Icon size={16} style={{ color }} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-lg font-bold text-fg tabular-nums leading-none truncate">{value}</p>
-        <p className="text-xs font-medium text-fg-muted mt-1 truncate">{label}</p>
-      </div>
-    </motion.button>
-  );
-}
-
 function Chip({ count, label, active }: { count: number; label: string; active?: boolean }) {
   return (
     <div
@@ -215,16 +160,13 @@ function Chip({ count, label, active }: { count: number; label: string; active?:
   );
 }
 
-export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
+export default function HomePage({ onViewAll }: HomePageProps) {
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const habits = useHabitStore((s) => s.habits);
   const toggleHabitCompleted = useHabitStore((s) => s.toggleHabitCompleted);
   const focusScheduleItem = useScheduleFocusStore((s) => s.focusItem);
-  const meals = useMealStore((s) => s.meals);
-  const groceryItems = useGroceryStore((s) => s.groceryItems);
-  const expenses = useExpenseStore((s) => s.expenses);
   const { reading, loading, toggle: toggleRead, tryAutoPlay } = useReadAloud();
   // Morning ritual: highlights the read-my-day row when the browser blocked
   // the automatic playback, inviting the one tap it needs.
@@ -362,13 +304,6 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
   const ringsClosed = pillars.filter((p) => p.total > 0 && p.done >= p.total).length;
   const perfectDay = ringsApplicable > 0 && ringsClosed === ringsApplicable;
 
-  // Today at a glance: today's calories and spend, joining the three ring
-  // pillars in the rollup strip below. Each tile taps through to its own page.
-  const groceryIndex = useMemo(() => indexItems(groceryItems), [groceryItems]);
-  const todayMeals = meals.filter((m) => m.date === today);
-  const kcalToday = dayNutrition(todayMeals, groceryIndex).calories;
-  const spendToday = expenses.filter((e) => e.date === today).reduce((sum, e) => sum + e.amount, 0);
-
   // Focus: what's happening now, else the next thing, else the highest-priority
   // task still left today.
   const active = items.filter((i) => !i.completed);
@@ -477,49 +412,6 @@ export default function HomePage({ onViewAll, onNavigate }: HomePageProps) {
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Today at a glance — a compact, scrollable rollup across every domain,
-          each tile tapping through to its page. */}
-      <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-        <GlanceStat
-          icon={ListChecks}
-          color="#9ec06a"
-          value={pillars[0].total ? `${pillars[0].done}/${pillars[0].total}` : "—"}
-          label="Tasks"
-          onClick={() => {
-            setSelectedDate(today);
-            onViewAll?.();
-          }}
-        />
-        <GlanceStat
-          icon={Flame}
-          color="#eab464"
-          value={pillars[1].total ? `${pillars[1].done}/${pillars[1].total}` : "—"}
-          label="Habits"
-          onClick={() => onNavigate?.("habits")}
-        />
-        <GlanceStat
-          icon={Dumbbell}
-          color="#fb7185"
-          value={pillars[2].total ? `${pillars[2].done}/${pillars[2].total}` : "Rest"}
-          label="Workout"
-          onClick={() => onNavigate?.("workout")}
-        />
-        <GlanceStat
-          icon={UtensilsCrossed}
-          color="#34d399"
-          value={kcalToday.toLocaleString()}
-          label="Calories"
-          onClick={() => onNavigate?.("meals")}
-        />
-        <GlanceStat
-          icon={Wallet}
-          color="#a78bfa"
-          value={money(spendToday)}
-          label="Spent"
-          onClick={() => onNavigate?.("expenses")}
-        />
       </div>
 
       {/* Today's tasks */}

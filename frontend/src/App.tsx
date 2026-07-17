@@ -156,7 +156,7 @@ function App() {
   function renderPage() {
     switch (activePage) {
       case "home":
-        return <HomePage onViewAll={() => go("schedule")} onNavigate={go} />;
+        return <HomePage onViewAll={() => go("schedule")} />;
       case "schedule":
         return (
           // Only weekly view shares the controller (strip + grid both move by
