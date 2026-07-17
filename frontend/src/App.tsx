@@ -195,8 +195,10 @@ function App() {
 
       <SettingsSheet isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-      {/* Title row — stays mounted; its contents animate */}
-      <div className="px-4 pt-4">
+      {/* Title row — stays mounted; its contents animate. Top padding adds the
+          iOS safe-area inset (0 on devices without a notch) so the header clears
+          the status bar / Dynamic Island. */}
+      <div className="px-4" style={{ paddingTop: "calc(16px + env(safe-area-inset-top))" }}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             {/* Hamburger */}
