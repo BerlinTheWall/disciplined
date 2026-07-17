@@ -92,7 +92,9 @@ function App() {
   );
 
   // The schedule page is titled by the day being viewed: Today/Tomorrow/
-  // Yesterday by name, any other day as a date with the month tinted.
+  // Yesterday by name, any other day as month + day only — the year already
+  // shows in the month header right below, and the short form keeps the title
+  // at the full size the other pages use.
   const selectedDate = useTaskStore((s) => s.selectedDate);
   const relDayName = activePage === "schedule" ? relativeDayName(selectedDate) : null;
   const titleDate = new Date(selectedDate + "T00:00:00");
@@ -104,7 +106,7 @@ function App() {
             <span className="text-rose-400">
               {titleDate.toLocaleDateString(undefined, { month: "short" })}
             </span>{" "}
-            {titleDate.getDate()}, {titleDate.getFullYear()}
+            {titleDate.getDate()}
           </>
         ));
 
@@ -223,7 +225,7 @@ function App() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: dir > 0 ? -24 : 24, opacity: 0 }}
                   transition={spring.snappy}
-                  className={`${activePage === "schedule" ? "text-xl" : "text-2xl"} font-bold whitespace-nowrap text-fg`}
+                  className="text-2xl font-bold whitespace-nowrap text-fg"
                 >
                   {pageTitle}
                 </motion.h1>
