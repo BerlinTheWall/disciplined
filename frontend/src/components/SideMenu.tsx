@@ -58,8 +58,13 @@ export default function SideMenu({
               stiffness: 300,
             }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 pt-8 pb-8">
+            {/* Header — top padding adds the iOS safe-area inset (0 on devices
+                without a notch) so the logo clears the status bar, same as the
+                app header. */}
+            <div
+              className="flex items-center justify-between px-5 pb-8"
+              style={{ paddingTop: "calc(32px + env(safe-area-inset-top))" }}
+            >
               <div className="flex items-center gap-3">
                 <img
                   src={logo}
@@ -72,7 +77,8 @@ export default function SideMenu({
             <motion.button
               onClick={onClose}
               whileTap={tap}
-              className="absolute top-4 right-4 p-1 text-fg-faint"
+              className="absolute right-4 p-1 text-fg-faint"
+              style={{ top: "calc(16px + env(safe-area-inset-top))" }}
             >
               <X size={18} />
             </motion.button>
