@@ -99,30 +99,29 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
               className="flex flex-col items-center gap-0.5 flex-1"
             >
               <span className="relative flex items-center justify-center w-12 h-8">
-                {/* Always mounted; cross-faded via opacity only (no scale, no
-                    mount/unmount). A transform animating next to the icon made
-                    WKWebView re-round the icon's position ~1px on select; opacity
-                    doesn't transform the sibling, so the icon stays put. Not a
-                    layoutId morph either: shared layout animations inside
-                    position:fixed measured against the page and yanked the whole
-                    pill downward on tab switch. */}
+                {/* The active highlight, cross-faded via opacity only. */}
                 <motion.span
                   initial={false}
                   animate={{ opacity: t.isActive ? 1 : 0 }}
                   transition={spring.snappy}
                   className="absolute inset-0 bg-fg rounded-2xl"
                 />
-                <Icon
-                  // size 24 (even) centers on whole pixels in the 48x32 box, and
-                  // transform-gpu keeps the icon on its own layer, so when the
-                  // active pill animates its scale next to it WKWebView can't
-                  // re-round the icon's position (~1px shift seen only on iOS).
-                  size={24}
-                  // Constant stroke width: a changing stroke re-thickens the
-                  // glyph on selection; emphasis comes from the pill + color.
-                  strokeWidth={2}
-                  className={`relative z-10 transform-gpu ${t.isActive ? "text-fg-inverse" : "text-fg-faint"}`}
-                />
+                {/* Two stacked, identical icons cross-faded by opacity. Flipping
+                    one icon's color class repainted the glyph and made WKWebView
+                    re-round its subpixel position (~1px shift on select, iOS
+                    only). Here neither icon's own props change — only the white
+                    copy's opacity — so nothing can move. size 24 (even) keeps it
+                    centered on whole pixels; both copies share size + stroke so
+                    they overlap exactly. */}
+                <Icon size={24} strokeWidth={2} className="relative z-10 text-fg-faint" />
+                <motion.span
+                  initial={false}
+                  animate={{ opacity: t.isActive ? 1 : 0 }}
+                  transition={spring.snappy}
+                  className="absolute inset-0 z-10 flex items-center justify-center text-fg-inverse"
+                >
+                  <Icon size={24} strokeWidth={2} />
+                </motion.span>
               </span>
               <span
                 className={`text-[11px] ${
