@@ -2,6 +2,11 @@
 
 /* ── Theme tokens ──────────────────────────────────────────────────── */
 :root {
+  /* Floating UI (nav pill, mic, status cards) sits at `calc(base + --safe-bottom)`
+     above the bottom edge. Clears the iOS home indicator without the oversized
+     gap the full safe-area inset produced; 0 (unchanged) on non-notch devices. */
+  --safe-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px));
+
   --surface: #ffffff;
   --surface-alt: #f9fafb;
   --surface-raised: #f3f4f6;
