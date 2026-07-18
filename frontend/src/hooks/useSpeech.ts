@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
+import { SpeechRecognition as NativeSpeechRecognition } from "@capacitor-community/speech-recognition";
+import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { create } from "zustand";
 
 import { api } from "@/lib/api";
 import { useSettingsStore } from "@/store/settingsStore";
 
-// Browser-native voice: SpeechRecognition (speech-to-text) and speechSynthesis
-// (text-to-speech). Both are free and on-device/OS-provided — no backend.
+// Voice input/output. Speech-to-text has two implementations behind one hook:
+// the browser's SpeechRecognition API (Chrome/Edge/Safari; Firefox lacks it),
+// and — in the packaged iOS app, where WKWebView has no Web Speech API at
+// all — the OS speech recognizer via @capacitor-community/speech-recognition.
+// Text-to-speech uses speechSynthesis, which WKWebView does support.
 // SpeechRecognition is missing from TypeScript's DOM lib, so the minimal
-// surface we use is declared here. Chrome/Edge/Safari support it (Safari via
-// the webkit prefix); Firefox doesn't, so callers must respect `supported`.
+// surface we use is declared here.
+
+const isNativeSpeech = Capacitor.isNativePlatform();
 
 interface SRAlternative {
   transcript: string;
@@ -44,7 +50,7 @@ const SpeechRecognitionCtor: SRConstructor | undefined =
         .SpeechRecognition ??
       (window as { webkitSpeechRecognition?: SRConstructor }).webkitSpeechRecognition);
 
-export const speechInputSupported = Boolean(SpeechRecognitionCtor);
+export const speechInputSupported = isNativeSpeech || Boolean(SpeechRecognitionCtor);
 
 interface SpeechHandlers {
   // Live partial transcript while the user is still talking.
@@ -52,6 +58,13 @@ interface SpeechHandlers {
   // The finished utterance.
   onFinal: (text: string) => void;
 }
+
+// How long of a pause ends a native utterance. The Web Speech API detects
+// silence itself; iOS's recognizer keeps listening until told to stop, so the
+// hook finalizes after a pause (short once something was heard, longer while
+// still waiting for the first words).
+const NATIVE_SILENCE_MS = 1_800;
+const NATIVE_NO_SPEECH_MS = 6_000;
 
 export function useSpeechRecognition(handlers: SpeechHandlers) {
   const [listening, setListening] = useState(false);
@@ -62,7 +75,71 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
     handlersRef.current = handlers;
   });
 
+  // ── Native (packaged iOS app) ──────────────────────────────────────
+  const nativeActive = useRef(false);
+  const nativeText = useRef("");
+  const nativeListener = useRef<PluginListenerHandle | null>(null);
+  const silenceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  function armSilenceTimer() {
+    clearTimeout(silenceTimer.current);
+    silenceTimer.current = setTimeout(
+      () => void nativeStop(true),
+      nativeText.current ? NATIVE_SILENCE_MS : NATIVE_NO_SPEECH_MS
+    );
+  }
+
+  async function nativeStart() {
+    if (nativeActive.current) return;
+    stopSpeaking(); // don't transcribe our own text-to-speech
+    try {
+      const perm = await NativeSpeechRecognition.requestPermissions();
+      if (perm.speechRecognition !== "granted") return;
+    } catch {
+      return;
+    }
+    nativeActive.current = true;
+    nativeText.current = "";
+    nativeListener.current = await NativeSpeechRecognition.addListener("partialResults", (data) => {
+      const text = data.matches?.[0] ?? "";
+      if (!text) return;
+      nativeText.current = text;
+      handlersRef.current.onInterim?.(text);
+      armSilenceTimer();
+    });
+    setListening(true);
+    armSilenceTimer();
+    void NativeSpeechRecognition.start({
+      language: navigator.language || "en-US",
+      maxResults: 3,
+      partialResults: true,
+      popup: false,
+    }).catch(() => void nativeStop(false));
+  }
+
+  async function nativeStop(fireFinal: boolean) {
+    if (!nativeActive.current) return;
+    nativeActive.current = false;
+    clearTimeout(silenceTimer.current);
+    try {
+      await NativeSpeechRecognition.stop();
+    } catch {
+      // already stopped
+    }
+    void nativeListener.current?.remove();
+    nativeListener.current = null;
+    setListening(false);
+    const text = nativeText.current.trim();
+    nativeText.current = "";
+    if (fireFinal && text) handlersRef.current.onFinal(text);
+  }
+
+  // ── Browser ────────────────────────────────────────────────────────
   function start() {
+    if (isNativeSpeech) {
+      void nativeStart();
+      return;
+    }
     if (!SpeechRecognitionCtor || recRef.current) return;
     stopSpeaking(); // don't transcribe our own text-to-speech
     const rec = new SpeechRecognitionCtor();
@@ -93,10 +170,21 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
   }
 
   function stop() {
+    // Tapping stop while native-listening sends what was heard so far.
+    if (isNativeSpeech) {
+      void nativeStop(true);
+      return;
+    }
     recRef.current?.stop();
   }
 
-  useEffect(() => () => recRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      recRef.current?.abort();
+      if (nativeActive.current) void nativeStop(false);
+    },
+    []
+  );
 
   return { supported: speechInputSupported, listening, start, stop };
 }
