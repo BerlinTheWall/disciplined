@@ -1,10 +1,10 @@
-import { useContext, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import CalendarMonth from "./CalendarMonth";
-import { WeekSwipeContext } from "./swipeController";
+import { useSwipeController, WeekSwipeContext } from "./swipeController";
 import SwipePager from "./SwipePager";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
@@ -38,6 +38,27 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
 
   function shiftWeek(delta: number) {
     setSelectedDate(toISODate(addDays(selectedDateObj, delta * 7)));
+  }
+
+  // The arrows drive the same slide a swipe produces: settle the pager's
+  // motion value one page-width over, committing the week change on arrival.
+  // In weekly view the shared controller moves the grid below in sync; in
+  // daily view WeekHeader owns the controller so the arrows can reach it.
+  const internalController = useSwipeController(
+    () => shiftWeek(-1),
+    () => shiftWeek(1)
+  );
+  const controller = sharedController ?? internalController;
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  function arrowShift(delta: -1 | 1) {
+    const width = stripRef.current?.offsetWidth ?? 0;
+    if (width === 0) {
+      shiftWeek(delta); // measurement failed — change the week without the slide
+      return;
+    }
+    if (delta === 1) controller.settle(-width, controller.onNext);
+    else controller.settle(width, controller.onPrev);
   }
 
   function jumpTo(iso: string) {
@@ -108,7 +129,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
       {/* Month row — tap the title to jump to any month/year */}
       <div className="flex items-center justify-between mb-3 px-1">
         <motion.button
-          onClick={() => shiftWeek(-1)}
+          onClick={() => arrowShift(-1)}
           whileTap={tap}
           className="p-2 -m-2 text-fg-faint"
         >
@@ -123,7 +144,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
           <ChevronDown size={15} />
         </motion.button>
         <motion.button
-          onClick={() => shiftWeek(1)}
+          onClick={() => arrowShift(1)}
           whileTap={tap}
           className="p-2 -m-2 text-fg-faint"
         >
@@ -132,14 +153,16 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
       </div>
 
       {/* Swipe the strip to change weeks — reveals the neighbouring week as you
-          drag. In weekly view it shares a controller with the grid so both move. */}
-      <SwipePager
-        controller={sharedController}
-        onPrev={() => shiftWeek(-1)}
-        onNext={() => shiftWeek(1)}
-        pageKey={(offset) => toISODate(getWeekDates(addDays(selectedDateObj, offset * 7))[0])}
-        renderPage={renderWeek}
-      />
+          drag. In weekly view it shares a controller with the grid so both move.
+          The controller is always supplied from here so the arrows above can
+          drive the same slide. */}
+      <div ref={stripRef}>
+        <SwipePager
+          controller={controller}
+          pageKey={(offset) => toISODate(getWeekDates(addDays(selectedDateObj, offset * 7))[0])}
+          renderPage={renderWeek}
+        />
+      </div>
 
       {/* Tap the month title → the same month calendar the edit sheet uses;
           picking a day jumps straight to it. */}
