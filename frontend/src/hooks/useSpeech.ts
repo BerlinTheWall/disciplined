@@ -95,7 +95,10 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
     try {
       const perm = await NativeSpeechRecognition.requestPermissions();
       if (perm.speechRecognition !== "granted") return;
-    } catch {
+    } catch (e) {
+      // Typically "not implemented": the native plugin isn't in this build —
+      // npm install + npx cap sync ios + rebuild in Xcode.
+      console.warn("[speech] native permission request failed", e);
       return;
     }
     nativeActive.current = true;
@@ -114,7 +117,10 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       maxResults: 3,
       partialResults: true,
       popup: false,
-    }).catch(() => void nativeStop(false));
+    }).catch((e) => {
+      console.warn("[speech] native recognition failed", e);
+      void nativeStop(false);
+    });
   }
 
   async function nativeStop(fireFinal: boolean) {
