@@ -60,8 +60,10 @@ interface NativeReminderHandlers {
   // Done / Snooze notification buttons — same semantics as the web
   // service-worker actions.
   onAction: (action: string, data: ReminderNotificationData) => void;
-  // Plain tap on the notification body: jump to the item's day.
-  onOpen: (date: string) => void;
+  // Plain tap on the notification body: gets the full reminder payload so the
+  // app can jump to the day AND surface an in-app Done/Snooze prompt (iOS
+  // won't put buttons on a collapsed banner, so this is the one-tap path).
+  onOpen: (data: ReminderNotificationData) => void;
 }
 
 let handlers: NativeReminderHandlers | null = null;
@@ -93,7 +95,7 @@ export async function initNativeReminders(h: NativeReminderHandlers) {
     if (event.actionId === "done" || event.actionId === "snooze") {
       handlers.onAction(event.actionId, data);
     } else {
-      handlers.onOpen(data.date);
+      handlers.onOpen(data);
     }
   });
 }

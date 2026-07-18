@@ -303,6 +303,44 @@ function handleReminderAction(action: string, data: ReminderNotificationData) {
   }
 }
 
+// Rebuild a full banner alert from a tapped notification's payload, so the
+// app can offer Done/Snooze in one tap (iOS only shows notification buttons on
+// long-press). Null when the item is gone or already completed — then the tap
+// just opens the day.
+function alertFromData(data: ReminderNotificationData): ReminderAlert | null {
+  const now = Date.now();
+  const build = (
+    title: string,
+    startMinutes: number,
+    color: string,
+    icon: IconKey
+  ): ReminderAlert => {
+    const startAt = new Date(data.date + "T00:00:00").getTime() + startMinutes * 60_000;
+    return {
+      key: data.key,
+      kind: data.kind,
+      id: data.id,
+      title,
+      body:
+        now >= startAt
+          ? `Starting now (${formatTimeLabel(startMinutes)})`
+          : `Starts at ${formatTimeLabel(startMinutes)}`,
+      color,
+      icon,
+      date: data.date,
+      startMinutes,
+    };
+  };
+  if (data.kind === "task") {
+    const t = useTaskStore.getState().tasks.find((x) => x.id === data.id);
+    if (!t || t.completed) return null;
+    return build(t.title, t.startMinutes, t.color, t.icon);
+  }
+  const h = useHabitStore.getState().habits.find((x) => x.id === data.id);
+  if (!h || h.completedDates.includes(data.date)) return null;
+  return build(h.title, h.startMinutes, h.color, h.icon);
+}
+
 interface ReminderHostProps {
   // Jump to the item's day on the schedule page.
   onOpen: (date: string) => void;
@@ -315,9 +353,18 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
   const dismissAlert = useReminderStore((s) => s.dismissAlert);
 
   // Native side: permission cache, Done/Snooze action routing, tap-to-open.
+  // A body tap jumps to the day and surfaces the same banner with Done/Snooze
+  // buttons — one tap from notification to actions.
   // Re-run when the onOpen prop changes so taps always use the live handler.
   useEffect(() => {
-    void initNativeReminders({ onAction: handleReminderAction, onOpen });
+    void initNativeReminders({
+      onAction: handleReminderAction,
+      onOpen: (data) => {
+        onOpen(data.date);
+        const alert = alertFromData(data);
+        if (alert) useReminderStore.getState().pushAlert(alert);
+      },
+    });
   }, [onOpen]);
 
   // Precise scheduling: after each pass, aim a timer exactly at the next fire
@@ -449,6 +496,43 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
                   </p>
                   <p className="font-semibold text-fg truncate">{alert.title}</p>
                   <p className="text-sm text-fg-muted">{alert.body}</p>
+                  {/* Inline actions — the same semantics as the notification's
+                      long-press buttons, one tap away. Snoozing removes the
+                      banner via the store; Done dismisses it here. */}
+                  <div className="flex gap-2 mt-2">
+                    <motion.button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dismissAlert(alert.key);
+                        handleReminderAction("done", {
+                          key: alert.key,
+                          kind: alert.kind,
+                          id: alert.id,
+                          date: alert.date,
+                        });
+                      }}
+                      whileTap={tap}
+                      className="h-8 px-4 rounded-full bg-fg text-fg-inverse text-[13px] font-semibold"
+                    >
+                      Done
+                    </motion.button>
+                    <motion.button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dismissAlert(alert.key);
+                        handleReminderAction("snooze", {
+                          key: alert.key,
+                          kind: alert.kind,
+                          id: alert.id,
+                          date: alert.date,
+                        });
+                      }}
+                      whileTap={tap}
+                      className="h-8 px-4 rounded-full bg-surface-raised text-fg text-[13px] font-medium"
+                    >
+                      Snooze 10 min
+                    </motion.button>
+                  </div>
                 </div>
                 <motion.button
                   onClick={(e) => {
