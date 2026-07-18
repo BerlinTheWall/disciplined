@@ -210,11 +210,15 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   // provide one, the local template otherwise. Fetched and voice-prefetched in
   // the background (debounced) so playback starts instantly. The template
   // string doubles as the change signal — it varies exactly when the day does.
-  const briefing = assistantDayBriefing(items, "Today");
-  const [script, setScript] = useState<string | null>(null);
-
   const now = useNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
+  // Current time for the briefing, rounded to 15-minute buckets so the script
+  // (and its cached LLM/audio versions) don't regenerate every minute.
+  const briefNow = Math.floor(nowMin / 15) * 15;
+
+  const briefing = assistantDayBriefing(items, "Today", briefNow);
+  const [script, setScript] = useState<string | null>(null);
+
   // Earliest allowed auto-play time. Before it, the briefing stays armed (the
   // once-per-day flag is not burned), so an app opened at 1 AM briefs at 7 AM
   // — the flip of this boolean re-runs the effect below.
@@ -239,7 +243,8 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           completed: i.completed,
           kind: i.kind,
         })),
-        streaks
+        streaks,
+        briefNow
       );
       if (cancelled) return;
       setScript(s);

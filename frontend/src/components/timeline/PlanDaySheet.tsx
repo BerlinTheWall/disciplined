@@ -20,10 +20,12 @@ import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { isLightColor } from "@/lib/color";
-import { parseISODate, relativeDayLabel } from "@/lib/date";
+import { parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
+import { isHabitActiveOnDate } from "@/lib/habits";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { formatDuration, formatTimeLabel, rangeLabel, timeStringToMinutes } from "@/lib/time";
+import { useHabitStore } from "@/store/habitStore";
 import { useTaskStore } from "@/store/taskStore";
 import BottomSheet from "../BottomSheet";
 import { useConfirm } from "../ConfirmDialog";
@@ -109,7 +111,34 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   // stops when the sheet closes. While the sheet is open, an LLM-written
   // script (and its audio) is prepared in the background; the local template
   // stays as the fallback when the backend can't deliver.
-  const briefing = assistantDayBriefing(dayTasks, relativeDayLabel(selectedDate));
+  // The summary covers the whole day, not just the task list shown here:
+  // habits active on this day ride along, and when the day is today the
+  // current time (15-minute buckets, for caching) lets the script call out
+  // passed-but-undone items.
+  const habits = useHabitStore((s) => s.habits);
+  const briefingItems = [
+    ...dayTasks.map((t) => ({
+      title: t.title,
+      startMinutes: t.startMinutes,
+      durationMinutes: t.durationMinutes,
+      completed: t.completed,
+      kind: "task" as const,
+    })),
+    ...habits
+      .filter((h) => isHabitActiveOnDate(h, parseISODate(selectedDate)))
+      .map((h) => ({
+        title: h.title,
+        startMinutes: h.startMinutes,
+        durationMinutes: h.durationMinutes,
+        completed: h.completedDates.includes(selectedDate),
+        kind: "habit" as const,
+      })),
+  ].sort((a, b) => a.startMinutes - b.startMinutes);
+  const briefNow =
+    selectedDate === todayISODate()
+      ? Math.floor((new Date().getHours() * 60 + new Date().getMinutes()) / 15) * 15
+      : undefined;
+  const briefing = assistantDayBriefing(briefingItems, relativeDayLabel(selectedDate), briefNow);
   const [script, setScript] = useState<string | null>(null);
 
   function toggleRead() {
@@ -125,13 +154,9 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     const id = window.setTimeout(async () => {
       const s = await fetchBriefingScript(
         relativeDayLabel(selectedDate),
-        dayTasks.map((t) => ({
-          title: t.title,
-          startMinutes: t.startMinutes,
-          durationMinutes: t.durationMinutes,
-          completed: t.completed,
-          kind: "task" as const,
-        }))
+        briefingItems,
+        [],
+        briefNow
       );
       if (cancelled) return;
       setScript(s);

@@ -84,8 +84,14 @@ interface BriefingTask {
 
 // One flowing run-through of the day, the way an assistant would brief a
 // manager. Kept under the TTS length cap by summarizing the tail of very
-// busy days.
-export function assistantDayBriefing(tasks: BriefingTask[], dayLabel: string): string {
+// busy days. When `nowMinutes` is given (briefing today), items whose start
+// has passed without being completed are called out as still open instead of
+// being walked through as if they were ahead.
+export function assistantDayBriefing(
+  tasks: BriefingTask[],
+  dayLabel: string,
+  nowMinutes?: number
+): string {
   const name = useProfileStore.getState().name.trim();
   const day = dayLabel === "Today" ? "today" : dayLabel === "Tomorrow" ? "tomorrow" : dayLabel;
   const prefix = name ? `${name}, ` : "";
@@ -103,25 +109,45 @@ export function assistantDayBriefing(tasks: BriefingTask[], dayLabel: string): s
     return `${prefix}all ${tasks.length === 1 ? "your tasks are" : `${tasks.length} tasks are`} already checked off for ${day}. Nice work.`;
   }
 
+  const overdue =
+    nowMinutes === undefined ? [] : remaining.filter((t) => t.startMinutes < nowMinutes);
+  const upcoming =
+    nowMinutes === undefined ? remaining : remaining.filter((t) => t.startMinutes >= nowMinutes);
+
   const count = remaining.length === 1 ? "one thing" : `${remaining.length} things`;
   let text =
     `${prefix}here's the plan for ${day} — ${count} on the list. ` +
     (doneCount > 0 ? `You've already finished ${doneCount}. ` : "");
 
-  for (let i = 0; i < remaining.length; i++) {
-    const t = remaining[i];
+  if (overdue.length > 0) {
+    const names = overdue
+      .slice(0, 3)
+      .map((t) => t.title)
+      .join(", ");
+    const extra = overdue.length > 3 ? ` and ${overdue.length - 3} more` : "";
+    text +=
+      overdue.length === 1
+        ? `${names} slipped past its ${spokenTime(overdue[0].startMinutes)} slot and is still open — do it now, move it, or let it go. `
+        : `${names}${extra} are past their slots and still open — worth a quick decision. `;
+  }
+
+  for (let i = 0; i < upcoming.length; i++) {
+    const t = upcoming[i];
     const piece =
       i === 0
-        ? `You start at ${spokenTime(t.startMinutes)} with ${t.title}, ${spokenDuration(t.durationMinutes)}. `
-        : i === remaining.length - 1
+        ? `${nowMinutes === undefined ? "You start" : "Next up"} at ${spokenTime(t.startMinutes)} with ${t.title}, ${spokenDuration(t.durationMinutes)}. `
+        : i === upcoming.length - 1
           ? `And finally at ${spokenTime(t.startMinutes)}, ${t.title}, ${spokenDuration(t.durationMinutes)}. `
           : `Then at ${spokenTime(t.startMinutes)}, ${t.title}, ${spokenDuration(t.durationMinutes)}. `;
     // Leave room for the summary tail when the day is packed.
     if (text.length + piece.length > 1200) {
-      text += `Plus ${remaining.length - i} more after that. `;
+      text += `Plus ${upcoming.length - i} more after that. `;
       break;
     }
     text += piece;
+  }
+  if (upcoming.length === 0) {
+    text += "Nothing else is on the calendar ahead. ";
   }
 
   return text + "That's your day.";

@@ -128,6 +128,10 @@ a long free gap worth using, or an unusually early or late item.
 references to earlier conversations — there were none.
 - Only describe an item as done if it is marked "already completed". Items without that \
 mark are still ahead — never congratulate work that has not happened.
+- Daily habits in the schedule count as much as tasks — include them in the walk-through.
+- Items marked "past its start time, still not done" were missed, not finished: mention \
+them briefly and nudge one decision — do it now, move it, or let it go. Never skip them \
+and never assume they happened.
 - When the schedule is sparse, keep the briefing short rather than padding it with filler.
 - Tone: warm, composed, professional. Encouraging but never gushing."""
 
@@ -135,6 +139,10 @@ mark are still ahead — never congratulate work that has not happened.
 def write_briefing_prompt(req: BriefingRequest) -> str:
     lines = [f"Day being briefed: {req.day_label}"]
     lines.append(f"User's name: {req.name or '(not given)'}")
+    if req.now_minutes is not None:
+        lines.append(
+            f"Current time: {fmt_minutes(req.now_minutes)} — items starting earlier have passed."
+        )
     if req.items:
         lines.append("Schedule (in start-time order):")
         for item in sorted(req.items, key=lambda i: i.start_minutes):
@@ -144,6 +152,8 @@ def write_briefing_prompt(req: BriefingRequest) -> str:
                 flags.append("daily habit")
             if item.completed:
                 flags.append("already completed")
+            elif req.now_minutes is not None and item.start_minutes < req.now_minutes:
+                flags.append("past its start time, still not done")
             suffix = f" ({', '.join(flags)})" if flags else ""
             lines.append(
                 f"- {fmt_minutes(item.start_minutes)}-{fmt_minutes(end)}: {item.title}{suffix}"

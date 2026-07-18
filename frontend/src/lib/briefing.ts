@@ -12,13 +12,17 @@ const CACHE_MAX = 6;
 export function fetchBriefingScript(
   dayLabel: string,
   items: BriefingItemPayload[],
-  streaks: { title: string; days: number }[] = []
+  streaks: { title: string; days: number }[] = [],
+  // Pass only when the day is today (callers round it, so the cache isn't
+  // busted every minute).
+  nowMinutes?: number
 ): Promise<string | null> {
   const payload: BriefingPayload = {
     dayLabel,
     name: useProfileStore.getState().name.trim(),
     items: [...items].sort((a, b) => a.startMinutes - b.startMinutes),
     streaks,
+    nowMinutes,
   };
   const key = JSON.stringify(payload);
 

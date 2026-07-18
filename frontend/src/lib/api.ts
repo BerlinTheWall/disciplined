@@ -130,6 +130,9 @@ export interface BriefingPayload {
   name: string;
   items: BriefingItemPayload[];
   streaks: { title: string; days: number }[];
+  // Current clock time (minutes from midnight), only when briefing today —
+  // lets the script call out passed-but-undone items instead of guessing.
+  nowMinutes?: number;
 }
 
 // Chat tools that change the schedule server-side — when a chat turn ran any of

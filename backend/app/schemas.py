@@ -61,6 +61,10 @@ class BriefingRequest(CamelModel):
     name: str = Field(default="", max_length=80)
     items: list[BriefingItem] = Field(max_length=60)
     streaks: list[BriefingStreak] = Field(default_factory=list, max_length=10)
+    # The user's current clock time (minutes from midnight), sent only when the
+    # briefed day is today — lets the script treat passed-but-undone items as
+    # overdue instead of guessing.
+    now_minutes: int | None = Field(default=None, ge=0, lt=24 * 60)
 
 
 class BriefingResponse(CamelModel):
