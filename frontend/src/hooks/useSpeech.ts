@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { SpeechRecognition as NativeSpeechRecognition } from "@capacitor-community/speech-recognition";
+// The @capgo fork, not @capacitor-community: the community plugin is
+// CocoaPods-only (no Package.swift), so Capacitor 8's SPM-based iOS project
+// silently skipped its native code — every call threw "not implemented".
+import { SpeechRecognition as NativeSpeechRecognition } from "@capgo/capacitor-speech-recognition";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { create } from "zustand";
 
@@ -126,6 +129,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       maxResults: 3,
       partialResults: true,
       popup: false,
+      addPunctuation: true,
     }).catch((e) => {
       console.warn("[speech] native recognition failed", e);
       handlersRef.current.onError?.(`Listening failed: ${String(e)}`);
