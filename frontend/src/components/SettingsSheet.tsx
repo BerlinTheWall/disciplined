@@ -221,7 +221,7 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     <BottomSheet
       isOpen={isOpen}
       onClose={onClose}
-      className="bg-surface-alt p-5 pb-8 max-h-[90vh] overflow-y-auto"
+      className="bg-surface-alt p-5 pb-[calc(2rem+env(safe-area-inset-bottom))] max-h-[70vh] overflow-y-auto"
     >
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-fg">Settings</h2>
