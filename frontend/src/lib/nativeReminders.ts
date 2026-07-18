@@ -1,7 +1,7 @@
 import { Capacitor, type PermissionState } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 
-import { prepareReminderSounds } from "./reminderAudio";
+import { lookupReminderSounds, prepareReminderSounds } from "./reminderAudio";
 import type { NotifyPermission, ReminderNotificationData } from "./reminders";
 import { useSettingsStore } from "@/store/settingsStore";
 
@@ -110,6 +110,32 @@ export function syncNativeReminders(upcoming: NativeReminder[]) {
   syncTimer = setTimeout(() => void doSync(), 400);
 }
 
+// Cancel everything pending and schedule the batch. `sounds` maps a
+// reminder's spoken line to its synthesized WAV; reminders without one fall
+// back to "default" — the name resolves to no file, which iOS answers with
+// the standard notification sound. Omitting the field entirely would deliver
+// SILENTLY (the plugin only sets a sound when one is passed).
+async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string> | null) {
+  const pending = await LocalNotifications.getPending();
+  if (pending.notifications.length > 0) {
+    await LocalNotifications.cancel({
+      notifications: pending.notifications.map((n) => ({ id: n.id })),
+    });
+  }
+  if (batch.length === 0) return;
+  await LocalNotifications.schedule({
+    notifications: batch.map((r) => ({
+      id: notifId(r.key),
+      title: r.title,
+      body: r.body,
+      schedule: { at: new Date(r.fireAt) },
+      actionTypeId: "REMINDER",
+      extra: r.data,
+      sound: sounds?.get(r.speech) ?? "default",
+    })),
+  });
+}
+
 // Synthesizing sounds makes a sync take a while; if another sync is requested
 // meanwhile, run one more pass at the end instead of overlapping.
 let syncing = false;
@@ -124,33 +150,18 @@ async function doSync() {
   syncing = true;
   try {
     const batch = latest.slice(0, MAX_SCHEDULED);
+    const speak = useSettingsStore.getState().speakReminders;
 
-    // Spoken notifications: pre-synthesize each reminder's line so iOS plays
-    // the speech as the notification sound. Off => default sound. Failures
-    // just mean that reminder keeps the default sound until the next sync.
-    let sounds = new Map<string, string>();
-    if (useSettingsStore.getState().speakReminders && batch.length > 0) {
-      sounds = await prepareReminderSounds(batch.map((r) => r.speech));
-    }
+    // Pass 1 — immediate: schedule with whatever spoken audio is already
+    // cached, so quitting the app mid-sync never leaves stale notifications.
+    await scheduleBatch(batch, speak ? lookupReminderSounds(batch.map((r) => r.speech)) : null);
 
-    const pending = await LocalNotifications.getPending();
-    if (pending.notifications.length > 0) {
-      await LocalNotifications.cancel({
-        notifications: pending.notifications.map((n) => ({ id: n.id })),
-      });
-    }
-    if (batch.length > 0) {
-      await LocalNotifications.schedule({
-        notifications: batch.map((r) => ({
-          id: notifId(r.key),
-          title: r.title,
-          body: r.body,
-          schedule: { at: new Date(r.fireAt) },
-          actionTypeId: "REMINDER",
-          extra: r.data,
-          sound: sounds.get(r.speech),
-        })),
-      });
+    // Pass 2 — synthesize the missing lines (network, can take a while) and
+    // reschedule so those reminders speak instead of dinging. Failures just
+    // mean a reminder keeps the default sound until the next sync.
+    if (speak && batch.length > 0) {
+      const sounds = await prepareReminderSounds(batch.map((r) => r.speech));
+      await scheduleBatch(batch, sounds);
     }
   } catch (e) {
     console.warn("[reminders] native sync failed", e);

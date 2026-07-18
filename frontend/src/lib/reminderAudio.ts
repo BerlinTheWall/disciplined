@@ -75,6 +75,18 @@ async function ensureSound(text: string, hash: string): Promise<string | null> {
   }
 }
 
+// Cache-only lookup: text -> filename for lines whose audio already exists.
+// Synchronous and instant — used to schedule immediately before synthesis.
+export function lookupReminderSounds(lines: string[]): Map<string, string> {
+  const index = loadIndex();
+  const ready = new Map<string, string>();
+  for (const text of lines) {
+    const hash = textHash(text);
+    if (index[hash]) ready.set(text, index[hash]);
+  }
+  return ready;
+}
+
 // Ensure spoken audio exists for the given lines (nearest reminders first).
 // Returns text -> filename for every line that has a ready file. Lines beyond
 // `limit` are skipped this pass — they move up as their date approaches.
