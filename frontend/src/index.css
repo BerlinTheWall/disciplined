@@ -7,6 +7,9 @@
      iPhone and 16px on non-notch devices. Change the numbers here to move all
      the floating UI up or down together. */
   --nav-bottom: max(16px, calc(env(safe-area-inset-bottom) - 8px));
+  /* Raw top inset, readable from JS via getComputedStyle (BottomSheet caps
+     its keyboard lift with it). */
+  --safe-top: env(safe-area-inset-top, 0px);
 
   --surface: #ffffff;
   --surface-alt: #f9fafb;

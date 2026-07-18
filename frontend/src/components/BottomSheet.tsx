@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
@@ -20,10 +20,21 @@ interface BottomSheetProps {
 
 export default function BottomSheet({ isOpen, onClose, className, children }: BottomSheetProps) {
   useScrollLock(isOpen);
+  const panelRef = useRef<HTMLDivElement>(null);
   // iOS overlays the keyboard on the layout viewport rather than resizing it,
   // so a fixed bottom-0 panel would sit behind it — lift the panel by the
   // keyboard's height (0 when closed, and on platforms that resize instead).
+  // Capped so a tall sheet's top never leaves the screen: it lifts only as far
+  // as the space above allows, keeping the (top-anchored) focused field
+  // visible while its lower part stays behind the keyboard.
   const keyboardInset = useKeyboardInset(isOpen);
+  let lift = keyboardInset;
+  if (keyboardInset > 0 && panelRef.current) {
+    const safeTop =
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
+    const spaceAbove = window.innerHeight - panelRef.current.offsetHeight - safeTop - 8;
+    lift = Math.min(keyboardInset, Math.max(0, spaceAbove));
+  }
 
   return (
     <AnimatePresence>
@@ -37,9 +48,10 @@ export default function BottomSheet({ isOpen, onClose, className, children }: Bo
             onClick={onClose}
           />
           <motion.div
+            ref={panelRef}
             className={`fixed bottom-0 left-0 right-0 rounded-t-2xl z-50 shadow-xl ${className ?? ""}`}
             initial={{ y: "100%" }}
-            animate={{ y: -keyboardInset }}
+            animate={{ y: -lift }}
             exit={{ y: "100%" }}
             transition={spring.snappy}
           >
