@@ -83,7 +83,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
-  const { reading, loading, toggle, stop: stopReading } = useReadAloud();
+  const { reading, loading, toggle } = useReadAloud();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Tasks already on this day, sorted — the live plan.
@@ -173,11 +173,11 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     toggle(script ?? briefing);
   }
 
+  // Note: closing the sheet does NOT stop an in-progress reading — the
+  // summary keeps talking while the user moves on; any speaker button (here
+  // or on Home) stops it, since the read-aloud state is global.
   useEffect(() => {
-    if (!isOpen) {
-      stopReading();
-      return;
-    }
+    if (!isOpen) return;
     let cancelled = false;
     const id = window.setTimeout(async () => {
       const s = await fetchBriefingScript(
@@ -194,7 +194,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [isOpen, briefing, stopReading]);
+  }, [isOpen, briefing]);
 
   // Next free start = end of the latest item on this day (tasks and habit
   // occurrences alike), else default.
