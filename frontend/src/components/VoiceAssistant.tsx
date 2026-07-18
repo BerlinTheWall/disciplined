@@ -153,6 +153,7 @@ export default function VoiceAssistant() {
       {/* The mic — its own circle beside the nav pill, not a fourth tab */}
       <motion.button
         onClick={onMicTap}
+        data-tour="mic"
         whileTap={tap}
         aria-label={listening ? "Stop listening" : "Talk to the assistant"}
         className={`fixed right-4 z-30 w-16 h-16 rounded-full shadow-xl flex items-center justify-center border ${

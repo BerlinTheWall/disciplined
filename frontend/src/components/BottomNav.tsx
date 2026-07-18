@@ -71,6 +71,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
         {active === "schedule" && (
           <motion.button
             onClick={onAdd}
+            data-tour="add-task"
             whileTap={tap}
             initial={{ opacity: 0, scale: 0.6, y: 8 }}
             animate={{ opacity: isScrolling ? 0.4 : 1, scale: 1, y: 0, rotate: fabOpen ? 135 : 0 }}
@@ -91,6 +92,7 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
           return (
             <motion.button
               key={t.key}
+              data-tour={t.key === "calendar" ? "calendar-tab" : undefined}
               onClick={t.onSelect}
               whileTap={tap}
               className="flex flex-col items-center gap-0.5 flex-1"

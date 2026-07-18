@@ -13,6 +13,7 @@ import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
 import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
+import TutorialHost from "./components/TutorialHost";
 import VoiceAssistant from "./components/VoiceAssistant";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
@@ -213,6 +214,7 @@ function App() {
             {/* Hamburger */}
             <motion.button
               onClick={() => setIsSideMenuOpen(true)}
+              data-tour="menu"
               whileTap={tap}
               className="p-1 -ml-1 text-fg-faint"
             >
@@ -377,6 +379,10 @@ function App() {
 
       {/* Global push-to-talk — floats above the nav on every page */}
       <VoiceAssistant />
+
+      {/* First-launch guided tour — spotlights the essential controls and
+          advances only when the user actually uses them. */}
+      <TutorialHost activePage={activePage} isAddOpen={isAddOpen} isSideMenuOpen={isSideMenuOpen} />
     </div>
   );
 }
