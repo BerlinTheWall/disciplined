@@ -28,6 +28,18 @@ function voiceLabel(v: SpeechSynthesisVoice) {
     .replace(/ \(.*\)$/, "");
 }
 
+// Earliest auto-play time choices for the morning briefing; opening the app
+// earlier leaves the briefing armed until the clock passes the chosen time.
+const BRIEFING_FROM_OPTIONS: Array<{ value: number | null; label: string }> = [
+  { value: null, label: "Any time" },
+  { value: 5 * 60, label: "5 AM" },
+  { value: 6 * 60, label: "6 AM" },
+  { value: 7 * 60, label: "7 AM" },
+  { value: 8 * 60, label: "8 AM" },
+  { value: 9 * 60, label: "9 AM" },
+  { value: 10 * 60, label: "10 AM" },
+];
+
 // A titled group of rows rendered as one card, iOS-settings style: hairline
 // dividers between rows rather than a gap, so a section reads as one block.
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -135,8 +147,18 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setNaturalVoice,
       ])
     );
-  const [morningBriefing, setMorningBriefing] = useSettingsStore(
-    useShallow((state) => [state.morningBriefing, state.setMorningBriefing])
+  const [
+    morningBriefing,
+    setMorningBriefing,
+    morningBriefingFromMinutes,
+    setMorningBriefingFromMinutes,
+  ] = useSettingsStore(
+    useShallow((state) => [
+      state.morningBriefing,
+      state.setMorningBriefing,
+      state.morningBriefingFromMinutes,
+      state.setMorningBriefingFromMinutes,
+    ])
   );
 
   function toggleNaturalVoice() {
@@ -252,6 +274,16 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           on={morningBriefing}
           onToggle={() => setMorningBriefing(!morningBriefing)}
         />
+        <Collapse open={morningBriefing}>
+          <ChipRow
+            title="Not before"
+            options={BRIEFING_FROM_OPTIONS}
+            selected={(o) => o.value === morningBriefingFromMinutes}
+            onSelect={(o) => setMorningBriefingFromMinutes(o.value)}
+            labelOf={(o) => o.label}
+            keyOf={(o) => String(o.value)}
+          />
+        </Collapse>
       </Section>
 
       <Section title="Appearance">

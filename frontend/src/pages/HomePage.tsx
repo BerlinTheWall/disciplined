@@ -212,6 +212,15 @@ export default function HomePage({ onViewAll }: HomePageProps) {
   // string doubles as the change signal — it varies exactly when the day does.
   const briefing = assistantDayBriefing(items, "Today");
   const [script, setScript] = useState<string | null>(null);
+
+  const now = useNow();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  // Earliest allowed auto-play time. Before it, the briefing stays armed (the
+  // once-per-day flag is not burned), so an app opened at 1 AM briefs at 7 AM
+  // — the flip of this boolean re-runs the effect below.
+  const briefingFromMinutes = useSettingsStore((s) => s.morningBriefingFromMinutes);
+  const briefingWindowOpen = nowMin >= (briefingFromMinutes ?? 0);
+
   useEffect(() => {
     let cancelled = false;
     const id = window.setTimeout(async () => {
@@ -242,6 +251,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
         useSettingsStore.getState();
       if (
         morningBriefing &&
+        briefingWindowOpen &&
         lastMorningBriefingDate !== today &&
         document.visibilityState === "visible"
       ) {
@@ -255,10 +265,7 @@ export default function HomePage({ onViewAll }: HomePageProps) {
       window.clearTimeout(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [briefing]);
-
-  const now = useNow();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  }, [briefing, briefingWindowOpen]);
   const inSpan = (i: DayItem) =>
     nowMin >= i.startMinutes && nowMin < i.startMinutes + i.durationMinutes;
 

@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
@@ -28,13 +28,18 @@ export default function BottomSheet({ isOpen, onClose, className, children }: Bo
   // as the space above allows, keeping the (top-anchored) focused field
   // visible while its lower part stays behind the keyboard.
   const keyboardInset = useKeyboardInset(isOpen);
-  let lift = keyboardInset;
-  if (keyboardInset > 0 && panelRef.current) {
+  const [lift, setLift] = useState(0);
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (keyboardInset === 0 || !panel) {
+      setLift(0);
+      return;
+    }
     const safeTop =
       parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
-    const spaceAbove = window.innerHeight - panelRef.current.offsetHeight - safeTop - 8;
-    lift = Math.min(keyboardInset, Math.max(0, spaceAbove));
-  }
+    const spaceAbove = window.innerHeight - panel.offsetHeight - safeTop - 8;
+    setLift(Math.min(keyboardInset, Math.max(0, spaceAbove)));
+  }, [keyboardInset]);
 
   return (
     <AnimatePresence>

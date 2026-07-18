@@ -41,6 +41,11 @@ interface SettingsState {
   // prompt instead.
   morningBriefing: boolean;
   setMorningBriefing: (on: boolean) => void;
+  // Earliest clock time (minutes from midnight) the morning briefing may
+  // auto-play; opening the app before it leaves the briefing armed for later
+  // that day. null = any time.
+  morningBriefingFromMinutes: number | null;
+  setMorningBriefingFromMinutes: (minutes: number | null) => void;
   // Date (ISO) the morning briefing last ran/prompted — prevents repeats.
   lastMorningBriefingDate: string | null;
   setLastMorningBriefingDate: (date: string) => void;
@@ -67,6 +72,8 @@ export const useSettingsStore = create<SettingsState>()(
       setNaturalVoice: (on) => set({ naturalVoice: on }),
       morningBriefing: false,
       setMorningBriefing: (on) => set({ morningBriefing: on }),
+      morningBriefingFromMinutes: null,
+      setMorningBriefingFromMinutes: (minutes) => set({ morningBriefingFromMinutes: minutes }),
       lastMorningBriefingDate: null,
       setLastMorningBriefingDate: (date) => set({ lastMorningBriefingDate: date }),
     }),
