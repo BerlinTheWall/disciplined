@@ -72,6 +72,13 @@ export default function VoiceAssistant() {
   const { supported, listening, start, stop } = useSpeechRecognition({
     onInterim: setText,
     onFinal: (transcript) => void handleFinal(transcript),
+    // Native recognition failures surface here — there's no console on the
+    // phone, so the card is where the user (and debugging) sees the reason.
+    onError: (message) => {
+      setPhase("error");
+      setText(message);
+      scheduleDismiss(12_000);
+    },
   });
 
   function onMicTap() {

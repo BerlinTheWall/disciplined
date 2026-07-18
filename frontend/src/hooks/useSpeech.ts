@@ -57,6 +57,9 @@ interface SpeechHandlers {
   onInterim?: (text: string) => void;
   // The finished utterance.
   onFinal: (text: string) => void;
+  // Recognition couldn't start/run — the message says why (surfaced in the
+  // UI on native, where there's no console to check).
+  onError?: (message: string) => void;
 }
 
 // How long of a pause ends a native utterance. The Web Speech API detects
@@ -94,11 +97,17 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
     stopSpeaking(); // don't transcribe our own text-to-speech
     try {
       const perm = await NativeSpeechRecognition.requestPermissions();
-      if (perm.speechRecognition !== "granted") return;
+      if (perm.speechRecognition !== "granted") {
+        handlersRef.current.onError?.(
+          "Microphone or speech access is off — enable both for Disciplined in iOS Settings."
+        );
+        return;
+      }
     } catch (e) {
       // Typically "not implemented": the native plugin isn't in this build —
       // npm install + npx cap sync ios + rebuild in Xcode.
       console.warn("[speech] native permission request failed", e);
+      handlersRef.current.onError?.(`Speech setup failed: ${String(e)}`);
       return;
     }
     nativeActive.current = true;
@@ -119,6 +128,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       popup: false,
     }).catch((e) => {
       console.warn("[speech] native recognition failed", e);
+      handlersRef.current.onError?.(`Listening failed: ${String(e)}`);
       void nativeStop(false);
     });
   }
