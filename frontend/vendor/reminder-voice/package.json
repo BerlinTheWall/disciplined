@@ -1,0 +1,15 @@
+{
+  "name": "reminder-voice",
+  "version": "1.0.0",
+  "description": "Local Capacitor plugin: renders the iOS device text-to-speech voice into a Library/Sounds file, used as the natural-sounding offline fallback for spoken reminder notifications.",
+  "main": "index.js",
+  "license": "MIT",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}

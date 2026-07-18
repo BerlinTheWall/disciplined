@@ -1,7 +1,20 @@
+import { registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 
 import { api } from "./api";
 import { useSettingsStore } from "@/store/settingsStore";
+
+// Local native plugin (vendor/reminder-voice): renders the iOS device voice
+// straight into Library/Sounds — the natural-sounding offline fallback.
+interface ReminderVoicePlugin {
+  synthesizeToSound(options: {
+    text: string;
+    fileName: string;
+    language?: string;
+    rate?: number;
+  }): Promise<{ fileName: string }>;
+}
+const ReminderVoice = registerPlugin<ReminderVoicePlugin>("ReminderVoice");
 
 // Spoken notification sounds for the packaged iOS app.
 //
@@ -44,33 +57,11 @@ async function naturalWav(text: string): Promise<Blob | null> {
   }
 }
 
-// Bundled offline synthesizer (eSpeak via mespeak) — robotic, but needs no
-// network or backend, so a spoken notification never silently degrades to a
-// plain ding. Loaded lazily; only ever used on the native platform.
-let mespeakReady: Promise<typeof import("mespeak").default> | null = null;
-function loadMeSpeak() {
-  mespeakReady ??= Promise.all([
-    import("mespeak"),
-    import("mespeak/src/mespeak_config.json"),
-    import("mespeak/voices/en/en-us.json"),
-  ]).then(([mod, config, voice]) => {
-    mod.default.loadConfig(config.default);
-    mod.default.loadVoice(voice.default);
-    return mod.default;
-  });
-  return mespeakReady;
-}
-
-async function robotWav(text: string): Promise<Blob> {
-  const meSpeak = await loadMeSpeak();
-  const raw = meSpeak.speak(text, { rawdata: "array", speed: 165 });
-  if (!raw || raw.length === 0) throw new Error("offline speech synthesis failed");
-  return new Blob([new Uint8Array(raw)], { type: "audio/wav" });
-}
-
-// Robot-voiced files carry a -r suffix so a later sync can tell them apart
-// and upgrade them to the natural voice when it's available again.
-const isRobotFile = (filename: string) => filename.endsWith("-r.wav");
+// Fallback-voiced files carry a -d suffix (device voice; -r was the retired
+// robot voice) so a later sync can tell them apart and upgrade them to the
+// natural voice when it's available again.
+const isFallbackFile = (filename: string) =>
+  filename.endsWith("-d.caf") || filename.endsWith("-r.wav");
 const canTryNatural = () =>
   useSettingsStore.getState().naturalVoice &&
   Date.now() - naturalFailedAt >= NATURAL_RETRY_COOLDOWN_MS;
@@ -112,13 +103,22 @@ async function ensureSound(text: string, hash: string): Promise<string | null> {
   try {
     const line = text.slice(0, MAX_TEXT_CHARS);
     const natural = await naturalWav(line);
-    const wav = natural ?? (await robotWav(line));
-    const filename = natural ? `rem-${hash}.wav` : `rem-${hash}-r.wav`;
-    await Filesystem.writeFile({
-      path: `${SOUND_DIR}/${filename}`,
-      data: await blobToBase64(wav),
-      directory: Directory.Library,
-      recursive: true,
+    if (natural) {
+      const filename = `rem-${hash}.wav`;
+      await Filesystem.writeFile({
+        path: `${SOUND_DIR}/${filename}`,
+        data: await blobToBase64(natural),
+        directory: Directory.Library,
+        recursive: true,
+      });
+      return filename;
+    }
+    // Device-voice fallback, rendered natively straight into Library/Sounds.
+    const filename = `rem-${hash}-d.caf`;
+    await ReminderVoice.synthesizeToSound({
+      text: line,
+      fileName: filename,
+      language: navigator.language || undefined,
     });
     return filename;
   } catch (e) {
@@ -155,9 +155,9 @@ export async function prepareReminderSounds(
     const hash = textHash(text);
     wanted.add(hash);
     const existing = index[hash];
-    // A natural-voice file is final; a robot-voiced one still works but gets
-    // re-synthesized (upgraded) when the natural voice is available again.
-    if (existing && (!isRobotFile(existing) || !canTryNatural())) {
+    // A natural-voice file is final; a fallback-voiced one still works but
+    // gets re-synthesized (upgraded) when the natural voice is back.
+    if (existing && (!isFallbackFile(existing) || !canTryNatural())) {
       ready.set(text, existing);
       continue;
     }

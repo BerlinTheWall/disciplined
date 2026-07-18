@@ -27,9 +27,9 @@
     "framer-motion": "^12.40.0",
     "immer": "^11.1.8",
     "lucide-react": "^1.20.0",
-    "mespeak": "file:vendor/mespeak",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "reminder-voice": "file:vendor/reminder-voice",
     "tailwindcss": "^4.3.1",
     "zustand": "^5.0.14"
   },
