@@ -226,6 +226,36 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Hear the whole plan — compact speaker in the header; spins while
+              the summary is prepared, becomes a stop square while reading. */}
+          {!showCopyPicker && (
+            <motion.button
+              onClick={toggleRead}
+              whileTap={tap}
+              aria-label={
+                loading ? "Preparing summary" : reading ? "Stop reading" : "Read day summary"
+              }
+              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                reading || loading
+                  ? "bg-surface-inverse text-fg-inverse"
+                  : "bg-surface-raised text-fg-muted"
+              }`}
+            >
+              {loading ? (
+                <motion.span
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  className="flex"
+                >
+                  <Loader2 size={16} />
+                </motion.span>
+              ) : reading ? (
+                <Square size={13} />
+              ) : (
+                <Volume2 size={17} />
+              )}
+            </motion.button>
+          )}
           {!showCopyPicker && otherDays.length > 0 && (
             <motion.button
               onClick={() => setShowCopyPicker(true)}
@@ -276,42 +306,6 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
         </div>
       ) : (
         <>
-          {/* Hear the whole plan — the sheet's headline action besides adding. */}
-          <div className="px-4 pb-2">
-            <motion.button
-              onClick={toggleRead}
-              whileTap={tap}
-              className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left ${
-                reading || loading ? "bg-surface-inverse" : "bg-surface-alt"
-              }`}
-            >
-              <span
-                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                  reading || loading
-                    ? "bg-white/15 text-fg-inverse"
-                    : "bg-surface-raised text-fg-muted"
-                }`}
-              >
-                {loading ? (
-                  <motion.span
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="flex"
-                  >
-                    <Loader2 size={16} />
-                  </motion.span>
-                ) : reading ? (
-                  <Square size={14} />
-                ) : (
-                  <Volume2 size={17} />
-                )}
-              </span>
-              <span className={`font-medium ${reading || loading ? "text-fg-inverse" : "text-fg"}`}>
-                {loading ? "Preparing your summary…" : reading ? "Stop reading" : "Day Summary"}
-              </span>
-            </motion.button>
-          </div>
-
           {/* Running plan list */}
           <div className="flex-1 overflow-y-auto px-4 min-h-[80px]">
             {dayTasks.length === 0 ? (
