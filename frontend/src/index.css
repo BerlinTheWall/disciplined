@@ -109,6 +109,20 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* App feel, not web-page feel: no long-press text selection, no iOS
+     copy/share callout, no gray tap flash. Typed fields re-enable selection
+     below — selecting while editing is real functionality. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 @layer base {
