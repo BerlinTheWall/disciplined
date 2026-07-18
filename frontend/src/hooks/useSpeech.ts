@@ -102,7 +102,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       const perm = await NativeSpeechRecognition.requestPermissions();
       if (perm.speechRecognition !== "granted") {
         handlersRef.current.onError?.(
-          "Microphone or speech access is off — enable both for Disciplined in iOS Settings."
+          "To use voice, allow Microphone and Speech Recognition for Disciplined in iOS Settings."
         );
         return;
       }
@@ -110,7 +110,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       // Typically "not implemented": the native plugin isn't in this build —
       // npm install + npx cap sync ios + rebuild in Xcode.
       console.warn("[speech] native permission request failed", e);
-      handlersRef.current.onError?.(`Speech setup failed: ${String(e)}`);
+      handlersRef.current.onError?.("Voice input isn't available right now — please try again.");
       return;
     }
     nativeActive.current = true;
@@ -132,7 +132,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       addPunctuation: true,
     }).catch((e) => {
       console.warn("[speech] native recognition failed", e);
-      handlersRef.current.onError?.(`Listening failed: ${String(e)}`);
+      handlersRef.current.onError?.("I couldn't hear you — please try again.");
       void nativeStop(false);
     });
   }
