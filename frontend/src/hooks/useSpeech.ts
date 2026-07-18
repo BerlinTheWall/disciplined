@@ -69,8 +69,8 @@ interface SpeechHandlers {
 // silence itself; iOS's recognizer keeps listening until told to stop, so the
 // hook finalizes after a pause (short once something was heard, longer while
 // still waiting for the first words).
-const NATIVE_SILENCE_MS = 1_800;
-const NATIVE_NO_SPEECH_MS = 6_000;
+const NATIVE_SILENCE_MS = 3_000;
+const NATIVE_NO_SPEECH_MS = 7_000;
 
 export function useSpeechRecognition(handlers: SpeechHandlers) {
   const [listening, setListening] = useState(false);
