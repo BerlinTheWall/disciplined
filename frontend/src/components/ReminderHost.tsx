@@ -237,14 +237,13 @@ function tick() {
   const { fired, markFired, clearSnooze, pushAlert } = useReminderStore.getState();
   const now = Date.now();
 
-  // Packaged iOS app with permission granted: the OS presents the
-  // pre-scheduled notification itself (foreground included), so the in-app
-  // banner would be a duplicate. Speech stays a foreground channel. Without
-  // permission, fall through — banners are all the user gets, same as web.
-  if (isNativeReminderPlatform && notifyPermission() === "granted") {
-    for (const reminder of collectDue(now)) speakReminder(reminder);
-    return;
-  }
+  // Packaged iOS app with permission granted: the pre-scheduled notification
+  // IS the reminder — one channel whether the app is open or closed. iOS
+  // presents it in the foreground too, and its sound clip carries the voice,
+  // so neither the in-app banner nor separate speech runs here (they'd
+  // double up). Without permission, fall through — banners + speech are the
+  // fallback, same as web.
+  if (isNativeReminderPlatform && notifyPermission() === "granted") return;
 
   for (const reminder of collectDue(now)) {
     if (fired[reminder.key]) continue;
