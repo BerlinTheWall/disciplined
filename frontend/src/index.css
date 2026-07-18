@@ -116,6 +116,8 @@ body {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  /* No double-tap-to-zoom (pinch zoom is blocked by the viewport meta). */
+  touch-action: manipulation;
 }
 
 input,
