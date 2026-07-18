@@ -9,6 +9,7 @@ import {
   Copy,
   Loader2,
   Plus,
+  Repeat,
   Square,
   Volume2,
   X,
@@ -73,6 +74,9 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   );
 
   const confirm = useConfirm();
+  const [habits, skipHabitOccurrence] = useHabitStore(
+    useShallow((state) => [state.habits, state.skipHabitOccurrence])
+  );
 
   const [title, setTitle] = useState("");
   const [time, setTime] = useState(formatTimeLabel(DEFAULT_START));
@@ -87,13 +91,27 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     .filter((t) => t.date === selectedDate)
     .sort((a, b) => a.startMinutes - b.startMinutes);
 
+  // Habits landing on a given day: weekly recurrence minus explicitly skipped
+  // occurrences. Shown in the plan, counted in the copy picker, and copied.
+  const habitsOn = (iso: string) =>
+    habits.filter(
+      (h) => isHabitActiveOnDate(h, parseISODate(iso)) && !h.skippedDates?.includes(iso)
+    );
+  const dayHabits = habitsOn(selectedDate).sort((a, b) => a.startMinutes - b.startMinutes);
+
+  // The full plan the sheet shows: tasks and habit occurrences in time order.
+  const dayItems = [
+    ...dayTasks.map((t) => ({ kind: "task" as const, item: t })),
+    ...dayHabits.map((h) => ({ kind: "habit" as const, item: h })),
+  ].sort((a, b) => a.item.startMinutes - b.item.startMinutes);
+
   // Other days that have tasks, newest first — sources to copy a plan from.
   const otherDays = Array.from(new Set(tasks.map((t) => t.date)))
     .filter((d) => d !== selectedDate)
     .map((d) => {
-      const items = tasks
-        .filter((t) => t.date === d)
-        .sort((a, b) => a.startMinutes - b.startMinutes);
+      const items = [...tasks.filter((t) => t.date === d), ...habitsOn(d)].sort(
+        (a, b) => a.startMinutes - b.startMinutes
+      );
       return {
         date: d,
         count: items.length,
@@ -104,6 +122,19 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
 
   function handleCopyFrom(fromDate: string) {
     copyTasksToDate(fromDate, selectedDate);
+    // The source day's habits come along as one-off tasks — unless the same
+    // habit already lands on the target day through its own recurrence.
+    for (const h of habitsOn(fromDate)) {
+      if (isHabitActiveOnDate(h, parseISODate(selectedDate))) continue;
+      addTask({
+        title: h.title,
+        startMinutes: h.startMinutes,
+        durationMinutes: h.durationMinutes,
+        color: h.color,
+        icon: h.icon,
+        date: selectedDate,
+      });
+    }
     setShowCopyPicker(false);
   }
 
@@ -115,7 +146,6 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   // habits active on this day ride along, and when the day is today the
   // current time (15-minute buckets, for caching) lets the script call out
   // passed-but-undone items.
-  const habits = useHabitStore((s) => s.habits);
   const briefingItems = [
     ...dayTasks.map((t) => ({
       title: t.title,
@@ -124,15 +154,13 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
       completed: t.completed,
       kind: "task" as const,
     })),
-    ...habits
-      .filter((h) => isHabitActiveOnDate(h, parseISODate(selectedDate)))
-      .map((h) => ({
-        title: h.title,
-        startMinutes: h.startMinutes,
-        durationMinutes: h.durationMinutes,
-        completed: h.completedDates.includes(selectedDate),
-        kind: "habit" as const,
-      })),
+    ...dayHabits.map((h) => ({
+      title: h.title,
+      startMinutes: h.startMinutes,
+      durationMinutes: h.durationMinutes,
+      completed: h.completedDates.includes(selectedDate),
+      kind: "habit" as const,
+    })),
   ].sort((a, b) => a.startMinutes - b.startMinutes);
   const briefNow =
     selectedDate === todayISODate()
@@ -168,10 +196,11 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     };
   }, [isOpen, briefing, stopReading]);
 
-  // Next free start = end of the latest task on this day (rounded), else default.
+  // Next free start = end of the latest item on this day (tasks and habit
+  // occurrences alike), else default.
   function nextStartMinutes() {
-    if (dayTasks.length === 0) return DEFAULT_START;
-    const end = Math.max(...dayTasks.map((t) => t.startMinutes + t.durationMinutes));
+    if (dayItems.length === 0) return DEFAULT_START;
+    const end = Math.max(...dayItems.map(({ item }) => item.startMinutes + item.durationMinutes));
     return Math.min(end, MINUTES_PER_DAY - 15);
   }
 
@@ -320,7 +349,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                     <span className="text-fg-faint font-normal"> · {fullDateLabel(day.date)}</span>
                   </p>
                   <p className="text-xs text-fg-faint truncate">
-                    {day.count} {day.count === 1 ? "task" : "tasks"}
+                    {day.count} {day.count === 1 ? "item" : "items"}
                     {day.preview ? ` · ${day.preview}` : ""}
                   </p>
                 </div>
@@ -331,9 +360,9 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
         </div>
       ) : (
         <>
-          {/* Running plan list */}
+          {/* Running plan list — tasks and this day's habit occurrences */}
           <div className="flex-1 overflow-y-auto px-4 min-h-[80px]">
-            {dayTasks.length === 0 ? (
+            {dayItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <p className="text-sm text-fg-faint">
                   Type a task below and hit{" "}
@@ -343,11 +372,11 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
             ) : (
               <div className="flex flex-col gap-2 py-1">
                 <AnimatePresence initial={false}>
-                  {dayTasks.map((t) => {
+                  {dayItems.map(({ kind, item: t }) => {
                     const Icon = ICONS[t.icon] ?? ICONS.default;
                     return (
                       <motion.div
-                        key={t.id}
+                        key={`${kind}:${t.id}`}
                         layout
                         initial={{ opacity: 0, y: -6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -366,12 +395,23 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-fg truncate">{t.title}</p>
-                          <p className="text-xs text-fg-faint tabular-nums">
+                          <p className="flex items-center gap-1 text-xs text-fg-faint tabular-nums">
+                            {kind === "habit" && <Repeat size={11} aria-label="Repeats weekly" />}
                             {rangeLabel(t.startMinutes, t.durationMinutes)}
                           </p>
                         </div>
                         <motion.button
                           onClick={async () => {
+                            if (kind === "habit") {
+                              const ok = await confirm({
+                                title: "Remove from this day?",
+                                message: `"${t.title}" repeats weekly — only this day's occurrence will be removed.`,
+                                confirmLabel: "Remove",
+                                destructive: true,
+                              });
+                              if (ok) skipHabitOccurrence(t.id, selectedDate);
+                              return;
+                            }
                             const ok = await confirm({
                               title: "Delete task?",
                               message: `"${t.title}" will be permanently removed.`,
