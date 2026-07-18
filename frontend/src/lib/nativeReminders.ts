@@ -1,7 +1,9 @@
 import { Capacitor, type PermissionState } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 
+import { prepareReminderSounds } from "./reminderAudio";
 import type { NotifyPermission, ReminderNotificationData } from "./reminders";
+import { useSettingsStore } from "@/store/settingsStore";
 
 // iOS delivery channel for reminders. The web scheduler (ReminderHost) can't
 // deliver in the packaged app: WKWebView has no Notification API, and iOS
@@ -16,6 +18,9 @@ export interface NativeReminder {
   key: string;
   title: string;
   body: string;
+  // The assistant-phrased sentence to pre-synthesize as this notification's
+  // sound, so the phone speaks the reminder when it fires (app closed or not).
+  speech: string;
   fireAt: number; // epoch ms
   data: ReminderNotificationData;
 }
@@ -105,16 +110,35 @@ export function syncNativeReminders(upcoming: NativeReminder[]) {
   syncTimer = setTimeout(() => void doSync(), 400);
 }
 
+// Synthesizing sounds makes a sync take a while; if another sync is requested
+// meanwhile, run one more pass at the end instead of overlapping.
+let syncing = false;
+let syncQueued = false;
+
 async function doSync() {
   if (cachedPermission !== "granted") return;
+  if (syncing) {
+    syncQueued = true;
+    return;
+  }
+  syncing = true;
   try {
+    const batch = latest.slice(0, MAX_SCHEDULED);
+
+    // Spoken notifications: pre-synthesize each reminder's line so iOS plays
+    // the speech as the notification sound. Off => default sound. Failures
+    // just mean that reminder keeps the default sound until the next sync.
+    let sounds = new Map<string, string>();
+    if (useSettingsStore.getState().speakReminders && batch.length > 0) {
+      sounds = await prepareReminderSounds(batch.map((r) => r.speech));
+    }
+
     const pending = await LocalNotifications.getPending();
     if (pending.notifications.length > 0) {
       await LocalNotifications.cancel({
         notifications: pending.notifications.map((n) => ({ id: n.id })),
       });
     }
-    const batch = latest.slice(0, MAX_SCHEDULED);
     if (batch.length > 0) {
       await LocalNotifications.schedule({
         notifications: batch.map((r) => ({
@@ -124,10 +148,17 @@ async function doSync() {
           schedule: { at: new Date(r.fireAt) },
           actionTypeId: "REMINDER",
           extra: r.data,
+          sound: sounds.get(r.speech),
         })),
       });
     }
   } catch (e) {
     console.warn("[reminders] native sync failed", e);
+  } finally {
+    syncing = false;
+    if (syncQueued) {
+      syncQueued = false;
+      void doSync();
+    }
   }
 }

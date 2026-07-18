@@ -172,15 +172,24 @@ function collectUpcoming(now: number): NativeReminder[] {
     minutesBefore: number
   ) => {
     const key = `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`;
-    const fireAt =
-      snoozes[key] ??
-      new Date(date + "T00:00:00").getTime() + (startMinutes - minutesBefore) * 60_000;
+    const startAt = new Date(date + "T00:00:00").getTime() + startMinutes * 60_000;
+    const fireAt = snoozes[key] ?? startAt - minutesBefore * 60_000;
     // Anything already due is the running scheduler's job, not a future schedule.
     if (fireAt <= now + 1_000) return;
+    // Stable variant seed: the same reminder must always produce the same
+    // sentence, or every sync would re-synthesize its notification audio.
+    let seed = 0;
+    for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) | 0;
     upcoming.push({
       key,
       title,
       body: `Starts at ${formatTimeLabel(startMinutes)}`,
+      speech: assistantReminderLine(
+        title,
+        startMinutes,
+        Math.round((startAt - fireAt) / 60_000),
+        seed
+      ),
       fireAt,
       data: { key, kind, id, date },
     });
@@ -346,9 +355,14 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
     const unsubSnoozes = useReminderStore.subscribe((state, prev) => {
       if (state.snoozes !== prev.snoozes) run();
     });
-    // Flipping the master switch re-syncs (or clears) the native schedule.
+    // Flipping the master switch re-syncs (or clears) the native schedule;
+    // toggling spoken reminders re-syncs to attach or drop the audio.
     const unsubSettings = useSettingsStore.subscribe((state, prev) => {
-      if (state.remindersEnabled !== prev.remindersEnabled) run();
+      if (
+        state.remindersEnabled !== prev.remindersEnabled ||
+        state.speakReminders !== prev.speakReminders
+      )
+        run();
     });
     const onVisible = () => {
       if (document.visibilityState === "visible") run();

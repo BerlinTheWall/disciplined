@@ -34,30 +34,45 @@ function spokenDuration(mins: number) {
   return `for ${hours} and ${m} minutes`;
 }
 
-function pick(variants: string[]) {
+// Random normally; a caller-provided seed makes the choice stable — the
+// pre-synthesized notification audio must produce the same sentence for the
+// same reminder on every schedule sync, or each sync would re-synthesize it.
+function pick(variants: string[], seed?: number) {
+  if (seed !== undefined) return variants[Math.abs(seed) % variants.length];
   return variants[Math.floor(Math.random() * variants.length)];
 }
 
-export function assistantReminderLine(title: string, startMinutes: number, minutesUntil: number) {
+export function assistantReminderLine(
+  title: string,
+  startMinutes: number,
+  minutesUntil: number,
+  variantSeed?: number
+) {
   const name = useProfileStore.getState().name.trim();
   const time = spokenTime(startMinutes);
 
   if (minutesUntil <= 0) {
-    return pick([
-      name ? `${name}, it's ${time} — time for ${title}.` : `It's ${time} — time for ${title}.`,
-      `${title} is starting now.`,
-      `Time for ${title} — it's ${time}.`,
-    ]);
+    return pick(
+      [
+        name ? `${name}, it's ${time} — time for ${title}.` : `It's ${time} — time for ${title}.`,
+        `${title} is starting now.`,
+        `Time for ${title} — it's ${time}.`,
+      ],
+      variantSeed
+    );
   }
 
   const lead = spokenLead(minutesUntil);
-  return pick([
-    name
-      ? `${name}, quick heads-up — ${title} starts ${lead}, at ${time}.`
-      : `Quick heads-up — ${title} starts ${lead}, at ${time}.`,
-    `Just a reminder: ${title} is coming up ${lead}.`,
-    `${title} starts ${lead}. That's at ${time}.`,
-  ]);
+  return pick(
+    [
+      name
+        ? `${name}, quick heads-up — ${title} starts ${lead}, at ${time}.`
+        : `Quick heads-up — ${title} starts ${lead}, at ${time}.`,
+      `Just a reminder: ${title} is coming up ${lead}.`,
+      `${title} starts ${lead}. That's at ${time}.`,
+    ],
+    variantSeed
+  );
 }
 
 interface BriefingTask {
