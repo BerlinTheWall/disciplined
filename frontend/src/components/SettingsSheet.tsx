@@ -221,109 +221,112 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     <BottomSheet
       isOpen={isOpen}
       onClose={onClose}
-      className="bg-surface-alt p-5 pb-[calc(2rem+env(safe-area-inset-bottom))] max-h-[70vh] overflow-y-auto"
+      className="bg-surface-alt max-h-[70vh] flex flex-col overflow-hidden"
     >
-      <div className="flex items-center justify-between mb-4">
+      {/* Fixed header — stays put while the sections below scroll */}
+      <div className="flex items-center justify-between p-5 pb-4">
         <h2 className="text-xl font-bold text-fg">Settings</h2>
         <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
           <X size={22} />
         </motion.button>
       </div>
 
-      <Section title="Notifications">
-        <Row
-          title="Reminders"
-          subtitle={reminderSubtitle}
-          on={remindersEnabled}
-          onToggle={() => void toggleReminders()}
-        />
-        <Collapse open={remindersEnabled}>
-          <ChipRow
-            title="Default reminder"
-            options={REMINDER_OPTIONS}
-            keyOf={(o) => String(o.value)}
-            labelOf={(o) => o.label}
-            selected={(o) => defaultReminderMinutes === o.value}
-            onSelect={(o) => setDefaultReminderMinutes(o.value)}
-          />
-        </Collapse>
-        <Collapse open={remindersEnabled}>
-          <Row title="Speak reminders" on={speakReminders} onToggle={toggleSpeakReminders} />
-        </Collapse>
-        <Collapse open={remindersEnabled && speakReminders}>
+      <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+        <Section title="Notifications">
           <Row
-            title="Natural voice"
-            subtitle="Human-like AI voice; falls back to the device voice offline"
-            on={naturalVoice}
-            onToggle={toggleNaturalVoice}
+            title="Reminders"
+            subtitle={reminderSubtitle}
+            on={remindersEnabled}
+            onToggle={() => void toggleReminders()}
           />
-        </Collapse>
-        <Collapse open={remindersEnabled && speakReminders && !naturalVoice}>
-          <ChipRow
-            title="Device voice"
-            options={voiceChoices}
-            keyOf={(v) => v?.voiceURI ?? "default"}
-            labelOf={(v) => (v ? voiceLabel(v) : "Default")}
-            selected={(v) => voiceURI === (v?.voiceURI ?? null)}
-            onSelect={(v) => pickVoice(v?.voiceURI ?? null)}
+          <Collapse open={remindersEnabled}>
+            <ChipRow
+              title="Default reminder"
+              options={REMINDER_OPTIONS}
+              keyOf={(o) => String(o.value)}
+              labelOf={(o) => o.label}
+              selected={(o) => defaultReminderMinutes === o.value}
+              onSelect={(o) => setDefaultReminderMinutes(o.value)}
+            />
+          </Collapse>
+          <Collapse open={remindersEnabled}>
+            <Row title="Speak reminders" on={speakReminders} onToggle={toggleSpeakReminders} />
+          </Collapse>
+          <Collapse open={remindersEnabled && speakReminders}>
+            <Row
+              title="Natural voice"
+              subtitle="Human-like AI voice; falls back to the device voice offline"
+              on={naturalVoice}
+              onToggle={toggleNaturalVoice}
+            />
+          </Collapse>
+          <Collapse open={remindersEnabled && speakReminders && !naturalVoice}>
+            <ChipRow
+              title="Device voice"
+              options={voiceChoices}
+              keyOf={(v) => v?.voiceURI ?? "default"}
+              labelOf={(v) => (v ? voiceLabel(v) : "Default")}
+              selected={(v) => voiceURI === (v?.voiceURI ?? null)}
+              onSelect={(v) => pickVoice(v?.voiceURI ?? null)}
+            />
+          </Collapse>
+          <Row
+            title="Morning briefing"
+            subtitle="Hear your day on the first open of each day"
+            on={morningBriefing}
+            onToggle={() => setMorningBriefing(!morningBriefing)}
           />
-        </Collapse>
-        <Row
-          title="Morning briefing"
-          subtitle="Hear your day on the first open of each day"
-          on={morningBriefing}
-          onToggle={() => setMorningBriefing(!morningBriefing)}
-        />
-        <Collapse open={morningBriefing}>
-          <ChipRow
-            title="Not before"
-            options={BRIEFING_FROM_OPTIONS}
-            selected={(o) => o.value === morningBriefingFromMinutes}
-            onSelect={(o) => setMorningBriefingFromMinutes(o.value)}
-            labelOf={(o) => o.label}
-            keyOf={(o) => String(o.value)}
-          />
-        </Collapse>
-      </Section>
+          <Collapse open={morningBriefing}>
+            <ChipRow
+              title="Not before"
+              options={BRIEFING_FROM_OPTIONS}
+              selected={(o) => o.value === morningBriefingFromMinutes}
+              onSelect={(o) => setMorningBriefingFromMinutes(o.value)}
+              labelOf={(o) => o.label}
+              keyOf={(o) => String(o.value)}
+            />
+          </Collapse>
+        </Section>
 
-      <Section title="Appearance">
-        <Row title="Dark mode" on={theme === "dark"} onToggle={toggleTheme} />
-        <Row
-          title="Alternate style"
-          subtitle="A different look for the calendar and tasks"
-          on={altStyle}
-          onToggle={() => setAltStyle(!altStyle)}
-        />
-        <div className="px-4 py-3">
-          <p className="text-[15px] font-medium text-fg mb-2">Background</p>
-          <div className="flex gap-2">
-            {BACKGROUNDS.map((bg) => {
-              const selected = background === bg.key;
-              return (
-                <motion.button
-                  key={bg.key}
-                  onClick={() => setBackground(bg.key)}
-                  whileTap={tap}
-                  className="flex-1 flex flex-col items-center gap-1.5"
-                >
-                  <span
-                    className="w-full h-12 rounded-xl border-2 transition-colors"
-                    style={{
-                      background: bg.swatch,
-                      borderColor: selected ? "var(--fg)" : "var(--border-strong)",
-                    }}
-                  />
-                  <span
-                    className={`text-[11px] font-medium ${selected ? "text-fg" : "text-fg-muted"}`}
+        <Section title="Appearance">
+          <Row title="Dark mode" on={theme === "dark"} onToggle={toggleTheme} />
+          <Row
+            title="Alternate style"
+            subtitle="A different look for the calendar and tasks"
+            on={altStyle}
+            onToggle={() => setAltStyle(!altStyle)}
+          />
+          <div className="px-4 py-3">
+            <p className="text-[15px] font-medium text-fg mb-2">Background</p>
+            <div className="flex gap-2">
+              {BACKGROUNDS.map((bg) => {
+                const selected = background === bg.key;
+                return (
+                  <motion.button
+                    key={bg.key}
+                    onClick={() => setBackground(bg.key)}
+                    whileTap={tap}
+                    className="flex-1 flex flex-col items-center gap-1.5"
                   >
-                    {bg.label}
-                  </span>
-                </motion.button>
-              );
-            })}
+                    <span
+                      className="w-full h-12 rounded-xl border-2 transition-colors"
+                      style={{
+                        background: bg.swatch,
+                        borderColor: selected ? "var(--fg)" : "var(--border-strong)",
+                      }}
+                    />
+                    <span
+                      className={`text-[11px] font-medium ${selected ? "text-fg" : "text-fg-muted"}`}
+                    >
+                      {bg.label}
+                    </span>
+                  </motion.button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </Section>
+        </Section>
+      </div>
     </BottomSheet>
   );
 }
