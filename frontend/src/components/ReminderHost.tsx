@@ -389,7 +389,12 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
   }, [alerts]);
 
   return (
-    <div className="fixed top-3 inset-x-3 z-[70] flex flex-col gap-2 pointer-events-none">
+    <div
+      className="fixed inset-x-3 z-[70] flex flex-col gap-2 pointer-events-none"
+      // Clear the iOS status bar / Dynamic Island (inset is 0 on devices
+      // without a notch), same treatment as the app header.
+      style={{ top: "calc(12px + env(safe-area-inset-top))" }}
+    >
       <AnimatePresence>
         {alerts.map((alert) => {
           const Icon = ICONS[alert.icon] ?? ICONS.default;
