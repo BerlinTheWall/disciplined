@@ -1,6 +1,7 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 
 import { api } from "./api";
+import { useSettingsStore } from "@/store/settingsStore";
 
 // Spoken notification sounds for the packaged iOS app.
 //
@@ -24,6 +25,55 @@ const INDEX_KEY = "disciplined-reminder-sounds";
 // Notification sounds cap at 30s; the backend line is one sentence, but guard
 // anyway — synthesis time and file size both grow with text length.
 const MAX_TEXT_CHARS = 300;
+// After the natural (Gemini) voice fails once, skip it for a while instead of
+// paying its timeout on every line of every sync; robot-voiced files are
+// upgraded once it recovers.
+const NATURAL_RETRY_COOLDOWN_MS = 10 * 60_000;
+let naturalFailedAt = 0;
+
+// The natural voice, when the setting allows and it isn't cooling down.
+async function naturalWav(text: string): Promise<Blob | null> {
+  if (!useSettingsStore.getState().naturalVoice) return null;
+  if (Date.now() - naturalFailedAt < NATURAL_RETRY_COOLDOWN_MS) return null;
+  try {
+    return await api.tts(text, 20_000);
+  } catch (e) {
+    naturalFailedAt = Date.now();
+    console.warn("[reminders] natural voice unavailable, using offline voice", e);
+    return null;
+  }
+}
+
+// Bundled offline synthesizer (eSpeak via mespeak) — robotic, but needs no
+// network or backend, so a spoken notification never silently degrades to a
+// plain ding. Loaded lazily; only ever used on the native platform.
+let mespeakReady: Promise<typeof import("mespeak").default> | null = null;
+function loadMeSpeak() {
+  mespeakReady ??= Promise.all([
+    import("mespeak"),
+    import("mespeak/src/mespeak_config.json"),
+    import("mespeak/voices/en/en-us.json"),
+  ]).then(([mod, config, voice]) => {
+    mod.default.loadConfig(config.default);
+    mod.default.loadVoice(voice.default);
+    return mod.default;
+  });
+  return mespeakReady;
+}
+
+async function robotWav(text: string): Promise<Blob> {
+  const meSpeak = await loadMeSpeak();
+  const raw = meSpeak.speak(text, { rawdata: "array", speed: 165 });
+  if (!raw || raw.length === 0) throw new Error("offline speech synthesis failed");
+  return new Blob([new Uint8Array(raw)], { type: "audio/wav" });
+}
+
+// Robot-voiced files carry a -r suffix so a later sync can tell them apart
+// and upgrade them to the natural voice when it's available again.
+const isRobotFile = (filename: string) => filename.endsWith("-r.wav");
+const canTryNatural = () =>
+  useSettingsStore.getState().naturalVoice &&
+  Date.now() - naturalFailedAt >= NATURAL_RETRY_COOLDOWN_MS;
 
 function textHash(text: string): string {
   let h = 5381;
@@ -59,9 +109,11 @@ function blobToBase64(blob: Blob): Promise<string> {
 const inFlight = new Map<string, Promise<string | null>>();
 
 async function ensureSound(text: string, hash: string): Promise<string | null> {
-  const filename = `rem-${hash}.wav`;
   try {
-    const wav = await api.tts(text.slice(0, MAX_TEXT_CHARS), 20_000);
+    const line = text.slice(0, MAX_TEXT_CHARS);
+    const natural = await naturalWav(line);
+    const wav = natural ?? (await robotWav(line));
+    const filename = natural ? `rem-${hash}.wav` : `rem-${hash}-r.wav`;
     await Filesystem.writeFile({
       path: `${SOUND_DIR}/${filename}`,
       data: await blobToBase64(wav),
@@ -71,7 +123,7 @@ async function ensureSound(text: string, hash: string): Promise<string | null> {
     return filename;
   } catch (e) {
     console.warn("[reminders] sound synthesis failed", e);
-    return null; // scheduled without a spoken sound; next sync retries
+    return null; // scheduled with the default sound; next sync retries
   }
 }
 
@@ -102,11 +154,17 @@ export async function prepareReminderSounds(
   for (const text of lines) {
     const hash = textHash(text);
     wanted.add(hash);
-    if (index[hash]) {
-      ready.set(text, index[hash]);
+    const existing = index[hash];
+    // A natural-voice file is final; a robot-voiced one still works but gets
+    // re-synthesized (upgraded) when the natural voice is available again.
+    if (existing && (!isRobotFile(existing) || !canTryNatural())) {
+      ready.set(text, existing);
       continue;
     }
-    if (prepared >= limit) continue;
+    if (prepared >= limit) {
+      if (existing) ready.set(text, existing);
+      continue;
+    }
     prepared++;
     let job = inFlight.get(hash);
     if (!job) {
@@ -115,8 +173,16 @@ export async function prepareReminderSounds(
     }
     const filename = await job;
     if (filename) {
+      if (existing && existing !== filename) {
+        void Filesystem.deleteFile({
+          path: `${SOUND_DIR}/${existing}`,
+          directory: Directory.Library,
+        }).catch(() => undefined);
+      }
       index[hash] = filename;
       ready.set(text, filename);
+    } else if (existing) {
+      ready.set(text, existing);
     }
   }
 

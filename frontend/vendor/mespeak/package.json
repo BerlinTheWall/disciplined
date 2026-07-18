@@ -1,0 +1,7 @@
+{
+  "name": "mespeak",
+  "version": "2.0.2-utf8",
+  "description": "Vendored copy of the mespeak npm package (meSpeak.js / eSpeak) with its source files re-encoded to valid UTF-8 — the published package's ESpeak.js contains non-UTF-8 bytes that the app bundler rejects. Used as the offline fallback voice for spoken reminder notifications.",
+  "main": "src/index.js",
+  "license": "GPL-3.0"
+}
