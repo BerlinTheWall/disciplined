@@ -377,8 +377,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   }
 
   // Copies the task as currently shown in the form — including unsaved edits —
-  // as a new, uncompleted task, and closes the editor. The original keeps its
-  // saved state (the user chose Duplicate, not Update).
+  // as a new, uncompleted task. The editor stays open (so several copies can
+  // be made in a row); the original keeps its saved state (the user chose
+  // Duplicate, not Update).
   function handleDuplicate() {
     if (!editItem || editItem.type !== "task" || mode !== "task") return;
     if (!title.trim() || duration < 1) return;
@@ -396,7 +397,6 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       workoutSessionId,
       recipeId,
     });
-    onClose();
   }
 
   async function handleDelete() {
