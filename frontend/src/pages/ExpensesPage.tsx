@@ -165,7 +165,6 @@ export default function ExpensesPage() {
                   value={budgetDraft}
                   onChange={(e) => setBudgetDraft(e.target.value)}
                   placeholder="0"
-                  autoFocus
                   className="w-full bg-surface-feature-alt text-white rounded-xl pl-7 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-gray-500"
                 />
               </div>

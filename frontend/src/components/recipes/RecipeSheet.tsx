@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChefHat, ImageOff, ImagePlus, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { isLightColor } from "@/lib/color";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
 import { formatAmount, indexItems, lineNutrition } from "@/lib/grocery";
@@ -55,7 +54,6 @@ export default function RecipeSheet({ isOpen, onClose, editRecipe }: RecipeSheet
   const isEditing = !!editRecipe;
   const nameRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(nameRef, isOpen && !isEditing);
   const items = indexItems(groceryItems);
 
   const [name, setName] = useState("");

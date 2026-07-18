@@ -192,7 +192,6 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                     >
                       <input
                         type="text"
-                        autoFocus
                         value={promptText}
                         onChange={(e) => setPromptText(e.target.value)}
                         placeholder={pending.options.placeholder}

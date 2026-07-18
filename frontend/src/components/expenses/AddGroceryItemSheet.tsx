@@ -6,7 +6,6 @@ import { ChevronDown, ChevronUp, Wand2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BarcodeLookup from "./BarcodeLookup";
-import { useAutoFocus } from "@/hooks/useAutoFocus";
 import {
   FALLBACK_FOOD_ICON,
   FOOD_CATEGORIES,
@@ -61,7 +60,6 @@ export default function AddGroceryItemSheet({
 
   const isEditing = !!editItem;
   const nameRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(nameRef, isOpen);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<FoodCategoryKey>("protein");

@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { CATEGORIES, CATEGORY_KEYS, type CategoryKey } from "@/lib/categories";
 import { todayISODate } from "@/lib/date";
 import { tap } from "@/lib/motion";
@@ -28,7 +27,6 @@ export default function AddExpenseSheet({ isOpen, onClose, editExpense }: AddExp
 
   const isEditing = !!editExpense;
   const amountRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(amountRef, isOpen);
 
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");

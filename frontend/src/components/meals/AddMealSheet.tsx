@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { Check, ChefHat, Minus, Plus, Search, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { todayISODate } from "@/lib/date";
 import { FALLBACK_FOOD_ICON, FOOD_CATEGORIES } from "@/lib/foodCategories";
 import { formatAmount, indexItems, lineNutrition } from "@/lib/grocery";
@@ -56,7 +55,6 @@ export default function AddMealSheet({ isOpen, onClose, editMeal }: AddMealSheet
 
   const isEditing = !!editMeal;
   const nameRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(nameRef, isOpen);
   const items = indexItems(groceryItems);
 
   const [name, setName] = useState("");

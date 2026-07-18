@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
@@ -80,7 +79,6 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [showCopyPicker, setShowCopyPicker] = useState(false);
   const { reading, loading, toggle, stop: stopReading } = useReadAloud();
   const inputRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(inputRef, isOpen && !showCopyPicker);
 
   // Tasks already on this day, sorted — the live plan.
   const dayTasks = tasks

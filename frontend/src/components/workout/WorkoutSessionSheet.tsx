@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { isLightColor } from "@/lib/color";
 import { spring, tap } from "@/lib/motion";
 import { fieldMeta, WORKOUT_TYPE_META, WORKOUT_TYPE_ORDER } from "@/lib/workout";
@@ -64,7 +63,6 @@ export default function WorkoutSessionSheet({
 
   const isEditing = !!editSession;
   const nameRef = useRef<HTMLInputElement>(null);
-  useAutoFocus(nameRef, isOpen && !isEditing);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<WorkoutType>("gym");
