@@ -7,16 +7,20 @@ import { immer } from "zustand/middleware/immer";
 interface State {
   name: string;
   tagline: string;
+  // Small square JPEG data URL (see lib/avatar.ts) or null for the initial.
+  avatar: string | null;
 }
 
 const initialState: State = {
   name: "Hooman",
   tagline: "Staying disciplined",
+  avatar: null,
 };
 
 interface Actions {
   setName: (name: string) => void;
   setTagline: (tagline: string) => void;
+  setAvatar: (avatar: string | null) => void;
 }
 
 export const useProfileStore = create<State & Actions>()(
@@ -30,6 +34,10 @@ export const useProfileStore = create<State & Actions>()(
       setTagline: (tagline) =>
         set((state) => {
           state.tagline = tagline;
+        }),
+      setAvatar: (avatar) =>
+        set((state) => {
+          state.avatar = avatar;
         }),
     })),
     { name: "disciplined-profile" }

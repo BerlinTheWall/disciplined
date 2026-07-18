@@ -115,8 +115,10 @@ function App() {
           </span>
         ));
 
-  // Initial-letter avatar in the home header — the way into the profile page.
+  // Avatar in the home header — the way into the profile page. Shows the
+  // profile photo when one is set, the initial letter otherwise.
   const profileName = useProfileStore((s) => s.name);
+  const profileAvatar = useProfileStore((s) => s.avatar);
   const profileInitial = profileName.trim().charAt(0).toUpperCase() || "?";
 
   function go(p: Page) {
@@ -266,9 +268,17 @@ function App() {
                   <span className="text-base font-semibold text-fg max-w-36 truncate">
                     {profileName}
                   </span>
-                  <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
-                    <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
-                  </span>
+                  {profileAvatar ? (
+                    <img
+                      src={profileAvatar}
+                      alt=""
+                      className="w-10 h-10 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
+                    </span>
+                  )}
                 </motion.button>
               )}
               {activePage === "schedule" && (

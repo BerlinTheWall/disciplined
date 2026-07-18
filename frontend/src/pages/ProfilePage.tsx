@@ -1,9 +1,20 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Flame, LogOut, Pencil, TrendingDown, TrendingUp, Utensils } from "lucide-react";
+import {
+  Camera,
+  Check,
+  Flame,
+  LogOut,
+  Pencil,
+  TrendingDown,
+  TrendingUp,
+  Utensils,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import { useChoose } from "@/components/ConfirmDialog";
+import { fileToAvatar } from "@/lib/avatar";
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
 import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
@@ -203,9 +214,50 @@ export default function ProfilePage() {
   const sessions = useWorkoutStore((s) => s.sessions);
   const expenses = useExpenseStore((s) => s.expenses);
   const monthlyBudget = useExpenseStore((s) => s.monthlyBudget);
-  const [name, tagline, setName, setTagline] = useProfileStore(
-    useShallow((state) => [state.name, state.tagline, state.setName, state.setTagline])
+  const [name, tagline, avatar, setName, setTagline, setAvatar] = useProfileStore(
+    useShallow((state) => [
+      state.name,
+      state.tagline,
+      state.avatar,
+      state.setName,
+      state.setTagline,
+      state.setAvatar,
+    ])
   );
+  const choose = useChoose();
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  // Tap the avatar to set a photo; with one already set, offer replace/remove.
+  async function onAvatarTap() {
+    if (avatar) {
+      const action = await choose({
+        title: "Profile photo",
+        options: [
+          { label: "Choose a new photo", value: "change" },
+          { label: "Remove photo", value: "remove", destructive: true },
+        ],
+      });
+      if (action === "remove") {
+        setAvatar(null);
+        return;
+      }
+      if (action !== "change") return;
+    }
+    avatarFileRef.current?.click();
+  }
+
+  async function onAvatarPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
+    if (!file) return;
+    try {
+      // Downscaled + center-cropped to a small square, so even a huge camera
+      // photo stores as a few dozen KB.
+      setAvatar(await fileToAvatar(file));
+    } catch (err) {
+      console.warn("avatar import failed", err);
+    }
+  }
   const account = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [editing, setEditing] = useState(false);
@@ -265,9 +317,28 @@ export default function ProfilePage() {
       {/* Profile header */}
       <section className="rounded-3xl bg-surface border border-border p-5">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-fg flex items-center justify-center shrink-0">
-            <span className="text-2xl font-bold text-fg-inverse">{initial}</span>
-          </div>
+          <motion.button
+            onClick={() => void onAvatarTap()}
+            whileTap={tap}
+            aria-label="Change profile photo"
+            className="relative w-16 h-16 rounded-full bg-fg flex items-center justify-center shrink-0"
+          >
+            {avatar ? (
+              <img src={avatar} alt="" className="w-16 h-16 rounded-full object-cover" />
+            ) : (
+              <span className="text-2xl font-bold text-fg-inverse">{initial}</span>
+            )}
+            <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-surface border border-border-strong flex items-center justify-center text-fg-muted">
+              <Camera size={13} />
+            </span>
+          </motion.button>
+          <input
+            ref={avatarFileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void onAvatarPicked(e)}
+          />
           {editing ? (
             <div className="flex-1 space-y-2">
               <input
