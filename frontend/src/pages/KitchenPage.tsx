@@ -20,12 +20,18 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function KitchenPage() {
-  const [tab, setTab] = useState<Tab>("meals");
-
-  const pendingRecipeId = useRecipeFocusStore((s) => s.pendingRecipeId);
-  useEffect(() => {
-    if (pendingRecipeId) setTab("recipes");
-  }, [pendingRecipeId]);
+  // Start on Recipes if we arrived here to open a specific recipe...
+  const [tab, setTab] = useState<Tab>(() =>
+    useRecipeFocusStore.getState().pendingRecipeId ? "recipes" : "meals"
+  );
+  // ...and switch to it if a recipe is requested while already here.
+  useEffect(
+    () =>
+      useRecipeFocusStore.subscribe((s, prev) => {
+        if (s.pendingRecipeId && s.pendingRecipeId !== prev.pendingRecipeId) setTab("recipes");
+      }),
+    []
+  );
 
   return (
     <div className="space-y-4">
