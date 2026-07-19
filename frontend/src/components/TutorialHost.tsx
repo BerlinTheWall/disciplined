@@ -90,10 +90,7 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
   // step is active.
   const selector = done ? undefined : STEPS[step]?.selector;
   useEffect(() => {
-    if (!selector) {
-      setHole(null);
-      return;
-    }
+    if (!selector) return;
     const measure = () => {
       const el = document.querySelector(selector);
       if (!el) {
@@ -109,10 +106,13 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
         height: r.height + pad * 2,
       });
     };
-    measure();
+    // First measure on the next frame (also keeps state updates out of the
+    // effect's synchronous body), then track the element while the step runs.
+    const raf = requestAnimationFrame(measure);
     const interval = window.setInterval(measure, 400);
     window.addEventListener("resize", measure);
     return () => {
+      cancelAnimationFrame(raf);
       window.clearInterval(interval);
       window.removeEventListener("resize", measure);
     };
@@ -121,8 +121,10 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
   if (done || step >= STEPS.length) return null;
   const current = STEPS[step];
 
-  // Card sits opposite the hole so it never covers the target.
-  const cardAbove = hole !== null && hole.top > window.innerHeight / 2;
+  // Steps without a selector never use hole state (it may be stale from the
+  // previous step). Card sits opposite the hole so it never covers the target.
+  const activeHole = selector ? hole : null;
+  const cardAbove = activeHole !== null && activeHole.top > window.innerHeight / 2;
 
   const card = (
     <motion.div
@@ -162,16 +164,16 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
   // hole. The hole itself has no element over it, so the real control works.
   return (
     <div className="fixed inset-0 z-[80] pointer-events-none">
-      {hole ? (
+      {activeHole ? (
         <>
           {/* Dim + ring around the target (the giant shadow is the dim). */}
           <div
             className="fixed rounded-2xl border-2 border-white/80 transition-all duration-300 pointer-events-none"
             style={{
-              top: hole.top,
-              left: hole.left,
-              width: hole.width,
-              height: hole.height,
+              top: activeHole.top,
+              left: activeHole.left,
+              width: activeHole.width,
+              height: activeHole.height,
               boxShadow: "0 0 0 200vmax rgba(0, 0, 0, 0.55)",
             }}
           />
@@ -179,26 +181,34 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
               screen is the spotlit control. */}
           <div
             className="fixed left-0 right-0 top-0 pointer-events-auto"
-            style={{ height: Math.max(hole.top, 0) }}
+            style={{ height: Math.max(activeHole.top, 0) }}
           />
           <div
             className="fixed left-0 right-0 bottom-0 pointer-events-auto"
-            style={{ top: hole.top + hole.height }}
+            style={{ top: activeHole.top + activeHole.height }}
           />
           <div
             className="fixed left-0 pointer-events-auto"
-            style={{ top: hole.top, height: hole.height, width: Math.max(hole.left, 0) }}
+            style={{
+              top: activeHole.top,
+              height: activeHole.height,
+              width: Math.max(activeHole.left, 0),
+            }}
           />
           <div
             className="fixed right-0 pointer-events-auto"
-            style={{ top: hole.top, height: hole.height, left: hole.left + hole.width }}
+            style={{
+              top: activeHole.top,
+              height: activeHole.height,
+              left: activeHole.left + activeHole.width,
+            }}
           />
         </>
       ) : (
         <div className="fixed inset-0 bg-black/55 pointer-events-auto" />
       )}
 
-      {current.mode === "modal" || !hole ? (
+      {current.mode === "modal" || !activeHole ? (
         <div className="fixed inset-x-6 top-1/2 -translate-y-1/2 z-[81]">
           <AnimatePresence mode="wait">{card}</AnimatePresence>
         </div>
@@ -207,8 +217,8 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
           className="fixed inset-x-4 z-[81]"
           style={
             cardAbove
-              ? { bottom: window.innerHeight - hole.top + 12 }
-              : { top: hole.top + hole.height + 12 }
+              ? { bottom: window.innerHeight - activeHole.top + 12 }
+              : { top: activeHole.top + activeHole.height + 12 }
           }
         >
           <AnimatePresence mode="wait">{card}</AnimatePresence>

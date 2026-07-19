@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
+import { GraduationCap, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
@@ -13,6 +13,7 @@ import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
+import { useTutorialStore } from "@/store/tutorialStore";
 
 interface SettingsSheetProps {
   isOpen: boolean;
@@ -325,6 +326,22 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               })}
             </div>
           </div>
+        </Section>
+
+        <Section title="Help">
+          <motion.button
+            onClick={() => {
+              // Back to the welcome card; close Settings so the tour has the
+              // screen to itself.
+              useTutorialStore.getState().restart();
+              onClose();
+            }}
+            whileTap={tap}
+            className="flex items-center gap-3 w-full px-4 py-3 text-left"
+          >
+            <span className="text-[15px] font-medium text-fg flex-1">Replay the tutorial</span>
+            <GraduationCap size={18} className="text-fg-muted" />
+          </motion.button>
         </Section>
       </div>
     </BottomSheet>

@@ -12,6 +12,8 @@ interface TutorialState {
   start: (baselineTasks: number) => void;
   setStep: (step: number) => void;
   finish: () => void;
+  // Replay from Settings: back to the welcome card as if it never ran.
+  restart: () => void;
 }
 
 export const useTutorialStore = create<TutorialState>()(
@@ -23,6 +25,7 @@ export const useTutorialStore = create<TutorialState>()(
       start: (baselineTasks) => set({ step: 1, baselineTasks }),
       setStep: (step) => set({ step }),
       finish: () => set({ done: true }),
+      restart: () => set({ done: false, step: 0 }),
     }),
     { name: "disciplined-tutorial" }
   )
