@@ -1,8 +1,27 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { priorityRank } from "@/lib/goalPriority";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Priority } from "@/types/task";
+
+// Re-slot one goal within its period by priority (high first), preserving the
+// relative order of its siblings, then renumber every order in that period.
+// Used when a goal is added or re-prioritized so the list stays priority-sorted
+// until the user drags something.
+function reslotByPriority(goals: Goal[], goalId: string): Goal[] {
+  const g = goals.find((x) => x.id === goalId);
+  if (!g) return goals;
+  const siblings = goals
+    .filter((x) => x.period === g.period && x.periodKey === g.periodKey && x.id !== goalId)
+    .sort((a, b) => a.order - b.order);
+  const rank = priorityRank(g.priority);
+  let idx = siblings.findIndex((o) => priorityRank(o.priority) > rank);
+  if (idx === -1) idx = siblings.length;
+  const ordered = [...siblings.slice(0, idx), g, ...siblings.slice(idx)];
+  const orderById = new Map(ordered.map((x, i) => [x.id, i]));
+  return goals.map((x) => (orderById.has(x.id) ? { ...x, order: orderById.get(x.id)! } : x));
+}
 
 // Weekly/monthly/yearly goals & plans. Device-local (like the profile) — a
 // simple write-through to localStorage, no backend sync yet.
@@ -33,32 +52,33 @@ interface GoalState {
 
 export const useGoalStore = create<GoalState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       goals: [],
 
       addGoal: ({ period, periodKey, title, target, priority = null }) => {
         const id = crypto.randomUUID();
-        const maxOrder = get()
-          .goals.filter((g) => g.period === period && g.periodKey === periodKey)
-          .reduce((m, g) => Math.max(m, g.order), -1);
         set((state) => ({
-          goals: [
-            ...state.goals,
-            {
-              id,
-              period,
-              periodKey,
-              title,
-              done: false,
-              target: target && target > 0 ? target : null,
-              progress: 0,
-              priority,
-              order: maxOrder + 1,
-              taskIds: [],
-              taskWeights: {},
-              createdAt: Date.now(),
-            },
-          ],
+          // Append, then slot into place by priority.
+          goals: reslotByPriority(
+            [
+              ...state.goals,
+              {
+                id,
+                period,
+                periodKey,
+                title,
+                done: false,
+                target: target && target > 0 ? target : null,
+                progress: 0,
+                priority,
+                order: Number.MAX_SAFE_INTEGER,
+                taskIds: [],
+                taskWeights: {},
+                createdAt: Date.now(),
+              },
+            ],
+            id
+          ),
         }));
         return id;
       },
@@ -79,7 +99,11 @@ export const useGoalStore = create<GoalState>()(
 
       setPriority: (id, priority) =>
         set((state) => ({
-          goals: state.goals.map((g) => (g.id === id ? { ...g, priority } : g)),
+          // Re-slot by the new priority (manual drags aside).
+          goals: reslotByPriority(
+            state.goals.map((g) => (g.id === id ? { ...g, priority } : g)),
+            id
+          ),
         })),
 
       setTaskWeight: (goalId, taskId, weight) =>

@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Flag,
   GripVertical,
   Plus,
   Target,
@@ -20,9 +19,9 @@ import {
   relativePeriodName,
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
+import { goalColor } from "@/lib/goalPriority";
 import { goalProgress } from "@/lib/goalProgress";
 import { spring, tap } from "@/lib/motion";
-import { PRIORITY_META } from "@/lib/priority";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -35,10 +34,9 @@ const PERIODS: { key: GoalPeriod; label: string }[] = [
   { key: "year", label: "Year" },
 ];
 
-// Cycle order for the priority flag: none → high → medium → low → none.
+// Cycle order for the priority circle: none → high → medium → low → none.
 const PRIORITY_CYCLE: (Priority | null)[] = [null, "high", "medium", "low"];
-const ACCENT = "#9ec06a";
-const priorityColor = (p: Priority | null) => (p ? PRIORITY_META[p].color : ACCENT);
+const ACCENT = "#9ec06a"; // overall period summary bar only
 
 export default function GoalsPage() {
   const goals = useGoalStore((s) => s.goals);
@@ -210,8 +208,8 @@ export default function GoalsPage() {
           }
           className="flex flex-col gap-2.5"
         >
-          {listed.map((g) => (
-            <GoalRow key={g.id} goal={g} tasks={tasks} />
+          {listed.map((g, i) => (
+            <GoalRow key={g.id} goal={g} index={i} tasks={tasks} />
           ))}
         </Reorder.Group>
       )}
@@ -228,10 +226,9 @@ export default function GoalsPage() {
             aria-label="Cycle new goal priority"
             className="w-11 h-11 rounded-xl bg-surface shadow-soft flex items-center justify-center shrink-0"
           >
-            <Flag
-              size={17}
-              style={{ color: priorityColor(newPriority) }}
-              fill={newPriority ? priorityColor(newPriority) : "none"}
+            <span
+              className="w-5 h-5 rounded-full"
+              style={{ backgroundColor: goalColor(newPriority) }}
             />
           </button>
           <input
@@ -272,13 +269,21 @@ export default function GoalsPage() {
 
 // ── One goal row ─────────────────────────────────────────────────────────────
 
-function GoalRow({ goal, tasks }: { goal: Goal; tasks: Parameters<typeof goalProgress>[1] }) {
+function GoalRow({
+  goal,
+  index,
+  tasks,
+}: {
+  goal: Goal;
+  index: number;
+  tasks: Parameters<typeof goalProgress>[1];
+}) {
   const controls = useDragControls();
   const confirm = useConfirm();
   const [expanded, setExpanded] = useState(false);
 
   const p = goalProgress(goal, tasks);
-  const accent = priorityColor(goal.priority);
+  const accent = goalColor(goal.priority);
 
   const toggleDone = () => useGoalStore.getState().toggleDone(goal.id);
   const cyclePriority = () => {
@@ -307,16 +312,17 @@ function GoalRow({ goal, tasks }: { goal: Goal; tasks: Parameters<typeof goalPro
             <GripVertical size={16} />
           </button>
 
+          {/* Rank circle: colour = priority (red/yellow/green, blue = none),
+              number = position in the list. Tap to cycle priority, which
+              re-slots the goal by priority (unless you've dragged it). */}
           <motion.button
-            onClick={toggleDone}
+            onClick={cyclePriority}
             whileTap={tap}
-            aria-label={p.done ? "Mark not done" : "Mark done"}
-            className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 ${
-              p.done ? "text-fg-inverse" : "border-border-strong text-transparent"
-            }`}
-            style={p.done ? { backgroundColor: accent, borderColor: accent } : undefined}
+            aria-label="Priority"
+            className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold text-white"
+            style={{ backgroundColor: accent }}
           >
-            <Check size={15} strokeWidth={3} />
+            {index + 1}
           </motion.button>
 
           <p
@@ -328,16 +334,15 @@ function GoalRow({ goal, tasks }: { goal: Goal; tasks: Parameters<typeof goalPro
           </p>
 
           <motion.button
-            onClick={cyclePriority}
+            onClick={toggleDone}
             whileTap={tap}
-            aria-label="Set priority"
-            className="p-1.5 shrink-0"
+            aria-label={p.done ? "Mark not done" : "Mark done"}
+            className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 ${
+              p.done ? "text-fg-inverse" : "border-border-strong text-transparent"
+            }`}
+            style={p.done ? { backgroundColor: accent, borderColor: accent } : undefined}
           >
-            <Flag
-              size={16}
-              style={{ color: goal.priority ? accent : "var(--fg-faint)" }}
-              fill={goal.priority ? accent : "none"}
-            />
+            <Check size={15} strokeWidth={3} />
           </motion.button>
 
           {p.mode === "manual" && !p.done && (

@@ -3,8 +3,8 @@ import { Target } from "lucide-react";
 
 import { chipCls } from "./addItemOptions";
 import { periodLabel, relativePeriodName } from "@/lib/goalPeriods";
+import { goalColor } from "@/lib/goalPriority";
 import { tap } from "@/lib/motion";
-import { PRIORITY_META } from "@/lib/priority";
 import { useGoalStore } from "@/store/goalStore";
 
 // "Link to a goal" picker in the add/edit task sheet. Completing a linked task
@@ -45,7 +45,7 @@ export function GoalLinkSection({
           >
             <span
               className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: g.priority ? PRIORITY_META[g.priority].color : "#9ca3af" }}
+              style={{ backgroundColor: goalColor(g.priority) }}
             />
             <span className="truncate max-w-40">{g.title}</span>
             <span className="text-[10px] text-fg-faint">
