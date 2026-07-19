@@ -5,6 +5,7 @@ import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
+import OnboardingWizard from "./components/onboarding/OnboardingWizard";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
@@ -27,6 +28,7 @@ import KitchenPage from "./pages/KitchenPage";
 import ProfilePage from "./pages/ProfilePage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useGoalFocusStore } from "./store/goalFocusStore";
+import { useOnboardingStore } from "./store/onboardingStore";
 import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
@@ -66,6 +68,7 @@ function App() {
   const setViewMode = useSettingsStore((s) => s.setScheduleView);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const onboardingDone = useOnboardingStore((s) => s.done);
 
   // Apply the chosen ambient background preset (per theme) to the app's --app-bg.
   const background = useSettingsStore((s) => s.background);
@@ -387,9 +390,18 @@ function App() {
       {/* Global push-to-talk — floats above the nav on every page */}
       <VoiceAssistant />
 
-      {/* First-launch guided tour — spotlights the essential controls and
-          advances only when the user actually uses them. */}
-      <TutorialHost activePage={activePage} isAddOpen={isAddOpen} isSideMenuOpen={isSideMenuOpen} />
+      {/* First-launch setup wizard (plan your first day), then the spotlight
+          tour — gated so the tour can't react to the wizard's task creation.
+          Completing/skipping the wizard marks the tour done; it stays
+          available from Settings → Replay the tutorial. */}
+      {!onboardingDone && <OnboardingWizard />}
+      {onboardingDone && (
+        <TutorialHost
+          activePage={activePage}
+          isAddOpen={isAddOpen}
+          isSideMenuOpen={isSideMenuOpen}
+        />
+      )}
     </div>
   );
 }
