@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { LogOut, Palette, Settings, X } from "lucide-react";
+import { Lock, LogOut, Palette, Settings, X } from "lucide-react";
 
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
@@ -86,8 +86,22 @@ export default function SideMenu({
             {/* Nav items */}
             <div className="px-3 flex-1">
               {ALL_TABS.filter(({ id }) => !HIDDEN_FROM_MENU.includes(id)).map(
-                ({ id, icon: Icon, label }) => {
+                ({ id, icon: Icon, label, locked }) => {
                   const isActive = id === activePage;
+                  // Locked entries show a padlock and can't be opened yet.
+                  if (locked) {
+                    return (
+                      <div
+                        key={id}
+                        aria-disabled
+                        className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 opacity-45"
+                      >
+                        <Icon size={20} strokeWidth={1.8} className="text-fg-muted" />
+                        <span className="font-medium text-fg-muted flex-1">{label}</span>
+                        <Lock size={15} className="text-fg-faint" />
+                      </div>
+                    );
+                  }
                   return (
                     <motion.button
                       key={id}

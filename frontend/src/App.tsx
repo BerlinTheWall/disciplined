@@ -20,13 +20,11 @@ import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
 import { PAGE_ORDER, type Page } from "./lib/pages";
 import ExpensesPage from "./pages/ExpensesPage";
-import FoodPage from "./pages/FoodPage";
 import GoalsPage from "./pages/GoalsPage";
 import HabitsPage from "./pages/HabitsPage";
 import HomePage from "./pages/HomePage";
-import MealsPage from "./pages/MealsPage";
+import KitchenPage from "./pages/KitchenPage";
 import ProfilePage from "./pages/ProfilePage";
-import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useGoalFocusStore } from "./store/goalFocusStore";
 import { useProfileStore } from "./store/profileStore";
@@ -40,9 +38,7 @@ const PAGE_TITLES: Record<Page, string> = {
   home: "", // the Home page shows its own greeting header
 
   goals: "Goals & Plans",
-  meals: "Meals",
-  recipes: "Recipes",
-  food: "Food & Products",
+  kitchen: "Kitchen",
   workout: "Workout",
   schedule: "Today",
   habits: "Habits",
@@ -151,9 +147,9 @@ function App() {
     return useRecipeFocusStore.subscribe((state, prev) => {
       if (state.pendingRecipeId && state.pendingRecipeId !== prev.pendingRecipeId) {
         setPage(([curr]) => {
-          if (curr === "recipes") return [curr, 0];
+          if (curr === "kitchen") return [curr, 0];
           const from = PAGE_ORDER.indexOf(curr);
-          return ["recipes", PAGE_ORDER.indexOf("recipes") > from ? 1 : -1];
+          return ["kitchen", PAGE_ORDER.indexOf("kitchen") > from ? 1 : -1];
         });
       }
     });
@@ -191,12 +187,8 @@ function App() {
             <Timeline viewMode={viewMode} />
           </WeekSwipeContext.Provider>
         );
-      case "meals":
-        return <MealsPage />;
-      case "recipes":
-        return <RecipesPage />;
-      case "food":
-        return <FoodPage />;
+      case "kitchen":
+        return <KitchenPage />;
       case "workout":
         return <WorkoutPage />;
       case "habits":
