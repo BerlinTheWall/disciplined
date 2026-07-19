@@ -8,10 +8,12 @@ import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
+import { currentPeriodKey } from "@/lib/goalPeriods";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
+import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -20,6 +22,7 @@ import type { Priority } from "@/types/task";
 
 interface HomePageProps {
   onViewAll?: () => void;
+  onOpenGoals?: () => void;
 }
 
 interface DayItem {
@@ -160,7 +163,12 @@ function Chip({ count, label, active }: { count: number; label: string; active?:
   );
 }
 
-export default function HomePage({ onViewAll }: HomePageProps) {
+export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
+  // This week's goals for the compact Home card — keeping them visible is
+  // what makes them stick.
+  const weekGoals = useGoalStore((s) => s.goals)
+    .filter((g) => g.period === "week" && g.periodKey === currentPeriodKey("week"))
+    .sort((a, b) => Number(a.done) - Number(b.done) || a.createdAt - b.createdAt);
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
@@ -425,6 +433,62 @@ export default function HomePage({ onViewAll }: HomePageProps) {
           </div>
         </div>
       </div>
+
+      {/* This week's goals — compact, tap-through to the Goals page */}
+      {onOpenGoals && (
+        <div>
+          <div className="flex items-baseline justify-between px-1 mb-3">
+            <h2 className="text-lg font-bold text-fg">This Week's Goals</h2>
+            <button onClick={onOpenGoals} className="text-sm font-medium text-fg-muted">
+              View All
+            </button>
+          </div>
+          {weekGoals.length === 0 ? (
+            <motion.button
+              onClick={onOpenGoals}
+              whileTap={press}
+              className="w-full bg-surface rounded-3xl shadow-card px-4 py-4 text-left"
+            >
+              <p className="text-sm text-fg-faint">No goals set for this week — tap to add one.</p>
+            </motion.button>
+          ) : (
+            <motion.button
+              onClick={onOpenGoals}
+              whileTap={press}
+              className="w-full bg-surface rounded-3xl shadow-card px-4 py-3.5 text-left space-y-2.5"
+            >
+              {weekGoals.slice(0, 3).map((g) => (
+                <div key={g.id} className="flex items-center gap-2.5">
+                  <span
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      g.done
+                        ? "bg-fg border-fg text-fg-inverse"
+                        : "border-border-strong text-transparent"
+                    }`}
+                  >
+                    <Check size={11} strokeWidth={3.5} />
+                  </span>
+                  <span
+                    className={`flex-1 min-w-0 text-sm font-medium truncate ${
+                      g.done ? "text-fg-faint line-through" : "text-fg"
+                    }`}
+                  >
+                    {g.title}
+                  </span>
+                  {g.target !== null && (
+                    <span className="text-xs text-fg-muted tabular-nums shrink-0">
+                      {g.progress}/{g.target}
+                    </span>
+                  )}
+                </div>
+              ))}
+              {weekGoals.length > 3 && (
+                <p className="text-xs text-fg-faint pl-[30px]">+{weekGoals.length - 3} more</p>
+              )}
+            </motion.button>
+          )}
+        </div>
+      )}
 
       {/* Today's tasks */}
       <div>

@@ -21,6 +21,7 @@ import { spring, tap } from "./lib/motion";
 import { PAGE_ORDER, type Page } from "./lib/pages";
 import ExpensesPage from "./pages/ExpensesPage";
 import FoodPage from "./pages/FoodPage";
+import GoalsPage from "./pages/GoalsPage";
 import HabitsPage from "./pages/HabitsPage";
 import HomePage from "./pages/HomePage";
 import MealsPage from "./pages/MealsPage";
@@ -37,6 +38,7 @@ import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 const PAGE_TITLES: Record<Page, string> = {
   home: "", // the Home page shows its own greeting header
 
+  goals: "Goals",
   meals: "Meals",
   recipes: "Recipes",
   food: "Food & Products",
@@ -166,7 +168,9 @@ function App() {
   function renderPage() {
     switch (activePage) {
       case "home":
-        return <HomePage onViewAll={() => go("schedule")} />;
+        return <HomePage onViewAll={() => go("schedule")} onOpenGoals={() => go("goals")} />;
+      case "goals":
+        return <GoalsPage />;
       case "schedule":
         return (
           // Only weekly view shares the controller (strip + grid both move by

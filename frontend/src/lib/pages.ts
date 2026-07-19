@@ -4,6 +4,7 @@ import {
   Dumbbell,
   Flame,
   Package,
+  Target,
   UtensilsCrossed,
   Wallet,
 } from "lucide-react";
@@ -11,6 +12,7 @@ import type { LucideIcon } from "lucide-react";
 
 export type Page =
   | "home"
+  | "goals"
   | "meals"
   | "recipes"
   | "food"
@@ -22,6 +24,7 @@ export type Page =
 
 export const PAGE_ORDER: Page[] = [
   "home",
+  "goals",
   "meals",
   "recipes",
   "food",
@@ -33,6 +36,7 @@ export const PAGE_ORDER: Page[] = [
 ];
 
 export const ALL_TABS: { id: Page; icon: LucideIcon; label: string }[] = [
+  { id: "goals", icon: Target, label: "Goals" },
   { id: "meals", icon: UtensilsCrossed, label: "Meals" },
   { id: "recipes", icon: ChefHat, label: "Recipes" },
   { id: "food", icon: Package, label: "Food & Products" },
