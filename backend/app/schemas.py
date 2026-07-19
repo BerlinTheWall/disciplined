@@ -155,6 +155,47 @@ class HabitOut(HabitBase):
     id: str
 
 
+# ---- Goals & Plans ----
+
+GoalPeriod = Literal["week", "month", "year"]
+
+
+class GoalBase(CamelModel):
+    period: GoalPeriod
+    period_key: str
+    title: str
+    done: bool = False
+    target: int | None = Field(default=None, ge=1)
+    progress: int = Field(default=0, ge=0)
+    priority: Priority | None = None
+    order: int = 0
+    task_ids: list[str] = []
+    task_weights: dict[str, int] = {}
+    created_at: int = 0
+
+
+class GoalCreate(GoalBase):
+    id: str | None = None
+
+
+class GoalUpdate(CamelModel):
+    period: GoalPeriod | None = None
+    period_key: str | None = None
+    title: str | None = None
+    done: bool | None = None
+    target: int | None = Field(default=None, ge=1)
+    progress: int | None = Field(default=None, ge=0)
+    priority: Priority | None = None
+    order: int | None = None
+    task_ids: list[str] | None = None
+    task_weights: dict[str, int] | None = None
+    created_at: int | None = None
+
+
+class GoalOut(GoalBase):
+    id: str
+
+
 # ---- Workouts ----
 
 WorkoutType = Literal["gym", "running", "cycling", "swimming", "yoga", "other"]

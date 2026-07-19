@@ -1,8 +1,10 @@
 import { api, type ApiResource } from "@/lib/api";
+import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useMealStore } from "@/store/mealStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useWorkoutStore } from "@/store/workoutStore";
+import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
 import type { Meal } from "@/types/meal";
 import type { Task } from "@/types/task";
@@ -150,6 +152,16 @@ const syncers = {
     subscribe: (onChange) =>
       useMealStore.subscribe((state, prev) => {
         if (state.meals !== prev.meals) onChange();
+      }),
+  }),
+  goals: createSyncer<Goal>({
+    label: "goals",
+    api: api.goals,
+    getItems: () => useGoalStore.getState().goals,
+    setItems: (goals) => useGoalStore.setState({ goals }),
+    subscribe: (onChange) =>
+      useGoalStore.subscribe((state, prev) => {
+        if (state.goals !== prev.goals) onChange();
       }),
   }),
 };

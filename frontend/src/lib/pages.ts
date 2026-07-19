@@ -18,7 +18,7 @@ export const PAGE_ORDER: Page[] = [
 // Side-menu entries. `locked` ones show a padlock and aren't navigable yet.
 export const ALL_TABS: { id: Page; icon: LucideIcon; label: string; locked?: boolean }[] = [
   { id: "goals", icon: Target, label: "Goals & Plans" },
-  { id: "kitchen", icon: UtensilsCrossed, label: "Kitchen" },
+  { id: "kitchen", icon: UtensilsCrossed, label: "Meals" },
   { id: "workout", icon: Dumbbell, label: "Workout", locked: true },
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
   { id: "habits", icon: Flame, label: "Habits" },

@@ -1,4 +1,5 @@
 import { todayISODate } from "@/lib/date";
+import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
 import type { Meal } from "@/types/meal";
 import type { Task } from "@/types/task";
@@ -159,6 +160,7 @@ export const api = {
     me: (): Promise<AuthUser> => request("/api/auth/me"),
   },
   events: resource<Task>("events"),
+  goals: resource<Goal>("goals"),
   habits: resource<Habit>("habits"),
   workouts: resource<WorkoutSession>("workouts"),
   meals: resource<Meal>("meals"),

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import auth, briefing, chat, events, habits, meals, tts, workouts
+from app.routers import auth, briefing, chat, events, goals, habits, meals, tts, workouts
 
 # uvicorn configures its own loggers and leaves the root alone, so without this
 # nothing the app itself logs during startup ever reaches the deploy log.
@@ -35,6 +35,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(events.router)
+app.include_router(goals.router)
 app.include_router(habits.router)
 app.include_router(workouts.router)
 app.include_router(meals.router)

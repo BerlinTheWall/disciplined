@@ -1,6 +1,6 @@
 ﻿from uuid import uuid4
 
-from sqlalchemy import Boolean, Float, Integer, String
+from sqlalchemy import BigInteger, Boolean, Float, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +71,27 @@ class WorkoutSession(Base):
     type: Mapped[str] = mapped_column(String, default="gym")  # gym|running|cycling|swimming|yoga|other
     color: Mapped[str] = mapped_column(String, default="#6366f1")
     exercises: Mapped[list] = mapped_column(JSONB, default=list)  # list of WorkoutExercise dicts
+
+
+class Goal(Base):
+    """A weekly/monthly/yearly goal or plan (frontend: Goals & Plans)."""
+
+    __tablename__ = "goals"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    period: Mapped[str] = mapped_column(String)  # week|month|year
+    period_key: Mapped[str] = mapped_column(String)  # Monday ISO / "YYYY-MM" / "YYYY"
+    title: Mapped[str] = mapped_column(String)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    target: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    priority: Mapped[str | None] = mapped_column(String, nullable=True)  # low|medium|high
+    # "order" is a reserved word in SQL — store it under a safe column name.
+    order: Mapped[int] = mapped_column("sort_order", Integer, default=0)
+    task_ids: Mapped[list] = mapped_column(JSONB, default=list)  # linked task ids
+    task_weights: Mapped[dict] = mapped_column(JSONB, default=dict)  # taskId -> percent
+    created_at: Mapped[int] = mapped_column(BigInteger, default=0)  # epoch ms
 
 
 class Meal(Base):
