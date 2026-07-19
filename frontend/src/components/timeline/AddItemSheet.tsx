@@ -134,6 +134,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
   const [goalLink, setGoalLink] = useState<string | null>(null);
+  const [goalWeight, setGoalWeight] = useState<number | null>(null);
   const [reminder, setReminder] = useState<number | null>(null);
   const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
   const [done, setDone] = useState(false);
@@ -173,12 +174,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
       setRecipeId(editItem.data.recipeId ?? undefined);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
-      setGoalLink(
+      const linkedGoal =
         editItem.type === "task"
-          ? (useGoalStore.getState().goals.find((g) => g.taskIds.includes(editItem.data.id))?.id ??
-              null)
-          : null
-      );
+          ? useGoalStore.getState().goals.find((g) => g.taskIds.includes(editItem.data.id))
+          : undefined;
+      setGoalLink(linkedGoal?.id ?? null);
+      setGoalWeight(linkedGoal?.taskWeights?.[editItem.data.id] ?? null);
       setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
@@ -203,6 +204,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setPriority(null);
     // Pre-link when the sheet was opened from a goal's "Add task".
     setGoalLink(useGoalFocusStore.getState().consume());
+    setGoalWeight(null);
     setReminder(useSettingsStore.getState().defaultReminderMinutes);
   }
 
@@ -344,6 +346,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           recipeId: recipeId ?? null,
         });
         useGoalStore.getState().linkTask(goalLink, editItem!.data.id);
+        if (goalLink)
+          useGoalStore.getState().setTaskWeight(goalLink, editItem!.data.id, goalWeight);
       } else {
         updateHabit(editItem!.data.id, {
           title: title.trim(),
@@ -372,6 +376,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           recipeId,
         });
         useGoalStore.getState().linkTask(goalLink, newTaskId);
+        if (goalLink) useGoalStore.getState().setTaskWeight(goalLink, newTaskId, goalWeight);
       } else {
         if (daysOfWeek.length === 0) return;
         addHabit({
@@ -815,7 +820,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       )}
       {mode === "task" && (
         <div className="mt-4">
-          <GoalLinkSection goalId={goalLink} onLink={setGoalLink} />
+          <GoalLinkSection
+            goalId={goalLink}
+            onLink={setGoalLink}
+            weight={goalWeight}
+            onWeight={setGoalWeight}
+          />
         </div>
       )}
       <Collapse open={mode === "habit"}>
@@ -1287,7 +1297,14 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               color={color}
               onSheetClose={onClose}
             />
-            {mode === "task" && <GoalLinkSection goalId={goalLink} onLink={setGoalLink} />}
+            {mode === "task" && (
+              <GoalLinkSection
+                goalId={goalLink}
+                onLink={setGoalLink}
+                weight={goalWeight}
+                onWeight={setGoalWeight}
+              />
+            )}
           </div>
         )}
       </FieldPanel>

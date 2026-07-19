@@ -436,8 +436,8 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
         </div>
       </div>
 
-      {/* This week's goals — compact, tap-through to the Goals page */}
-      {onOpenGoals && (
+      {/* This week's goals — only shown when there are goals for the week */}
+      {onOpenGoals && weekGoals.length > 0 && (
         <div>
           <div className="flex items-baseline justify-between px-1 mb-3">
             <h2 className="text-lg font-bold text-fg">This Week's Goals</h2>
@@ -445,15 +445,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
               View All
             </button>
           </div>
-          {weekGoals.length === 0 ? (
-            <motion.button
-              onClick={onOpenGoals}
-              whileTap={press}
-              className="w-full bg-surface rounded-3xl shadow-card px-4 py-4 text-left"
-            >
-              <p className="text-sm text-fg-faint">No goals set for this week — tap to add one.</p>
-            </motion.button>
-          ) : (
+          {
             <motion.button
               onClick={onOpenGoals}
               whileTap={press}
@@ -499,7 +491,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
                 <p className="text-xs text-fg-faint pl-[30px]">+{weekGoals.length - 3} more</p>
               )}
             </motion.button>
-          )}
+          }
         </div>
       )}
 

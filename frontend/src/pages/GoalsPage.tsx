@@ -24,9 +24,10 @@ import { goalProgress } from "@/lib/goalProgress";
 import { spring, tap } from "@/lib/motion";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
+import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Goal, GoalPeriod } from "@/types/goals";
-import type { Priority } from "@/types/task";
+import type { Priority, Task } from "@/types/task";
 
 const PERIODS: { key: GoalPeriod; label: string }[] = [
   { key: "week", label: "Week" },
@@ -38,11 +39,20 @@ const PERIODS: { key: GoalPeriod; label: string }[] = [
 const PRIORITY_CYCLE: (Priority | null)[] = [null, "high", "medium", "low"];
 const ACCENT = "#9ec06a"; // overall period summary bar only
 
-export default function GoalsPage() {
+export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => void }) {
   const goals = useGoalStore((s) => s.goals);
   const addGoal = useGoalStore((s) => s.addGoal);
   const reorder = useGoalStore((s) => s.reorder);
   const rollover = useGoalStore((s) => s.rollover);
+  const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
+
+  // Tap a linked task → land on its day in the schedule and scroll it into
+  // view (DaySchedule consumes the focus id).
+  function openTask(t: Task) {
+    setSelectedDate(t.date);
+    useScheduleFocusStore.getState().focusItem(t.id);
+    onOpenSchedule?.();
+  }
 
   const [period, setPeriod] = useState<GoalPeriod>("week");
   // One remembered key per horizon so switching tabs keeps your place.
@@ -209,7 +219,7 @@ export default function GoalsPage() {
           className="flex flex-col gap-2.5"
         >
           {listed.map((g, i) => (
-            <GoalRow key={g.id} goal={g} index={i} tasks={tasks} />
+            <GoalRow key={g.id} goal={g} index={i} tasks={tasks} onOpenTask={openTask} />
           ))}
         </Reorder.Group>
       )}
@@ -273,10 +283,12 @@ function GoalRow({
   goal,
   index,
   tasks,
+  onOpenTask,
 }: {
   goal: Goal;
   index: number;
   tasks: Parameters<typeof goalProgress>[1];
+  onOpenTask: (t: Task) => void;
 }) {
   const controls = useDragControls();
   const confirm = useConfirm();
@@ -440,13 +452,14 @@ function GoalRow({
                     >
                       <Check size={11} strokeWidth={3.5} />
                     </button>
-                    <span
-                      className={`flex-1 min-w-0 text-sm truncate ${
+                    <button
+                      onClick={() => onOpenTask(t)}
+                      className={`flex-1 min-w-0 text-left text-sm truncate ${
                         t.completed ? "text-fg-faint line-through" : "text-fg"
                       }`}
                     >
                       {t.title}
-                    </span>
+                    </button>
                     {/* Weight — type a %, or leave blank to auto-split the rest */}
                     <div className="flex items-center shrink-0">
                       <input

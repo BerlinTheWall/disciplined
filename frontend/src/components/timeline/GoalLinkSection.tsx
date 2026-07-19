@@ -13,9 +13,14 @@ import { useGoalStore } from "@/store/goalStore";
 export function GoalLinkSection({
   goalId,
   onLink,
+  weight,
+  onWeight,
 }: {
   goalId: string | null;
   onLink: (id: string | null) => void;
+  // Percent of the goal this task is worth; null = auto even-split.
+  weight: number | null;
+  onWeight: (weight: number | null) => void;
 }) {
   const goals = useGoalStore((s) => s.goals);
   const options = goals
@@ -54,6 +59,27 @@ export function GoalLinkSection({
           </motion.button>
         ))}
       </div>
+
+      {goalId && (
+        <div className="mt-2.5 flex items-center gap-2">
+          <span className="text-xs text-fg-muted">Worth</span>
+          <div className="flex items-center rounded-lg bg-surface-raised px-2 py-1.5">
+            <input
+              value={weight == null ? "" : String(weight)}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/\D/g, "");
+                onWeight(raw === "" ? null : Math.min(100, parseInt(raw, 10)));
+              }}
+              placeholder="auto"
+              inputMode="numeric"
+              aria-label="Percent of the goal"
+              className="w-10 bg-transparent text-right text-sm font-medium tabular-nums text-fg placeholder-fg-faint focus:outline-none"
+            />
+            <span className="text-sm text-fg-muted">%</span>
+          </div>
+          <span className="text-xs text-fg-faint">of the goal (blank = even split)</span>
+        </div>
+      )}
     </div>
   );
 }

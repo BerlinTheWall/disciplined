@@ -181,7 +181,7 @@ function App() {
       case "home":
         return <HomePage onViewAll={() => go("schedule")} onOpenGoals={() => go("goals")} />;
       case "goals":
-        return <GoalsPage />;
+        return <GoalsPage onOpenSchedule={() => go("schedule")} />;
       case "schedule":
         return (
           // Only weekly view shares the controller (strip + grid both move by
