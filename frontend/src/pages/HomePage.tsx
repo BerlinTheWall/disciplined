@@ -487,7 +487,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
                           />
                         </span>
                         <span className="text-xs text-fg-muted tabular-nums">
-                          {gp.current}/{gp.total}
+                          {gp.mode === "tasks" ? `${gp.percent}%` : `${gp.current}/${gp.total}`}
                         </span>
                       </div>
                     )}

@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 
 import { useConfirm } from "@/components/ConfirmDialog";
-import { relativeDayLabel } from "@/lib/date";
 import {
   currentPeriodKey,
   periodLabel,
@@ -382,8 +381,7 @@ function GoalRow({ goal, tasks }: { goal: Goal; tasks: Parameters<typeof goalPro
               />
             </div>
             <span className="text-xs font-medium text-fg-muted tabular-nums shrink-0">
-              {p.current}/{p.total}
-              {p.mode === "tasks" ? " tasks" : ""}
+              {p.mode === "tasks" ? `${p.percent}%` : `${p.current}/${p.total}`}
             </span>
           </div>
         )}
@@ -444,9 +442,25 @@ function GoalRow({ goal, tasks }: { goal: Goal; tasks: Parameters<typeof goalPro
                     >
                       {t.title}
                     </span>
-                    <span className="text-[11px] text-fg-faint shrink-0 capitalize">
-                      {relativeDayLabel(t.date)}
-                    </span>
+                    {/* Weight — type a %, or leave blank to auto-split the rest */}
+                    <div className="flex items-center shrink-0">
+                      <input
+                        value={
+                          goal.taskWeights?.[t.id] != null ? String(goal.taskWeights[t.id]) : ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "");
+                          useGoalStore
+                            .getState()
+                            .setTaskWeight(goal.id, t.id, raw === "" ? null : parseInt(raw, 10));
+                        }}
+                        placeholder={String(Math.round(p.shares[t.id]))}
+                        inputMode="numeric"
+                        aria-label={`Weight for ${t.title}`}
+                        className="w-8 bg-transparent text-right text-xs font-medium tabular-nums text-fg placeholder-fg-faint focus:outline-none"
+                      />
+                      <span className="text-xs text-fg-faint">%</span>
+                    </div>
                     <button
                       onClick={() => useGoalStore.getState().linkTask(null, t.id)}
                       aria-label="Unlink task"
@@ -457,6 +471,9 @@ function GoalRow({ goal, tasks }: { goal: Goal; tasks: Parameters<typeof goalPro
                   </div>
                 ))}
               </div>
+              <p className="mt-1.5 text-[11px] text-fg-faint">
+                Type a task's % of the goal, or leave it blank to share the rest evenly.
+              </p>
             </motion.div>
           )}
         </AnimatePresence>

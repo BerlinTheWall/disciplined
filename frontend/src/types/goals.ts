@@ -23,5 +23,8 @@ export interface Goal {
   order: number;
   // Ids of tasks whose completion drives this goal's progress.
   taskIds: string[];
+  // Optional per-task weight (percent of the goal). Tasks omitted here split
+  // the remaining percentage evenly, so linking without weighting still works.
+  taskWeights?: Record<string, number>;
   createdAt: number;
 }

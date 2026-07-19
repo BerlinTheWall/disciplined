@@ -19,6 +19,9 @@ interface GoalState {
   toggleDone: (id: string) => void;
   addProgress: (id: string, delta: number) => void;
   setPriority: (id: string, priority: Priority | null) => void;
+  // Weight a linked task as a percent of the goal; null reverts it to the
+  // even auto-split of the remaining percentage.
+  setTaskWeight: (goalId: string, taskId: string, weight: number | null) => void;
   deleteGoal: (id: string) => void;
   // Persist a manual drag order for one period's goals.
   reorder: (period: GoalPeriod, periodKey: string, orderedIds: string[]) => void;
@@ -52,6 +55,7 @@ export const useGoalStore = create<GoalState>()(
               priority,
               order: maxOrder + 1,
               taskIds: [],
+              taskWeights: {},
               createdAt: Date.now(),
             },
           ],
@@ -78,6 +82,17 @@ export const useGoalStore = create<GoalState>()(
           goals: state.goals.map((g) => (g.id === id ? { ...g, priority } : g)),
         })),
 
+      setTaskWeight: (goalId, taskId, weight) =>
+        set((state) => ({
+          goals: state.goals.map((g) => {
+            if (g.id !== goalId) return g;
+            const weights = { ...(g.taskWeights ?? {}) };
+            if (weight === null) delete weights[taskId];
+            else weights[taskId] = Math.max(0, Math.min(100, Math.round(weight)));
+            return { ...g, taskWeights: weights };
+          }),
+        })),
+
       deleteGoal: (id) => set((state) => ({ goals: state.goals.filter((g) => g.id !== id) })),
 
       reorder: (period, periodKey, orderedIds) =>
@@ -94,7 +109,11 @@ export const useGoalStore = create<GoalState>()(
           goals: state.goals.map((g) => {
             const has = g.taskIds.includes(taskId);
             if (g.id === goalId) return has ? g : { ...g, taskIds: [...g.taskIds, taskId] };
-            return has ? { ...g, taskIds: g.taskIds.filter((t) => t !== taskId) } : g;
+            if (!has) return g;
+            // Unlinking: drop the task and any weight it carried.
+            const weights = { ...(g.taskWeights ?? {}) };
+            delete weights[taskId];
+            return { ...g, taskIds: g.taskIds.filter((t) => t !== taskId), taskWeights: weights };
           }),
         })),
 
@@ -124,6 +143,7 @@ export const useGoalStore = create<GoalState>()(
               progress: 0,
               done: false,
               taskIds: [],
+              taskWeights: {},
               order: ++next,
               createdAt: Date.now(),
             }));
@@ -132,16 +152,18 @@ export const useGoalStore = create<GoalState>()(
     }),
     {
       name: "disciplined-goals",
-      version: 1,
-      // v0 goals lacked priority/order/taskIds — backfill them.
-      migrate: (persisted, version) => {
+      version: 2,
+      // Backfill fields added over time: priority/order/taskIds (v1) and
+      // taskWeights (v2).
+      migrate: (persisted) => {
         const state = persisted as { goals?: Goal[] };
-        if (version < 1 && state.goals) {
+        if (state.goals) {
           state.goals = state.goals.map((g, i) => ({
             ...g,
             priority: g.priority ?? null,
             order: g.order ?? i,
             taskIds: g.taskIds ?? [],
+            taskWeights: g.taskWeights ?? {},
           }));
         }
         return state as GoalState;
