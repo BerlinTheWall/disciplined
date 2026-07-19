@@ -36,7 +36,7 @@ export const PAGE_ORDER: Page[] = [
 ];
 
 export const ALL_TABS: { id: Page; icon: LucideIcon; label: string }[] = [
-  { id: "goals", icon: Target, label: "Goals" },
+  { id: "goals", icon: Target, label: "Goals & Plans" },
   { id: "meals", icon: UtensilsCrossed, label: "Meals" },
   { id: "recipes", icon: ChefHat, label: "Recipes" },
   { id: "food", icon: Package, label: "Food & Products" },

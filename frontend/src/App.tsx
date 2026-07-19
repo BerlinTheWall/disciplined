@@ -28,6 +28,7 @@ import MealsPage from "./pages/MealsPage";
 import ProfilePage from "./pages/ProfilePage";
 import RecipesPage from "./pages/RecipesPage";
 import WorkoutPage from "./pages/WorkoutPage";
+import { useGoalFocusStore } from "./store/goalFocusStore";
 import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
@@ -38,7 +39,7 @@ import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 const PAGE_TITLES: Record<Page, string> = {
   home: "", // the Home page shows its own greeting header
 
-  goals: "Goals",
+  goals: "Goals & Plans",
   meals: "Meals",
   recipes: "Recipes",
   food: "Food & Products",
@@ -154,6 +155,16 @@ function App() {
           const from = PAGE_ORDER.indexOf(curr);
           return ["recipes", PAGE_ORDER.indexOf("recipes") > from ? 1 : -1];
         });
+      }
+    });
+  }, []);
+
+  // "Add task" from a goal opens the add sheet; AddItemSheet consumes the
+  // pending goal id on open and links the new task back to it.
+  useEffect(() => {
+    return useGoalFocusStore.subscribe((state, prev) => {
+      if (state.pendingLinkGoalId && state.pendingLinkGoalId !== prev.pendingLinkGoalId) {
+        setIsAddOpen(true);
       }
     });
   }, []);

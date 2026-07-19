@@ -34,6 +34,7 @@ import {
 } from "./addItemOptions";
 import CalendarMonth from "./CalendarMonth";
 import { FieldPanel, FieldRow, type EditRowKey } from "./FieldPanel";
+import { GoalLinkSection } from "./GoalLinkSection";
 import { RecipeLinkSection, WorkoutLinkSection } from "./LinkSections";
 import type { EditItem } from "./Timeline";
 import TimeWheel from "./TimeWheel";
@@ -57,6 +58,8 @@ import {
   timeStringToMinutes,
 } from "@/lib/time";
 import { WORKOUT_TYPE_META } from "@/lib/workout";
+import { useGoalFocusStore } from "@/store/goalFocusStore";
+import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -130,6 +133,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
+  const [goalLink, setGoalLink] = useState<string | null>(null);
   const [reminder, setReminder] = useState<number | null>(null);
   const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
   const [done, setDone] = useState(false);
@@ -169,6 +173,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
       setRecipeId(editItem.data.recipeId ?? undefined);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
+      setGoalLink(
+        editItem.type === "task"
+          ? (useGoalStore.getState().goals.find((g) => g.taskIds.includes(editItem.data.id))?.id ??
+              null)
+          : null
+      );
       setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
@@ -191,6 +201,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
     setPriority(null);
+    // Pre-link when the sheet was opened from a goal's "Add task".
+    setGoalLink(useGoalFocusStore.getState().consume());
     setReminder(useSettingsStore.getState().defaultReminderMinutes);
   }
 
@@ -331,6 +343,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           workoutSessionId: workoutSessionId ?? null,
           recipeId: recipeId ?? null,
         });
+        useGoalStore.getState().linkTask(goalLink, editItem!.data.id);
       } else {
         updateHabit(editItem!.data.id, {
           title: title.trim(),
@@ -346,7 +359,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       }
     } else {
       if (mode === "task") {
-        addTask({
+        const newTaskId = addTask({
           title: title.trim(),
           startMinutes,
           durationMinutes: duration,
@@ -358,6 +371,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           workoutSessionId,
           recipeId,
         });
+        useGoalStore.getState().linkTask(goalLink, newTaskId);
       } else {
         if (daysOfWeek.length === 0) return;
         addHabit({
@@ -797,6 +811,11 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
             color={color}
             onSheetClose={onClose}
           />
+        </div>
+      )}
+      {mode === "task" && (
+        <div className="mt-4">
+          <GoalLinkSection goalId={goalLink} onLink={setGoalLink} />
         </div>
       )}
       <Collapse open={mode === "habit"}>
@@ -1268,6 +1287,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               color={color}
               onSheetClose={onClose}
             />
+            {mode === "task" && <GoalLinkSection goalId={goalLink} onLink={setGoalLink} />}
           </div>
         )}
       </FieldPanel>

@@ -9,6 +9,7 @@ import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
 import { currentPeriodKey } from "@/lib/goalPeriods";
+import { goalProgress } from "@/lib/goalProgress";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { press, tap } from "@/lib/motion";
@@ -168,7 +169,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
   // what makes them stick.
   const weekGoals = useGoalStore((s) => s.goals)
     .filter((g) => g.period === "week" && g.periodKey === currentPeriodKey("week"))
-    .sort((a, b) => Number(a.done) - Number(b.done) || a.createdAt - b.createdAt);
+    .sort((a, b) => a.order - b.order);
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
@@ -457,31 +458,42 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
               whileTap={press}
               className="w-full bg-surface rounded-3xl shadow-card px-4 py-3.5 text-left space-y-2.5"
             >
-              {weekGoals.slice(0, 3).map((g) => (
-                <div key={g.id} className="flex items-center gap-2.5">
-                  <span
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      g.done
-                        ? "bg-fg border-fg text-fg-inverse"
-                        : "border-border-strong text-transparent"
-                    }`}
-                  >
-                    <Check size={11} strokeWidth={3.5} />
-                  </span>
-                  <span
-                    className={`flex-1 min-w-0 text-sm font-medium truncate ${
-                      g.done ? "text-fg-faint line-through" : "text-fg"
-                    }`}
-                  >
-                    {g.title}
-                  </span>
-                  {g.target !== null && (
-                    <span className="text-xs text-fg-muted tabular-nums shrink-0">
-                      {g.progress}/{g.target}
+              {weekGoals.slice(0, 3).map((g) => {
+                const gp = goalProgress(g, tasks);
+                const accent = g.priority ? PRIORITY_META[g.priority].color : "#9ec06a";
+                return (
+                  <div key={g.id} className="flex items-center gap-2.5">
+                    <span
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        gp.done ? "text-fg-inverse" : "border-border-strong text-transparent"
+                      }`}
+                      style={gp.done ? { backgroundColor: accent, borderColor: accent } : undefined}
+                    >
+                      <Check size={11} strokeWidth={3.5} />
                     </span>
-                  )}
-                </div>
-              ))}
+                    <span
+                      className={`flex-1 min-w-0 text-sm font-medium truncate ${
+                        gp.done ? "text-fg-faint line-through" : "text-fg"
+                      }`}
+                    >
+                      {g.title}
+                    </span>
+                    {gp.mode !== "check" && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="w-12 h-1.5 rounded-full bg-surface-subtle overflow-hidden">
+                          <span
+                            className="block h-full rounded-full"
+                            style={{ width: `${gp.fraction * 100}%`, backgroundColor: accent }}
+                          />
+                        </span>
+                        <span className="text-xs text-fg-muted tabular-nums">
+                          {gp.current}/{gp.total}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {weekGoals.length > 3 && (
                 <p className="text-xs text-fg-faint pl-[30px]">+{weekGoals.length - 3} more</p>
               )}
