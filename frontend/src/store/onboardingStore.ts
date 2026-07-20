@@ -8,6 +8,7 @@ import { persist } from "zustand/middleware";
 interface OnboardingState {
   done: boolean;
   finish: () => void;
+  restart: () => void;
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -15,6 +16,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     (set) => ({
       done: false,
       finish: () => set({ done: true }),
+      restart: () => set({ done: false }),
     }),
     { name: "disciplined-onboarding" }
   )

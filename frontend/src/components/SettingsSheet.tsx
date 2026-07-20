@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { GraduationCap, X } from "lucide-react";
+import { GraduationCap, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
@@ -11,6 +11,7 @@ import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTutorialStore } from "@/store/tutorialStore";
@@ -341,6 +342,18 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           >
             <span className="text-[15px] font-medium text-fg flex-1">Replay the tutorial</span>
             <GraduationCap size={18} className="text-fg-muted" />
+          </motion.button>
+          <motion.button
+            onClick={() => {
+              // Re-show the first-launch setup wizard (for testing).
+              useOnboardingStore.getState().restart();
+              onClose();
+            }}
+            whileTap={tap}
+            className="flex items-center gap-3 w-full px-4 py-3 text-left"
+          >
+            <span className="text-[15px] font-medium text-fg flex-1">Replay the setup wizard</span>
+            <Sparkles size={18} className="text-fg-muted" />
           </motion.button>
         </Section>
       </div>
