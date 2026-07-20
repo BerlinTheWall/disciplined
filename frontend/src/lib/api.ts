@@ -178,8 +178,14 @@ export const api = {
   // JSON `request` helper; callers treat any failure as "fall back to the
   // device voice". The abort keeps a slow server from stalling a reminder —
   // longer, user-initiated reads (day briefings) pass a more patient timeout,
-  // since synthesis time grows with text length.
-  tts: async (text: string, timeoutMs = 10_000): Promise<Blob> => {
+  // since synthesis time grows with text length. `preset` picks a
+  // server-controlled voice/style — "sigma" is Sigma Mode's deep, intense
+  // drill-sergeant read.
+  tts: async (
+    text: string,
+    timeoutMs = 10_000,
+    preset: "default" | "sigma" = "default"
+  ): Promise<Blob> => {
     const token = getToken();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -190,7 +196,7 @@ export const api = {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, preset }),
         signal: controller.signal,
       });
       if (!res.ok) throw new ApiError(res.status, "text-to-speech failed");

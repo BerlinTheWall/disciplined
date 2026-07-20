@@ -1,5 +1,9 @@
-// Motivation for Sigma Mode. Deep, aggressive lines barked over the device
-// voice and flashed on screen.
+import { api } from "./api";
+
+// Motivation for Sigma Mode. Deep, aggressive lines barked over Gemini's
+// "sigma" voice preset (deep, gravelly, drill-sergeant delivery) and flashed
+// on screen. Falls back to the device's local voice when the backend is
+// unreachable — same "best-effort" pattern as reminder speech.
 
 export const SIGMA_LINES = [
   "Who's gonna carry the boats?!",
@@ -24,6 +28,13 @@ export const SIGMA_LINES = [
 
 export function sigmaLine(): string {
   return SIGMA_LINES[Math.floor(Math.random() * SIGMA_LINES.length)];
+}
+
+// Synthesizes a line with Gemini's intense "sigma" voice preset. Throws on
+// any failure (offline, backend down, quota) — callers fall back to
+// speakHard(), same contract as the rest of the app's TTS call sites.
+export async function synthesizeSigmaLine(text: string): Promise<Blob> {
+  return api.tts(text, 12_000, "sigma");
 }
 
 // Speak a line with a low, forceful delivery on the device voice. Prefers a

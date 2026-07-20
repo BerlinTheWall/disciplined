@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Flame, Skull } from "lucide-react";
 
 import { tap } from "@/lib/motion";
-import { SIGMA_LINES, speakHard } from "@/lib/sigma";
+import { SIGMA_LINES, speakHard, synthesizeSigmaLine } from "@/lib/sigma";
 import { getSigmaBlob } from "@/lib/sigmaMedia";
 import { useSigmaStore } from "@/store/sigmaStore";
 
@@ -14,9 +14,11 @@ import { useSigmaStore } from "@/store/sigmaStore";
 //   - a floating flame button fires one on demand, for when you're slacking
 //     and need it *right now*
 // A "fire" either speaks a line (custom, editable in the Sigma manager, or
-// the built-in defaults) or plays a random uploaded voice/song clip — see
-// pickAction. Nothing here touches the shared reminder/notification systems —
-// it's fully separate so it can never leak into the normal app experience.
+// the built-in defaults) — read by Gemini's deep, intense "sigma" voice
+// preset, falling back to the device's local voice if that's unreachable —
+// or plays a random uploaded voice/song clip; see pickAction. Nothing here
+// touches the shared reminder/notification systems — it's fully separate so
+// it can never leak into the normal app experience.
 
 const MIN_INTERVAL_MS = 3 * 60_000;
 const MAX_INTERVAL_MS = 8 * 60_000;
@@ -45,14 +47,41 @@ export default function SigmaMode() {
   const [activating, setActivating] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // The currently-playing uploaded clip, so a new fire cuts off the last one
-  // instead of piling up overlapping audio.
+  // The currently-playing clip (uploaded or Gemini-synthesized), so a new
+  // fire cuts off the last one instead of piling up overlapping audio.
   const currentAudio = useRef<HTMLAudioElement | null>(null);
 
   function stopCurrentAudio() {
     if (currentAudio.current) {
       currentAudio.current.pause();
       currentAudio.current = null;
+    }
+  }
+
+  // Plays a blob (object URL revoked once done), replacing whatever's
+  // currently playing. Rejects if playback couldn't start (blocked, etc.).
+  function playBlob(blob: Blob): Promise<void> {
+    stopCurrentAudio();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio.current = audio;
+    audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+    return audio.play().catch((e) => {
+      URL.revokeObjectURL(url);
+      throw e;
+    });
+  }
+
+  // Gemini's deep "sigma" voice for a line; false (not thrown) on any
+  // failure so callers fall back to the device voice.
+  async function speakGemini(text: string): Promise<boolean> {
+    try {
+      const blob = await synthesizeSigmaLine(text);
+      await playBlob(blob);
+      return true;
+    } catch (e) {
+      console.warn("[sigma] Gemini voice unavailable, using device voice", e);
+      return false;
     }
   }
 
@@ -63,39 +92,43 @@ export default function SigmaMode() {
     if (action.kind === "audio") {
       const blob = await getSigmaBlob(action.id);
       if (blob) {
-        stopCurrentAudio();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        currentAudio.current = audio;
-        audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
-        void audio.play().catch(() => URL.revokeObjectURL(url));
-        setBanner(`🔊 ${action.name}`);
-        bannerTimer.current = setTimeout(() => setBanner(null), BANNER_MS);
-        return;
+        try {
+          await playBlob(blob);
+          setBanner(`🔊 ${action.name}`);
+          bannerTimer.current = setTimeout(() => setBanner(null), BANNER_MS);
+          return;
+        } catch {
+          // Playback blocked/failed — fall through to a spoken line instead.
+        }
       }
-      // Blob missing (deleted since?) — fall through to a spoken line instead.
     }
 
-    const text = action.kind === "text" ? action.text : sigmaFallbackLine();
+    const text =
+      action.kind === "text"
+        ? action.text
+        : SIGMA_LINES[Math.floor(Math.random() * SIGMA_LINES.length)];
     setBanner(text);
-    speakHard(text);
     bannerTimer.current = setTimeout(() => setBanner(null), BANNER_MS);
-  }
-
-  function sigmaFallbackLine() {
-    return SIGMA_LINES[Math.floor(Math.random() * SIGMA_LINES.length)];
+    const ok = await speakGemini(text);
+    if (!ok) speakHard(text);
   }
 
   // Rising edge: off -> on plays the activation splash.
   useEffect(() => {
     if (on && !wasOn.current) {
       setActivating(true);
-      speakHard("Sigma mode activated. No more slacking.");
+      const line = "Sigma mode activated. No more slacking.";
+      void speakGemini(line).then((ok) => {
+        if (!ok) speakHard(line);
+      });
       const id = setTimeout(() => setActivating(false), 2200);
       wasOn.current = true;
       return () => clearTimeout(id);
     }
     wasOn.current = on;
+    // speakGemini only closes over refs (stable) — re-running this on every
+    // render would just be redundant, not different behavior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
 
   // Recurring, randomly-timed hype while on.
@@ -111,9 +144,8 @@ export default function SigmaMode() {
     };
     schedule();
     return () => clearTimeout(timer);
-    // fire() only reads live state via getState() and closes over nothing that
-    // changes — re-running this effect when it "changes" would just restart
-    // the same timer loop for no reason, so it's deliberately left out.
+    // fire() only reads live state via getState() and closes over refs — it
+    // doesn't change in any way that should restart the timer loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
 
