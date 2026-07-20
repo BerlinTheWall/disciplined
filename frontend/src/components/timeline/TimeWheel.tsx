@@ -6,10 +6,6 @@ import { formatTimeLabel, timeStringToMinutes } from "@/lib/time";
 const WHEEL_ITEM_H = 40;
 const WHEEL_VISIBLE = 3;
 
-// Divisors of 60 up to 15 — the minute grid always tiles the hour cleanly, so
-// hours and minutes can live on two independent wheels.
-const DIVISORS_60 = [1, 2, 3, 4, 5, 6, 10, 12, 15];
-
 // One snap-scrolling column (hours or minutes). It parks itself on the selected
 // index whenever that changes from outside, and reports the settled index back
 // up once the scroll comes to rest. The centered slot's text is drawn in the
@@ -88,54 +84,28 @@ function WheelColumn({
 // create wizard and, taller, in the edit sheet's time panel.
 export default function TimeWheel({
   value,
-  durationMinutes,
   color,
   onChange,
   visibleRows = WHEEL_VISIBLE,
 }: {
   value: string;
-  durationMinutes: number;
+  durationMinutes?: number; // still accepted by callers; the minute wheel is now 1-min steps
   color: string;
   onChange: (next: string) => void;
   visibleRows?: number;
 }) {
-  // The minute grid steps by the duration so short tasks can start on finer
-  // marks (a 5-min task offers :00/:05/…), but never coarser than 15 and always
-  // on a divisor of 60 so every hour is tiled the same way.
-  const cap = Math.max(1, Math.min(durationMinutes, 15));
-  const minuteStep = useMemo(() => [...DIVISORS_60].reverse().find((d) => d <= cap) ?? 1, [cap]);
-
   const hours = useMemo(() => Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0")), []);
   const minutes = useMemo(
-    () =>
-      Array.from({ length: 60 / minuteStep }, (_, i) => String(i * minuteStep).padStart(2, "0")),
-    [minuteStep]
+    () => Array.from({ length: 60 }, (_, m) => String(m).padStart(2, "0")),
+    []
   );
 
-  // Snap the incoming value onto the minute grid (every multiple of minuteStep
-  // is a valid start), then split it into hour + minute indices for the wheels.
-  const snappedTotal =
-    (((Math.round(timeStringToMinutes(value) / minuteStep) * minuteStep) % 1440) + 1440) % 1440;
-  const selHour = Math.floor(snappedTotal / 60);
-  const selMinuteIndex = (snappedTotal % 60) / minuteStep;
+  const total = timeStringToMinutes(value);
+  const selHour = Math.floor(total / 60);
+  const selMinute = total % 60;
 
-  const didMount = useRef(false);
-
-  // Keep the stored start time on the grid so what's shown matches what's saved
-  // when the duration (and thus the minute step) changes. Skip the first render
-  // so we don't overwrite the value the sheet just loaded.
-  useLayoutEffect(() => {
-    if (didMount.current) {
-      const aligned = formatTimeLabel(snappedTotal);
-      if (aligned !== value) onChange(aligned);
-    } else {
-      didMount.current = true;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minuteStep]);
-
-  function commit(hour: number, minuteIndex: number) {
-    const next = formatTimeLabel(hour * 60 + minuteIndex * minuteStep);
+  function commit(hour: number, minute: number) {
+    const next = formatTimeLabel(hour * 60 + minute);
     if (next !== value) onChange(next);
   }
 
@@ -157,7 +127,7 @@ export default function TimeWheel({
         <WheelColumn
           labels={hours}
           selectedIndex={selHour}
-          onSettle={(i) => commit(i, selMinuteIndex)}
+          onSettle={(i) => commit(i, selMinute)}
           contrast={contrast}
           visibleRows={visibleRows}
           align="end"
@@ -169,7 +139,7 @@ export default function TimeWheel({
         </div>
         <WheelColumn
           labels={minutes}
-          selectedIndex={selMinuteIndex}
+          selectedIndex={selMinute}
           onSettle={(i) => commit(selHour, i)}
           contrast={contrast}
           visibleRows={visibleRows}
