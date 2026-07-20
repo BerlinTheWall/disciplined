@@ -88,7 +88,12 @@ function UploadRow({
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }) {
-  const media = useSigmaStore((s) => s.media.filter((m) => m.kind === kind));
+  // Filter outside the selector: a selector that returns a fresh array every
+  // call makes useSyncExternalStore see a "changed" value on every render and
+  // re-render forever (crashes to a blank screen). Select the raw array,
+  // filter it as plain render logic instead.
+  const allMedia = useSigmaStore((s) => s.media);
+  const media = allMedia.filter((m) => m.kind === kind);
   const addMedia = useSigmaStore((s) => s.addMedia);
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
