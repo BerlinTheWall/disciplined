@@ -15,14 +15,25 @@ interface Actions {
   logout: () => void;
 }
 
-// Keys of the stores that sync to the backend. Cleared on logout so the next
-// account on this device doesn't inherit (or seed the server with) the
-// previous account's data.
-const SYNCED_STORE_KEYS = [
+// Keys of the stores holding user content. Cleared on logout so the next
+// account on this device doesn't inherit — or, for the synced stores, seed
+// the server with — the previous account's data. Device preferences
+// (settings, theme, tutorial/onboarding flags) survive.
+const USER_DATA_STORE_KEYS = [
+  // synced with the backend
   "disciplined-tasks",
   "disciplined-habits",
   "disciplined-workouts",
   "disciplined-meals",
+  "disciplined-goals",
+  // device-local user content
+  "disciplined-grocery",
+  "disciplined-expenses",
+  "disciplined-recipes",
+  "disciplined-shopping",
+  "disciplined-preferences",
+  "disciplined-profile",
+  "disciplined-reminders",
 ];
 
 export const useAuthStore = create<State & Actions>()(
@@ -41,7 +52,7 @@ export const useAuthStore = create<State & Actions>()(
       },
       logout: () => {
         setToken(null);
-        for (const key of SYNCED_STORE_KEYS) localStorage.removeItem(key);
+        for (const key of USER_DATA_STORE_KEYS) localStorage.removeItem(key);
         set({ user: null });
         // Reload so the sync module and all stores start from a clean slate.
         window.location.reload();
