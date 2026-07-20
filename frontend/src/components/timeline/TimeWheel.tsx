@@ -4,6 +4,9 @@ import { isLightColor } from "@/lib/color";
 import { formatTimeLabel, timeStringToMinutes } from "@/lib/time";
 
 const WHEEL_ITEM_H = 40;
+// The minute wheel uses shorter rows than the hour wheel, so the same drag
+// covers more minutes — it scrolls a little faster.
+const MINUTE_ITEM_H = 30;
 const WHEEL_VISIBLE = 3;
 
 // One snap-scrolling column (hours or minutes). It parks itself on the selected
@@ -16,6 +19,7 @@ function WheelColumn({
   onSettle,
   contrast,
   visibleRows,
+  itemHeight,
   align,
 }: {
   labels: string[];
@@ -23,9 +27,10 @@ function WheelColumn({
   onSettle: (index: number) => void;
   contrast: string;
   visibleRows: number;
+  itemHeight: number;
   align: "end" | "start";
 }) {
-  const pad = ((visibleRows - 1) / 2) * WHEEL_ITEM_H;
+  const pad = ((visibleRows - 1) / 2) * itemHeight;
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [active, setActive] = useState(selectedIndex);
@@ -36,15 +41,15 @@ function WheelColumn({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const target = selectedIndex * WHEEL_ITEM_H;
-    if (Math.abs(el.scrollTop - target) > WHEEL_ITEM_H / 2) el.scrollTop = target;
+    const target = selectedIndex * itemHeight;
+    if (Math.abs(el.scrollTop - target) > itemHeight / 2) el.scrollTop = target;
     setActive(selectedIndex);
-  }, [selectedIndex]);
+  }, [selectedIndex, itemHeight]);
 
   function handleScroll() {
     const el = ref.current;
     if (!el) return;
-    const idx = Math.max(0, Math.min(labels.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_H)));
+    const idx = Math.max(0, Math.min(labels.length - 1, Math.round(el.scrollTop / itemHeight)));
     setActive(idx);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => onSettle(idx), 110);
@@ -56,14 +61,14 @@ function WheelColumn({
       ref={ref}
       onScroll={handleScroll}
       className="wheel-col w-16 overflow-y-scroll snap-y snap-mandatory"
-      style={{ height: visibleRows * WHEEL_ITEM_H, scrollbarWidth: "none" }}
+      style={{ height: visibleRows * itemHeight, scrollbarWidth: "none" }}
     >
       <div style={{ height: pad }} />
       {labels.map((label, i) => (
         <div
           key={label}
           className={`flex items-center snap-center ${rowAlign}`}
-          style={{ height: WHEEL_ITEM_H }}
+          style={{ height: itemHeight }}
         >
           <span
             className={`text-lg font-semibold tabular-nums ${i === active ? "" : "text-fg-disabled"}`}
@@ -123,13 +128,14 @@ export default function TimeWheel({
           backgroundColor: color,
         }}
       />
-      <div className="relative flex items-stretch justify-center">
+      <div className="relative flex items-center justify-center">
         <WheelColumn
           labels={hours}
           selectedIndex={selHour}
           onSettle={(i) => commit(i, selMinute)}
           contrast={contrast}
           visibleRows={visibleRows}
+          itemHeight={WHEEL_ITEM_H}
           align="end"
         />
         <div className="flex items-center px-0.5">
@@ -143,6 +149,7 @@ export default function TimeWheel({
           onSettle={(i) => commit(selHour, i)}
           contrast={contrast}
           visibleRows={visibleRows}
+          itemHeight={MINUTE_ITEM_H}
           align="start"
         />
       </div>
