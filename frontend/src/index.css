@@ -66,6 +66,36 @@
     radial-gradient(60% 50% at 88% 94%, rgba(98, 94, 130, 0.22), transparent 72%), var(--surface);
 }
 
+/* ── SIGMA MODE ────────────────────────────────────────────────────────
+   Personal-use-only gimmick (never shown by default): overrides every color
+   token to a harsh black/red palette, regardless of light/dark theme.
+   Toggled by setting data-sigma="on" on <html> (see SigmaMode.tsx). */
+[data-sigma="on"] {
+  --surface: #0a0a0a;
+  --surface-alt: #141414;
+  --surface-raised: #1c1c1c;
+  --surface-subtle: #2a2a2a;
+  --surface-inverse: #dc1414;
+  --surface-feature: #1c1c1c;
+  --surface-feature-alt: #2a2a2a;
+
+  --fg: #f5f5f5;
+  --fg-muted: #b0b0b0;
+  --fg-faint: #707070;
+  --fg-disabled: #3a3a3a;
+  --fg-inverse: #0a0a0a;
+  --fg-muted-inverse: #3a3a3a;
+
+  --border: #2a2a2a;
+  --border-strong: #dc1414;
+  --border-input: #2a2a2a;
+  --border-focus: #dc1414;
+
+  --app-bg:
+    radial-gradient(70% 45% at 50% 0%, rgba(220, 20, 20, 0.28), transparent 65%),
+    radial-gradient(60% 50% at 90% 100%, rgba(120, 0, 0, 0.25), transparent 70%), var(--surface);
+}
+
 /* ── Tailwind v4 theme mappings ────────────────────────────────────── */
 @theme inline {
   /* Neo-grotesque sans for the whole app (drives the default font + font-sans).

@@ -9,6 +9,7 @@ import OnboardingWizard from "./components/onboarding/OnboardingWizard";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
+import SigmaMode from "./components/SigmaMode";
 import AddItemSheet from "./components/timeline/AddItemSheet";
 import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
@@ -389,6 +390,9 @@ function App() {
 
       {/* Global push-to-talk — floats above the nav on every page */}
       <VoiceAssistant />
+
+      {/* Personal-use gimmick — renders nothing unless Sigma Mode is on */}
+      <SigmaMode />
 
       {/* First-launch setup wizard (plan your first day), then the spotlight
           tour — gated so the tour can't react to the wizard's task creation.
