@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { GraduationCap, Sparkles, X } from "lucide-react";
+import { Flame, GraduationCap, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
@@ -368,6 +368,17 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             on={sigmaOn}
             onToggle={() => useSigmaStore.getState().toggle()}
           />
+          <motion.button
+            onClick={() => {
+              useSigmaStore.getState().openManager();
+              onClose();
+            }}
+            whileTap={tap}
+            className="flex items-center gap-3 w-full px-4 py-3 text-left"
+          >
+            <span className="text-[15px] font-medium text-fg flex-1">Manage Sigma content</span>
+            <Flame size={18} className="text-fg-muted" />
+          </motion.button>
         </Section>
       </div>
     </BottomSheet>

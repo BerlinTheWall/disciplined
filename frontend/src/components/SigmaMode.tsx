@@ -3,21 +3,41 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Flame, Skull } from "lucide-react";
 
 import { tap } from "@/lib/motion";
-import { sigmaLine, speakHard } from "@/lib/sigma";
+import { SIGMA_LINES, speakHard } from "@/lib/sigma";
+import { getSigmaBlob } from "@/lib/sigmaMedia";
 import { useSigmaStore } from "@/store/sigmaStore";
 
 // Personal-use-only hype layer for Sigma Mode. Mounted once at the app root
 // (see App.tsx) and renders nothing while off. While on:
 //   - a rising edge (off -> on) plays a full-screen "activated" splash
-//   - a recurring timer barks a random line as a flashing banner + speech
-//   - a floating skull button lets you demand a line on tap, for when
-//     you're slacking and need it *right now*
-// Nothing here touches the shared reminder/notification systems — it's fully
-// separate so it can never leak into the normal app experience.
+//   - a recurring timer fires a random hype action as a flashing banner
+//   - a floating flame button fires one on demand, for when you're slacking
+//     and need it *right now*
+// A "fire" either speaks a line (custom, editable in the Sigma manager, or
+// the built-in defaults) or plays a random uploaded voice/song clip — see
+// pickAction. Nothing here touches the shared reminder/notification systems —
+// it's fully separate so it can never leak into the normal app experience.
 
 const MIN_INTERVAL_MS = 3 * 60_000;
 const MAX_INTERVAL_MS = 8 * 60_000;
 const BANNER_MS = 4_500;
+// When at least one audio clip is uploaded, this fraction of fires play a
+// clip instead of speaking a line — audio gets real presence regardless of
+// how many text lines exist.
+const AUDIO_CHANCE = 0.5;
+
+type SigmaAction = { kind: "text"; text: string } | { kind: "audio"; id: string; name: string };
+
+function pickAction(): SigmaAction {
+  const { lines, media } = useSigmaStore.getState();
+  const audios = media.filter((m) => m.kind === "audio");
+  if (audios.length > 0 && Math.random() < AUDIO_CHANCE) {
+    const a = audios[Math.floor(Math.random() * audios.length)];
+    return { kind: "audio", id: a.id, name: a.name };
+  }
+  const pool = lines.length > 0 ? lines : SIGMA_LINES;
+  return { kind: "text", text: pool[Math.floor(Math.random() * pool.length)] };
+}
 
 export default function SigmaMode() {
   const on = useSigmaStore((s) => s.on);
@@ -25,12 +45,45 @@ export default function SigmaMode() {
   const [activating, setActivating] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // The currently-playing uploaded clip, so a new fire cuts off the last one
+  // instead of piling up overlapping audio.
+  const currentAudio = useRef<HTMLAudioElement | null>(null);
 
-  function bark(text: string) {
+  function stopCurrentAudio() {
+    if (currentAudio.current) {
+      currentAudio.current.pause();
+      currentAudio.current = null;
+    }
+  }
+
+  async function fire() {
+    const action = pickAction();
     clearTimeout(bannerTimer.current);
+
+    if (action.kind === "audio") {
+      const blob = await getSigmaBlob(action.id);
+      if (blob) {
+        stopCurrentAudio();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        currentAudio.current = audio;
+        audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+        void audio.play().catch(() => URL.revokeObjectURL(url));
+        setBanner(`🔊 ${action.name}`);
+        bannerTimer.current = setTimeout(() => setBanner(null), BANNER_MS);
+        return;
+      }
+      // Blob missing (deleted since?) — fall through to a spoken line instead.
+    }
+
+    const text = action.kind === "text" ? action.text : sigmaFallbackLine();
     setBanner(text);
     speakHard(text);
     bannerTimer.current = setTimeout(() => setBanner(null), BANNER_MS);
+  }
+
+  function sigmaFallbackLine() {
+    return SIGMA_LINES[Math.floor(Math.random() * SIGMA_LINES.length)];
   }
 
   // Rising edge: off -> on plays the activation splash.
@@ -52,15 +105,25 @@ export default function SigmaMode() {
     const schedule = () => {
       const delay = MIN_INTERVAL_MS + Math.random() * (MAX_INTERVAL_MS - MIN_INTERVAL_MS);
       timer = setTimeout(() => {
-        bark(sigmaLine());
+        void fire();
         schedule();
       }, delay);
     };
     schedule();
     return () => clearTimeout(timer);
+    // fire() only reads live state via getState() and closes over nothing that
+    // changes — re-running this effect when it "changes" would just restart
+    // the same timer loop for no reason, so it's deliberately left out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
 
-  useEffect(() => () => clearTimeout(bannerTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(bannerTimer.current);
+      stopCurrentAudio();
+    },
+    []
+  );
 
   if (!on) return null;
 
@@ -121,11 +184,11 @@ export default function SigmaMode() {
         )}
       </AnimatePresence>
 
-      {/* Floating "fuel" button — demand a line right now. Parked above the
+      {/* Floating "fuel" button — fires an action right now. Parked above the
           nav's other floating controls (pill/mic/schedule + button) so it
           never overlaps them on any page. */}
       <motion.button
-        onClick={() => bark(sigmaLine())}
+        onClick={() => void fire()}
         whileTap={tap}
         aria-label="Demand motivation"
         className="fixed z-[91] flex h-14 w-14 items-center justify-center rounded-full border-2"
