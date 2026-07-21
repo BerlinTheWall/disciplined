@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Flame, Skull } from "lucide-react";
 
 import { tap } from "@/lib/motion";
-import { SIGMA_LINES, speakHard, synthesizeSigmaLine } from "@/lib/sigma";
+import { SIGMA_LINES } from "@/lib/sigma";
 import { getSigmaBlob } from "@/lib/sigmaMedia";
 import { useSigmaStore } from "@/store/sigmaStore";
 
@@ -13,10 +13,9 @@ import { useSigmaStore } from "@/store/sigmaStore";
 //   - a recurring timer fires a random hype action as a flashing banner
 //   - a floating flame button fires one on demand, for when you're slacking
 //     and need it *right now*
-// A "fire" either speaks a line (custom, editable in the Sigma manager, or
-// the built-in defaults) — read by Gemini's deep, intense "sigma" voice
-// preset, falling back to the device's local voice if that's unreachable —
-// or plays a random uploaded voice/song clip; see pickAction. Nothing here
+// A "fire" either shows a line (custom, editable in the Sigma manager, or the
+// built-in defaults) as a flashing banner — text only, never read aloud — or
+// plays a random uploaded voice/song clip; see pickAction. Nothing here
 // touches the shared reminder/notification systems — it's fully separate so
 // it can never leak into the normal app experience.
 
@@ -72,19 +71,6 @@ export default function SigmaMode() {
     });
   }
 
-  // Gemini's deep "sigma" voice for a line; false (not thrown) on any
-  // failure so callers fall back to the device voice.
-  async function speakGemini(text: string): Promise<boolean> {
-    try {
-      const blob = await synthesizeSigmaLine(text);
-      await playBlob(blob);
-      return true;
-    } catch (e) {
-      console.warn("[sigma] Gemini voice unavailable, using device voice", e);
-      return false;
-    }
-  }
-
   async function fire() {
     const action = pickAction();
     clearTimeout(bannerTimer.current);
@@ -109,26 +95,17 @@ export default function SigmaMode() {
         : SIGMA_LINES[Math.floor(Math.random() * SIGMA_LINES.length)];
     setBanner(text);
     bannerTimer.current = setTimeout(() => setBanner(null), BANNER_MS);
-    const ok = await speakGemini(text);
-    if (!ok) speakHard(text);
   }
 
-  // Rising edge: off -> on plays the activation splash.
+  // Rising edge: off -> on plays the activation splash (visual only).
   useEffect(() => {
     if (on && !wasOn.current) {
       setActivating(true);
-      const line = "Sigma mode activated. No more slacking.";
-      void speakGemini(line).then((ok) => {
-        if (!ok) speakHard(line);
-      });
       const id = setTimeout(() => setActivating(false), 2200);
       wasOn.current = true;
       return () => clearTimeout(id);
     }
     wasOn.current = on;
-    // speakGemini only closes over refs (stable) — re-running this on every
-    // render would just be redundant, not different behavior.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
 
   // Recurring, randomly-timed hype while on.

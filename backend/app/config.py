@@ -48,9 +48,6 @@ class Settings(BaseSettings):
     # Aoede (breezy), Kore (firm), Leda (youthful), Charon (informative), …
     gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
     gemini_tts_voice: str = "Zephyr"
-    # Sigma Mode's hype-line voice (personal-use gimmick) — a deeper, more
-    # forceful prebuilt voice than the assistant's default.
-    gemini_sigma_voice: str = "Fenrir"
     # Railway injects DATABASE_URL; docker-compose.yml serves the local default.
     database_url: str = "postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined"
     # Signs auth tokens — set a long random value in .env for anything public.
