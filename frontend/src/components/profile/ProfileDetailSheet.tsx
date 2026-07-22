@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Flame, Lightbulb, Loader2, Square, X } from "lucide-react";
+import { motion } from "framer-motion";
+import { ChevronLeft, ChevronRight, Flame, Lightbulb, Loader2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import Collapse from "@/components/Collapse";
 import {
   CalorieBars,
   Heatmap,
@@ -11,7 +12,7 @@ import {
   MonthBars,
   Stat,
 } from "@/components/profile/ProfileCharts";
-import { primeAudioChannel, speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
+import { primeAudioChannel, speakAssistant, stopSpeaking, wordTokens } from "@/hooks/useSpeech";
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
 import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
@@ -104,13 +105,17 @@ function PeriodToggle({
 
 // The highlighted "here's what's going on" box at the top of every detail —
 // a short, locally-composed analysis (arithmetic phrased as prose, not an LLM
-// call) of the period-over-period numbers below it. The lightbulb doubles as
-// a read-aloud button (Gemini voice via speakAssistant). State is kept local
-// to this instance rather than the app's global read-aloud store, so this
-// doesn't fight over play/stop with unrelated speech elsewhere in the app.
+// call) of the period-over-period numbers below it. Collapsed by default;
+// tapping the lightbulb expands it and reads it aloud (Gemini voice via
+// speakAssistant), lighting up the bulb and highlighting each word as it's
+// spoken. State is kept local to this instance rather than the app's global
+// read-aloud store, so this doesn't fight over play/stop with unrelated
+// speech elsewhere in the app.
 function Analysis({ text }: { text: string }) {
   const [status, setStatus] = useState<"idle" | "loading" | "reading">("idle");
+  const [activeWord, setActiveWord] = useState(-1);
   const activeRef = useRef(false); // true while THIS instance owns the current speech
+  const words = useMemo(() => wordTokens(text).map((t) => t.word), [text]);
 
   useEffect(() => {
     // The sheet stays mounted across a Week/Month/Year switch — only `text`
@@ -120,6 +125,7 @@ function Analysis({ text }: { text: string }) {
       stopSpeaking();
       activeRef.current = false;
       setStatus("idle");
+      setActiveWord(-1);
     }
   }, [text]);
 
@@ -134,6 +140,7 @@ function Analysis({ text }: { text: string }) {
       stopSpeaking();
       activeRef.current = false;
       setStatus("idle");
+      setActiveWord(-1);
       return;
     }
     // Unlock the audio channel synchronously in the tap handler — the actual
@@ -144,12 +151,16 @@ function Analysis({ text }: { text: string }) {
     setStatus("loading");
     void speakAssistant(text, {
       onStart: () => setStatus("reading"),
+      onWord: setActiveWord,
       onDone: () => {
         activeRef.current = false;
         setStatus("idle");
+        setActiveWord(-1);
       },
     });
   }
+
+  const expanded = status !== "idle";
 
   return (
     <div className="rounded-2xl bg-surface-alt border border-border-strong p-4">
@@ -174,29 +185,41 @@ function Analysis({ text }: { text: string }) {
             >
               <Loader2 size={15} className="text-fg-muted" />
             </motion.span>
-          ) : status === "reading" ? (
-            <Square size={13} className="text-fg-muted" />
           ) : (
-            <Lightbulb size={15} className="text-fg-muted" />
+            <Lightbulb
+              size={15}
+              className={status === "reading" ? "text-amber-400" : "text-fg-muted"}
+              fill={status === "reading" ? "currentColor" : "none"}
+            />
           )}
         </motion.button>
-        <p className="text-sm text-fg leading-relaxed">{text}</p>
-      </div>
-      <AnimatePresence initial={false}>
-        {status !== "idle" && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={spring.gentle}
-            className="overflow-hidden"
-          >
-            <p className="text-xs text-fg-faint pt-3 pl-11">
+
+        <div className="flex-1 min-w-0">
+          {!expanded && (
+            <button onClick={handleTap} className="text-sm text-fg-muted text-left pt-1.5 w-full">
+              Tap to hear the analysis
+            </button>
+          )}
+          <Collapse open={expanded}>
+            <p className="text-sm text-fg leading-relaxed">
+              {words.map((w, i) => (
+                <span
+                  key={i}
+                  className={
+                    i === activeWord ? "bg-amber-400/30 rounded px-0.5 -mx-0.5" : undefined
+                  }
+                >
+                  {w}
+                  {i < words.length - 1 ? " " : ""}
+                </span>
+              ))}
+            </p>
+            <p className="text-xs text-fg-faint pt-2">
               {status === "loading" ? "Preparing voice…" : "🔊 Reading aloud — tap to stop"}
             </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </Collapse>
+        </div>
+      </div>
     </div>
   );
 }

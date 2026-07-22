@@ -209,6 +209,13 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
   return { supported: speechInputSupported, listening, start, stop };
 }
 
+// Splits text into the words a karaoke-style highlight can index into, each
+// tagged with its start offset in the original string (matches the
+// charIndex the Web Speech API's boundary event reports).
+export function wordTokens(text: string): { word: string; start: number }[] {
+  return [...text.matchAll(/\S+/g)].map((m) => ({ word: m[0], start: m.index ?? 0 }));
+}
+
 export const speechOutputSupported = typeof window !== "undefined" && "speechSynthesis" in window;
 
 // The OS-provided voices. They load asynchronously in Chrome — empty on first
@@ -237,11 +244,15 @@ export function speak(
     voiceURI,
     onDone,
     onStart,
+    onWord,
   }: {
     interrupt?: boolean;
     voiceURI?: string | null;
     onDone?: () => void;
     onStart?: () => void;
+    // Real per-word timing from the browser's own boundary event — exact,
+    // unlike the estimate playNaturalVoice has to make for a plain audio clip.
+    onWord?: (index: number) => void;
   } = {}
 ) {
   if (!speechOutputSupported) {
@@ -264,6 +275,18 @@ export function speak(
   if (onDone) {
     utterance.onend = onDone;
     utterance.onerror = onDone;
+  }
+  if (onWord) {
+    const tokens = wordTokens(text);
+    utterance.onboundary = (event) => {
+      if (event.name && event.name !== "word") return;
+      let idx = 0;
+      for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i].start <= event.charIndex) idx = i;
+        else break;
+      }
+      onWord(idx);
+    };
   }
   window.speechSynthesis.speak(utterance);
   // Chromium sometimes leaves the queue in a paused state for hidden tabs —
@@ -356,6 +379,9 @@ interface SpeakCallbacks {
   // Fired when playback finishes (not when stopped early via stopSpeaking).
   onDone?: () => void;
   timeoutMs?: number;
+  // Fires repeatedly with the index (into wordTokens(text)) of the word
+  // currently being spoken, for karaoke-style highlighting.
+  onWord?: (index: number) => void;
 }
 
 // Whether assistant speech is being prepared (synthesis/network) or playing —
@@ -370,7 +396,7 @@ export const useSpeechState = create<{ pending: boolean; speaking: boolean }>(()
 // blocked autoplay) resolves false so the caller can fall back.
 async function playNaturalVoice(
   text: string,
-  { onStart, onDone, timeoutMs }: SpeakCallbacks = {}
+  { onStart, onDone, onWord, timeoutMs }: SpeakCallbacks = {}
 ): Promise<boolean> {
   try {
     const blob = await fetchSpeech(text, timeoutMs);
@@ -390,6 +416,32 @@ async function playNaturalVoice(
     await audio.play();
     currentAudio = audio;
     onStart?.();
+    // A plain audio clip carries no per-word timing, so estimate it: weight
+    // each word by character count (a rough stand-in for how long it takes
+    // to say) and map the clip's current playback fraction onto that scale.
+    if (onWord) {
+      const tokens = wordTokens(text);
+      if (tokens.length) {
+        const weights = tokens.map((t) => t.word.length + 1);
+        const total = weights.reduce((a, b) => a + b, 0);
+        let acc = 0;
+        const cumulative = weights.map((w) => (acc += w));
+        let raf = 0;
+        const tick = () => {
+          const dur = audio.duration;
+          if (dur && isFinite(dur) && dur > 0) {
+            const frac = Math.min(audio.currentTime / dur, 1);
+            const idx = cumulative.findIndex((c) => c / total >= frac);
+            onWord(idx === -1 ? tokens.length - 1 : idx);
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        const stopTicking = () => cancelAnimationFrame(raf);
+        audio.addEventListener("ended", stopTicking, { once: true });
+        audio.addEventListener("pause", stopTicking, { once: true });
+      }
+    }
     return true;
   } catch {
     return false;
@@ -408,7 +460,7 @@ export function speakNaturalOnly(text: string, onDone?: () => void): Promise<boo
 // local device voice otherwise. Queued, so stacked reminders don't collide.
 // Updates useSpeechState so UIs can show "preparing voice" / "speaking".
 export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {}) {
-  const { onStart, onDone, timeoutMs } = callbacks;
+  const { onStart, onDone, onWord, timeoutMs } = callbacks;
   useSpeechState.setState({ pending: true });
   const wrapStart = () => {
     useSpeechState.setState({ pending: false, speaking: true });
@@ -420,9 +472,9 @@ export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {
   };
   if (
     useSettingsStore.getState().naturalVoice &&
-    (await playNaturalVoice(text, { onStart: wrapStart, onDone: wrapDone, timeoutMs }))
+    (await playNaturalVoice(text, { onStart: wrapStart, onDone: wrapDone, onWord, timeoutMs }))
   ) {
     return;
   }
-  speak(text, { interrupt: false, onStart: wrapStart, onDone: wrapDone });
+  speak(text, { interrupt: false, onStart: wrapStart, onDone: wrapDone, onWord });
 }
