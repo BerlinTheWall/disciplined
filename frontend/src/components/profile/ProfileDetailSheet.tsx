@@ -216,11 +216,13 @@ function Analysis({ text }: { text: string }) {
                 </span>
               ))}
             </p>
-            {status !== "idle" && (
-              <p className="text-xs text-fg-faint pt-2">
-                {status === "loading" ? "Preparing voice…" : "🔊 Reading aloud — tap to stop"}
-              </p>
-            )}
+            <p className="text-xs text-fg-faint pt-2">
+              {status === "loading"
+                ? "Preparing voice…"
+                : status === "reading"
+                  ? "🔊 Reading aloud — tap to stop"
+                  : "Tap the bulb to read it again"}
+            </p>
           </Collapse>
         </div>
       </div>
