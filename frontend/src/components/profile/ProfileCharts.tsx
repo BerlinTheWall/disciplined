@@ -208,9 +208,11 @@ export function Stat({ value, label }: { value: number | string; label: string }
   );
 }
 
-// Month-over-month comparison bars: one bar per point, the last (current
-// month) highlighted, an optional dashed goal/reference line, and a value +
-// month label under each bar. Used by every Profile detail sheet.
+// Period-over-period comparison bars: one bar per point, an optional dashed
+// goal/reference line, and a value + label under each bar. Used by every
+// Profile detail sheet. The highlighted bar defaults to the last (current)
+// point; pass `selectedIndex` + `onSelect` to make bars tappable and drive
+// the highlight from outside (the Consistency detail's week drill-down).
 export function MonthBars<T extends { key: string; label: string }>({
   points,
   value,
@@ -218,6 +220,8 @@ export function MonthBars<T extends { key: string; label: string }>({
   accent = ACCENT,
   goal,
   height = 120,
+  selectedIndex,
+  onSelect,
 }: {
   points: T[];
   value: (p: T) => number;
@@ -225,9 +229,12 @@ export function MonthBars<T extends { key: string; label: string }>({
   accent?: string;
   goal?: number;
   height?: number;
+  selectedIndex?: number;
+  onSelect?: (index: number) => void;
 }) {
   const values = points.map(value);
   const max = Math.max(goal ?? 0, ...values, 1);
+  const highlightIdx = selectedIndex ?? points.length - 1;
   return (
     <div>
       <div className="relative" style={{ height }}>
@@ -240,15 +247,29 @@ export function MonthBars<T extends { key: string; label: string }>({
         <div className="absolute inset-0 flex items-end gap-2">
           {points.map((p, i) => {
             const v = value(p);
-            const isCurrent = i === points.length - 1;
+            const isHighlighted = i === highlightIdx;
             const h = Math.max((v / max) * height, v > 0 ? 3 : 0);
+            const bar = (
+              <div
+                className="w-full rounded-t-md"
+                style={{ height: h, backgroundColor: isHighlighted ? accent : `${accent}55` }}
+              />
+            );
             return (
               <div key={p.key} className="flex-1 flex justify-center">
-                <div
-                  className="w-full rounded-t-md"
-                  style={{ height: h, backgroundColor: isCurrent ? accent : `${accent}55` }}
-                  title={`${p.label}: ${format(v)}`}
-                />
+                {onSelect ? (
+                  <button
+                    onClick={() => onSelect(i)}
+                    aria-label={`${p.label}: ${format(v)}`}
+                    className="w-full h-full flex items-end justify-center"
+                  >
+                    {bar}
+                  </button>
+                ) : (
+                  <div title={`${p.label}: ${format(v)}`} className="w-full h-full flex items-end">
+                    {bar}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -256,16 +277,16 @@ export function MonthBars<T extends { key: string; label: string }>({
       </div>
       <div className="flex gap-2 mt-2">
         {points.map((p, i) => {
-          const isCurrent = i === points.length - 1;
+          const isHighlighted = i === highlightIdx;
           return (
             <div key={p.key} className="flex-1 text-center">
               <p
-                className={`text-[10px] font-medium tabular-nums ${isCurrent ? "text-fg" : "text-fg-faint"}`}
+                className={`text-[10px] font-medium tabular-nums ${isHighlighted ? "text-fg" : "text-fg-faint"}`}
               >
                 {format(value(p))}
               </p>
               <p
-                className={`text-[10px] mt-0.5 ${isCurrent ? "font-bold text-fg" : "text-fg-faint"}`}
+                className={`text-[10px] mt-0.5 ${isHighlighted ? "font-bold text-fg" : "text-fg-faint"}`}
               >
                 {p.label}
               </p>

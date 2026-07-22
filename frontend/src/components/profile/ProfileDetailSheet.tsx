@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Flame, Lightbulb, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, Lightbulb, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
@@ -12,12 +12,13 @@ import {
   Stat,
 } from "@/components/profile/ProfileCharts";
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
-import { todayISODate } from "@/lib/date";
+import { addDays, todayISODate, toISODate } from "@/lib/date";
 import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
 import { money } from "@/lib/grocery";
 import { ICONS } from "@/lib/icons";
 import {
   consistencyByPeriod,
+  dayScore,
   habitConsistencyByPeriod,
   habitMonthlyCompletion,
   habitStats,
@@ -36,6 +37,7 @@ import {
   workoutsByPeriod,
   workoutStats,
   type ComparePeriod,
+  type PeriodRange,
 } from "@/lib/insights";
 import { spring, tap } from "@/lib/motion";
 import { WORKOUT_TYPE_META } from "@/lib/workout";
@@ -164,6 +166,30 @@ export default function ProfileDetailSheet({
     .filter((w) => w.total > 0)
     .reduce((a, b) => (b.pct < a.pct ? b : a), weekdays.find((w) => w.total > 0) ?? weekdays[0]);
 
+  // Week drill-down: which specific week (Mon..Sun) is expanded below the
+  // "Last N weeks" chart when period === "week". Index into weekRanges/
+  // consistencyPoints, which share the same ordering there. Persists across
+  // switching away from and back to Week — jumping back to whatever you were
+  // last looking at is more useful than always snapping to the current week.
+  const [selectedWeekIdx, setSelectedWeekIdx] = useState<number | null>(null);
+  const weekRanges = useMemo(() => lastPeriods("week", PERIOD_COUNTS.week, todayObj), [todayObj]);
+  const effectiveWeekIdx = Math.min(
+    selectedWeekIdx ?? weekRanges.length - 1,
+    weekRanges.length - 1
+  );
+  const selectedWeek = weekRanges[effectiveWeekIdx];
+  // One entry per Mon..Sun of that week; null for days after today (they
+  // haven't happened, so there's nothing to show — not a 0% failure).
+  const weekDayScores = useMemo(() => {
+    const monday = new Date(selectedWeek.start + "T00:00:00");
+    const todayISO = todayISODate();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = addDays(monday, i);
+      const iso = toISODate(d);
+      return iso > todayISO ? null : dayScore(iso, tasks, habits);
+    });
+  }, [selectedWeek, tasks, habits]);
+
   // Habits
   const habitRows = useMemo(() => habitStats(habits, todayObj), [habits, todayObj]);
   const habitPoints = useMemo(
@@ -235,9 +261,78 @@ export default function ProfileDetailSheet({
                   points={consistencyPoints}
                   value={(p) => p.pct}
                   format={(v) => `${v}%`}
+                  selectedIndex={period === "week" ? effectiveWeekIdx : undefined}
+                  onSelect={period === "week" ? setSelectedWeekIdx : undefined}
                 />
+                {period === "week" && (
+                  <p className="text-[11px] text-fg-faint text-center mt-2">
+                    Tap a bar to see that week's days
+                  </p>
+                )}
               </div>
             </Section>
+
+            {period === "week" && (
+              <Section title="Week detail">
+                <div className="rounded-2xl bg-surface p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <motion.button
+                      onClick={() => setSelectedWeekIdx(Math.max(0, effectiveWeekIdx - 1))}
+                      whileTap={tap}
+                      disabled={effectiveWeekIdx === 0}
+                      aria-label="Previous week"
+                      className="p-1.5 -m-1.5 text-fg-muted disabled:opacity-30"
+                    >
+                      <ChevronLeft size={18} />
+                    </motion.button>
+                    <p className="text-sm font-semibold text-fg">{weekRangeLabel(selectedWeek)}</p>
+                    <motion.button
+                      onClick={() =>
+                        setSelectedWeekIdx(Math.min(weekRanges.length - 1, effectiveWeekIdx + 1))
+                      }
+                      whileTap={tap}
+                      disabled={effectiveWeekIdx === weekRanges.length - 1}
+                      aria-label="Next week"
+                      className="p-1.5 -m-1.5 text-fg-muted disabled:opacity-30"
+                    >
+                      <ChevronRight size={18} />
+                    </motion.button>
+                  </div>
+                  <div className="flex items-end gap-2 h-20">
+                    {weekDayScores.map((d, i) => {
+                      const date = addDays(new Date(selectedWeek.start + "T00:00:00"), i);
+                      const hasData = d !== null && d.total > 0;
+                      return (
+                        <div
+                          key={i}
+                          className="flex-1 flex flex-col items-center justify-end gap-1"
+                        >
+                          <div className="w-full h-14 rounded-md bg-surface-subtle flex items-end overflow-hidden">
+                            {hasData && (
+                              <div
+                                className="w-full rounded-md"
+                                style={{
+                                  height: `${Math.max((d.score ?? 0) * 100, 6)}%`,
+                                  backgroundColor: "#9ec06a",
+                                }}
+                                title={`${d.done}/${d.total}`}
+                              />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-fg-faint">
+                            {WEEKDAY_LABELS[date.getDay()]}
+                          </p>
+                          <p className="text-[10px] font-medium text-fg tabular-nums">
+                            {date.getDate()}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Section>
+            )}
+
             <Section title="Full year">
               <div className="rounded-2xl bg-surface p-4">
                 <Heatmap weeks={heat} />
@@ -512,4 +607,14 @@ export default function ProfileDetailSheet({
 
 function dayName(day: number): string {
   return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][day];
+}
+
+// "Jul 14 – Jul 20" — the full Mon..Sun span, even for the current
+// (still-in-progress) week, so it's clear which week you're looking at
+// regardless of how much of it has actually happened yet.
+function weekRangeLabel(week: PeriodRange): string {
+  const monday = new Date(week.start + "T00:00:00");
+  const sunday = addDays(monday, 6);
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${fmt(monday)} – ${fmt(sunday)}`;
 }
