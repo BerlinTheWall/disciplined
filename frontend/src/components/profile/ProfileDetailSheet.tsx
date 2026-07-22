@@ -203,12 +203,7 @@ function Analysis({ text }: { text: string }) {
           <Collapse open={expanded}>
             <p className="text-sm text-fg leading-relaxed">
               {words.map((w, i) => (
-                <span
-                  key={i}
-                  className={
-                    i === activeWord ? "bg-amber-400/30 rounded px-0.5 -mx-0.5" : undefined
-                  }
-                >
+                <span key={i} className={i <= activeWord ? "text-amber-400" : undefined}>
                   {w}
                   {i < words.length - 1 ? " " : ""}
                 </span>
