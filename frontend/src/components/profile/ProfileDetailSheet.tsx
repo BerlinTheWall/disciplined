@@ -113,18 +113,24 @@ function PeriodToggle({
 // speech elsewhere in the app.
 function Analysis({ text }: { text: string }) {
   const [status, setStatus] = useState<"idle" | "loading" | "reading">("idle");
+  // Separate from `status`: once opened, the text stays visible even after
+  // reading finishes or is stopped — only a new `text` (period switch) closes
+  // it back up, since the old reading no longer matches what's on screen.
+  const [expanded, setExpanded] = useState(false);
   const [activeWord, setActiveWord] = useState(-1);
   const activeRef = useRef(false); // true while THIS instance owns the current speech
+  const expandedRef = useRef(false); // mirrors `expanded`, read-only inside the effect below
   const words = useMemo(() => wordTokens(text).map((t) => t.word), [text]);
 
   useEffect(() => {
-    // The sheet stays mounted across a Week/Month/Year switch — only `text`
-    // changes — so a reading in progress would otherwise keep narrating
-    // numbers that no longer match what's on screen.
     if (activeRef.current) {
       stopSpeaking();
       activeRef.current = false;
+    }
+    if (expandedRef.current) {
+      expandedRef.current = false;
       setStatus("idle");
+      setExpanded(false);
       setActiveWord(-1);
     }
   }, [text]);
@@ -137,10 +143,10 @@ function Analysis({ text }: { text: string }) {
 
   function handleTap() {
     if (status !== "idle") {
+      // Stop, but leave the box open and the words read so far still colored.
       stopSpeaking();
       activeRef.current = false;
       setStatus("idle");
-      setActiveWord(-1);
       return;
     }
     // Unlock the audio channel synchronously in the tap handler — the actual
@@ -148,6 +154,9 @@ function Analysis({ text }: { text: string }) {
     // mobile browsers otherwise require.
     primeAudioChannel();
     activeRef.current = true;
+    expandedRef.current = true;
+    setExpanded(true);
+    setActiveWord(-1);
     setStatus("loading");
     void speakAssistant(text, {
       onStart: () => setStatus("reading"),
@@ -155,12 +164,10 @@ function Analysis({ text }: { text: string }) {
       onDone: () => {
         activeRef.current = false;
         setStatus("idle");
-        setActiveWord(-1);
+        setActiveWord(words.length - 1); // finished — leave the whole line colored
       },
     });
   }
-
-  const expanded = status !== "idle";
 
   return (
     <div className="rounded-2xl bg-surface-alt border border-border-strong p-4">
@@ -209,9 +216,11 @@ function Analysis({ text }: { text: string }) {
                 </span>
               ))}
             </p>
-            <p className="text-xs text-fg-faint pt-2">
-              {status === "loading" ? "Preparing voice…" : "🔊 Reading aloud — tap to stop"}
-            </p>
+            {status !== "idle" && (
+              <p className="text-xs text-fg-faint pt-2">
+                {status === "loading" ? "Preparing voice…" : "🔊 Reading aloud — tap to stop"}
+              </p>
+            )}
           </Collapse>
         </div>
       </div>
