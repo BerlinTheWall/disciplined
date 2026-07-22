@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Flame, Lightbulb, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -17,16 +17,15 @@ import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
 import { money } from "@/lib/grocery";
 import { ICONS } from "@/lib/icons";
 import {
+  consistencyByPeriod,
+  habitConsistencyByPeriod,
   habitMonthlyCompletion,
   habitStats,
   heatmapWeeks,
-  lastMonths,
-  monthlyConsistency,
-  monthlyHabitConsistency,
-  monthlyNutrition,
-  monthlySpend,
-  monthlyWorkouts,
+  lastPeriods,
+  nutritionByPeriod,
   recentNutrition,
+  spendByPeriod,
   spendInRange,
   summarizeConsistency,
   summarizeHabits,
@@ -34,9 +33,11 @@ import {
   summarizeSpending,
   summarizeWorkouts,
   weekdayBreakdown,
+  workoutsByPeriod,
   workoutStats,
+  type ComparePeriod,
 } from "@/lib/insights";
-import { tap } from "@/lib/motion";
+import { spring, tap } from "@/lib/motion";
 import { WORKOUT_TYPE_META } from "@/lib/workout";
 import { useExpenseStore } from "@/store/expenseStore";
 import { useGroceryStore } from "@/store/groceryStore";
@@ -47,7 +48,14 @@ import { useWorkoutStore } from "@/store/workoutStore";
 
 export type ProfileDetailKind = "consistency" | "habits" | "workouts" | "nutrition" | "spending";
 
-const MONTHS_BACK = 6;
+// How many bars to show per granularity — enough to actually compare against
+// each other without the chart turning into a wall of slivers.
+const PERIOD_COUNTS: Record<ComparePeriod, number> = { week: 8, month: 6, year: 5 };
+const PERIODS: { key: ComparePeriod; label: string }[] = [
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+  { key: "year", label: "Year" },
+];
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
 const TITLES: Record<ProfileDetailKind, string> = {
@@ -58,9 +66,42 @@ const TITLES: Record<ProfileDetailKind, string> = {
   spending: "Spending",
 };
 
+// Week/Month/Year switcher for the comparison chart — the same segmented
+// control pattern as the Goals page.
+function PeriodToggle({
+  value,
+  onChange,
+}: {
+  value: ComparePeriod;
+  onChange: (p: ComparePeriod) => void;
+}) {
+  return (
+    <div className="flex items-center bg-surface-raised rounded-xl p-1 mb-4">
+      {PERIODS.map((p) => (
+        <button
+          key={p.key}
+          onClick={() => onChange(p.key)}
+          className="relative flex-1 h-9 rounded-lg text-sm font-medium"
+        >
+          {value === p.key && (
+            <motion.span
+              layoutId="profileDetailPeriod"
+              transition={spring.snappy}
+              className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+            />
+          )}
+          <span className={`relative z-10 ${value === p.key ? "text-fg" : "text-fg-muted"}`}>
+            {p.label}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // The highlighted "here's what's going on" box at the top of every detail —
 // a short, locally-composed analysis (arithmetic phrased as prose, not an LLM
-// call) of the month-over-month numbers below it.
+// call) of the period-over-period numbers below it.
 function Analysis({ text }: { text: string }) {
   return (
     <div className="rounded-2xl bg-surface-alt border border-border-strong p-4 flex items-start gap-3">
@@ -101,11 +142,15 @@ export default function ProfileDetailSheet({
   const today = todayISODate();
   const todayObj = useMemo(() => new Date(), []);
 
+  // Chart granularity — shared across whichever card's sheet is open.
+  const [period, setPeriod] = useState<ComparePeriod>("month");
+  const count = PERIOD_COUNTS[period];
+
   // Consistency
   const heat = useMemo(() => heatmapWeeks(52, tasks, habits), [tasks, habits]);
-  const consistencyMonths = useMemo(
-    () => monthlyConsistency(MONTHS_BACK, tasks, habits, todayObj),
-    [tasks, habits, todayObj]
+  const consistencyPoints = useMemo(
+    () => consistencyByPeriod(period, count, tasks, habits, todayObj),
+    [period, count, tasks, habits, todayObj]
   );
   const weekdays = useMemo(
     () => weekdayBreakdown(90, tasks, habits, todayObj),
@@ -121,44 +166,44 @@ export default function ProfileDetailSheet({
 
   // Habits
   const habitRows = useMemo(() => habitStats(habits, todayObj), [habits, todayObj]);
-  const habitMonths = useMemo(
-    () => monthlyHabitConsistency(MONTHS_BACK, habits, todayObj),
-    [habits, todayObj]
+  const habitPoints = useMemo(
+    () => habitConsistencyByPeriod(period, count, habits, todayObj),
+    [period, count, habits, todayObj]
   );
 
   // Workouts
-  const workoutMonths = useMemo(
-    () => monthlyWorkouts(MONTHS_BACK, tasks, sessions, todayObj),
-    [tasks, sessions, todayObj]
+  const workoutPoints = useMemo(
+    () => workoutsByPeriod(period, count, tasks, sessions, todayObj),
+    [period, count, tasks, sessions, todayObj]
   );
   const woOverall = useMemo(
     () => workoutStats(tasks, sessions, "0000-01-01", today, todayObj),
     [tasks, sessions, today, todayObj]
   );
-  const currentWoMonth = workoutMonths[workoutMonths.length - 1];
-  const prevWoMonth = workoutMonths[workoutMonths.length - 2];
+  const currentWorkoutPeriod = workoutPoints[workoutPoints.length - 1];
+  const prevWorkoutPeriod = workoutPoints[workoutPoints.length - 2];
 
   // Nutrition
   const nutrition14 = useMemo(
     () => recentNutrition(14, meals, groceryItems),
     [meals, groceryItems]
   );
-  const nutritionMonths = useMemo(
-    () => monthlyNutrition(MONTHS_BACK, meals, groceryItems, todayObj),
-    [meals, groceryItems, todayObj]
+  const nutritionPoints = useMemo(
+    () => nutritionByPeriod(period, count, meals, groceryItems, todayObj),
+    [period, count, meals, groceryItems, todayObj]
   );
-  const currentNutritionMonth = nutritionMonths[nutritionMonths.length - 1];
+  const currentNutritionPeriod = nutritionPoints[nutritionPoints.length - 1];
 
   // Spending
-  const spendMonths = useMemo(
-    () => monthlySpend(MONTHS_BACK, expenses, todayObj),
-    [expenses, todayObj]
+  const spendPoints = useMemo(
+    () => spendByPeriod(period, count, expenses, todayObj),
+    [period, count, expenses, todayObj]
   );
-  const currentSpendMonth = spendMonths[spendMonths.length - 1];
+  const currentSpendPeriod = spendPoints[spendPoints.length - 1];
   const currentSpendDetail = useMemo(() => {
-    const range = lastMonths(1, todayObj)[0];
+    const range = lastPeriods(period, 1, todayObj)[0];
     return spendInRange(expenses, range.start, range.endISO);
-  }, [expenses, todayObj]);
+  }, [period, expenses, todayObj]);
   const topCategories = Object.entries(currentSpendDetail.byCategory).sort((a, b) => b[1] - a[1]);
   const maxCat = topCategories.length ? topCategories[0][1] : 1;
 
@@ -178,14 +223,16 @@ export default function ProfileDetailSheet({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+        <PeriodToggle value={period} onChange={setPeriod} />
+
         {kind === "consistency" && (
           <>
-            <Analysis text={summarizeConsistency(consistencyMonths)} />
+            <Analysis text={summarizeConsistency(consistencyPoints, period)} />
             <div className="h-4" />
-            <Section title={`Last ${MONTHS_BACK} months`}>
+            <Section title={`Last ${count} ${period}s`}>
               <div className="rounded-2xl bg-surface p-4">
                 <MonthBars
-                  points={consistencyMonths}
+                  points={consistencyPoints}
                   value={(p) => p.pct}
                   format={(v) => `${v}%`}
                 />
@@ -248,11 +295,11 @@ export default function ProfileDetailSheet({
 
         {kind === "habits" && (
           <>
-            <Analysis text={summarizeHabits(habitRows, habitMonths)} />
+            <Analysis text={summarizeHabits(habitRows, habitPoints, period)} />
             <div className="h-4" />
-            <Section title={`Overall completion, last ${MONTHS_BACK} months`}>
+            <Section title={`Overall completion, last ${count} ${period}s`}>
               <div className="rounded-2xl bg-surface p-4">
-                <MonthBars points={habitMonths} value={(p) => p.pct} format={(v) => `${v}%`} />
+                <MonthBars points={habitPoints} value={(p) => p.pct} format={(v) => `${v}%`} />
               </div>
             </Section>
             <Section title="Every habit">
@@ -300,27 +347,27 @@ export default function ProfileDetailSheet({
 
         {kind === "workouts" && (
           <>
-            <Analysis text={summarizeWorkouts(workoutMonths, woOverall.daysSince)} />
+            <Analysis text={summarizeWorkouts(workoutPoints, woOverall.daysSince, period)} />
             <div className="h-4" />
-            <Section title={`Sessions per month, last ${MONTHS_BACK} months`}>
+            <Section title={`Sessions per ${period}, last ${count} ${period}s`}>
               <div className="rounded-2xl bg-surface p-4">
-                <MonthBars points={workoutMonths} value={(p) => p.total} />
+                <MonthBars points={workoutPoints} value={(p) => p.total} />
               </div>
             </Section>
             <Section title="Snapshot">
               <div className="grid grid-cols-3 gap-3">
-                <Stat value={currentWoMonth?.total ?? 0} label="this month" />
-                <Stat value={prevWoMonth?.total ?? 0} label="last month" />
+                <Stat value={currentWorkoutPeriod?.total ?? 0} label={`this ${period}`} />
+                <Stat value={prevWorkoutPeriod?.total ?? 0} label={`last ${period}`} />
                 <Stat
                   value={woOverall.daysSince ?? "—"}
                   label={woOverall.daysSince === null ? "none yet" : "days since last"}
                 />
               </div>
             </Section>
-            <Section title="This month by type">
-              {currentWoMonth && Object.keys(currentWoMonth.byType).length > 0 ? (
+            <Section title={`This ${period} by type`}>
+              {currentWorkoutPeriod && Object.keys(currentWorkoutPeriod.byType).length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(currentWoMonth.byType).map(([type, count]) => {
+                  {Object.entries(currentWorkoutPeriod.byType).map(([type, count]) => {
                     const meta = WORKOUT_TYPE_META[type as keyof typeof WORKOUT_TYPE_META];
                     const TypeIcon = meta.icon as LucideIcon;
                     return (
@@ -337,7 +384,7 @@ export default function ProfileDetailSheet({
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-fg-faint">No workouts completed this month yet.</p>
+                <p className="text-sm text-fg-faint">No workouts completed this {period} yet.</p>
               )}
             </Section>
           </>
@@ -345,12 +392,12 @@ export default function ProfileDetailSheet({
 
         {kind === "nutrition" && (
           <>
-            <Analysis text={summarizeNutrition(nutritionMonths, CALORIE_GOAL)} />
+            <Analysis text={summarizeNutrition(nutritionPoints, CALORIE_GOAL, period)} />
             <div className="h-4" />
-            <Section title={`Avg daily calories, last ${MONTHS_BACK} months`}>
+            <Section title={`Avg daily calories, last ${count} ${period}s`}>
               <div className="rounded-2xl bg-surface p-4">
                 <MonthBars
-                  points={nutritionMonths}
+                  points={nutritionPoints}
                   value={(p) => p.avg.calories}
                   goal={CALORIE_GOAL}
                 />
@@ -368,23 +415,23 @@ export default function ProfileDetailSheet({
                 />
               </div>
             </Section>
-            <Section title="This month's average macros">
+            <Section title={`This ${period}'s average macros`}>
               <div className="rounded-2xl bg-surface p-4 space-y-2.5">
                 <MacroBar
                   label="Protein"
-                  value={currentNutritionMonth?.avg.protein ?? 0}
+                  value={currentNutritionPeriod?.avg.protein ?? 0}
                   goal={MACRO_GOALS.protein}
                   color="#f87171"
                 />
                 <MacroBar
                   label="Carbs"
-                  value={currentNutritionMonth?.avg.carbs ?? 0}
+                  value={currentNutritionPeriod?.avg.carbs ?? 0}
                   goal={MACRO_GOALS.carbs}
                   color="#fbbf24"
                 />
                 <MacroBar
                   label="Fat"
-                  value={currentNutritionMonth?.avg.fat ?? 0}
+                  value={currentNutritionPeriod?.avg.fat ?? 0}
                   goal={MACRO_GOALS.fat}
                   color="#60a5fa"
                 />
@@ -395,19 +442,19 @@ export default function ProfileDetailSheet({
 
         {kind === "spending" && (
           <>
-            <Analysis text={summarizeSpending(spendMonths, monthlyBudget)} />
+            <Analysis text={summarizeSpending(spendPoints, monthlyBudget, period)} />
             <div className="h-4" />
-            <Section title={`Total per month, last ${MONTHS_BACK} months`}>
+            <Section title={`Total per ${period}, last ${count} ${period}s`}>
               <div className="rounded-2xl bg-surface p-4">
                 <MonthBars
-                  points={spendMonths}
+                  points={spendPoints}
                   value={(p) => p.total}
                   format={(v) => money(v)}
-                  goal={monthlyBudget || undefined}
+                  goal={period === "month" ? monthlyBudget || undefined : undefined}
                 />
               </div>
             </Section>
-            <Section title="This month by category">
+            <Section title={`This ${period} by category`}>
               <div className="rounded-2xl bg-surface p-4">
                 {topCategories.length > 0 ? (
                   <div className="space-y-2.5">
@@ -444,15 +491,15 @@ export default function ProfileDetailSheet({
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-fg-faint">No spending logged this month.</p>
+                  <p className="text-sm text-fg-faint">No spending logged this {period}.</p>
                 )}
               </div>
             </Section>
-            {currentSpendMonth && (
+            {currentSpendPeriod && (
               <Section title="Snapshot">
                 <div className="grid grid-cols-2 gap-3">
-                  <Stat value={money(currentSpendMonth.total)} label="this month" />
-                  <Stat value={money(monthlyBudget)} label="budget" />
+                  <Stat value={money(currentSpendPeriod.total)} label={`this ${period}`} />
+                  <Stat value={money(monthlyBudget)} label="monthly budget" />
                 </div>
               </Section>
             )}

@@ -53,22 +53,82 @@ function cellColor(cell: DayScore | null): string {
   return `rgba(158,192,106,${alpha.toFixed(2)})`;
 }
 
+// Sun..Sat — only Mon/Wed/Fri get a visible label (GitHub's convention) so
+// the strip doesn't crowd the tiny 13px row height.
+const WEEKDAY_SIDE_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+const CELL = 13; // px, matches w-[13px] h-[13px] below
+
 export function Heatmap({ weeks }: { weeks: (DayScore | null)[][] }) {
+  // A month label above the column where that month first appears (its first
+  // non-empty cell), so the grid reads as a timeline instead of bare blocks —
+  // the same convention GitHub's contribution graph uses. Built via a single
+  // self-contained reduce (rather than a `let` mutated across map callbacks)
+  // so there's no variable reassigned after the render that computed it.
+  const { labels: monthLabels } = weeks.reduce<{
+    labels: (string | null)[];
+    prevMonth: string | null;
+  }>(
+    (acc, col) => {
+      const first = col.find((c): c is DayScore => c !== null);
+      if (!first) {
+        acc.labels.push(null);
+        return acc;
+      }
+      const label = new Date(first.date + "T00:00:00").toLocaleDateString(undefined, {
+        month: "short",
+      });
+      if (label === acc.prevMonth) {
+        acc.labels.push(null);
+      } else {
+        acc.labels.push(label);
+        acc.prevMonth = label;
+      }
+      return acc;
+    },
+    { labels: [], prevMonth: null }
+  );
+
   return (
     <div className="overflow-x-auto -mx-1 px-1">
-      <div className="flex gap-[3px]">
-        {weeks.map((col, ci) => (
-          <div key={ci} className="flex flex-col gap-[3px]">
-            {col.map((cell, ri) => (
-              <div
-                key={ri}
-                title={cell ? `${cell.date}: ${cell.done}/${cell.total}` : undefined}
-                className="w-[13px] h-[13px] rounded-[3px]"
-                style={{ backgroundColor: cellColor(cell) }}
-              />
+      <div className="flex gap-1.5" style={{ width: "max-content" }}>
+        {/* Weekday labels down the left, aligned to the cell rows below. */}
+        <div className="flex flex-col gap-[3px] shrink-0">
+          <div style={{ height: CELL }} />
+          {WEEKDAY_SIDE_LABELS.map((label, i) => (
+            <div key={i} className="flex items-center" style={{ height: CELL }}>
+              <span className="text-[9px] leading-none text-fg-faint">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-[3px]">
+          {/* Month labels across the top, one slot per column. */}
+          <div className="flex gap-[3px]" style={{ height: CELL }}>
+            {monthLabels.map((label, ci) => (
+              <div key={ci} className="relative shrink-0" style={{ width: CELL }}>
+                {label && (
+                  <span className="absolute left-0 top-0 whitespace-nowrap text-[9px] leading-none text-fg-faint">
+                    {label}
+                  </span>
+                )}
+              </div>
             ))}
           </div>
-        ))}
+          <div className="flex gap-[3px]">
+            {weeks.map((col, ci) => (
+              <div key={ci} className="flex flex-col gap-[3px]">
+                {col.map((cell, ri) => (
+                  <div
+                    key={ri}
+                    title={cell ? `${cell.date}: ${cell.done}/${cell.total}` : undefined}
+                    className="w-[13px] h-[13px] rounded-[3px]"
+                    style={{ backgroundColor: cellColor(cell) }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

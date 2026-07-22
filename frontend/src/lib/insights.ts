@@ -1,5 +1,5 @@
 import { CATEGORIES, type CategoryKey } from "./categories";
-import { addDays, toISODate } from "./date";
+import { addDays, getWeekDates, toISODate } from "./date";
 import { dayNutrition, indexItems, money } from "./grocery";
 import { getHabitStreak, isHabitActiveOnDate } from "./habits";
 import type { Nutrition } from "./nutritions";
@@ -272,23 +272,62 @@ export function prevMonthRangeISO(end: Date = new Date()): { start: string; endI
   return { start: toISODate(first), endISO: toISODate(last) };
 }
 
-// ── Month-over-month comparisons (Profile detail views) ─────────────────────
+// ── Period-over-period comparisons (Profile detail views) ───────────────────
 //
-// Everything below powers the full-detail sheets behind each Profile card:
-// a chart comparing the last several calendar months against each other, plus
-// a short, locally-composed (not LLM) analysis sentence or two. Kept as pure
-// functions over the same store data the compact Profile cards already use.
+// Everything below powers the full-detail sheets behind each Profile card: a
+// chart comparing the last several periods — week, month, or year, the user's
+// choice — against each other, plus a short, locally-composed (not LLM)
+// analysis sentence or two. Kept as pure functions over the same store data
+// the compact Profile cards already use.
 
-export interface MonthRange {
+export type ComparePeriod = "week" | "month" | "year";
+
+export interface PeriodRange {
   start: string;
-  endISO: string; // clamped to `end` for the current, still-in-progress month
-  label: string; // "Jul"
-  key: string; // "2026-07", stable across years
+  endISO: string; // clamped to `end` for the current, still-in-progress period
+  label: string; // "Jul 14" (week) · "Jul" (month) · "2026" (year)
+  key: string; // stable, sortable
 }
 
-// The last `count` calendar months ending on `end`'s month, oldest first.
-export function lastMonths(count: number, end: Date = new Date()): MonthRange[] {
-  const out: MonthRange[] = [];
+// The last `count` periods ending on the period containing `end`, oldest
+// first. Weeks are Monday-start, matching the rest of the app's week
+// convention; the current, still-in-progress period is clamped so totals
+// don't imply data for days that haven't happened yet.
+export function lastPeriods(
+  period: ComparePeriod,
+  count: number,
+  end: Date = new Date()
+): PeriodRange[] {
+  const out: PeriodRange[] = [];
+  if (period === "week") {
+    for (let i = count - 1; i >= 0; i--) {
+      const monday = getWeekDates(addDays(end, -i * 7))[0];
+      const sunday = addDays(monday, 6);
+      const endDate = sunday > end ? end : sunday;
+      out.push({
+        start: toISODate(monday),
+        endISO: toISODate(endDate),
+        label: monday.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        key: toISODate(monday),
+      });
+    }
+    return out;
+  }
+  if (period === "year") {
+    for (let i = count - 1; i >= 0; i--) {
+      const year = end.getFullYear() - i;
+      const first = new Date(year, 0, 1);
+      const last = new Date(year, 11, 31);
+      const endDate = last > end ? end : last;
+      out.push({
+        start: toISODate(first),
+        endISO: toISODate(endDate),
+        label: String(year),
+        key: String(year),
+      });
+    }
+    return out;
+  }
   for (let i = count - 1; i >= 0; i--) {
     const first = new Date(end.getFullYear(), end.getMonth() - i, 1);
     const last = new Date(end.getFullYear(), end.getMonth() - i + 1, 0);
@@ -303,7 +342,7 @@ export function lastMonths(count: number, end: Date = new Date()): MonthRange[] 
   return out;
 }
 
-export interface MonthlyPoint {
+export interface PeriodPoint {
   key: string;
   label: string;
   done: number;
@@ -311,7 +350,7 @@ export interface MonthlyPoint {
   pct: number; // 0..100; 0 when total is 0
 }
 
-function pointFrom(m: MonthRange, done: number, total: number): MonthlyPoint {
+function pointFrom(m: PeriodRange, done: number, total: number): PeriodPoint {
   return {
     key: m.key,
     label: m.label,
@@ -321,15 +360,16 @@ function pointFrom(m: MonthRange, done: number, total: number): MonthlyPoint {
   };
 }
 
-// Monthly discipline score (tasks + habits combined) for the last `count`
-// months — the same metric as the heatmap, aggregated per month.
-export function monthlyConsistency(
+// Discipline score (tasks + habits combined) per period — the same metric as
+// the heatmap, aggregated over the chosen granularity.
+export function consistencyByPeriod(
+  period: ComparePeriod,
   count: number,
   tasks: Task[],
   habits: Habit[],
   end: Date = new Date()
-): MonthlyPoint[] {
-  return lastMonths(count, end).map((m) => {
+): PeriodPoint[] {
+  return lastPeriods(period, count, end).map((m) => {
     let done = 0;
     let total = 0;
     let cursor = new Date(m.start + "T00:00:00");
@@ -344,14 +384,15 @@ export function monthlyConsistency(
   });
 }
 
-// Habits-only monthly completion rate, aggregated across every habit — the
-// habit-streak card's month-over-month trend.
-export function monthlyHabitConsistency(
+// Habits-only completion rate per period, aggregated across every habit — the
+// habit-streak card's period-over-period trend.
+export function habitConsistencyByPeriod(
+  period: ComparePeriod,
   count: number,
   habits: Habit[],
   end: Date = new Date()
-): MonthlyPoint[] {
-  return lastMonths(count, end).map((m) => {
+): PeriodPoint[] {
+  return lastPeriods(period, count, end).map((m) => {
     let done = 0;
     let total = 0;
     let cursor = new Date(m.start + "T00:00:00");
@@ -370,13 +411,14 @@ export function monthlyHabitConsistency(
 }
 
 // A single habit's own monthly completion rate — used for its "this month vs
-// last month" pair in the habit-streak detail list.
+// last month" pair in the habit-streak detail list (always month-granularity,
+// independent of the chart's period switcher).
 export function habitMonthlyCompletion(
   habit: Habit,
   count: number,
   end: Date = new Date()
-): MonthlyPoint[] {
-  return lastMonths(count, end).map((m) => {
+): PeriodPoint[] {
+  return lastPeriods("month", count, end).map((m) => {
     let done = 0;
     let total = 0;
     let cursor = new Date(m.start + "T00:00:00");
@@ -419,26 +461,27 @@ export function weekdayBreakdown(
   }));
 }
 
-export interface MonthlyWorkoutPoint {
+export interface PeriodWorkoutPoint {
   key: string;
   label: string;
   total: number;
   byType: Partial<Record<WorkoutType, number>>;
 }
 
-export function monthlyWorkouts(
+export function workoutsByPeriod(
+  period: ComparePeriod,
   count: number,
   tasks: Task[],
   sessions: WorkoutSession[],
   end: Date = new Date()
-): MonthlyWorkoutPoint[] {
-  return lastMonths(count, end).map((m) => {
+): PeriodWorkoutPoint[] {
+  return lastPeriods(period, count, end).map((m) => {
     const stats = workoutStats(tasks, sessions, m.start, m.endISO, end);
     return { key: m.key, label: m.label, total: stats.total, byType: stats.byType };
   });
 }
 
-export interface MonthlyNutritionPoint {
+export interface PeriodNutritionPoint {
   key: string;
   label: string;
   avg: Nutrition;
@@ -446,14 +489,15 @@ export interface MonthlyNutritionPoint {
   totalDays: number;
 }
 
-export function monthlyNutrition(
+export function nutritionByPeriod(
+  period: ComparePeriod,
   count: number,
   meals: Meal[],
   items: GroceryItem[],
   end: Date = new Date()
-): MonthlyNutritionPoint[] {
+): PeriodNutritionPoint[] {
   const index = indexItems(items);
-  return lastMonths(count, end).map((m) => {
+  return lastPeriods(period, count, end).map((m) => {
     const start = new Date(m.start + "T00:00:00");
     const last = new Date(m.endISO + "T00:00:00");
     const totalDays = Math.round((last.getTime() - start.getTime()) / 86_400_000) + 1;
@@ -492,19 +536,20 @@ export function monthlyNutrition(
   });
 }
 
-export interface MonthlySpendPoint {
+export interface PeriodSpendPoint {
   key: string;
   label: string;
   total: number;
   byCategory: Record<string, number>;
 }
 
-export function monthlySpend(
+export function spendByPeriod(
+  period: ComparePeriod,
   count: number,
   expenses: Expense[],
   end: Date = new Date()
-): MonthlySpendPoint[] {
-  return lastMonths(count, end).map((m) => {
+): PeriodSpendPoint[] {
+  return lastPeriods(period, count, end).map((m) => {
     const s = spendInRange(expenses, m.start, m.endISO);
     return { key: m.key, label: m.label, total: s.total, byCategory: s.byCategory };
   });
@@ -512,14 +557,14 @@ export function monthlySpend(
 
 // ── Locally-composed analysis (no LLM — pure arithmetic phrased as prose) ────
 
-export function summarizeConsistency(points: MonthlyPoint[]): string {
+export function summarizeConsistency(points: PeriodPoint[], period: ComparePeriod): string {
   const current = points[points.length - 1];
   const prev = points[points.length - 2];
   if (current.total === 0) {
-    return "Nothing scheduled yet this month — plan a few tasks or habits to start tracking your consistency.";
+    return `Nothing scheduled yet this ${period} — plan a few tasks or habits to start tracking your consistency.`;
   }
   const parts = [
-    `You're completing ${current.pct}% of what you plan this month (${current.done}/${current.total}).`,
+    `You're completing ${current.pct}% of what you plan this ${period} (${current.done}/${current.total}).`,
   ];
   if (prev && prev.total > 0) {
     const delta = current.pct - prev.pct;
@@ -536,18 +581,22 @@ export function summarizeConsistency(points: MonthlyPoint[]): string {
   const withData = points.filter((p) => p.total > 0);
   const best = withData.reduce((a, b) => (b.pct > a.pct ? b : a), withData[0]);
   if (best && best.key !== current.key) {
-    parts.push(`Your best month recently was ${best.label} at ${best.pct}%.`);
+    parts.push(`Your best ${period} recently was ${best.label} at ${best.pct}%.`);
   }
   return parts.join(" ");
 }
 
-export function summarizeHabits(rows: HabitStat[], monthly: MonthlyPoint[]): string {
+export function summarizeHabits(
+  rows: HabitStat[],
+  points: PeriodPoint[],
+  period: ComparePeriod
+): string {
   if (rows.length === 0) return "No habits set up yet — add one to start building a streak.";
-  const current = monthly[monthly.length - 1];
-  const prev = monthly[monthly.length - 2];
+  const current = points[points.length - 1];
+  const prev = points[points.length - 2];
   const parts: string[] = [];
   if (current.total > 0) {
-    parts.push(`Across all habits you're at ${current.pct}% this month.`);
+    parts.push(`Across all habits you're at ${current.pct}% this ${period}.`);
     if (prev && prev.total > 0) {
       const delta = current.pct - prev.pct;
       if (Math.abs(delta) >= 3) {
@@ -574,14 +623,18 @@ export function summarizeHabits(rows: HabitStat[], monthly: MonthlyPoint[]): str
   return parts.join(" ");
 }
 
-export function summarizeWorkouts(points: MonthlyWorkoutPoint[], daysSince: number | null): string {
+export function summarizeWorkouts(
+  points: PeriodWorkoutPoint[],
+  daysSince: number | null,
+  period: ComparePeriod
+): string {
   const current = points[points.length - 1];
   const prev = points[points.length - 2];
   if (current.total === 0 && (!prev || prev.total === 0)) {
     return "No workouts logged yet — link a workout to a task to start tracking.";
   }
   const parts = [
-    `You've logged ${current.total} workout${current.total === 1 ? "" : "s"} this month.`,
+    `You've logged ${current.total} workout${current.total === 1 ? "" : "s"} this ${period}.`,
   ];
   if (prev) {
     const delta = current.total - prev.total;
@@ -608,13 +661,17 @@ export function summarizeWorkouts(points: MonthlyWorkoutPoint[], daysSince: numb
   return parts.join(" ");
 }
 
-export function summarizeNutrition(points: MonthlyNutritionPoint[], calorieGoal: number): string {
+export function summarizeNutrition(
+  points: PeriodNutritionPoint[],
+  calorieGoal: number,
+  period: ComparePeriod
+): string {
   const current = points[points.length - 1];
   const prev = points[points.length - 2];
   if (current.loggedDays === 0)
-    return "No meals logged this month yet — log a few to see your trends.";
+    return `No meals logged this ${period} yet — log a few to see your trends.`;
   const parts = [
-    `You're averaging ${current.avg.calories} kcal/day this month (logged ${current.loggedDays} of ${current.totalDays} days).`,
+    `You're averaging ${current.avg.calories} kcal/day this ${period} (logged ${current.loggedDays} of ${current.totalDays} days).`,
   ];
   const vsGoal = current.avg.calories - calorieGoal;
   if (Math.abs(vsGoal) >= 100) {
@@ -640,13 +697,19 @@ export function summarizeNutrition(points: MonthlyNutritionPoint[], calorieGoal:
   return parts.join(" ");
 }
 
-export function summarizeSpending(points: MonthlySpendPoint[], budget: number): string {
+export function summarizeSpending(
+  points: PeriodSpendPoint[],
+  budget: number,
+  period: ComparePeriod
+): string {
   const current = points[points.length - 1];
   const prev = points[points.length - 2];
-  if (current.total === 0) return "No spending logged this month yet.";
+  if (current.total === 0) return `No spending logged this ${period} yet.`;
+  // The budget is inherently a monthly figure — only compare against it when
+  // looking at monthly bars, where the comparison actually means something.
   const parts = [
-    `You've spent ${money(current.total)} this month` +
-      (budget > 0 ? ` against a ${money(budget)} budget.` : "."),
+    `You've spent ${money(current.total)} this ${period}` +
+      (period === "month" && budget > 0 ? ` against a ${money(budget)} budget.` : "."),
   ];
   if (prev && prev.total > 0) {
     const delta = current.total - prev.total;
@@ -664,6 +727,8 @@ export function summarizeSpending(points: MonthlySpendPoint[], budget: number): 
     const meta = CATEGORIES[topCat[0]] ?? CATEGORIES.other;
     parts.push(`Your biggest category is ${meta.label} at ${money(topCat[1])}.`);
   }
-  if (budget > 0 && current.total > budget) parts.push("You're over budget for the month.");
+  if (period === "month" && budget > 0 && current.total > budget) {
+    parts.push("You're over budget for the month.");
+  }
   return parts.join(" ");
 }
