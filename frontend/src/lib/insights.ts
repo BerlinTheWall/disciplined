@@ -1,7 +1,9 @@
+import { CATEGORIES, type CategoryKey } from "./categories";
 import { addDays, toISODate } from "./date";
-import { dayNutrition, indexItems } from "./grocery";
+import { dayNutrition, indexItems, money } from "./grocery";
 import { getHabitStreak, isHabitActiveOnDate } from "./habits";
 import type { Nutrition } from "./nutritions";
+import { WORKOUT_TYPE_META } from "./workout";
 import type { Expense } from "@/types/expense";
 import type { GroceryItem } from "@/types/grocery";
 import type { Habit } from "@/types/habits";
@@ -268,4 +270,400 @@ export function prevMonthRangeISO(end: Date = new Date()): { start: string; endI
   const first = new Date(end.getFullYear(), end.getMonth() - 1, 1);
   const last = new Date(end.getFullYear(), end.getMonth(), 0);
   return { start: toISODate(first), endISO: toISODate(last) };
+}
+
+// ── Month-over-month comparisons (Profile detail views) ─────────────────────
+//
+// Everything below powers the full-detail sheets behind each Profile card:
+// a chart comparing the last several calendar months against each other, plus
+// a short, locally-composed (not LLM) analysis sentence or two. Kept as pure
+// functions over the same store data the compact Profile cards already use.
+
+export interface MonthRange {
+  start: string;
+  endISO: string; // clamped to `end` for the current, still-in-progress month
+  label: string; // "Jul"
+  key: string; // "2026-07", stable across years
+}
+
+// The last `count` calendar months ending on `end`'s month, oldest first.
+export function lastMonths(count: number, end: Date = new Date()): MonthRange[] {
+  const out: MonthRange[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const first = new Date(end.getFullYear(), end.getMonth() - i, 1);
+    const last = new Date(end.getFullYear(), end.getMonth() - i + 1, 0);
+    const endDate = last > end ? end : last;
+    out.push({
+      start: toISODate(first),
+      endISO: toISODate(endDate),
+      label: first.toLocaleDateString(undefined, { month: "short" }),
+      key: `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, "0")}`,
+    });
+  }
+  return out;
+}
+
+export interface MonthlyPoint {
+  key: string;
+  label: string;
+  done: number;
+  total: number;
+  pct: number; // 0..100; 0 when total is 0
+}
+
+function pointFrom(m: MonthRange, done: number, total: number): MonthlyPoint {
+  return {
+    key: m.key,
+    label: m.label,
+    done,
+    total,
+    pct: total ? Math.round((done / total) * 100) : 0,
+  };
+}
+
+// Monthly discipline score (tasks + habits combined) for the last `count`
+// months — the same metric as the heatmap, aggregated per month.
+export function monthlyConsistency(
+  count: number,
+  tasks: Task[],
+  habits: Habit[],
+  end: Date = new Date()
+): MonthlyPoint[] {
+  return lastMonths(count, end).map((m) => {
+    let done = 0;
+    let total = 0;
+    let cursor = new Date(m.start + "T00:00:00");
+    const last = new Date(m.endISO + "T00:00:00");
+    while (cursor <= last) {
+      const s = dayScore(toISODate(cursor), tasks, habits);
+      done += s.done;
+      total += s.total;
+      cursor = addDays(cursor, 1);
+    }
+    return pointFrom(m, done, total);
+  });
+}
+
+// Habits-only monthly completion rate, aggregated across every habit — the
+// habit-streak card's month-over-month trend.
+export function monthlyHabitConsistency(
+  count: number,
+  habits: Habit[],
+  end: Date = new Date()
+): MonthlyPoint[] {
+  return lastMonths(count, end).map((m) => {
+    let done = 0;
+    let total = 0;
+    let cursor = new Date(m.start + "T00:00:00");
+    const last = new Date(m.endISO + "T00:00:00");
+    while (cursor <= last) {
+      const iso = toISODate(cursor);
+      for (const h of habits) {
+        if (!isHabitActiveOnDate(h, cursor)) continue;
+        total++;
+        if (h.completedDates.includes(iso)) done++;
+      }
+      cursor = addDays(cursor, 1);
+    }
+    return pointFrom(m, done, total);
+  });
+}
+
+// A single habit's own monthly completion rate — used for its "this month vs
+// last month" pair in the habit-streak detail list.
+export function habitMonthlyCompletion(
+  habit: Habit,
+  count: number,
+  end: Date = new Date()
+): MonthlyPoint[] {
+  return lastMonths(count, end).map((m) => {
+    let done = 0;
+    let total = 0;
+    let cursor = new Date(m.start + "T00:00:00");
+    const last = new Date(m.endISO + "T00:00:00");
+    while (cursor <= last) {
+      if (isHabitActiveOnDate(habit, cursor)) {
+        total++;
+        if (habit.completedDates.includes(toISODate(cursor))) done++;
+      }
+      cursor = addDays(cursor, 1);
+    }
+    return pointFrom(m, done, total);
+  });
+}
+
+// Average discipline by weekday over the last `days` days — "you're strongest
+// on Wednesdays, weakest on Sundays" material for the consistency detail.
+export interface WeekdayPoint {
+  day: number; // 0 = Sunday
+  pct: number;
+  total: number;
+}
+
+export function weekdayBreakdown(
+  days: number,
+  tasks: Task[],
+  habits: Habit[],
+  end: Date = new Date()
+): WeekdayPoint[] {
+  const buckets = Array.from({ length: 7 }, () => ({ done: 0, total: 0 }));
+  for (const s of recentScores(days, tasks, habits, end)) {
+    const wd = new Date(s.date + "T00:00:00").getDay();
+    buckets[wd].done += s.done;
+    buckets[wd].total += s.total;
+  }
+  return buckets.map((b, day) => ({
+    day,
+    total: b.total,
+    pct: b.total ? Math.round((b.done / b.total) * 100) : 0,
+  }));
+}
+
+export interface MonthlyWorkoutPoint {
+  key: string;
+  label: string;
+  total: number;
+  byType: Partial<Record<WorkoutType, number>>;
+}
+
+export function monthlyWorkouts(
+  count: number,
+  tasks: Task[],
+  sessions: WorkoutSession[],
+  end: Date = new Date()
+): MonthlyWorkoutPoint[] {
+  return lastMonths(count, end).map((m) => {
+    const stats = workoutStats(tasks, sessions, m.start, m.endISO, end);
+    return { key: m.key, label: m.label, total: stats.total, byType: stats.byType };
+  });
+}
+
+export interface MonthlyNutritionPoint {
+  key: string;
+  label: string;
+  avg: Nutrition;
+  loggedDays: number;
+  totalDays: number;
+}
+
+export function monthlyNutrition(
+  count: number,
+  meals: Meal[],
+  items: GroceryItem[],
+  end: Date = new Date()
+): MonthlyNutritionPoint[] {
+  const index = indexItems(items);
+  return lastMonths(count, end).map((m) => {
+    const start = new Date(m.start + "T00:00:00");
+    const last = new Date(m.endISO + "T00:00:00");
+    const totalDays = Math.round((last.getTime() - start.getTime()) / 86_400_000) + 1;
+    const sum: Nutrition = { calories: 0, protein: 0, fat: 0, carbs: 0, sugar: 0, fiber: 0 };
+    let loggedDays = 0;
+    let cursor = start;
+    while (cursor <= last) {
+      const dayMeals = meals.filter((mm) => mm.date === toISODate(cursor));
+      if (dayMeals.length > 0) {
+        loggedDays++;
+        const n = dayNutrition(dayMeals, index);
+        sum.calories += n.calories;
+        sum.protein += n.protein;
+        sum.fat += n.fat;
+        sum.carbs += n.carbs;
+        sum.sugar += n.sugar;
+        sum.fiber += n.fiber;
+      }
+      cursor = addDays(cursor, 1);
+    }
+    const d = loggedDays || 1;
+    return {
+      key: m.key,
+      label: m.label,
+      totalDays,
+      loggedDays,
+      avg: {
+        calories: Math.round(sum.calories / d),
+        protein: Math.round(sum.protein / d),
+        fat: Math.round(sum.fat / d),
+        carbs: Math.round(sum.carbs / d),
+        sugar: Math.round(sum.sugar / d),
+        fiber: Math.round(sum.fiber / d),
+      },
+    };
+  });
+}
+
+export interface MonthlySpendPoint {
+  key: string;
+  label: string;
+  total: number;
+  byCategory: Record<string, number>;
+}
+
+export function monthlySpend(
+  count: number,
+  expenses: Expense[],
+  end: Date = new Date()
+): MonthlySpendPoint[] {
+  return lastMonths(count, end).map((m) => {
+    const s = spendInRange(expenses, m.start, m.endISO);
+    return { key: m.key, label: m.label, total: s.total, byCategory: s.byCategory };
+  });
+}
+
+// ── Locally-composed analysis (no LLM — pure arithmetic phrased as prose) ────
+
+export function summarizeConsistency(points: MonthlyPoint[]): string {
+  const current = points[points.length - 1];
+  const prev = points[points.length - 2];
+  if (current.total === 0) {
+    return "Nothing scheduled yet this month — plan a few tasks or habits to start tracking your consistency.";
+  }
+  const parts = [
+    `You're completing ${current.pct}% of what you plan this month (${current.done}/${current.total}).`,
+  ];
+  if (prev && prev.total > 0) {
+    const delta = current.pct - prev.pct;
+    if (Math.abs(delta) >= 3) {
+      parts.push(
+        delta > 0
+          ? `That's up ${delta} points from ${prev.label} — solid improvement.`
+          : `That's down ${Math.abs(delta)} points from ${prev.label} — worth tightening up.`
+      );
+    } else {
+      parts.push(`That's about the same as ${prev.label}.`);
+    }
+  }
+  const withData = points.filter((p) => p.total > 0);
+  const best = withData.reduce((a, b) => (b.pct > a.pct ? b : a), withData[0]);
+  if (best && best.key !== current.key) {
+    parts.push(`Your best month recently was ${best.label} at ${best.pct}%.`);
+  }
+  return parts.join(" ");
+}
+
+export function summarizeHabits(rows: HabitStat[], monthly: MonthlyPoint[]): string {
+  if (rows.length === 0) return "No habits set up yet — add one to start building a streak.";
+  const current = monthly[monthly.length - 1];
+  const prev = monthly[monthly.length - 2];
+  const parts: string[] = [];
+  if (current.total > 0) {
+    parts.push(`Across all habits you're at ${current.pct}% this month.`);
+    if (prev && prev.total > 0) {
+      const delta = current.pct - prev.pct;
+      if (Math.abs(delta) >= 3) {
+        parts.push(
+          delta > 0
+            ? `Up ${delta} points from ${prev.label}.`
+            : `Down ${Math.abs(delta)} points from ${prev.label}.`
+        );
+      }
+    }
+  }
+  const best = [...rows].sort((a, b) => b.rate7 - a.rate7)[0];
+  const worst = [...rows].sort((a, b) => a.rate7 - b.rate7)[0];
+  if (best) {
+    parts.push(
+      `${best.habit.title} is your strongest right now at ${Math.round(best.rate7 * 100)}% (current streak: ${best.current}).`
+    );
+  }
+  if (worst && worst.habit.id !== best?.habit.id && worst.rate7 < 0.6) {
+    parts.push(
+      `${worst.habit.title} could use attention — only ${Math.round(worst.rate7 * 100)}% lately.`
+    );
+  }
+  return parts.join(" ");
+}
+
+export function summarizeWorkouts(points: MonthlyWorkoutPoint[], daysSince: number | null): string {
+  const current = points[points.length - 1];
+  const prev = points[points.length - 2];
+  if (current.total === 0 && (!prev || prev.total === 0)) {
+    return "No workouts logged yet — link a workout to a task to start tracking.";
+  }
+  const parts = [
+    `You've logged ${current.total} workout${current.total === 1 ? "" : "s"} this month.`,
+  ];
+  if (prev) {
+    const delta = current.total - prev.total;
+    if (delta !== 0) {
+      parts.push(
+        delta > 0
+          ? `That's ${delta} more than ${prev.label}.`
+          : `That's ${Math.abs(delta)} fewer than ${prev.label}.`
+      );
+    }
+  }
+  const topType = Object.entries(current.byType).sort((a, b) => b[1] - a[1])[0] as
+    [WorkoutType, number] | undefined;
+  if (topType) {
+    parts.push(
+      `Most of that was ${WORKOUT_TYPE_META[topType[0]].label.toLowerCase()} (${topType[1]}x).`
+    );
+  }
+  if (daysSince !== null) {
+    if (daysSince === 0) parts.push("You worked out today — nice.");
+    else if (daysSince >= 5)
+      parts.push(`It's been ${daysSince} days since your last one — time to get back to it.`);
+  }
+  return parts.join(" ");
+}
+
+export function summarizeNutrition(points: MonthlyNutritionPoint[], calorieGoal: number): string {
+  const current = points[points.length - 1];
+  const prev = points[points.length - 2];
+  if (current.loggedDays === 0)
+    return "No meals logged this month yet — log a few to see your trends.";
+  const parts = [
+    `You're averaging ${current.avg.calories} kcal/day this month (logged ${current.loggedDays} of ${current.totalDays} days).`,
+  ];
+  const vsGoal = current.avg.calories - calorieGoal;
+  if (Math.abs(vsGoal) >= 100) {
+    parts.push(
+      vsGoal > 0
+        ? `That's ${vsGoal} kcal over your ${calorieGoal} goal on average.`
+        : `That's ${Math.abs(vsGoal)} kcal under your ${calorieGoal} goal on average.`
+    );
+  }
+  if (prev && prev.loggedDays > 0) {
+    const delta = current.avg.calories - prev.avg.calories;
+    if (Math.abs(delta) >= 75) {
+      parts.push(
+        delta > 0
+          ? `Up ${delta} kcal/day from ${prev.label}.`
+          : `Down ${Math.abs(delta)} kcal/day from ${prev.label}.`
+      );
+    }
+  }
+  if (current.loggedDays < current.totalDays * 0.5) {
+    parts.push("Logging more consistently would make these numbers more reliable.");
+  }
+  return parts.join(" ");
+}
+
+export function summarizeSpending(points: MonthlySpendPoint[], budget: number): string {
+  const current = points[points.length - 1];
+  const prev = points[points.length - 2];
+  if (current.total === 0) return "No spending logged this month yet.";
+  const parts = [
+    `You've spent ${money(current.total)} this month` +
+      (budget > 0 ? ` against a ${money(budget)} budget.` : "."),
+  ];
+  if (prev && prev.total > 0) {
+    const delta = current.total - prev.total;
+    if (Math.abs(delta) >= 1) {
+      parts.push(
+        delta > 0
+          ? `That's ${money(delta)} more than ${prev.label}.`
+          : `That's ${money(Math.abs(delta))} less than ${prev.label}.`
+      );
+    }
+  }
+  const topCat = Object.entries(current.byCategory).sort((a, b) => b[1] - a[1])[0] as
+    [CategoryKey, number] | undefined;
+  if (topCat) {
+    const meta = CATEGORIES[topCat[0]] ?? CATEGORIES.other;
+    parts.push(`Your biggest category is ${meta.label} at ${money(topCat[1])}.`);
+  }
+  if (budget > 0 && current.total > budget) parts.push("You're over budget for the month.");
+  return parts.join(" ");
 }

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   Camera,
   Check,
+  ChevronRight,
   Flame,
   LogOut,
   Pencil,
@@ -14,6 +15,10 @@ import type { LucideIcon } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useChoose } from "@/components/ConfirmDialog";
+import { CalorieBars, Heatmap, MacroBar, Ring, Stat } from "@/components/profile/ProfileCharts";
+import ProfileDetailSheet, {
+  type ProfileDetailKind,
+} from "@/components/profile/ProfileDetailSheet";
 import { fileToAvatar } from "@/lib/avatar";
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
@@ -30,7 +35,6 @@ import {
   recentScores,
   spendInRange,
   workoutStats,
-  type DayScore,
 } from "@/lib/insights";
 import { tap } from "@/lib/motion";
 import { WORKOUT_TYPE_META } from "@/lib/workout";
@@ -47,160 +51,43 @@ const ACCENT = "#9ec06a"; // the app's soft-green progress accent
 
 // ── Small shared pieces ──────────────────────────────────────────────────────
 
+// Every card doubles as a button into its full-detail sheet (ProfileDetailSheet)
+// when `onClick` is given — a chevron marks it as tappable so it doesn't read
+// as a dead-end showcase.
 function Card({
   title,
   action,
+  onClick,
   children,
 }: {
   title: string;
   action?: React.ReactNode;
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
-  return (
-    <section className="rounded-3xl bg-surface border border-border p-5">
+  const content = (
+    <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-fg-muted uppercase tracking-wide">{title}</h2>
-        {action}
+        <div className="flex items-center gap-2">
+          {action}
+          {onClick && <ChevronRight size={16} className="text-fg-faint" />}
+        </div>
       </div>
       {children}
-    </section>
+    </>
   );
-}
-
-function Ring({ percent, size = 96 }: { percent: number; size?: number }) {
-  const stroke = 10;
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - percent / 100);
+  if (!onClick) {
+    return <section className="rounded-3xl bg-surface border border-border p-5">{content}</section>;
+  }
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="rgba(128,128,128,0.18)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={ACCENT}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 0.6s ease" }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-        <span className="text-2xl font-bold text-fg tabular-nums">{percent}</span>
-        <span className="text-[11px] text-fg-faint mt-0.5">percent</span>
-      </div>
-    </div>
-  );
-}
-
-// ── Heatmap ──────────────────────────────────────────────────────────────────
-
-// Faint track for empty/no-data cells; a green ramp for completion; a soft red
-// for days where commitments existed but none were done.
-function cellColor(cell: DayScore | null): string {
-  if (!cell || cell.total === 0) return "rgba(128,128,128,0.12)";
-  if (cell.score === 0) return "rgba(248,113,113,0.28)";
-  const s = cell.score ?? 0;
-  const alpha = 0.28 + s * 0.62; // 0.28 → 0.9
-  return `rgba(158,192,106,${alpha.toFixed(2)})`;
-}
-
-function Heatmap({ weeks }: { weeks: (DayScore | null)[][] }) {
-  return (
-    <div className="overflow-x-auto -mx-1 px-1">
-      <div className="flex gap-[3px]">
-        {weeks.map((col, ci) => (
-          <div key={ci} className="flex flex-col gap-[3px]">
-            {col.map((cell, ri) => (
-              <div
-                key={ri}
-                title={cell ? `${cell.date}: ${cell.done}/${cell.total}` : undefined}
-                className="w-[13px] h-[13px] rounded-[3px]"
-                style={{ backgroundColor: cellColor(cell) }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Nutrition mini bar chart ─────────────────────────────────────────────────
-
-function CalorieBars({
-  days,
-  goal,
-}: {
-  days: { date: string; calories: number; logged: boolean }[];
-  goal: number;
-}) {
-  const max = Math.max(goal, ...days.map((d) => d.calories), 1);
-  return (
-    <div className="relative">
-      {/* goal line */}
-      <div
-        className="absolute left-0 right-0 border-t border-dashed border-fg-faint/50"
-        style={{ bottom: `${(goal / max) * 88}px` }}
-      />
-      <div className="flex items-end gap-[3px] h-[88px]">
-        {days.map((d) => {
-          const h = d.logged ? Math.max((d.calories / max) * 88, 2) : 0;
-          const over = d.calories > goal;
-          return (
-            <div key={d.date} className="flex-1 flex items-end" style={{ height: 88 }}>
-              <div
-                className="w-full rounded-t-[3px]"
-                style={{
-                  height: h,
-                  backgroundColor: over ? "rgba(248,113,113,0.75)" : ACCENT,
-                }}
-                title={`${d.date}: ${d.calories} kcal`}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MacroBar({
-  label,
-  value,
-  goal,
-  color,
-}: {
-  label: string;
-  value: number;
-  goal: number;
-  color: string;
-}) {
-  const pct = goal ? Math.min((value / goal) * 100, 100) : 0;
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-1">
-        <span className="text-xs text-fg-muted">{label}</span>
-        <span className="text-xs font-medium text-fg tabular-nums">
-          {value}
-          <span className="text-fg-faint">/{goal}g</span>
-        </span>
-      </div>
-      <div className="h-2 rounded-full bg-surface-subtle overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-    </div>
+    <motion.button
+      onClick={onClick}
+      whileTap={tap}
+      className="w-full rounded-3xl bg-surface border border-border p-5 text-left"
+    >
+      {content}
+    </motion.button>
   );
 }
 
@@ -261,6 +148,9 @@ export default function ProfilePage() {
   const account = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [editing, setEditing] = useState(false);
+  // Which card's full-detail sheet is open — every showcase card below opens
+  // one (see ProfileDetailSheet: month-over-month charts + a written summary).
+  const [detail, setDetail] = useState<ProfileDetailKind | null>(null);
   const [draftName, setDraftName] = useState(name);
   const [draftTagline, setDraftTagline] = useState(tagline);
 
@@ -387,7 +277,7 @@ export default function ProfilePage() {
       </section>
 
       {/* This week */}
-      <Card title="This week">
+      <Card title="This week" onClick={() => setDetail("consistency")}>
         <div className="flex items-center gap-5">
           <Ring percent={weekPct} />
           <div className="flex-1 space-y-3">
@@ -426,7 +316,7 @@ export default function ProfilePage() {
       </Card>
 
       {/* Consistency heatmap */}
-      <Card title="Consistency">
+      <Card title="Consistency" onClick={() => setDetail("consistency")}>
         <Heatmap weeks={heat} />
         <div className="flex items-center justify-end gap-1.5 mt-3 text-[11px] text-fg-faint">
           <span>Less</span>
@@ -443,7 +333,7 @@ export default function ProfilePage() {
 
       {/* Habits */}
       {habitRows.length > 0 && (
-        <Card title="Habit streaks">
+        <Card title="Habit streaks" onClick={() => setDetail("habits")}>
           <div className="space-y-3">
             {habitRows.map(({ habit, current, longest, rate7 }) => {
               const Icon = ICONS[habit.icon] ?? ICONS.default;
@@ -482,7 +372,7 @@ export default function ProfilePage() {
       )}
 
       {/* Workouts */}
-      <Card title="Workouts">
+      <Card title="Workouts" onClick={() => setDetail("workouts")}>
         <div className="grid grid-cols-3 gap-3 mb-4">
           <Stat value={woWeek.total} label="this week" />
           <Stat value={woMonth.total} label="this month" />
@@ -515,7 +405,7 @@ export default function ProfilePage() {
       </Card>
 
       {/* Nutrition */}
-      <Card title="Nutrition">
+      <Card title="Nutrition" onClick={() => setDetail("nutrition")}>
         <div className="flex items-baseline justify-between mb-1">
           <p className="text-sm text-fg-muted">Avg daily calories (14d)</p>
           <p className="text-lg font-bold text-fg tabular-nums">
@@ -557,7 +447,7 @@ export default function ProfilePage() {
       </Card>
 
       {/* Spending */}
-      <Card title="Spending">
+      <Card title="Spending" onClick={() => setDetail("spending")}>
         <div className="flex items-baseline justify-between mb-1">
           <div>
             <p className="text-2xl font-bold text-fg tabular-nums leading-none">
@@ -634,15 +524,8 @@ export default function ProfilePage() {
           </motion.button>
         </div>
       </Card>
-    </div>
-  );
-}
 
-function Stat({ value, label }: { value: number | string; label: string }) {
-  return (
-    <div className="rounded-2xl bg-surface-subtle px-3 py-3 text-center">
-      <p className="text-xl font-bold text-fg tabular-nums leading-none">{value}</p>
-      <p className="text-[11px] text-fg-faint mt-1">{label}</p>
+      <ProfileDetailSheet kind={detail} onClose={() => setDetail(null)} />
     </div>
   );
 }
