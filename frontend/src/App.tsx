@@ -59,8 +59,16 @@ const pageVariants = {
 };
 
 function App() {
-  // [page, direction] — direction drives the slide
-  const [[activePage, dir], setPage] = useState<[Page, number]>(["home", 0]);
+  // [page, direction] — direction drives the slide. Starts on whatever page
+  // was active when the app was last closed/reloaded, so reopening it
+  // continues where the user left off instead of always landing on Home.
+  const [[activePage, dir], setPage] = useState<[Page, number]>([
+    useSettingsStore.getState().lastActivePage,
+    0,
+  ]);
+  useEffect(() => {
+    useSettingsStore.getState().setLastActivePage(activePage);
+  }, [activePage]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isPlanOpen, setIsPlanOpen] = useState(false);
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false);

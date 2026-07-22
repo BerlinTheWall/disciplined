@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { DEFAULT_BACKGROUND, type BackgroundKey } from "@/lib/backgrounds";
+import type { Page } from "@/lib/pages";
 
 // App-wide preferences that should survive reloads: schedule view style,
 // visual options, and the reminder behavior toggles.
@@ -49,6 +50,10 @@ interface SettingsState {
   // Date (ISO) the morning briefing last ran/prompted — prevents repeats.
   lastMorningBriefingDate: string | null;
   setLastMorningBriefingDate: (date: string) => void;
+  // The tab the app was on when last closed/reloaded — reopening lands back
+  // here instead of always resetting to Home.
+  lastActivePage: Page;
+  setLastActivePage: (page: Page) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -76,6 +81,8 @@ export const useSettingsStore = create<SettingsState>()(
       setMorningBriefingFromMinutes: (minutes) => set({ morningBriefingFromMinutes: minutes }),
       lastMorningBriefingDate: null,
       setLastMorningBriefingDate: (date) => set({ lastMorningBriefingDate: date }),
+      lastActivePage: "home",
+      setLastActivePage: (page) => set({ lastActivePage: page }),
     }),
     { name: "disciplined-settings" }
   )
