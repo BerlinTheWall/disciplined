@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Flame, Lightbulb, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronLeft, ChevronRight, Flame, Lightbulb, Loader2, Square, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
@@ -11,6 +11,7 @@ import {
   MonthBars,
   Stat,
 } from "@/components/profile/ProfileCharts";
+import { primeAudioChannel, speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
 import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
 import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
@@ -103,14 +104,99 @@ function PeriodToggle({
 
 // The highlighted "here's what's going on" box at the top of every detail —
 // a short, locally-composed analysis (arithmetic phrased as prose, not an LLM
-// call) of the period-over-period numbers below it.
+// call) of the period-over-period numbers below it. The lightbulb doubles as
+// a read-aloud button (Gemini voice via speakAssistant). State is kept local
+// to this instance rather than the app's global read-aloud store, so this
+// doesn't fight over play/stop with unrelated speech elsewhere in the app.
 function Analysis({ text }: { text: string }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "reading">("idle");
+  const activeRef = useRef(false); // true while THIS instance owns the current speech
+
+  useEffect(() => {
+    // The sheet stays mounted across a Week/Month/Year switch — only `text`
+    // changes — so a reading in progress would otherwise keep narrating
+    // numbers that no longer match what's on screen.
+    if (activeRef.current) {
+      stopSpeaking();
+      activeRef.current = false;
+      setStatus("idle");
+    }
+  }, [text]);
+
+  useEffect(() => {
+    return () => {
+      if (activeRef.current) stopSpeaking();
+    };
+  }, []);
+
+  function handleTap() {
+    if (status !== "idle") {
+      stopSpeaking();
+      activeRef.current = false;
+      setStatus("idle");
+      return;
+    }
+    // Unlock the audio channel synchronously in the tap handler — the actual
+    // playback starts later, after an async fetch, outside the gesture window
+    // mobile browsers otherwise require.
+    primeAudioChannel();
+    activeRef.current = true;
+    setStatus("loading");
+    void speakAssistant(text, {
+      onStart: () => setStatus("reading"),
+      onDone: () => {
+        activeRef.current = false;
+        setStatus("idle");
+      },
+    });
+  }
+
   return (
-    <div className="rounded-2xl bg-surface-alt border border-border-strong p-4 flex items-start gap-3">
-      <span className="w-8 h-8 rounded-full bg-surface flex items-center justify-center shrink-0 mt-0.5">
-        <Lightbulb size={15} className="text-fg-muted" />
-      </span>
-      <p className="text-sm text-fg leading-relaxed">{text}</p>
+    <div className="rounded-2xl bg-surface-alt border border-border-strong p-4">
+      <div className="flex items-start gap-3">
+        <motion.button
+          whileTap={tap}
+          onClick={handleTap}
+          aria-label={
+            status === "idle"
+              ? "Read analysis aloud"
+              : status === "loading"
+                ? "Preparing voice"
+                : "Stop reading"
+          }
+          className="w-8 h-8 rounded-full bg-surface flex items-center justify-center shrink-0 mt-0.5"
+        >
+          {status === "loading" ? (
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="flex"
+            >
+              <Loader2 size={15} className="text-fg-muted" />
+            </motion.span>
+          ) : status === "reading" ? (
+            <Square size={13} className="text-fg-muted" />
+          ) : (
+            <Lightbulb size={15} className="text-fg-muted" />
+          )}
+        </motion.button>
+        <p className="text-sm text-fg leading-relaxed">{text}</p>
+      </div>
+      <AnimatePresence initial={false}>
+        {status !== "idle" && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={spring.gentle}
+            className="overflow-hidden"
+          >
+            <p className="text-xs text-fg-faint pt-3 pl-11">
+              {status === "loading" ? "Preparing voice…" : "🔊 Reading aloud — tap to stop"}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -275,7 +361,7 @@ export default function ProfileDetailSheet({
             {period === "week" && (
               <Section title="Week detail">
                 <div className="rounded-2xl bg-surface p-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-5">
                     <motion.button
                       onClick={() => setSelectedWeekIdx(Math.max(0, effectiveWeekIdx - 1))}
                       whileTap={tap}

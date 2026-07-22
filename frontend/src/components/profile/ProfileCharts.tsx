@@ -53,9 +53,7 @@ function cellColor(cell: DayScore | null): string {
   return `rgba(158,192,106,${alpha.toFixed(2)})`;
 }
 
-// Sun..Sat — only Mon/Wed/Fri get a visible label (GitHub's convention) so
-// the strip doesn't crowd the tiny 13px row height.
-const WEEKDAY_SIDE_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+const WEEKDAY_SIDE_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CELL = 13; // px, matches w-[13px] h-[13px] below
 
 export function Heatmap({ weeks }: { weeks: (DayScore | null)[][] }) {
@@ -89,10 +87,12 @@ export function Heatmap({ weeks }: { weeks: (DayScore | null)[][] }) {
   );
 
   return (
-    <div className="overflow-x-auto -mx-1 px-1">
+    <div className="overflow-x-auto -mx-1 px-1 py-2">
       <div className="flex gap-1.5" style={{ width: "max-content" }}>
-        {/* Weekday labels down the left, aligned to the cell rows below. */}
-        <div className="flex flex-col gap-[3px] shrink-0">
+        {/* Weekday labels down the left. Sticky within the horizontally
+            scrolling container so they stay put while the grid scrolls past
+            underneath — a solid background masks the cells sliding beneath. */}
+        <div className="sticky left-0 z-10 flex shrink-0 flex-col gap-[3px] bg-surface pr-1.5">
           <div style={{ height: CELL }} />
           {WEEKDAY_SIDE_LABELS.map((label, i) => (
             <div key={i} className="flex items-center" style={{ height: CELL }}>
