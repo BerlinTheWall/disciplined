@@ -142,7 +142,7 @@ export default function MealDetailSheet({ meal, onClose, onEdit }: MealDetailShe
                           <AlertCircle size={15} className="text-fg-faint" />
                         </span>
                         <p className="flex-1 text-sm text-fg-faint">
-                          Item no longer in Food &amp; Products
+                          Item no longer in your pantry
                         </p>
                       </div>
                     );

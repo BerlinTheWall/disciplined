@@ -23,8 +23,8 @@ function reslotByPriority(goals: Goal[], goalId: string): Goal[] {
   return goals.map((x) => (orderById.has(x.id) ? { ...x, order: orderById.get(x.id)! } : x));
 }
 
-// Weekly/monthly/yearly goals & plans. Device-local (like the profile) — a
-// simple write-through to localStorage, no backend sync yet.
+// Weekly/monthly/yearly goals & plans. Write-through to localStorage, synced
+// to the backend via lib/sync.ts (also lets the chat assistant read/update it).
 
 interface GoalState {
   goals: Goal[];

@@ -191,7 +191,7 @@ export default function RecipeDetailSheet({ recipe, onClose, onEdit }: RecipeDet
                           <AlertCircle size={15} className="text-fg-faint" />
                         </span>
                         <p className="flex-1 text-sm text-fg-faint">
-                          Item no longer in Food &amp; Products
+                          Item no longer in your pantry
                         </p>
                       </div>
                     );

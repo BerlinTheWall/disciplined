@@ -9,13 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import Event
+from app.models import Event, Goal
 from app.schemas import BriefingRequest, ChatAction, ChatMessage, ChatResponse
 from app.services.tools import (
     FUNCTION_DECLARATIONS,
+    current_period_keys,
     event_to_dict,
     execute_tool,
     fmt_minutes,
+    goal_to_dict,
     habit_occurrences,
 )
 
@@ -89,7 +91,32 @@ async def build_system_prompt(
     else:
         schedule = "(nothing scheduled in the next 7 days)"
 
-    return f"""You are the scheduling assistant for Disciplined, a personal productivity app.
+    goals = (
+        await db.scalars(
+            select(Goal)
+            .where(
+                Goal.user_id == user_id,
+                Goal.period_key.in_(current_period_keys(today).values()),
+            )
+            .order_by(Goal.period, Goal.order)
+        )
+    ).all()
+    if goals:
+        goal_lines = []
+        for g in goals:
+            info = await goal_to_dict(db, user_id, g)
+            detail = {
+                "manual": f"manual {info['current']}/{info['total']}",
+                "tasks": f"{info['current']}/{info['total']} linked tasks done",
+                "check": "check-off",
+            }[info["mode"]]
+            status = "done" if info["done"] else "not done"
+            goal_lines.append(f"- id={g.id} | {g.period} | {g.title} | {detail} | {status}")
+        goals_block = "\n".join(goal_lines)
+    else:
+        goals_block = "(no goals set for the current week/month/year)"
+
+    return f"""You are the personal assistant for Disciplined, a personal productivity app.
 
 Date reference — today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}:
 {date_reference}
@@ -97,12 +124,16 @@ Date reference — today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}:
 The user's schedule for the next 7 days:
 {schedule}
 
+The user's goals for the current week/month/year:
+{goals_block}
+
 Rules:
 - Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference above. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
 - Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
-- Reference events by their id when calling tools. Never invent or guess an id.
-- The schedule mixes one-time events and recurring habits (marked "habit"). Habits are a full part of the user's day — include them when listing or summarizing a day. Your tools can only change events: if asked to move, delete or edit a habit, explain that habits are managed in the app's Habits tab.
-- Nothing changes unless you call a tool for it. Never tell the user something was created, moved, deleted or swapped unless you called create_event, move_event, delete_event or swap_events for it in this conversation turn and it returned without an error.
+- Reference events, habits and goals by their id when calling tools. Never invent or guess an id.
+- The schedule mixes one-time events and recurring habits (marked "habit"). Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion. For habits, you can only mark a given date's occurrence done or not with set_habit_completion — habits still can't be created, deleted, retimed, renamed, or have their days changed through chat; explain those are edited in the Habits tab.
+- Goals have three progress modes, shown above: "manual N/M" goals accept add_goal_progress (positive or negative). "X/Y linked tasks done" goals are task-linked — their progress comes automatically from finishing those tasks, so use set_event_completion on the linked task(s) rather than trying to set progress directly; only use set_goal_done on a task-linked goal if the user explicitly wants it marked done regardless of the linked tasks. "check-off" goals only support set_goal_done. Goals cannot be created or deleted through chat. Use list_goals for goals outside the current week/month/year shown above.
+- Nothing changes unless you call a tool for it. Never tell the user something was created, moved, deleted, swapped, completed, or had its progress changed unless you called the corresponding tool (create_event, move_event, delete_event, swap_events, set_event_completion, set_habit_completion, add_goal_progress, set_goal_done) for it in this conversation turn and it returned without an error.
 - To create or move, call create_event / move_event directly — they check for conflicts themselves. If they return slot_taken, nothing changed: tell the user about the overlap and suggest a free alternative. Use check_conflicts only to answer availability questions ("am I free at 3?").
 - For events outside the 7 days shown above, use list_events to look them up first.
 - Do not ask clarifying questions when a default works. Missing title: derive it from the message ("add a meeting tomorrow" -> "Meeting"). Missing time or duration: simply omit those arguments when calling create_event — it auto-picks a free slot and defaults to 60 minutes; report back what was picked. Create right away; the user will correct you if needed. Only ask when the request is truly ambiguous (e.g. which of two matching events to delete).

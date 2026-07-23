@@ -1,8 +1,10 @@
 import { create } from "zustand";
 
 import { speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
-import { api, MUTATING_CHAT_TOOLS, type ChatMessage, type ChatResponse } from "@/lib/api";
-import { refreshEvents } from "@/lib/sync";
+import { api, CHAT_TOOL_DOMAIN, type ChatMessage, type ChatResponse } from "@/lib/api";
+import { refreshEvents, refreshGoals, refreshHabits } from "@/lib/sync";
+
+const REFRESHERS = { events: refreshEvents, habits: refreshHabits, goals: refreshGoals } as const;
 
 // Conversation state for the assistant chat sheet. Deliberately not persisted —
 // a chat is a session thing; the schedule it changes is what persists.
@@ -59,7 +61,8 @@ export const useChatStore = create<State & Actions>()((set, get) => ({
         busy: false,
         messages: [...state.messages, { role: "model", content: res.reply }],
       }));
-      if (res.actions.some((a) => MUTATING_CHAT_TOOLS.has(a.tool))) await refreshEvents();
+      const domains = new Set(res.actions.map((a) => CHAT_TOOL_DOMAIN[a.tool]).filter(Boolean));
+      await Promise.all([...domains].map((d) => REFRESHERS[d]()));
       // The assistant always says its reply out loud — typed or spoken input
       // alike. A new reply cuts off whatever was still being read.
       stopSpeaking();

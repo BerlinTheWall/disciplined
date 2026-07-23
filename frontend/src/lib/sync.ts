@@ -180,8 +180,16 @@ export async function startSync(): Promise<void> {
   );
 }
 
-// For the chat assistant: after a chat turn whose actions mutated the
-// schedule, pull the server's version of events into the store.
+// For the chat assistant: after a chat turn whose actions mutated a domain,
+// pull the server's version of that domain into its store.
 export async function refreshEvents(): Promise<void> {
   await syncers.events.refresh();
+}
+
+export async function refreshHabits(): Promise<void> {
+  await syncers.habits.refresh();
+}
+
+export async function refreshGoals(): Promise<void> {
+  await syncers.goals.refresh();
 }

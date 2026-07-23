@@ -136,14 +136,18 @@ export interface BriefingPayload {
   nowMinutes?: number;
 }
 
-// Chat tools that change the schedule server-side — when a chat turn ran any of
-// these, the events store must be refreshed from the server.
-export const MUTATING_CHAT_TOOLS = new Set([
-  "create_event",
-  "move_event",
-  "delete_event",
-  "swap_events",
-]);
+// Chat tools that change data server-side, mapped to the store domain that
+// needs refreshing from the server after a chat turn ran them.
+export const CHAT_TOOL_DOMAIN: Record<string, "events" | "habits" | "goals"> = {
+  create_event: "events",
+  move_event: "events",
+  delete_event: "events",
+  swap_events: "events",
+  set_event_completion: "events",
+  set_habit_completion: "habits",
+  add_goal_progress: "goals",
+  set_goal_done: "goals",
+};
 
 export const api = {
   auth: {

@@ -11,7 +11,7 @@ from google.genai import types
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Habit
+from app.models import Event, Goal, Habit
 
 
 def fmt_minutes(m: int) -> str:
@@ -64,6 +64,52 @@ async def habit_occurrences(
                 out.append(habit_occurrence_to_dict(h, day_str))
         day += timedelta(days=1)
     return out
+
+
+async def goal_to_dict(db: AsyncSession, user_id: str, g: Goal) -> dict[str, Any]:
+    """Resolve a goal's progress mode exactly like the frontend's goalProgress.ts:
+    task-linked goals derive progress from their linked events' completion,
+    manual goals from a numeric target, everything else is a plain done flag."""
+    task_ids = g.task_ids or []
+    if task_ids:
+        linked = [
+            e
+            for e in (await db.scalars(select(Event).where(Event.id.in_(task_ids)))).all()
+            if e.user_id == user_id
+        ]
+        completed = sum(1 for e in linked if e.completed)
+        total = len(linked)
+        mode, current = "tasks", completed
+        done = g.done or (total > 0 and completed == total)
+    elif g.target is not None and g.target > 0:
+        mode, current, total = "manual", g.progress, g.target
+        done = g.done or g.progress >= g.target
+    else:
+        mode, current, total, done = "check", 0, 0, g.done
+    return {
+        "id": g.id,
+        "kind": "goal",
+        "title": g.title,
+        "period": g.period,
+        "period_key": g.period_key,
+        "mode": mode,
+        "done": done,
+        "current": current,
+        "total": total,
+        "priority": g.priority,
+    }
+
+
+def current_period_keys(today: date) -> dict[str, str]:
+    """Mirrors frontend/src/lib/goalPeriods.ts::periodKeyFor for week/month/year.
+    The three formats ("YYYY-MM-DD" Monday, "YYYY-MM", "YYYY") never collide
+    textually, so callers can safely filter Goal.period_key with a single IN."""
+    monday = today - timedelta(days=today.weekday())
+    return {
+        "week": monday.isoformat(),
+        "month": f"{today.year:04d}-{today.month:02d}",
+        "year": str(today.year),
+    }
 
 
 _MINUTES_DESC = "Minutes since midnight, e.g. 540 = 9:00 AM, 810 = 1:30 PM."
@@ -185,10 +231,94 @@ FUNCTION_DECLARATIONS = [
             required=["event_id_a", "event_id_b"],
         ),
     ),
+    types.FunctionDeclaration(
+        name="set_event_completion",
+        description="Mark a one-time event done or not done.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "event_id": types.Schema(type=types.Type.STRING, description="ID of the event."),
+                "done": types.Schema(type=types.Type.BOOLEAN, description="True to mark done, false to un-mark."),
+            },
+            required=["event_id", "done"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="set_habit_completion",
+        description="Mark a recurring habit's occurrence on a specific date done or not done.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "habit_id": types.Schema(type=types.Type.STRING, description="ID of the habit."),
+                "date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
+                "done": types.Schema(type=types.Type.BOOLEAN, description="True to mark done, false to un-mark."),
+            },
+            required=["habit_id", "date", "done"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="list_goals",
+        description="List the user's goals, optionally filtered to a period. Use this for goals outside the current week/month/year shown in context.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "period": types.Schema(
+                    type=types.Type.STRING,
+                    enum=["week", "month", "year"],
+                    description="Restrict to this period type.",
+                ),
+                "period_key": types.Schema(
+                    type=types.Type.STRING,
+                    description='The specific period instance: week is the Monday\'s ISO date, month is "YYYY-MM", year is "YYYY".',
+                ),
+            },
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="add_goal_progress",
+        description=(
+            "Add (or subtract, with a negative delta) to a manual-mode goal's progress. "
+            "Only works on goals with a numeric target and no linked tasks — check the goal's "
+            "mode first (from context or list_goals); for task-linked goals, complete the "
+            "linked task(s) instead, and for check-mode goals use set_goal_done."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "goal_id": types.Schema(type=types.Type.STRING, description="ID of the goal."),
+                "delta": types.Schema(
+                    type=types.Type.INTEGER,
+                    description="Amount to add to progress; negative to subtract.",
+                ),
+            },
+            required=["goal_id", "delta"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="set_goal_done",
+        description="Mark a goal done or not done directly, regardless of its progress mode.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "goal_id": types.Schema(type=types.Type.STRING, description="ID of the goal."),
+                "done": types.Schema(type=types.Type.BOOLEAN, description="True to mark done, false to un-mark."),
+            },
+            required=["goal_id", "done"],
+        ),
+    ),
 ]
 
 # Tools that change data — the client uses this to know when to refetch.
-MUTATING_TOOLS = {"create_event", "move_event", "delete_event", "swap_events"}
+MUTATING_TOOLS = {
+    "create_event",
+    "move_event",
+    "delete_event",
+    "swap_events",
+    "set_event_completion",
+    "set_habit_completion",
+    "add_goal_progress",
+    "set_goal_done",
+}
 
 
 async def _get_event(db: AsyncSession, user_id: str, event_id: str) -> Event | None:
@@ -196,6 +326,20 @@ async def _get_event(db: AsyncSession, user_id: str, event_id: str) -> Event | N
     if event is None or event.user_id != user_id:
         return None
     return event
+
+
+async def _get_habit(db: AsyncSession, user_id: str, habit_id: str) -> Habit | None:
+    habit = await db.get(Habit, habit_id)
+    if habit is None or habit.user_id != user_id:
+        return None
+    return habit
+
+
+async def _get_goal(db: AsyncSession, user_id: str, goal_id: str) -> Goal | None:
+    goal = await db.get(Goal, goal_id)
+    if goal is None or goal.user_id != user_id:
+        return None
+    return goal
 
 
 async def _missing_event_error(db: AsyncSession, user_id: str, item_id: str) -> dict:
@@ -364,6 +508,76 @@ async def _swap_events(db: AsyncSession, user_id: str, args: dict) -> dict:
     return {"swapped": [event_to_dict(a), event_to_dict(b)]}
 
 
+async def _set_event_completion(db: AsyncSession, user_id: str, args: dict) -> dict:
+    event = await _get_event(db, user_id, args["event_id"])
+    if event is None:
+        return await _missing_event_error(db, user_id, args["event_id"])
+    event.completed = bool(args["done"])
+    await db.commit()
+    return {"event": event_to_dict(event)}
+
+
+async def _set_habit_completion(db: AsyncSession, user_id: str, args: dict) -> dict:
+    habit = await _get_habit(db, user_id, args["habit_id"])
+    if habit is None:
+        return {"error": f"No habit with id {args['habit_id']}"}
+    date_str = args["date"]
+    current = habit.completed_dates or []
+    if args["done"]:
+        new_dates = current if date_str in current else [*current, date_str]
+    else:
+        new_dates = [d for d in current if d != date_str]
+    habit.completed_dates = new_dates  # reassign — JSONB mutation isn't tracked in-place
+    await db.commit()
+    return {"habit": habit_occurrence_to_dict(habit, date_str)}
+
+
+async def _list_goals(db: AsyncSession, user_id: str, args: dict) -> dict:
+    query = select(Goal).where(Goal.user_id == user_id)
+    if args.get("period"):
+        query = query.where(Goal.period == args["period"])
+    if args.get("period_key"):
+        query = query.where(Goal.period_key == args["period_key"])
+    query = query.order_by(Goal.period, Goal.order)
+    goals = (await db.scalars(query)).all()
+    return {"goals": [await goal_to_dict(db, user_id, g) for g in goals]}
+
+
+async def _add_goal_progress(db: AsyncSession, user_id: str, args: dict) -> dict:
+    goal = await _get_goal(db, user_id, args["goal_id"])
+    if goal is None:
+        return {"error": f"No goal with id {args['goal_id']}"}
+    info = await goal_to_dict(db, user_id, goal)
+    if info["mode"] == "tasks":
+        return {
+            "error": "goal_is_task_linked",
+            "message": (
+                "This goal's progress comes from finishing its linked tasks, not something "
+                "settable directly. Use set_event_completion on the linked task(s), or tell "
+                "the user to complete them in the app. If they explicitly want it marked done "
+                "regardless, use set_goal_done instead."
+            ),
+        }
+    if info["mode"] == "check":
+        return {
+            "error": "goal_has_no_target",
+            "message": "This goal has no numeric target — use set_goal_done to mark it done instead.",
+        }
+    goal.progress = max(0, min(goal.target, goal.progress + int(args["delta"])))
+    goal.done = goal.progress >= goal.target
+    await db.commit()
+    return {"goal": await goal_to_dict(db, user_id, goal)}
+
+
+async def _set_goal_done(db: AsyncSession, user_id: str, args: dict) -> dict:
+    goal = await _get_goal(db, user_id, args["goal_id"])
+    if goal is None:
+        return {"error": f"No goal with id {args['goal_id']}"}
+    goal.done = bool(args["done"])
+    await db.commit()
+    return {"goal": await goal_to_dict(db, user_id, goal)}
+
+
 _EXECUTORS = {
     "create_event": _create_event,
     "list_events": _list_events,
@@ -371,6 +585,11 @@ _EXECUTORS = {
     "delete_event": _delete_event,
     "check_conflicts": _check_conflicts,
     "swap_events": _swap_events,
+    "set_event_completion": _set_event_completion,
+    "set_habit_completion": _set_habit_completion,
+    "list_goals": _list_goals,
+    "add_goal_progress": _add_goal_progress,
+    "set_goal_done": _set_goal_done,
 }
 
 

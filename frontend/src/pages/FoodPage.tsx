@@ -16,9 +16,15 @@ export default function FoodPage() {
   const [editItem, setEditItem] = useState<GroceryItem | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  // Quick-logged foods (created inline while logging a meal) have nothing to
+  // stock — they're shown separately, without the stock stepper, rather than
+  // cluttering the pantry with "Out" badges for things you never meant to track.
+  const pantryItems = groceryItems.filter((it) => it.source !== "quickLog");
+  const loggedItems = groceryItems.filter((it) => it.source === "quickLog");
+
   // Sort by category (catalog order), then name, so similar things sit together.
   const catOrder = Object.keys(FOOD_CATEGORIES);
-  const items = [...groceryItems].sort((a, b) => {
+  const items = [...pantryItems].sort((a, b) => {
     const c = catOrder.indexOf(a.category) - catOrder.indexOf(b.category);
     return c !== 0 ? c : a.name.localeCompare(b.name);
   });
@@ -37,17 +43,20 @@ export default function FoodPage() {
         </motion.button>
       </div>
 
-      {items.length === 0 ? (
+      {items.length === 0 && loggedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-14 h-14 rounded-full bg-surface-raised flex items-center justify-center">
             <Package size={24} className="text-fg-faint" />
           </div>
           <p className="text-base font-medium text-fg">Nothing here yet</p>
           <p className="text-sm text-fg-faint text-center">
-            Add the food and products you have, with their details. Meals and recipes are built from
-            this list.
+            Add the food and products you have — meals and recipes are built from your pantry.
           </p>
         </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-fg-faint px-1">
+          Nothing stocked yet — add an item, or quick-log a food from Meals.
+        </p>
       ) : (
         items.map((item) => {
           const cat = FOOD_CATEGORIES[item.category];
@@ -107,6 +116,41 @@ export default function FoodPage() {
             </div>
           );
         })
+      )}
+
+      {/* Quick-logged foods — no stock to track, so no stepper/"Out" badge;
+          tapping still opens the full editor if you want to turn one into a
+          real pantry item (set a price, start stocking it, etc). */}
+      {loggedItems.length > 0 && (
+        <div className="flex flex-col gap-2 mt-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint px-1">
+            Logged foods
+          </p>
+          {loggedItems.map((item) => {
+            const cat = FOOD_CATEGORIES[item.category];
+            const Icon = cat.icon ?? FALLBACK_FOOD_ICON;
+            return (
+              <motion.button
+                key={item.id}
+                onClick={() => setEditItem(item)}
+                whileTap={press}
+                transition={spring.snappy}
+                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-alt text-left w-full"
+              >
+                <span
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0"
+                  style={{ backgroundColor: cat.color }}
+                >
+                  <Icon size={18} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-fg leading-tight truncate">{item.name}</p>
+                  <p className="text-xs text-fg-faint mt-0.5">{item.nutrition.calories} kcal</p>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
       )}
 
       <AddGroceryItemSheet

@@ -16,7 +16,7 @@ type Tab = "meals" | "recipes" | "food";
 const TABS: { key: Tab; label: string }[] = [
   { key: "meals", label: "Meals" },
   { key: "recipes", label: "Recipes" },
-  { key: "food", label: "Food" },
+  { key: "food", label: "Pantry" },
 ];
 
 export default function KitchenPage() {
