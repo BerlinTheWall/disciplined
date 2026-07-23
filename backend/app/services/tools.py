@@ -505,6 +505,22 @@ FUNCTION_DECLARATIONS = [
         ),
         parameters=types.Schema(type=types.Type.OBJECT, properties={}),
     ),
+    types.FunctionDeclaration(
+        name="delete_habit",
+        description=(
+            "Permanently delete one specific habit, including its completion history. There's "
+            "no undo. Only for a single, clearly named habit — never call this in a loop to "
+            "wipe every habit; refuse a request to delete all habits instead and point the user "
+            "to the Habits tab."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "habit_id": types.Schema(type=types.Type.STRING, description="ID of the habit."),
+            },
+            required=["habit_id"],
+        ),
+    ),
 ]
 
 # Tools that change data — the client uses this to know when to refetch.
@@ -519,6 +535,7 @@ MUTATING_TOOLS = {
     "set_goal_done",
     "create_habit",
     "update_habit",
+    "delete_habit",
 }
 
 
@@ -857,6 +874,16 @@ async def _list_habits(db: AsyncSession, user_id: str, args: dict) -> dict:
     }
 
 
+async def _delete_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
+    habit = await _get_habit(db, user_id, args["habit_id"])
+    if habit is None:
+        return {"error": f"No habit with id {args['habit_id']}"}
+    deleted = _habit_summary(habit)
+    await db.delete(habit)
+    await db.commit()
+    return {"deleted": deleted}
+
+
 _EXECUTORS = {
     "create_event": _create_event,
     "list_events": _list_events,
@@ -872,6 +899,7 @@ _EXECUTORS = {
     "create_habit": _create_habit,
     "update_habit": _update_habit,
     "list_habits": _list_habits,
+    "delete_habit": _delete_habit,
 }
 
 
