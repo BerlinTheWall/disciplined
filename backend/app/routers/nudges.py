@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models import User
 from app.schemas import NudgeRequest, NudgeResponse, NudgeSuggestedSlot
 from app.services.gemini import resolve_today, write_nudge
-from app.services.nudges import build_action_phrase, evaluate, suggest_evening_slot
+from app.services.nudges import build_action_phrase, evaluate, suggest_slot_for_candidate
 
 router = APIRouter(prefix="/api/nudges", tags=["nudges"])
 logger = logging.getLogger("uvicorn.error")
@@ -28,9 +28,7 @@ async def check_nudge(
     if candidate is None:
         return NudgeResponse()
 
-    slot = None
-    if candidate.type in ("habit_gap", "workout_gap"):
-        slot = await suggest_evening_slot(db, user.id, today, body.now_minutes)
+    slot = await suggest_slot_for_candidate(db, user.id, candidate, today, body.now_minutes)
 
     try:
         message = await write_nudge(candidate, slot)

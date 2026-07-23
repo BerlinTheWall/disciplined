@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Goal, Habit
-from app.services.tools import _overlapping, current_period_keys, goal_to_dict
+from app.services.tools import _overlapping, current_period_keys, goal_to_dict, habit_occurrences
 
 NudgeType = Literal["habit_gap", "workout_gap", "goal_pacing"]
 
@@ -181,7 +181,9 @@ async def suggest_evening_slot(
 ) -> dict[str, Any] | None:
     """First free `duration`-minute slot between 18:00 and 21:00, today unless
     that window has effectively passed, else tomorrow. Reuses _overlapping —
-    the same conflict check create_event uses — scanning in 15-minute steps."""
+    the same conflict check create_event uses — scanning in 15-minute steps.
+    Only a sensible fallback when there's no natural time of day to anchor
+    to (workout_gap has no single habit row to read a schedule from)."""
     window_start, window_end = 18 * 60, 21 * 60
     target_date = today
     if now_minutes is not None and now_minutes > window_end - duration:
@@ -197,6 +199,59 @@ async def suggest_evening_slot(
     return None
 
 
+async def suggest_habit_slot(
+    db: AsyncSession, user_id: str, habit: Habit, today: date
+) -> dict[str, Any] | None:
+    """The habit's own scheduled time, today, if nothing else occupies it. A
+    habit already has a designated time of day (e.g. a wake-up routine at
+    6am) — suggesting some unrelated evening slot for it doesn't make sense,
+    unlike workout_gap which has no single row to anchor a "usual time" to.
+
+    Deliberately doesn't reuse tools.py's _overlapping: that also checks
+    habit_occurrences for the date, which would always find this exact habit
+    occupying its own usual time and report a false conflict against itself —
+    a habit is trivially "free" at its own designated slot; only a genuinely
+    different event or habit colliding with it should count."""
+    date_str = today.isoformat()
+    start, duration = habit.start_minutes, habit.duration_minutes
+    end = start + duration
+
+    event_conflicts = (
+        await db.scalars(
+            select(Event).where(
+                Event.user_id == user_id,
+                Event.date == date_str,
+                Event.start_minutes < end,
+                Event.start_minutes + Event.duration_minutes > start,
+            )
+        )
+    ).all()
+    if event_conflicts:
+        return None
+
+    for occ in await habit_occurrences(db, user_id, date_str, date_str):
+        if occ["id"] == habit.id:
+            continue
+        if occ["start_minutes"] < end and occ["start_minutes"] + occ["duration_minutes"] > start:
+            return None
+
+    return {"date": date_str, "start_minutes": start, "duration_minutes": duration}
+
+
+async def suggest_slot_for_candidate(
+    db: AsyncSession, user_id: str, candidate: NudgeCandidate, today: date, now_minutes: int | None
+) -> dict[str, Any] | None:
+    """Dispatches to the right slot strategy per nudge type."""
+    if candidate.type == "habit_gap":
+        habit = await db.get(Habit, candidate.subject_id)
+        if habit is None or habit.user_id != user_id:
+            return None
+        return await suggest_habit_slot(db, user_id, habit, today)
+    if candidate.type == "workout_gap":
+        return await suggest_evening_slot(db, user_id, today, now_minutes)
+    return None  # goal_pacing has no one-tap action, so no slot is needed
+
+
 def build_action_phrase(
     candidate: NudgeCandidate, slot: dict[str, Any] | None, today: date
 ) -> str | None:
@@ -208,5 +263,5 @@ def build_action_phrase(
     period = "AM" if hh < 12 else "PM"
     hh12 = hh % 12 or 12
     time_str = f"{hh12}:{mm:02d} {period}"
-    when = "tonight" if slot["date"] == today.isoformat() else "tomorrow evening"
+    when = "today" if slot["date"] == today.isoformat() else "tomorrow"
     return f"Block {time_str} {when} for {candidate.subject_title}"
