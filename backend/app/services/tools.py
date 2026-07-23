@@ -343,6 +343,38 @@ FUNCTION_DECLARATIONS = [
             required=["title"],
         ),
     ),
+    types.FunctionDeclaration(
+        name="update_habit",
+        description=(
+            "Change an existing habit's title, days, time, duration, or icon. Omit any field "
+            "you're not changing — only the given ones are updated."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "habit_id": types.Schema(type=types.Type.STRING, description="ID of the habit."),
+                "title": types.Schema(type=types.Type.STRING, description="New title."),
+                "days_of_week": types.Schema(
+                    type=types.Type.ARRAY,
+                    items=types.Schema(type=types.Type.INTEGER),
+                    description="New days it repeats on, 0=Sunday..6=Saturday.",
+                ),
+                "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
+                "duration_minutes": types.Schema(
+                    type=types.Type.INTEGER, description="New duration in minutes."
+                ),
+                "icon": types.Schema(
+                    type=types.Type.STRING,
+                    enum=[
+                        "alarm", "workout", "shower", "meal", "bike", "reading",
+                        "coffee", "work", "health", "shopping", "default",
+                    ],
+                    description="New icon.",
+                ),
+            },
+            required=["habit_id"],
+        ),
+    ),
 ]
 
 # Tools that change data — the client uses this to know when to refetch.
@@ -356,6 +388,7 @@ MUTATING_TOOLS = {
     "add_goal_progress",
     "set_goal_done",
     "create_habit",
+    "update_habit",
 }
 
 
@@ -627,17 +660,37 @@ async def _create_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
     )
     db.add(habit)
     await db.commit()
+    return {"created": _habit_summary(habit)}
+
+
+def _habit_summary(habit: Habit) -> dict[str, Any]:
     return {
-        "created": {
-            "id": habit.id,
-            "kind": "habit",
-            "title": habit.title,
-            "start": fmt_minutes(habit.start_minutes),
-            "start_minutes": habit.start_minutes,
-            "duration_minutes": habit.duration_minutes,
-            "days_of_week": habit.days_of_week,
-        }
+        "id": habit.id,
+        "kind": "habit",
+        "title": habit.title,
+        "start": fmt_minutes(habit.start_minutes),
+        "start_minutes": habit.start_minutes,
+        "duration_minutes": habit.duration_minutes,
+        "days_of_week": habit.days_of_week,
     }
+
+
+async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
+    habit = await _get_habit(db, user_id, args["habit_id"])
+    if habit is None:
+        return {"error": f"No habit with id {args['habit_id']}"}
+    if "title" in args and args["title"] is not None:
+        habit.title = args["title"]
+    if "days_of_week" in args and args["days_of_week"] is not None:
+        habit.days_of_week = args["days_of_week"]
+    if "start_minutes" in args and args["start_minutes"] is not None:
+        habit.start_minutes = int(args["start_minutes"])
+    if "duration_minutes" in args and args["duration_minutes"] is not None:
+        habit.duration_minutes = int(args["duration_minutes"])
+    if "icon" in args and args["icon"] is not None:
+        habit.icon = args["icon"]
+    await db.commit()
+    return {"updated": _habit_summary(habit)}
 
 
 _EXECUTORS = {
@@ -653,6 +706,7 @@ _EXECUTORS = {
     "add_goal_progress": _add_goal_progress,
     "set_goal_done": _set_goal_done,
     "create_habit": _create_habit,
+    "update_habit": _update_habit,
 }
 
 
