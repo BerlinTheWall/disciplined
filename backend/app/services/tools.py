@@ -151,6 +151,14 @@ def current_period_keys(today: date) -> dict[str, str]:
 
 _MINUTES_DESC = "Minutes since midnight, e.g. 540 = 9:00 AM, 810 = 1:30 PM."
 _DATE_DESC = 'ISO date string, e.g. "2026-07-05".'
+# Spelled out day-by-day, not "0=Sunday..6=Saturday" — leaving the model to
+# compute e.g. "Thursday is index 4" itself is exactly the kind of small
+# arithmetic smaller models get wrong (confirmed: a "Thursday" request landed
+# on Wednesday). Fully enumerating removes the arithmetic step entirely.
+_WEEKDAY_DESC = (
+    "Days it repeats on: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, "
+    "5=Friday, 6=Saturday."
+)
 
 FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
@@ -380,8 +388,8 @@ FUNCTION_DECLARATIONS = [
                     type=types.Type.ARRAY,
                     items=types.Schema(type=types.Type.INTEGER),
                     description=(
-                        "Days it repeats on when freq is weekly, 0=Sunday..6=Saturday. Omit for "
-                        "every day. Ignored when freq is monthly."
+                        _WEEKDAY_DESC + " Only used when freq is weekly. Omit for every day. "
+                        "Ignored when freq is monthly."
                     ),
                 ),
                 "start_minutes": types.Schema(
@@ -434,7 +442,7 @@ FUNCTION_DECLARATIONS = [
                 "days_of_week": types.Schema(
                     type=types.Type.ARRAY,
                     items=types.Schema(type=types.Type.INTEGER),
-                    description="New days it repeats on when freq is weekly, 0=Sunday..6=Saturday.",
+                    description="New days it repeats on. " + _WEEKDAY_DESC,
                 ),
                 "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
                 "duration_minutes": types.Schema(
