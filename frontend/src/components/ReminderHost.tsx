@@ -5,6 +5,7 @@ import { BellRing, X } from "lucide-react";
 import { speakAssistant } from "@/hooks/useSpeech";
 import { assistantReminderLine } from "@/lib/assistantSpeech";
 import { parseISODate, todayISODate, toISODate } from "@/lib/date";
+import { isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import {
@@ -38,16 +39,16 @@ const FIRE_SLACK_MS = 200;
 // Foreground banners dismiss themselves after a while.
 const AUTO_DISMISS_MS = 12_000;
 
-// Habits that can still fire a reminder today.
-function activeHabitsToday(today: string, weekday: number) {
+// Habits that can still fire a reminder on the given day.
+function activeHabitsToday(day: Date) {
+  const iso = toISODate(day);
   return useHabitStore
     .getState()
     .habits.filter(
       (h): h is Habit & { reminderMinutesBefore: number } =>
         h.reminderMinutesBefore != null &&
-        h.daysOfWeek.includes(weekday) &&
-        !h.completedDates.includes(today) &&
-        !h.skippedDates?.includes(today)
+        isHabitActiveOnDate(h, day) &&
+        !h.completedDates.includes(iso)
     );
 }
 
@@ -67,8 +68,7 @@ function nextFireAt(now: number): number | null {
     consider(t.date, t.startMinutes, t.reminderMinutesBefore);
   }
   const today = todayISODate();
-  const weekday = new Date().getDay();
-  for (const h of activeHabitsToday(today, weekday)) {
+  for (const h of activeHabitsToday(new Date())) {
     consider(today, h.startMinutes, h.reminderMinutesBefore);
   }
   // Snoozed reminders re-fire at their snooze time.
@@ -137,8 +137,7 @@ function collectDue(now: number): ReminderAlert[] {
   }
 
   const today = todayISODate();
-  const weekday = new Date().getDay();
-  for (const h of activeHabitsToday(today, weekday)) {
+  for (const h of activeHabitsToday(new Date())) {
     pushIfDue(
       "habit",
       h.id,
@@ -203,10 +202,9 @@ function collectUpcoming(now: number): NativeReminder[] {
     const day = new Date();
     day.setDate(day.getDate() + d);
     const iso = toISODate(day);
-    const weekday = day.getDay();
     for (const h of useHabitStore.getState().habits) {
-      if (h.reminderMinutesBefore == null || !h.daysOfWeek.includes(weekday)) continue;
-      if (h.completedDates.includes(iso) || h.skippedDates?.includes(iso)) continue;
+      if (h.reminderMinutesBefore == null || !isHabitActiveOnDate(h, day)) continue;
+      if (h.completedDates.includes(iso)) continue;
       consider("habit", h.id, h.title, iso, h.startMinutes, h.reminderMinutesBefore);
     }
   }

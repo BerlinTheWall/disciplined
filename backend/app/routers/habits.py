@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +57,10 @@ async def update_habit(
     habit = await get_habit_or_404(habit_id, db, user)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(habit, field, value)
+    # HabitUpdate is partial, so schema-level validation can't see whether the
+    # existing row already has an anchor_date — heal it here instead.
+    if (habit.freq == "monthly" or habit.interval > 1) and not habit.anchor_date:
+        habit.anchor_date = date.today().isoformat()
     await db.commit()
     return habit
 

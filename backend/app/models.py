@@ -57,6 +57,15 @@ class Habit(Base):
     days_of_week: Mapped[list] = mapped_column(JSONB, default=list)  # 0 = Sunday ... 6 = Saturday
     completed_dates: Mapped[list] = mapped_column(JSONB, default=list)  # ISO dates
     skipped_dates: Mapped[list] = mapped_column(JSONB, default=list)
+    # Recurrence beyond "every week": freq picks the unit, interval how many of
+    # them between occurrences (freq=weekly + interval=2 = every other week;
+    # freq=monthly + interval=6 = every 6 months). anchor_date is the cycle's
+    # first occurrence, the reference point interval math counts from — only
+    # load-bearing when interval>1 or freq=="monthly"; NULL/interval=1 behaves
+    # exactly like the original weekday-only model.
+    freq: Mapped[str] = mapped_column(String, default="weekly")  # "weekly" | "monthly"
+    interval: Mapped[int] = mapped_column(Integer, default=1)
+    anchor_date: Mapped[str | None] = mapped_column(String, nullable=True)
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
     workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -4,6 +4,7 @@ Times are minutes since midnight (e.g. 540 = 9:00 AM) to match the frontend's
 Task model. Dates are ISO strings ("2026-07-05").
 """
 
+import calendar
 from datetime import date, timedelta
 from typing import Any
 
@@ -45,6 +46,43 @@ def habit_occurrence_to_dict(h: Habit, date_str: str) -> dict[str, Any]:
     }
 
 
+def _monday_of(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+def habit_active_on(h: Habit, d: date) -> bool:
+    """Single source of truth for "does this habit have an occurrence on d".
+    Mirrored exactly by frontend/src/lib/habits.ts::isHabitActiveOnDate — keep
+    both in sync if this changes.
+
+    freq="weekly" + interval<=1 (or no anchor_date) is byte-for-byte the
+    original weekday-only check, so every pre-existing habit (migrated with
+    exactly that shape) behaves identically to before this was added."""
+    if d.isoformat() in (h.skipped_dates or []):
+        return False
+    freq = h.freq or "weekly"
+    interval = max(1, h.interval or 1)
+
+    if freq == "monthly":
+        if not h.anchor_date:
+            return False
+        anchor = date.fromisoformat(h.anchor_date)
+        month_diff = (d.year - anchor.year) * 12 + (d.month - anchor.month)
+        if month_diff < 0 or month_diff % interval != 0:
+            return False
+        target_day = min(anchor.day, calendar.monthrange(d.year, d.month)[1])
+        return d.day == target_day
+
+    js_weekday = (d.weekday() + 1) % 7  # python Mon=0 -> frontend Sun=0
+    if js_weekday not in (h.days_of_week or []):
+        return False
+    if interval <= 1 or not h.anchor_date:
+        return True
+    anchor = date.fromisoformat(h.anchor_date)
+    week_diff = (_monday_of(d) - _monday_of(anchor)).days // 7
+    return week_diff >= 0 and week_diff % interval == 0
+
+
 async def habit_occurrences(
     db: AsyncSession, user_id: str, start_date: str, end_date: str
 ) -> list[dict]:
@@ -58,9 +96,8 @@ async def habit_occurrences(
     end = date.fromisoformat(end_date)
     while day <= end:
         day_str = day.isoformat()
-        js_weekday = (day.weekday() + 1) % 7  # python Mon=0 -> frontend Sun=0
         for h in habits:
-            if js_weekday in (h.days_of_week or []) and day_str not in (h.skipped_dates or []):
+            if habit_active_on(h, day):
                 out.append(habit_occurrence_to_dict(h, day_str))
         day += timedelta(days=1)
     return out
@@ -318,10 +355,34 @@ FUNCTION_DECLARATIONS = [
             type=types.Type.OBJECT,
             properties={
                 "title": types.Schema(type=types.Type.STRING, description="Habit title."),
+                "freq": types.Schema(
+                    type=types.Type.STRING,
+                    enum=["weekly", "monthly"],
+                    description='How it repeats. Omit for "weekly" (the default).',
+                ),
+                "interval": types.Schema(
+                    type=types.Type.INTEGER,
+                    description=(
+                        "Repeat every N weeks (freq=weekly) or N months (freq=monthly). "
+                        "interval=2 + freq=weekly = every other week. interval=6 + freq=monthly "
+                        "= every 6 months. interval=12 + freq=monthly = once a year. Omit for 1."
+                    ),
+                ),
+                "anchor_date": types.Schema(
+                    type=types.Type.STRING,
+                    description=(
+                        _DATE_DESC + " The date this recurrence cycle counts from (its first "
+                        "occurrence) — resolve it yourself like any other date. Only matters "
+                        "when interval > 1 or freq is monthly; omit to default to today."
+                    ),
+                ),
                 "days_of_week": types.Schema(
                     type=types.Type.ARRAY,
                     items=types.Schema(type=types.Type.INTEGER),
-                    description="Days it repeats on, 0=Sunday..6=Saturday. Omit for every day.",
+                    description=(
+                        "Days it repeats on when freq is weekly, 0=Sunday..6=Saturday. Omit for "
+                        "every day. Ignored when freq is monthly."
+                    ),
                 ),
                 "start_minutes": types.Schema(
                     type=types.Type.INTEGER,
@@ -346,18 +407,34 @@ FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
         name="update_habit",
         description=(
-            "Change an existing habit's title, days, time, duration, or icon. Omit any field "
-            "you're not changing — only the given ones are updated."
+            "Change an existing habit's title, days, time, duration, icon, or how often it "
+            "repeats. Omit any field you're not changing — only the given ones are updated."
         ),
         parameters=types.Schema(
             type=types.Type.OBJECT,
             properties={
                 "habit_id": types.Schema(type=types.Type.STRING, description="ID of the habit."),
                 "title": types.Schema(type=types.Type.STRING, description="New title."),
+                "freq": types.Schema(
+                    type=types.Type.STRING,
+                    enum=["weekly", "monthly"],
+                    description="New repeat unit.",
+                ),
+                "interval": types.Schema(
+                    type=types.Type.INTEGER,
+                    description=(
+                        "New repeat interval — every N weeks (freq=weekly) or N months "
+                        "(freq=monthly). See create_habit's description for examples."
+                    ),
+                ),
+                "anchor_date": types.Schema(
+                    type=types.Type.STRING,
+                    description=_DATE_DESC + " New date the recurrence cycle counts from.",
+                ),
                 "days_of_week": types.Schema(
                     type=types.Type.ARRAY,
                     items=types.Schema(type=types.Type.INTEGER),
-                    description="New days it repeats on, 0=Sunday..6=Saturday.",
+                    description="New days it repeats on when freq is weekly, 0=Sunday..6=Saturday.",
                 ),
                 "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
                 "duration_minutes": types.Schema(
@@ -418,8 +495,8 @@ async def _missing_event_error(db: AsyncSession, user_id: str, item_id: str) -> 
     if habit is not None and habit.user_id == user_id:
         return {
             "error": (
-                f"{item_id} is a recurring habit — habits can't be changed through chat yet. "
-                "Tell the user to edit it in the Habits tab."
+                f"{item_id} is a recurring habit, not an event — use set_habit_completion or "
+                "update_habit for it instead."
             )
         }
     return {"error": f"No event with id {item_id}"}
@@ -650,12 +727,22 @@ async def _set_goal_done(db: AsyncSession, user_id: str, args: dict) -> dict:
 
 
 async def _create_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
+    freq = args.get("freq") or "weekly"
+    interval = int(args.get("interval") or 1)
+    if freq == "monthly":
+        interval = min(interval, 12)  # keeps streak/rate walk-backs within their guard
+    anchor_date = args.get("anchor_date")
+    if (interval > 1 or freq == "monthly") and not anchor_date:
+        anchor_date = date.today().isoformat()
     habit = Habit(
         title=args["title"],
         start_minutes=int(args.get("start_minutes") or 9 * 60),
         duration_minutes=int(args.get("duration_minutes") or 30),
         icon=args.get("icon", "default"),
-        days_of_week=args.get("days_of_week") or [0, 1, 2, 3, 4, 5, 6],
+        freq=freq,
+        interval=interval,
+        anchor_date=anchor_date,
+        days_of_week=args.get("days_of_week") or ([] if freq == "monthly" else [0, 1, 2, 3, 4, 5, 6]),
         user_id=user_id,
     )
     db.add(habit)
@@ -672,6 +759,9 @@ def _habit_summary(habit: Habit) -> dict[str, Any]:
         "start_minutes": habit.start_minutes,
         "duration_minutes": habit.duration_minutes,
         "days_of_week": habit.days_of_week,
+        "freq": habit.freq,
+        "interval": habit.interval,
+        "anchor_date": habit.anchor_date,
     }
 
 
@@ -689,6 +779,18 @@ async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
         habit.duration_minutes = int(args["duration_minutes"])
     if "icon" in args and args["icon"] is not None:
         habit.icon = args["icon"]
+    if "freq" in args and args["freq"] is not None:
+        habit.freq = args["freq"]
+    if "interval" in args and args["interval"] is not None:
+        habit.interval = int(args["interval"])
+    if "anchor_date" in args and args["anchor_date"] is not None:
+        habit.anchor_date = args["anchor_date"]
+    if habit.freq == "monthly":
+        habit.interval = min(habit.interval, 12)
+    # Auto-heal: an update that pushes freq/interval into "needs an anchor"
+    # territory on a row that never had one (every pre-existing habit).
+    if (habit.freq == "monthly" or habit.interval > 1) and not habit.anchor_date:
+        habit.anchor_date = date.today().isoformat()
     await db.commit()
     return {"updated": _habit_summary(habit)}
 

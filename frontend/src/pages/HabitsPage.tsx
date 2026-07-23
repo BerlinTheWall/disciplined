@@ -1,5 +1,6 @@
 import { Flame, Repeat } from "lucide-react";
 
+import { repeatSummary } from "@/components/timeline/addItemOptions";
 import { todayISODate } from "@/lib/date";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
@@ -48,21 +49,33 @@ export default function HabitsPage() {
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-fg leading-tight">{habit.title}</p>
 
-              {/* Active days dots */}
-              <div className="flex gap-1 mt-1.5">
-                {DAY_LABELS.map((label, i) => (
-                  <span
-                    key={i}
-                    className={`w-5 h-5 rounded-full text-[9px] font-medium flex items-center justify-center ${
-                      habit.daysOfWeek.includes(i)
-                        ? "bg-surface-inverse text-fg-inverse"
-                        : "bg-surface-subtle text-fg-faint"
-                    }`}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
+              {/* Active days dots — only meaningful for a weekly recurrence;
+                  monthly/interval habits get a text summary instead. */}
+              {(habit.freq ?? "weekly") === "monthly" ? (
+                <p className="text-xs text-fg-faint mt-1.5">
+                  {repeatSummary("monthly", habit.interval ?? 1, habit.daysOfWeek)}
+                </p>
+              ) : (
+                <>
+                  {(habit.interval ?? 1) > 1 && (
+                    <p className="text-xs text-fg-faint mt-1.5">Every {habit.interval} weeks</p>
+                  )}
+                  <div className="flex gap-1 mt-1.5">
+                    {DAY_LABELS.map((label, i) => (
+                      <span
+                        key={i}
+                        className={`w-5 h-5 rounded-full text-[9px] font-medium flex items-center justify-center ${
+                          habit.daysOfWeek.includes(i)
+                            ? "bg-surface-inverse text-fg-inverse"
+                            : "bg-surface-subtle text-fg-faint"
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Streak + today status */}

@@ -10,7 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Goal, Habit
-from app.services.tools import _overlapping, current_period_keys, goal_to_dict, habit_occurrences
+from app.services.tools import (
+    _overlapping,
+    current_period_keys,
+    goal_to_dict,
+    habit_active_on,
+    habit_occurrences,
+)
 
 NudgeType = Literal["habit_gap", "workout_gap", "goal_pacing"]
 
@@ -38,10 +44,7 @@ def period_bounds(period: str, period_key: str) -> tuple[date, date]:
 
 
 def _is_habit_active(habit: Habit, d: date) -> bool:
-    js_weekday = (d.weekday() + 1) % 7  # python Mon=0 -> frontend Sun=0
-    return js_weekday in (habit.days_of_week or []) and d.isoformat() not in (
-        habit.skipped_dates or []
-    )
+    return habit_active_on(habit, d)
 
 
 def _habit_miss_streak(habit: Habit, today: date) -> int:

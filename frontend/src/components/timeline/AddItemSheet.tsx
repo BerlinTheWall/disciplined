@@ -15,8 +15,10 @@ import {
   Dumbbell,
   Flag,
   Link2,
+  Minus,
   MoreHorizontal,
   Palette,
+  Plus,
   Repeat,
   Trash2,
   X,
@@ -130,6 +132,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [icon, setIcon] = useState<keyof typeof ICONS>("alarm");
   const [iconTouched, setIconTouched] = useState(false);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [freq, setFreq] = useState<"weekly" | "monthly">("weekly");
+  const [repeatInterval, setRepeatInterval] = useState(1);
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
@@ -171,6 +175,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setIcon(editItem.data.icon);
       setIconTouched(true);
       setDaysOfWeek(editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6]);
+      setFreq(editItem.type === "habit" ? (editItem.data.freq ?? "weekly") : "weekly");
+      setRepeatInterval(editItem.type === "habit" ? (editItem.data.interval ?? 1) : 1);
       setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
       setRecipeId(editItem.data.recipeId ?? undefined);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
@@ -199,6 +205,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     setIcon("alarm");
     setIconTouched(false);
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
+    setFreq("weekly");
+    setRepeatInterval(1);
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
     setPriority(null);
@@ -283,16 +291,37 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     );
   }
 
+  // Monthly is capped lower than weekly so a 7-occurrence streak/rate window
+  // never spans more than ~7 years (stays inside the ~10yr day-walk guard in
+  // lib/habits.ts and lib/insights.ts).
+  function clampInterval(value: number, f: "weekly" | "monthly") {
+    return Math.min(f === "monthly" ? 12 : 24, Math.max(1, value));
+  }
+
+  function changeFreq(next: "weekly" | "monthly") {
+    setFreq(next);
+    setRepeatInterval((v) => clampInterval(v, next));
+  }
+
   async function handleSubmit() {
     if (!title.trim() || duration < 1) return;
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
 
+    // Only load-bearing when interval>1 or monthly; NULL for a plain weekly
+    // habit, matching the backend's "no anchor = original weekday model"
+    // shortcut. Preserves an existing habit's original anchor when just
+    // tweaking other fields; otherwise anchors on the sheet's own date.
+    const needsAnchor = freq === "monthly" || repeatInterval > 1;
+    const existingAnchor =
+      isEditing && editItem!.type === "habit" ? editItem!.data.anchorDate : undefined;
+    const anchorDate = needsAnchor ? existingAnchor || date : null;
+
     // Type changed while editing: create the item on the other side, then
     // remove the original. Each store syncs its own create/delete.
     if (isEditing && mode !== editItem!.type) {
       if (mode === "habit") {
-        if (daysOfWeek.length === 0) return;
+        if (freq === "weekly" && daysOfWeek.length === 0) return;
         addHabit({
           title: title.trim(),
           startMinutes,
@@ -300,6 +329,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           daysOfWeek,
+          freq,
+          interval: repeatInterval,
+          anchorDate,
           reminderMinutesBefore: reminder,
           workoutSessionId,
           recipeId,
@@ -331,7 +363,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     }
 
     if (isEditing) {
-      if (editItem!.type === "habit" && daysOfWeek.length === 0) return;
+      if (editItem!.type === "habit" && freq === "weekly" && daysOfWeek.length === 0) return;
       if (editItem!.type === "task") {
         updateTask(editItem!.data.id, {
           title: title.trim(),
@@ -356,6 +388,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           daysOfWeek,
+          freq,
+          interval: repeatInterval,
+          anchorDate,
           reminderMinutesBefore: reminder,
           workoutSessionId: workoutSessionId ?? null,
           recipeId: recipeId ?? null,
@@ -378,7 +413,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         useGoalStore.getState().linkTask(goalLink, newTaskId);
         if (goalLink) useGoalStore.getState().setTaskWeight(goalLink, newTaskId, goalWeight);
       } else {
-        if (daysOfWeek.length === 0) return;
+        if (freq === "weekly" && daysOfWeek.length === 0) return;
         addHabit({
           title: title.trim(),
           startMinutes,
@@ -386,6 +421,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
           color,
           icon,
           daysOfWeek,
+          freq,
+          interval: repeatInterval,
+          anchorDate,
           reminderMinutesBefore: reminder,
           workoutSessionId,
           recipeId,
@@ -773,18 +811,65 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
     </div>
   );
 
-  const repeatDaysBody = (
-    <div className="flex gap-2">
-      {DAY_OPTIONS.map(({ label, value }) => (
+  const repeatBody = (
+    <div>
+      <div className="flex gap-2 mb-4">
+        {(["weekly", "monthly"] as const).map((f) => (
+          <motion.button
+            key={f}
+            onClick={() => changeFreq(f)}
+            whileTap={tap}
+            className={chipCls(freq === f)}
+          >
+            {f === "weekly" ? "Weekly" : "Monthly"}
+          </motion.button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-sm text-fg-muted">Every</span>
         <motion.button
-          key={value}
-          onClick={() => toggleDay(value)}
+          onClick={() => setRepeatInterval((v) => clampInterval(v - 1, freq))}
           whileTap={tap}
-          className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
+          aria-label="Decrease interval"
+          className="w-8 h-8 rounded-full bg-surface-raised text-fg flex items-center justify-center shrink-0"
         >
-          {label}
+          <Minus size={16} />
         </motion.button>
-      ))}
+        <span className="w-6 text-center font-semibold text-fg">{repeatInterval}</span>
+        <motion.button
+          onClick={() => setRepeatInterval((v) => clampInterval(v + 1, freq))}
+          whileTap={tap}
+          aria-label="Increase interval"
+          className="w-8 h-8 rounded-full bg-surface-raised text-fg flex items-center justify-center shrink-0"
+        >
+          <Plus size={16} />
+        </motion.button>
+        <span className="text-sm text-fg-muted">
+          {freq === "weekly"
+            ? repeatInterval === 1
+              ? "week"
+              : "weeks"
+            : repeatInterval === 1
+              ? "month"
+              : "months"}
+        </span>
+      </div>
+
+      {freq === "weekly" && (
+        <div className="flex gap-2">
+          {DAY_OPTIONS.map(({ label, value }) => (
+            <motion.button
+              key={value}
+              onClick={() => toggleDay(value)}
+              whileTap={tap}
+              className={`w-9 h-9 rounded-full text-sm font-medium ${daysOfWeek.includes(value) ? "bg-surface-inverse text-fg-inverse" : "bg-surface-raised text-fg-faint"}`}
+            >
+              {label}
+            </motion.button>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -830,15 +915,17 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       )}
       <Collapse open={mode === "habit"}>
         <div className="mt-4">
-          <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat on</label>
-          {repeatDaysBody}
+          <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat</label>
+          {repeatBody}
         </div>
       </Collapse>
     </div>
   );
 
   const saveDisabled =
-    !title.trim() || duration < 1 || (mode === "habit" && daysOfWeek.length === 0);
+    !title.trim() ||
+    duration < 1 ||
+    (mode === "habit" && freq === "weekly" && daysOfWeek.length === 0);
 
   return (
     <>
@@ -989,7 +1076,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
 
                 <FieldRow
                   icon={Repeat}
-                  value={mode === "task" ? "One-time" : repeatSummary(daysOfWeek)}
+                  value={
+                    mode === "task" ? "One-time" : repeatSummary(freq, repeatInterval, daysOfWeek)
+                  }
                   onPress={() => setOpenRow("repeat")}
                 />
 
@@ -1275,8 +1364,8 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
             {typeCards}
             <Collapse open={mode === "habit"}>
               <div className="mt-4">
-                <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat on</label>
-                {repeatDaysBody}
+                <label className="text-xs font-medium text-fg-muted mb-2 block">Repeat</label>
+                {repeatBody}
               </div>
             </Collapse>
           </div>

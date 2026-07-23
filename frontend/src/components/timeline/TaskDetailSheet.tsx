@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 
+import { repeatSummary } from "./addItemOptions";
 import type { EditItem } from "./Timeline";
 import { isLightColor } from "@/lib/color";
 import { formatFullDate } from "@/lib/date";
@@ -131,21 +132,39 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
               </InfoRow>
             )}
 
-            {item.type === "habit" && (
-              <InfoRow icon={Repeat} label="Repeats on">
-                <span className="flex gap-1">
-                  {DAY_LABELS.map((d, i) => (
-                    <span
-                      key={i}
-                      className={`w-6 h-6 rounded-full text-[11px] font-medium flex items-center justify-center ${
-                        item.data.daysOfWeek.includes(i)
-                          ? "bg-surface-inverse text-fg-inverse"
-                          : "bg-surface-raised text-fg-faint"
-                      }`}
-                    >
-                      {d}
+            {item.type === "habit" && (item.data.freq ?? "weekly") === "monthly" && (
+              <InfoRow icon={Repeat} label="Repeats">
+                <span className="text-sm font-medium text-fg">
+                  {repeatSummary("monthly", item.data.interval ?? 1, item.data.daysOfWeek)}
+                </span>
+              </InfoRow>
+            )}
+
+            {item.type === "habit" && (item.data.freq ?? "weekly") === "weekly" && (
+              <InfoRow
+                icon={Repeat}
+                label={(item.data.interval ?? 1) > 1 ? "Repeats" : "Repeats on"}
+              >
+                <span className="flex items-center gap-2">
+                  {(item.data.interval ?? 1) > 1 && (
+                    <span className="text-sm font-medium text-fg">
+                      Every {item.data.interval} weeks
                     </span>
-                  ))}
+                  )}
+                  <span className="flex gap-1">
+                    {DAY_LABELS.map((d, i) => (
+                      <span
+                        key={i}
+                        className={`w-6 h-6 rounded-full text-[11px] font-medium flex items-center justify-center ${
+                          item.data.daysOfWeek.includes(i)
+                            ? "bg-surface-inverse text-fg-inverse"
+                            : "bg-surface-raised text-fg-faint"
+                        }`}
+                      >
+                        {d}
+                      </span>
+                    ))}
+                  </span>
                 </span>
               </InfoRow>
             )}

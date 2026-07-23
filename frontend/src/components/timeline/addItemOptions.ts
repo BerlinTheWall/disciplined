@@ -38,13 +38,26 @@ export function durationTrackLabel(d: number, selected: boolean) {
   return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
 }
 
-export function repeatSummary(days: number[]) {
-  if (days.length === 7) return "Every day";
-  if (days.length === 0) return "No days picked";
-  const sorted = [...days].sort((a, b) => a - b);
-  if (sorted.length === 5 && sorted[0] === 1 && sorted[4] === 5) return "Weekdays";
-  if (sorted.length === 2 && sorted[0] === 0 && sorted[1] === 6) return "Weekends";
-  return sorted.map((d) => DAY_NAMES[d]).join(", ");
+export function repeatSummary(
+  freq: "weekly" | "monthly",
+  interval: number,
+  days: number[]
+): string {
+  if (freq === "monthly") {
+    if (interval <= 1) return "Monthly";
+    if (interval === 12) return "Yearly";
+    return `Every ${interval} months`;
+  }
+  const base = (() => {
+    if (days.length === 7) return "Every day";
+    if (days.length === 0) return "No days picked";
+    const sorted = [...days].sort((a, b) => a - b);
+    if (sorted.length === 5 && sorted[0] === 1 && sorted[4] === 5) return "Weekdays";
+    if (sorted.length === 2 && sorted[0] === 0 && sorted[1] === 6) return "Weekends";
+    return sorted.map((d) => DAY_NAMES[d]).join(", ");
+  })();
+  if (interval <= 1) return base;
+  return `Every ${interval} weeks (${base})`;
 }
 
 // The pill look for a selectable chip (reminder options, link pickers, …).

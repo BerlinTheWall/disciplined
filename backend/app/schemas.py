@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -125,16 +125,29 @@ class HabitBase(CamelModel):
     duration_minutes: int = Field(gt=0)
     color: str = "#6366f1"
     icon: str = "default"
-    days_of_week: list[int] = []  # 0 = Sunday ... 6 = Saturday
+    days_of_week: list[int] = []  # 0 = Sunday ... 6 = Saturday; ignored when freq="monthly"
     completed_dates: list[str] = []
     skipped_dates: list[str] = []
     reminder_minutes_before: int | None = Field(default=None, ge=0)
     workout_session_id: str | None = None
     recipe_id: str | None = None
+    freq: Literal["weekly", "monthly"] = "weekly"
+    interval: int = Field(default=1, ge=1, le=24)
+    # The cycle's first occurrence — only load-bearing when interval>1 or
+    # freq="monthly"; NULL/interval=1 behaves like the original weekday-only model.
+    anchor_date: str | None = None
 
 
 class HabitCreate(HabitBase):
     id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_recurrence(self) -> "HabitCreate":
+        if (self.freq == "monthly" or self.interval > 1) and self.anchor_date is None:
+            raise ValueError("anchor_date is required when freq is monthly or interval > 1")
+        if self.freq == "monthly" and self.interval > 12:
+            raise ValueError("monthly interval can't exceed 12")
+        return self
 
 
 class HabitUpdate(CamelModel):
@@ -149,6 +162,9 @@ class HabitUpdate(CamelModel):
     reminder_minutes_before: int | None = Field(default=None, ge=0)
     workout_session_id: str | None = None
     recipe_id: str | None = None
+    freq: Literal["weekly", "monthly"] | None = None
+    interval: int | None = Field(default=None, ge=1, le=24)
+    anchor_date: str | None = None
 
 
 class HabitOut(HabitBase):
