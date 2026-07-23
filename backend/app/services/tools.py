@@ -160,6 +160,26 @@ _WEEKDAY_DESC = (
     "5=Friday, 6=Saturday."
 )
 
+_WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+
+def habit_recurrence_label(h: Habit) -> str:
+    """Short human-readable cadence, e.g. "daily", "every 2 weeks (Thu)",
+    "every 6 months" — used so a habit is identifiable by its schedule even
+    when it has no occurrence in the visible 7-day window (biweekly/monthly
+    habits routinely skip a given week)."""
+    freq = h.freq or "weekly"
+    interval = max(1, h.interval or 1)
+    if freq == "monthly":
+        if interval == 1:
+            return "monthly"
+        if interval == 12:
+            return "yearly"
+        return f"every {interval} months"
+    days = h.days_of_week or []
+    base = "daily" if len(days) == 7 else "on " + ", ".join(_WEEKDAY_ABBR[d] for d in sorted(days))
+    return base if interval <= 1 else f"every {interval} weeks ({base})"
+
 FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
         name="create_event",
@@ -459,6 +479,17 @@ FUNCTION_DECLARATIONS = [
             },
             required=["habit_id"],
         ),
+    ),
+    types.FunctionDeclaration(
+        name="list_habits",
+        description=(
+            "List every habit with its id and how often it repeats. Every habit is already "
+            "listed in the system prompt above, so you shouldn't normally need this — but use "
+            "it if you're about to act on a habit and aren't confident of its id (e.g. it has "
+            "no occurrence in the 7-day schedule this week). Never guess a different habit's id "
+            "and never ask the user for a raw id — call this instead."
+        ),
+        parameters=types.Schema(type=types.Type.OBJECT, properties={}),
     ),
 ]
 
@@ -803,6 +834,15 @@ async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
     return {"updated": _habit_summary(habit)}
 
 
+async def _list_habits(db: AsyncSession, user_id: str, args: dict) -> dict:
+    habits = (
+        await db.scalars(select(Habit).where(Habit.user_id == user_id).order_by(Habit.start_minutes))
+    ).all()
+    return {
+        "habits": [{**_habit_summary(h), "repeats": habit_recurrence_label(h)} for h in habits]
+    }
+
+
 _EXECUTORS = {
     "create_event": _create_event,
     "list_events": _list_events,
@@ -817,6 +857,7 @@ _EXECUTORS = {
     "set_goal_done": _set_goal_done,
     "create_habit": _create_habit,
     "update_habit": _update_habit,
+    "list_habits": _list_habits,
 }
 
 

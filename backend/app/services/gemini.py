@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import Event, Goal
+from app.models import Event, Goal, Habit
 from app.schemas import BriefingRequest, ChatAction, ChatMessage, ChatResponse
 from app.services.nudges import NudgeCandidate
 from app.services.tools import (
@@ -20,6 +20,7 @@ from app.services.tools import (
     fmt_minutes,
     goal_to_dict,
     habit_occurrences,
+    habit_recurrence_label,
 )
 
 MAX_TOOL_ROUNDS = 8
@@ -92,6 +93,20 @@ async def build_system_prompt(
     else:
         schedule = "(nothing scheduled in the next 7 days)"
 
+    # Every habit, not just ones with an occurrence in the 7-day window above —
+    # a biweekly/monthly habit routinely has zero occurrences in a given week,
+    # and without this the model has no id to act on and previously guessed a
+    # different habit's id instead of asking or looking it up.
+    habits = (
+        await db.scalars(select(Habit).where(Habit.user_id == user_id).order_by(Habit.title))
+    ).all()
+    if habits:
+        habits_block = "\n".join(
+            f"- id={h.id} | {h.title} | {habit_recurrence_label(h)}" for h in habits
+        )
+    else:
+        habits_block = "(no habits yet)"
+
     goals = (
         await db.scalars(
             select(Goal)
@@ -125,14 +140,17 @@ Date reference — today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}:
 The user's schedule for the next 7 days:
 {schedule}
 
+The user's habits (every one, regardless of whether it occurs in the 7 days above):
+{habits_block}
+
 The user's goals for the current week/month/year:
 {goals_block}
 
 Rules:
 - Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference above. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
 - Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
-- Reference events, habits and goals by their id when calling tools. Never invent or guess an id.
-- The schedule mixes one-time events and recurring habits (marked "habit"). Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion. For habits: create_habit makes a new one (only title is required — omit days/time/duration for sensible defaults, same as the app's own new-habit form), update_habit changes an existing one's title/days/time/duration/icon/repeat-frequency (only pass the fields being changed), and set_habit_completion marks a given date's occurrence done or not. Habits still can't be deleted through chat; explain that's done in the Habits tab.
+- Reference events, habits and goals by their id when calling tools. Never invent or guess an id — match a named habit against the habits list above (by title), not the 7-day schedule, since a biweekly/monthly habit routinely has no occurrence there this week. If you still can't find it, call list_habits. Never ask the user to supply a raw id themselves.
+- The schedule mixes one-time events and recurring habits (marked "habit"); the habits list above is the authoritative id source for every habit, whether or not it shows up there this week. Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion. For habits: create_habit makes a new one (only title is required — omit days/time/duration for sensible defaults, same as the app's own new-habit form), update_habit changes an existing one's title/days/time/duration/icon/repeat-frequency (only pass the fields being changed), and set_habit_completion marks a given date's occurrence done or not. Habits still can't be deleted through chat; explain that's done in the Habits tab.
 - Habits repeat weekly by default. For anything less frequent — "every other week," "every 3 weeks," "once a month," "every 6 months," "once a year" — use freq and interval on create_habit/update_habit: freq=weekly + interval=2 is every other week; freq=monthly + interval=1 is monthly; freq=monthly + interval=6 is every 6 months; freq=monthly + interval=12 is yearly. anchor_date is the date this cycle counts from (its first occurrence) — resolve it yourself from the date reference like any other date, or omit it to anchor on today.
 - Goals have three progress modes, shown above: "manual N/M" goals accept add_goal_progress (positive or negative). "X/Y linked tasks done" goals are task-linked — their progress comes automatically from finishing those tasks, so use set_event_completion on the linked task(s) rather than trying to set progress directly; only use set_goal_done on a task-linked goal if the user explicitly wants it marked done regardless of the linked tasks. "check-off" goals only support set_goal_done. Goals cannot be created or deleted through chat. Use list_goals for goals outside the current week/month/year shown above.
 - Nothing changes unless you call a tool for it. Never tell the user something was created, moved, deleted, swapped, completed, or had its progress changed unless you called the corresponding tool (create_event, move_event, delete_event, swap_events, set_event_completion, set_habit_completion, add_goal_progress, set_goal_done) for it in this conversation turn and it returned without an error.
