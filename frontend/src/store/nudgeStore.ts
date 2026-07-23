@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
+
 export interface NudgeAlert {
   type: "habit_gap" | "workout_gap" | "goal_pacing";
   subjectId: string;
@@ -36,7 +38,21 @@ export const useNudgeStore = create<NudgeState>()(
           dismissedUntil: { ...state.dismissedUntil, [key]: untilDate },
         })),
 
-      setCurrent: (alert) => set({ current: alert }),
+      setCurrent: (alert) => {
+        if (alert) {
+          const today = new Date().toISOString().slice(0, 10);
+          useNotificationHistoryStore.getState().addEntry({
+            id: `${alert.type}:${alert.subjectId}:${today}`,
+            kind: "nudge",
+            title: "Disciplined noticed something",
+            body: alert.message,
+            firedAt: Date.now(),
+            actionPhrase: alert.actionPhrase,
+            nudgeType: alert.type,
+          });
+        }
+        set({ current: alert });
+      },
     }),
     {
       name: "disciplined-nudges",

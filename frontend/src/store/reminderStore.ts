@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { IconKey } from "@/lib/icons";
+import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 
 // A reminder that fired while the app was in the foreground — shown as an
 // in-app banner by ReminderHost until dismissed (or auto-expired).
@@ -75,11 +76,18 @@ export const useReminderStore = create<ReminderState>()(
         }),
 
       pushAlert: (alert) =>
-        set((state) =>
-          state.alerts.some((a) => a.key === alert.key)
-            ? state
-            : { alerts: [...state.alerts, alert] }
-        ),
+        set((state) => {
+          if (state.alerts.some((a) => a.key === alert.key)) return state;
+          useNotificationHistoryStore.getState().addEntry({
+            id: alert.key,
+            kind: "reminder",
+            title: alert.title,
+            body: alert.body,
+            firedAt: Date.now(),
+            date: alert.date,
+          });
+          return { alerts: [...state.alerts, alert] };
+        }),
 
       dismissAlert: (key) =>
         set((state) => ({ alerts: state.alerts.filter((a) => a.key !== key) })),

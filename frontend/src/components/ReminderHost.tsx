@@ -24,6 +24,7 @@ import {
 import { formatTimeLabel } from "@/lib/time";
 import { setWorkerTimeout } from "@/lib/workerTimer";
 import { useHabitStore } from "@/store/habitStore";
+import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 import { useReminderStore, type ReminderAlert } from "@/store/reminderStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -265,6 +266,16 @@ function tick() {
           if (shown) {
             useReminderStore.getState().markFired(reminder.key);
             useReminderStore.getState().clearSnooze(reminder.key);
+            // No banner shown here (tab isn't visible), so pushAlert's log
+            // hook never runs for this path — log it explicitly.
+            useNotificationHistoryStore.getState().addEntry({
+              id: reminder.key,
+              kind: "reminder",
+              title: reminder.title,
+              body: reminder.body,
+              firedAt: Date.now(),
+              date: reminder.date,
+            });
           }
         }
       );
