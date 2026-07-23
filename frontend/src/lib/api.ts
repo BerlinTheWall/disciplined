@@ -113,9 +113,20 @@ export interface ChatAction {
   result: unknown;
 }
 
+export interface PendingAction {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
 export interface ChatResponse {
   reply: string;
   actions: ChatAction[];
+  pendingActions: PendingAction[];
+}
+
+export interface ConfirmActionsResponse {
+  results: unknown[];
+  ok: boolean;
 }
 
 export interface BriefingItemPayload {
@@ -192,6 +203,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message, history, clientDate: todayISODate() }),
     }),
+  // The only path that actually executes a mutating action the assistant
+  // proposed — never called automatically, only on explicit user confirmation.
+  confirmChatActions: (actions: PendingAction[]): Promise<ConfirmActionsResponse> =>
+    request("/api/chat/confirm", { method: "POST", body: JSON.stringify({ actions }) }),
   // LLM-written spoken briefing for a day's schedule.
   briefing: (payload: BriefingPayload): Promise<{ script: string }> =>
     request("/api/briefing", { method: "POST", body: JSON.stringify(payload) }),

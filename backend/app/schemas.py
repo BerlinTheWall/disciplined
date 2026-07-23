@@ -337,6 +337,24 @@ class ChatAction(CamelModel):
     result: Any
 
 
+class PendingAction(CamelModel):
+    """A mutating tool call the model wants to make, intercepted before it ran —
+    execution only happens via a separate, explicit confirmation (see
+    ConfirmRequest), never automatically just because the model asked."""
+
+    tool: str
+    args: dict[str, Any]
+
+
+class ConfirmRequest(CamelModel):
+    actions: list[PendingAction]
+
+
+class ConfirmResponse(CamelModel):
+    results: list[Any]
+    ok: bool  # False if any result contains an "error" key
+
+
 # ---- Nudges ----
 
 
@@ -365,3 +383,4 @@ class NudgeResponse(CamelModel):
 class ChatResponse(CamelModel):
     reply: str
     actions: list[ChatAction] = []
+    pending_actions: list[PendingAction] = []

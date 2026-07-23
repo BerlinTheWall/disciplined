@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Event, Goal, Habit
-from app.schemas import BriefingRequest, ChatAction, ChatMessage, ChatResponse
+from app.schemas import BriefingRequest, ChatAction, ChatMessage, ChatResponse, PendingAction
 from app.services.nudges import NudgeCandidate
 from app.services.tools import (
     FUNCTION_DECLARATIONS,
+    MUTATING_TOOLS,
     current_period_keys,
     event_to_dict,
     execute_tool,
@@ -322,6 +323,7 @@ async def run_chat(
     )
     contents = _to_contents(history, message)
     actions: list[ChatAction] = []
+    pending_actions: list[PendingAction] = []
 
     response = None
     for _ in range(MAX_TOOL_ROUNDS):
@@ -339,7 +341,23 @@ async def run_chat(
         result_parts = []
         for call in response.function_calls:
             args = dict(call.args or {})
-            result = await execute_tool(db, user_id, call.name, args)
+            # Mutating tools are never auto-executed here — the model asking
+            # for one isn't enough on its own (confirmed this can't be
+            # trusted to a prompt instruction alone). Intercept it, tell the
+            # model nothing happened yet, and let a separate, explicit
+            # confirmation step (POST /api/chat/confirm) actually run it.
+            if call.name in MUTATING_TOOLS:
+                pending_actions.append(PendingAction(tool=call.name, args=args))
+                result = {
+                    "pending_confirmation": True,
+                    "message": (
+                        "Not executed yet — this needs the user's explicit confirmation "
+                        "first. Describe exactly what this will do in plain language and "
+                        "ask them to confirm before anything happens. Never say it's done."
+                    ),
+                }
+            else:
+                result = await execute_tool(db, user_id, call.name, args)
             actions.append(ChatAction(tool=call.name, args=args, result=result))
             result_parts.append(
                 types.Part.from_function_response(name=call.name, response={"result": result})
@@ -383,4 +401,5 @@ async def run_chat(
     return ChatResponse(
         reply=reply or "Sorry — something went wrong on my side. Please try that again.",
         actions=actions,
+        pending_actions=pending_actions,
     )

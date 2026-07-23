@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas import ChatRequest, ChatResponse
+from app.schemas import ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse
 from app.services.gemini import run_chat
+from app.services.tools import execute_tool
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger("uvicorn.error")
@@ -35,3 +36,18 @@ async def chat(
     except Exception:
         logger.exception("chat turn failed")
         raise HTTPException(status_code=502, detail="The assistant failed — please try again.")
+
+
+@router.post("/confirm", response_model=ConfirmResponse)
+async def confirm_actions(
+    body: ConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """The only path that actually executes a mutating tool the assistant
+    proposed — deliberately doesn't touch Gemini at all, so there's no model
+    judgment involved in whether this runs, only whatever the client already
+    confirmed."""
+    results = [await execute_tool(db, user.id, a.tool, a.args) for a in body.actions]
+    ok = not any(isinstance(r, dict) and "error" in r for r in results)
+    return ConfirmResponse(results=results, ok=ok)

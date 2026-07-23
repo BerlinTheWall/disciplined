@@ -16,14 +16,23 @@ import BottomSheet from "../BottomSheet";
 // Bottom sheet showing the assistant conversation. Opened by the schedule
 // quick-add bar when a message is sent; has its own input for follow-ups.
 
-function Bubble({ message }: { message: ChatBubble }) {
+function Bubble({
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  message: ChatBubble;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
   const isUser = message.role === "user";
+  const showActions = !isUser && message.pendingActions?.length && !message.resolved;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={spring.snappy}
-      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
     >
       <p
         className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
@@ -36,6 +45,24 @@ function Bubble({ message }: { message: ChatBubble }) {
       >
         {message.content}
       </p>
+      {showActions && (
+        <div className="flex gap-2 mt-1.5">
+          <motion.button
+            onClick={onConfirm}
+            whileTap={tap}
+            className="h-8 px-4 rounded-full bg-fg text-fg-inverse text-[13px] font-semibold"
+          >
+            Yes
+          </motion.button>
+          <motion.button
+            onClick={onCancel}
+            whileTap={tap}
+            className="h-8 px-4 rounded-full bg-surface-raised text-fg text-[13px] font-medium"
+          >
+            Cancel
+          </motion.button>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -58,16 +85,19 @@ function TypingDots() {
 }
 
 export default function ChatSheet() {
-  const [isOpen, busy, messages, closeChat, clearChat, send] = useChatStore(
-    useShallow((state) => [
-      state.isOpen,
-      state.busy,
-      state.messages,
-      state.closeChat,
-      state.clearChat,
-      state.send,
-    ])
-  );
+  const [isOpen, busy, messages, closeChat, clearChat, send, confirmPending, cancelPending] =
+    useChatStore(
+      useShallow((state) => [
+        state.isOpen,
+        state.busy,
+        state.messages,
+        state.closeChat,
+        state.clearChat,
+        state.send,
+        state.confirmPending,
+        state.cancelPending,
+      ])
+    );
 
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -157,7 +187,12 @@ export default function ChatSheet() {
           </p>
         )}
         {messages.map((m, i) => (
-          <Bubble key={i} message={m} />
+          <Bubble
+            key={i}
+            message={m}
+            onConfirm={() => void confirmPending(i)}
+            onCancel={() => cancelPending(i)}
+          />
         ))}
         {(busy || (isOpen && voicePending)) && <TypingDots />}
       </div>
