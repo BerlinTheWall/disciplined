@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Flame, Repeat } from "lucide-react";
 
 import { repeatSummary } from "@/components/timeline/addItemOptions";
+import AddItemSheet from "@/components/timeline/AddItemSheet";
+import TaskDetailSheet from "@/components/timeline/TaskDetailSheet";
+import type { EditItem } from "@/components/timeline/Timeline";
 import { todayISODate } from "@/lib/date";
-import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
+import { anchorDay, getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { useHabitStore } from "@/store/habitStore";
 
@@ -12,6 +16,12 @@ export default function HabitsPage() {
   const habits = useHabitStore((s) => s.habits);
   const today = new Date();
   const todayISO = todayISODate();
+
+  // Mirrors Timeline.tsx's pattern: tap a row for the read-only detail sheet,
+  // its Edit button promotes to the full editor (which is also where Delete
+  // lives, via the existing "this day only" vs "entire habit" dialog).
+  const [detailItem, setDetailItem] = useState<EditItem | null>(null);
+  const [editItem, setEditItem] = useState<EditItem | null>(null);
 
   if (habits.length === 0) {
     return (
@@ -36,7 +46,16 @@ export default function HabitsPage() {
         const completedToday = habit.completedDates.includes(todayISO);
 
         return (
-          <div key={habit.id} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-alt">
+          <div
+            key={habit.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setDetailItem({ type: "habit", data: habit })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setDetailItem({ type: "habit", data: habit });
+            }}
+            className="flex items-center gap-4 p-4 rounded-2xl bg-surface-alt cursor-pointer"
+          >
             {/* Colored icon pill */}
             <div
               className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
@@ -53,7 +72,12 @@ export default function HabitsPage() {
                   monthly/interval habits get a text summary instead. */}
               {(habit.freq ?? "weekly") === "monthly" ? (
                 <p className="text-xs text-fg-faint mt-1.5">
-                  {repeatSummary("monthly", habit.interval ?? 1, habit.daysOfWeek)}
+                  {repeatSummary(
+                    "monthly",
+                    habit.interval ?? 1,
+                    habit.daysOfWeek,
+                    anchorDay(habit.anchorDate)
+                  )}
                 </p>
               ) : (
                 <>
@@ -102,6 +126,16 @@ export default function HabitsPage() {
           </div>
         );
       })}
+
+      <TaskDetailSheet
+        item={detailItem}
+        onClose={() => setDetailItem(null)}
+        onEdit={(item) => {
+          setDetailItem(null);
+          setEditItem(item);
+        }}
+      />
+      <AddItemSheet isOpen={!!editItem} onClose={() => setEditItem(null)} editItem={editItem} />
     </div>
   );
 }

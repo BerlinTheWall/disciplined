@@ -15,10 +15,8 @@ import {
   Dumbbell,
   Flag,
   Link2,
-  Minus,
   MoreHorizontal,
   Palette,
-  Plus,
   Repeat,
   Trash2,
   X,
@@ -32,6 +30,7 @@ import {
   DURATION_OPTIONS,
   durationTrackLabel,
   MINUTES_PER_DAY,
+  ordinalLabel,
   repeatSummary,
 } from "./addItemOptions";
 import CalendarMonth from "./CalendarMonth";
@@ -40,9 +39,11 @@ import { GoalLinkSection } from "./GoalLinkSection";
 import { RecipeLinkSection, WorkoutLinkSection } from "./LinkSections";
 import type { EditItem } from "./Timeline";
 import TimeWheel from "./TimeWheel";
+import NumberWheel from "@/components/NumberWheel";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { isLightColor } from "@/lib/color";
 import { formatFullDate, relativeDayLabel } from "@/lib/date";
+import { anchorDay } from "@/lib/habits";
 import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
@@ -134,6 +135,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [freq, setFreq] = useState<"weekly" | "monthly">("weekly");
   const [repeatInterval, setRepeatInterval] = useState(1);
+  const [dayOfMonth, setDayOfMonth] = useState(1);
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
@@ -177,6 +179,12 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
       setDaysOfWeek(editItem.type === "habit" ? editItem.data.daysOfWeek : [0, 1, 2, 3, 4, 5, 6]);
       setFreq(editItem.type === "habit" ? (editItem.data.freq ?? "weekly") : "weekly");
       setRepeatInterval(editItem.type === "habit" ? (editItem.data.interval ?? 1) : 1);
+      setDayOfMonth(
+        dayOfMonthOf(
+          editItem.type === "habit" ? editItem.data.anchorDate : undefined,
+          new Date(selectedDate + "T00:00:00").getDate()
+        )
+      );
       setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
       setRecipeId(editItem.data.recipeId ?? undefined);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
@@ -299,8 +307,40 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   }
 
   function changeFreq(next: "weekly" | "monthly") {
+    // First time switching to monthly, default the day to today's — a
+    // sensible starting point, same spirit as the weekday grid defaulting to
+    // every day.
+    if (next === "monthly" && freq !== "monthly") {
+      setDayOfMonth(new Date(date + "T00:00:00").getDate());
+    }
     setFreq(next);
     setRepeatInterval((v) => clampInterval(v, next));
+  }
+
+  // Day-of-month parsed from an existing habit's anchorDate, falling back
+  // when there isn't one yet (a fresh habit) or it's unparseable.
+  function dayOfMonthOf(anchorDate: string | null | undefined, fallback: number): number {
+    return anchorDay(anchorDate) ?? fallback;
+  }
+
+  // anchorDate is a plain string with no DB date-type enforcement, so it must
+  // always be a syntactically valid calendar date — "2026-04-31" would crash
+  // both the frontend and backend occurrence math. Resolves the picked day to
+  // the nearest month (starting from `fromDate`) that actually contains it;
+  // a day 1-31 is guaranteed to exist within 12 months.
+  function resolveMonthlyAnchor(day: number, fromDate: string): string {
+    const base = new Date(fromDate + "T00:00:00");
+    for (let i = 0; i < 12; i++) {
+      const y = base.getFullYear();
+      const m = base.getMonth() + i;
+      const daysInThatMonth = new Date(y, m + 1, 0).getDate();
+      if (day <= daysInThatMonth) {
+        const wrappedMonth = ((m % 12) + 12) % 12;
+        const wrappedYear = y + Math.floor(m / 12);
+        return `${wrappedYear}-${String(wrappedMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+    }
+    return fromDate; // unreachable — every day 1-31 fits within 12 months
   }
 
   async function handleSubmit() {
@@ -310,12 +350,17 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
 
     // Only load-bearing when interval>1 or monthly; NULL for a plain weekly
     // habit, matching the backend's "no anchor = original weekday model"
-    // shortcut. Preserves an existing habit's original anchor when just
-    // tweaking other fields; otherwise anchors on the sheet's own date.
+    // shortcut. Preserves an existing habit's original anchor month when just
+    // tweaking other fields, so an interval>1 phase or a monthly habit's
+    // cycle doesn't silently reset each time it's edited.
     const needsAnchor = freq === "monthly" || repeatInterval > 1;
     const existingAnchor =
       isEditing && editItem!.type === "habit" ? editItem!.data.anchorDate : undefined;
-    const anchorDate = needsAnchor ? existingAnchor || date : null;
+    const anchorDate = !needsAnchor
+      ? null
+      : freq === "monthly"
+        ? resolveMonthlyAnchor(dayOfMonth, existingAnchor ?? date)
+        : existingAnchor || date;
 
     // Type changed while editing: create the item on the other side, then
     // remove the original. Each store syncs its own create/delete.
@@ -826,38 +871,22 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
         ))}
       </div>
 
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-sm text-fg-muted">Every</span>
-        <motion.button
-          onClick={() => setRepeatInterval((v) => clampInterval(v - 1, freq))}
-          whileTap={tap}
-          aria-label="Decrease interval"
-          className="w-8 h-8 rounded-full bg-surface-raised text-fg flex items-center justify-center shrink-0"
-        >
-          <Minus size={16} />
-        </motion.button>
-        <span className="w-6 text-center font-semibold text-fg">{repeatInterval}</span>
-        <motion.button
-          onClick={() => setRepeatInterval((v) => clampInterval(v + 1, freq))}
-          whileTap={tap}
-          aria-label="Increase interval"
-          className="w-8 h-8 rounded-full bg-surface-raised text-fg flex items-center justify-center shrink-0"
-        >
-          <Plus size={16} />
-        </motion.button>
-        <span className="text-sm text-fg-muted">
-          {freq === "weekly"
-            ? repeatInterval === 1
-              ? "week"
-              : "weeks"
-            : repeatInterval === 1
-              ? "month"
-              : "months"}
-        </span>
-      </div>
+      <label className="text-xs font-medium text-fg-muted mb-2 block">
+        Every {repeatInterval} {freq === "weekly" ? "week" : "month"}
+        {repeatInterval === 1 ? "" : "s"}
+      </label>
+      <NumberWheel
+        min={1}
+        max={freq === "monthly" ? 12 : 24}
+        value={repeatInterval}
+        onChange={(n) => setRepeatInterval(clampInterval(n, freq))}
+        color={color}
+        formatLabel={(n) => `${n} ${freq === "weekly" ? "week" : "month"}${n === 1 ? "" : "s"}`}
+        visibleRows={3}
+      />
 
       {freq === "weekly" && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-4">
           {DAY_OPTIONS.map(({ label, value }) => (
             <motion.button
               key={value}
@@ -868,6 +897,26 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
               {label}
             </motion.button>
           ))}
+        </div>
+      )}
+
+      {freq === "monthly" && (
+        <div className="mt-4">
+          <label className="text-xs font-medium text-fg-muted mb-2 block">
+            On the {ordinalLabel(dayOfMonth)}
+          </label>
+          <NumberWheel
+            min={1}
+            max={31}
+            value={dayOfMonth}
+            onChange={setDayOfMonth}
+            color={color}
+            formatLabel={ordinalLabel}
+            visibleRows={3}
+          />
+          {dayOfMonth >= 29 && (
+            <p className="text-xs text-fg-faint mt-2">Falls on the last day in shorter months.</p>
+          )}
         </div>
       )}
     </div>
@@ -1077,7 +1126,9 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
                 <FieldRow
                   icon={Repeat}
                   value={
-                    mode === "task" ? "One-time" : repeatSummary(freq, repeatInterval, daysOfWeek)
+                    mode === "task"
+                      ? "One-time"
+                      : repeatSummary(freq, repeatInterval, daysOfWeek, dayOfMonth)
                   }
                   onPress={() => setOpenRow("repeat")}
                 />

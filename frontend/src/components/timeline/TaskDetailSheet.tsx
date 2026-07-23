@@ -16,7 +16,7 @@ import { repeatSummary } from "./addItemOptions";
 import type { EditItem } from "./Timeline";
 import { isLightColor } from "@/lib/color";
 import { formatFullDate } from "@/lib/date";
-import { getHabitStreak } from "@/lib/habits";
+import { anchorDay, getHabitStreak } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
@@ -135,7 +135,12 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
             {item.type === "habit" && (item.data.freq ?? "weekly") === "monthly" && (
               <InfoRow icon={Repeat} label="Repeats">
                 <span className="text-sm font-medium text-fg">
-                  {repeatSummary("monthly", item.data.interval ?? 1, item.data.daysOfWeek)}
+                  {repeatSummary(
+                    "monthly",
+                    item.data.interval ?? 1,
+                    item.data.daysOfWeek,
+                    anchorDay(item.data.anchorDate)
+                  )}
                 </span>
               </InfoRow>
             )}

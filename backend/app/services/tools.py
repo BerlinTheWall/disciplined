@@ -50,6 +50,18 @@ def _monday_of(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+def _parse_anchor(anchor_date: str | None) -> date | None:
+    """None on anything unparseable — a habit degrades to "doesn't fire"
+    instead of taking down the whole system-prompt build (and therefore the
+    entire chat feature for that user) on one malformed row."""
+    if not anchor_date:
+        return None
+    try:
+        return date.fromisoformat(anchor_date)
+    except ValueError:
+        return None
+
+
 def habit_active_on(h: Habit, d: date) -> bool:
     """Single source of truth for "does this habit have an occurrence on d".
     Mirrored exactly by frontend/src/lib/habits.ts::isHabitActiveOnDate — keep
@@ -64,9 +76,9 @@ def habit_active_on(h: Habit, d: date) -> bool:
     interval = max(1, h.interval or 1)
 
     if freq == "monthly":
-        if not h.anchor_date:
+        anchor = _parse_anchor(h.anchor_date)
+        if anchor is None:
             return False
-        anchor = date.fromisoformat(h.anchor_date)
         month_diff = (d.year - anchor.year) * 12 + (d.month - anchor.month)
         if month_diff < 0 or month_diff % interval != 0:
             return False
@@ -78,7 +90,9 @@ def habit_active_on(h: Habit, d: date) -> bool:
         return False
     if interval <= 1 or not h.anchor_date:
         return True
-    anchor = date.fromisoformat(h.anchor_date)
+    anchor = _parse_anchor(h.anchor_date)
+    if anchor is None:
+        return True  # matches the "interval<=1 or no anchor_date" fallback above
     week_diff = (_monday_of(d) - _monday_of(anchor)).days // 7
     return week_diff >= 0 and week_diff % interval == 0
 

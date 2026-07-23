@@ -1,6 +1,7 @@
+from datetime import date as _date
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -137,6 +138,17 @@ class HabitBase(CamelModel):
     # freq="monthly"; NULL/interval=1 behaves like the original weekday-only model.
     anchor_date: str | None = None
 
+    @field_validator("anchor_date")
+    @classmethod
+    def _validate_anchor_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            _date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"anchor_date is not a valid calendar date: {value!r}") from exc
+        return value
+
 
 class HabitCreate(HabitBase):
     id: str | None = None
@@ -165,6 +177,17 @@ class HabitUpdate(CamelModel):
     freq: Literal["weekly", "monthly"] | None = None
     interval: int | None = Field(default=None, ge=1, le=24)
     anchor_date: str | None = None
+
+    @field_validator("anchor_date")
+    @classmethod
+    def _validate_anchor_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            _date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"anchor_date is not a valid calendar date: {value!r}") from exc
+        return value
 
 
 class HabitOut(HabitBase):

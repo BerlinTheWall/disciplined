@@ -38,15 +38,27 @@ export function durationTrackLabel(d: number, selected: boolean) {
   return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
 }
 
+// "1st", "2nd", "3rd", "4th", ..., "21st", "22nd", ...
+export function ordinalLabel(n: number): string {
+  const j = n % 10;
+  const k = n % 100;
+  if (j === 1 && k !== 11) return `${n}st`;
+  if (j === 2 && k !== 12) return `${n}nd`;
+  if (j === 3 && k !== 13) return `${n}rd`;
+  return `${n}th`;
+}
+
 export function repeatSummary(
   freq: "weekly" | "monthly",
   interval: number,
-  days: number[]
+  days: number[],
+  dayOfMonth?: number
 ): string {
   if (freq === "monthly") {
-    if (interval <= 1) return "Monthly";
-    if (interval === 12) return "Yearly";
-    return `Every ${interval} months`;
+    const dayLabel = dayOfMonth ? ` on the ${ordinalLabel(dayOfMonth)}` : "";
+    if (interval <= 1) return `Monthly${dayLabel}`;
+    if (interval === 12) return `Yearly${dayLabel}`;
+    return `Every ${interval} months${dayLabel}`;
   }
   const base = (() => {
     if (days.length === 7) return "Every day";

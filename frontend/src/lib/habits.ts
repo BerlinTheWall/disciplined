@@ -14,6 +14,20 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
+// null on anything unparseable — a habit degrades to "doesn't fire" instead
+// of propagating NaN comparisons into the calendar/streak/reminder code that
+// calls isHabitActiveOnDate in a loop.
+function parseAnchor(anchorDate: string | null | undefined): Date | null {
+  if (!anchorDate) return null;
+  const d = new Date(anchorDate + "T00:00:00");
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Just the day-of-month component, for display (e.g. "Monthly on the 15th").
+export function anchorDay(anchorDate: string | null | undefined): number | undefined {
+  return parseAnchor(anchorDate)?.getDate();
+}
+
 // Single source of truth for "does this habit have an occurrence on this
 // date". Mirrored exactly by backend/app/services/tools.py::habit_active_on
 // — keep both in sync if this changes.
@@ -27,8 +41,8 @@ export function isHabitActiveOnDate(habit: Habit, date: Date) {
   const interval = Math.max(1, habit.interval ?? 1);
 
   if (freq === "monthly") {
-    if (!habit.anchorDate) return false;
-    const anchor = new Date(habit.anchorDate + "T00:00:00");
+    const anchor = parseAnchor(habit.anchorDate);
+    if (!anchor) return false;
     const monthDiff =
       (date.getFullYear() - anchor.getFullYear()) * 12 + (date.getMonth() - anchor.getMonth());
     if (monthDiff < 0 || monthDiff % interval !== 0) return false;
@@ -38,7 +52,8 @@ export function isHabitActiveOnDate(habit: Habit, date: Date) {
 
   if (!habit.daysOfWeek.includes(date.getDay())) return false;
   if (interval <= 1 || !habit.anchorDate) return true;
-  const anchor = new Date(habit.anchorDate + "T00:00:00");
+  const anchor = parseAnchor(habit.anchorDate);
+  if (!anchor) return true; // matches the "interval<=1 or no anchorDate" fallback above
   const weekDiff = Math.round(
     (mondayOf(date).getTime() - mondayOf(anchor).getTime()) / (86_400_000 * 7)
   );
