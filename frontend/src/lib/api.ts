@@ -126,6 +126,20 @@ export interface BriefingItemPayload {
   kind: "task" | "habit";
 }
 
+export interface NudgeSuggestedSlot {
+  date: string;
+  startMinutes: number;
+  durationMinutes: number;
+}
+
+export interface NudgeResponse {
+  type: "habit_gap" | "workout_gap" | "goal_pacing" | null;
+  subjectId: string | null;
+  message: string | null;
+  actionPhrase: string | null;
+  suggestedSlot: NudgeSuggestedSlot | null;
+}
+
 export interface BriefingPayload {
   dayLabel: string;
   name: string;
@@ -178,6 +192,15 @@ export const api = {
   // LLM-written spoken briefing for a day's schedule.
   briefing: (payload: BriefingPayload): Promise<{ script: string }> =>
     request("/api/briefing", { method: "POST", body: JSON.stringify(payload) }),
+  nudges: {
+    // Deterministic check for something worth proactively surfacing;
+    // excludedKeys are the client's own active dismissal cooldowns.
+    check: (nowMinutes: number | undefined, excludedKeys: string[]): Promise<NudgeResponse> =>
+      request("/api/nudges/check", {
+        method: "POST",
+        body: JSON.stringify({ nowMinutes, excludedKeys, clientDate: todayISODate() }),
+      }),
+  },
   // Natural-voice audio (WAV) for a spoken line. Binary, so it bypasses the
   // JSON `request` helper; callers treat any failure as "fall back to the
   // device voice". The abort keeps a slow server from stalling a reminder —

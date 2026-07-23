@@ -5,6 +5,7 @@ import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
+import NudgeHost from "./components/NudgeHost";
 import OnboardingWizard from "./components/onboarding/OnboardingWizard";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
@@ -394,6 +395,10 @@ function App() {
           go("schedule");
         }}
       />
+
+      {/* Proactive assistant nudges — checks in on app open/foreground, at
+          most one banner a day */}
+      <NudgeHost onOpenGoals={() => go("goals")} />
 
       <BottomNav active={activePage} onChange={go} onAdd={openFab} fabOpen={fabOpen} />
 

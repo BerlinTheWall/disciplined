@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import Event, Goal
 from app.schemas import BriefingRequest, ChatAction, ChatMessage, ChatResponse
+from app.services.nudges import NudgeCandidate
 from app.services.tools import (
     FUNCTION_DECLARATIONS,
     current_period_keys,
@@ -33,7 +34,7 @@ def get_client() -> genai.Client:
     return genai.Client(api_key=settings.gemini_api_key)
 
 
-def _resolve_today(client_date: str | None) -> date:
+def resolve_today(client_date: str | None) -> date:
     """The user's local date wins; fall back to the server clock."""
     if client_date:
         try:
@@ -46,7 +47,7 @@ def _resolve_today(client_date: str | None) -> date:
 async def build_system_prompt(
     db: AsyncSession, user_id: str, client_date: str | None = None
 ) -> str:
-    today = _resolve_today(client_date)
+    today = resolve_today(client_date)
     week_end = today + timedelta(days=6)
 
     # Explicit weekday -> date table so the model never has to do date
@@ -215,6 +216,59 @@ async def write_briefing(req: BriefingRequest) -> str:
     if not script:
         raise RuntimeError("empty briefing from the model")
     return script
+
+
+NUDGE_INSTRUCTION = """You are the personal assistant inside Disciplined, a day-planner app. \
+You noticed something worth mentioning on your own — the user didn't ask. Write the short \
+message you'll show them about it.
+
+Rules:
+- Plain prose, 1-2 sentences. No markdown, no bullet points, no emojis.
+- Reference only the specific numbers/facts given to you. Never invent details.
+- End with a natural, low-pressure yes/no offer to take the given action — never guilt-trip \
+or nag; this is a friendly heads-up, not a scolding.
+- If no concrete action was given, just name what you noticed without offering to do anything.
+- Tone: warm, brief, matter-of-fact."""
+
+
+def write_nudge_prompt(candidate: NudgeCandidate, slot: dict | None) -> str:
+    lines = [f"What you noticed: {candidate.type}", f"Subject: {candidate.subject_title}"]
+    if candidate.type == "workout_gap":
+        lines.append(f"Days since the last completed workout: {candidate.metric['gap_days']}")
+        lines.append("Proposed action: offer to schedule one, at the slot below if given.")
+    elif candidate.type == "habit_gap":
+        lines.append(f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}")
+        lines.append("Proposed action: offer to schedule a slot for it today, if a slot is given below.")
+    else:
+        pct = round(candidate.metric["elapsed"] * 100)
+        lines.append(f"This goal's period is {pct}% elapsed and it's behind pace and not done yet.")
+        lines.append("Proposed action: none — just point out it needs attention.")
+    if slot is not None:
+        when = "today" if slot["date"] == date.today().isoformat() else "tomorrow"
+        lines.append(
+            f"A free slot exists {when} at {fmt_minutes(slot['start_minutes'])} "
+            f"for {slot['duration_minutes']} minutes."
+        )
+    else:
+        lines.append("No specific free slot was found nearby.")
+    return "\n".join(lines)
+
+
+async def write_nudge(candidate: NudgeCandidate, slot: dict | None) -> str:
+    client = get_client()
+    response = await client.aio.models.generate_content(
+        model=settings.gemini_model,
+        contents=write_nudge_prompt(candidate, slot),
+        config=types.GenerateContentConfig(
+            system_instruction=NUDGE_INSTRUCTION,
+            temperature=0.6,
+            thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
+        ),
+    )
+    text = _response_text(response)
+    if not text:
+        raise RuntimeError("empty nudge from the model")
+    return text
 
 
 def _to_contents(history: list[ChatMessage], message: str) -> list[types.Content]:

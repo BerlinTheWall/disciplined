@@ -298,6 +298,31 @@ class ChatAction(CamelModel):
     result: Any
 
 
+# ---- Nudges ----
+
+
+class NudgeRequest(CamelModel):
+    client_date: str | None = None
+    now_minutes: int | None = Field(default=None, ge=0, lt=24 * 60)
+    # Keys the client is currently suppressing (its own dismissal cooldowns),
+    # formatted "{type}:{subject_id}" — kept server-stateless.
+    excluded_keys: list[str] = Field(default_factory=list, max_length=50)
+
+
+class NudgeSuggestedSlot(CamelModel):
+    date: str
+    start_minutes: int
+    duration_minutes: int
+
+
+class NudgeResponse(CamelModel):
+    type: Literal["habit_gap", "workout_gap", "goal_pacing"] | None = None
+    subject_id: str | None = None
+    message: str | None = None
+    action_phrase: str | None = None
+    suggested_slot: NudgeSuggestedSlot | None = None
+
+
 class ChatResponse(CamelModel):
     reply: str
     actions: list[ChatAction] = []
