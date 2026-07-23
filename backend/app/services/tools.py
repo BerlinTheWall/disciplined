@@ -306,6 +306,43 @@ FUNCTION_DECLARATIONS = [
             required=["goal_id", "done"],
         ),
     ),
+    types.FunctionDeclaration(
+        name="create_habit",
+        description=(
+            "Create a new recurring habit. Only title is required — omit days_of_week for "
+            "every day, start_minutes/duration_minutes for 9:00 AM / 30 minutes (matching the "
+            "app's own new-habit defaults). No conflict checking, same as creating one in the "
+            "Habits tab."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "title": types.Schema(type=types.Type.STRING, description="Habit title."),
+                "days_of_week": types.Schema(
+                    type=types.Type.ARRAY,
+                    items=types.Schema(type=types.Type.INTEGER),
+                    description="Days it repeats on, 0=Sunday..6=Saturday. Omit for every day.",
+                ),
+                "start_minutes": types.Schema(
+                    type=types.Type.INTEGER,
+                    description=_MINUTES_DESC + " Omit to default to 9:00 AM.",
+                ),
+                "duration_minutes": types.Schema(
+                    type=types.Type.INTEGER,
+                    description="Duration in minutes. Omit to default to 30.",
+                ),
+                "icon": types.Schema(
+                    type=types.Type.STRING,
+                    enum=[
+                        "alarm", "workout", "shower", "meal", "bike", "reading",
+                        "coffee", "work", "health", "shopping", "default",
+                    ],
+                    description="Icon that best matches the habit.",
+                ),
+            },
+            required=["title"],
+        ),
+    ),
 ]
 
 # Tools that change data — the client uses this to know when to refetch.
@@ -318,6 +355,7 @@ MUTATING_TOOLS = {
     "set_habit_completion",
     "add_goal_progress",
     "set_goal_done",
+    "create_habit",
 }
 
 
@@ -578,6 +616,30 @@ async def _set_goal_done(db: AsyncSession, user_id: str, args: dict) -> dict:
     return {"goal": await goal_to_dict(db, user_id, goal)}
 
 
+async def _create_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
+    habit = Habit(
+        title=args["title"],
+        start_minutes=int(args.get("start_minutes") or 9 * 60),
+        duration_minutes=int(args.get("duration_minutes") or 30),
+        icon=args.get("icon", "default"),
+        days_of_week=args.get("days_of_week") or [0, 1, 2, 3, 4, 5, 6],
+        user_id=user_id,
+    )
+    db.add(habit)
+    await db.commit()
+    return {
+        "created": {
+            "id": habit.id,
+            "kind": "habit",
+            "title": habit.title,
+            "start": fmt_minutes(habit.start_minutes),
+            "start_minutes": habit.start_minutes,
+            "duration_minutes": habit.duration_minutes,
+            "days_of_week": habit.days_of_week,
+        }
+    }
+
+
 _EXECUTORS = {
     "create_event": _create_event,
     "list_events": _list_events,
@@ -590,6 +652,7 @@ _EXECUTORS = {
     "list_goals": _list_goals,
     "add_goal_progress": _add_goal_progress,
     "set_goal_done": _set_goal_done,
+    "create_habit": _create_habit,
 }
 
 

@@ -159,6 +159,7 @@ export const CHAT_TOOL_DOMAIN: Record<string, "events" | "habits" | "goals"> = {
   swap_events: "events",
   set_event_completion: "events",
   set_habit_completion: "habits",
+  create_habit: "habits",
   add_goal_progress: "goals",
   set_goal_done: "goals",
 };
