@@ -2,10 +2,20 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { SIGMA_LINES } from "@/lib/sigma";
+import { useAuthStore } from "@/store/authStore";
 
 // Sigma Mode: a personal, unpublished hype gimmick — flips the whole app to a
 // harsh black-and-red theme (see index.css [data-sigma="on"]) and barks
 // motivation at you. Never surfaced to other users; toggled from Settings.
+
+// Gate on the one account this was built for — every entry point (Settings
+// toggle, Home section, the global SigmaMode/SigmaManager mounts) checks this
+// rather than just `on`, so the feature stays invisible to anyone else even
+// if `on` was somehow left true in shared/persisted state.
+const SIGMA_ALLOWED_EMAIL = "hooman.ksh@gmail.com";
+export function useSigmaAccess(): boolean {
+  return useAuthStore((s) => s.user?.email === SIGMA_ALLOWED_EMAIL);
+}
 
 function applySigma(on: boolean) {
   if (on) document.documentElement.setAttribute("data-sigma", "on");

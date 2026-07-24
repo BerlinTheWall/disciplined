@@ -20,7 +20,7 @@ import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { useSigmaStore } from "@/store/sigmaStore";
+import { useSigmaAccess, useSigmaStore } from "@/store/sigmaStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Priority } from "@/types/task";
 
@@ -173,7 +173,9 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
   const weekGoals = useGoalStore((s) => s.goals)
     .filter((g) => g.period === "week" && g.periodKey === currentPeriodKey("week"))
     .sort((a, b) => a.order - b.order);
-  const sigmaOn = useSigmaStore((s) => s.on);
+  const sigmaEnabled = useSigmaStore((s) => s.on);
+  const sigmaAccess = useSigmaAccess();
+  const sigmaOn = sigmaEnabled && sigmaAccess;
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);

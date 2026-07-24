@@ -13,7 +13,7 @@ import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { useSigmaStore } from "@/store/sigmaStore";
+import { useSigmaAccess, useSigmaStore } from "@/store/sigmaStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTutorialStore } from "@/store/tutorialStore";
 
@@ -198,6 +198,7 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
   const { theme, toggleTheme } = useThemeStore();
   const sigmaOn = useSigmaStore((s) => s.on);
+  const sigmaAccess = useSigmaAccess();
   // Browser notification permission — refreshed after we ask for it, so the
   // subtitle below reflects the outcome.
   const [permission, setPermission] = useState(notifyPermission);
@@ -360,26 +361,29 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         </Section>
 
         {/* Personal gimmick, not a real product feature — harsh black/red
-            theme + hype interruptions for when you're slacking. */}
-        <Section title="???">
-          <Row
-            title="Sigma Mode"
-            subtitle="No mercy. No slacking."
-            on={sigmaOn}
-            onToggle={() => useSigmaStore.getState().toggle()}
-          />
-          <motion.button
-            onClick={() => {
-              useSigmaStore.getState().openManager();
-              onClose();
-            }}
-            whileTap={tap}
-            className="flex items-center gap-3 w-full px-4 py-3 text-left"
-          >
-            <span className="text-[15px] font-medium text-fg flex-1">Manage Sigma content</span>
-            <Flame size={18} className="text-fg-muted" />
-          </motion.button>
-        </Section>
+            theme + hype interruptions for when you're slacking. Only visible
+            to the one account it was built for. */}
+        {sigmaAccess && (
+          <Section title="???">
+            <Row
+              title="Sigma Mode"
+              subtitle="No mercy. No slacking."
+              on={sigmaOn}
+              onToggle={() => useSigmaStore.getState().toggle()}
+            />
+            <motion.button
+              onClick={() => {
+                useSigmaStore.getState().openManager();
+                onClose();
+              }}
+              whileTap={tap}
+              className="flex items-center gap-3 w-full px-4 py-3 text-left"
+            >
+              <span className="text-[15px] font-medium text-fg flex-1">Manage Sigma content</span>
+              <Flame size={18} className="text-fg-muted" />
+            </motion.button>
+          </Section>
+        )}
       </div>
     </BottomSheet>
   );
