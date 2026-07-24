@@ -82,6 +82,15 @@ function createSyncer<T extends { id: string }>(cfg: Syncable<T>) {
     timer = window.setTimeout(() => void push(), DEBOUNCE_MS);
   }
 
+  // Bypasses the debounce and pushes immediately — a pending debounced edit
+  // otherwise silently never reaches the server if the page is hidden,
+  // backgrounded, or reloaded before the timer fires (a quick edit-then-
+  // reload loses the change entirely, since JS timers don't survive that).
+  function flush() {
+    window.clearTimeout(timer);
+    void push();
+  }
+
   // Pull the server state into the store (e.g. after the chat assistant
   // changed things server-side). Sets the snapshot first so the store update
   // doesn't echo back as a push.
@@ -110,7 +119,7 @@ function createSyncer<T extends { id: string }>(cfg: Syncable<T>) {
     cfg.subscribe(schedule);
   }
 
-  return { hydrate, refresh };
+  return { hydrate, refresh, flush };
 }
 
 const syncers = {
@@ -166,6 +175,10 @@ const syncers = {
   }),
 };
 
+function flushAll() {
+  for (const s of Object.values(syncers)) s.flush();
+}
+
 export async function startSync(): Promise<void> {
   try {
     await api.health();
@@ -178,6 +191,17 @@ export async function startSync(): Promise<void> {
       s.hydrate().catch((e) => console.warn("[sync] hydrate failed", e))
     )
   );
+  // Flush any still-debounced edit the moment the app is backgrounded or
+  // the page starts navigating away — visibilitychange fires reliably when
+  // the app is put in the background (the common case: edit, then switch
+  // apps or lock the phone) and pagehide on an actual reload/close. Neither
+  // guarantees the request completes before the page fully terminates, but
+  // "attempted immediately" beats "never even tried" for a debounced edit
+  // that would otherwise silently vanish.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushAll();
+  });
+  window.addEventListener("pagehide", flushAll);
 }
 
 // For the chat assistant: after a chat turn whose actions mutated a domain,
