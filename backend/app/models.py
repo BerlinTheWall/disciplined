@@ -19,6 +19,11 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String)
     display_name: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    # Caps how many proactive coach check-ins fire per day (see
+    # services/coach.py's TIER_BUDGET). No billing exists yet, so this
+    # defaults everyone to the top tier; wiring real subscriptions later is
+    # just writing to this column instead of building the budget logic.
+    coach_tier: Mapped[str] = mapped_column(String, default="plus")  # "free" | "plus"
 
 
 class Event(Base):

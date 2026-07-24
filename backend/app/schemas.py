@@ -380,6 +380,36 @@ class NudgeResponse(CamelModel):
     suggested_slot: NudgeSuggestedSlot | None = None
 
 
+# ---- Proactive coach ----
+
+
+class CoachWindow(CamelModel):
+    label: str = Field(max_length=40)
+    start_minutes: int = Field(ge=0, lt=24 * 60)
+    end_minutes: int = Field(ge=0, lt=24 * 60)
+
+
+class CoachPlanRequest(CamelModel):
+    client_date: str | None = None
+    now_minutes: int = Field(ge=0, lt=24 * 60)
+    windows: list[CoachWindow] = Field(max_length=10)
+
+
+class CoachCheckpoint(CamelModel):
+    window_label: str
+    fire_at_minutes: int
+    title: str
+    body: str
+    action_phrase: str | None = None
+    # "{type}:{subject_id}" — used for the local-notification id and to route
+    # a tap back to the right chat action.
+    subject_key: str
+
+
+class CoachPlanResponse(CamelModel):
+    checkpoints: list[CoachCheckpoint] = []
+
+
 class ChatResponse(CamelModel):
     reply: str
     actions: list[ChatAction] = []

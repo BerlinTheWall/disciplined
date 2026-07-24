@@ -6,14 +6,14 @@ import { persist } from "zustand/middleware";
 // persistent counterpart to ReminderHost's/NudgeHost's transient banners,
 // which vanish once dismissed with no other trace.
 export interface HistoryEntry {
-  id: string; // reminder's alert key, or `${type}:${subjectId}:${date}` for nudges
-  kind: "reminder" | "nudge";
+  id: string; // reminder's alert key, or `${type}:${subjectId}:${date}` for nudges/coach
+  kind: "reminder" | "nudge" | "coach";
   title: string;
   body: string;
   firedAt: number; // epoch ms
   read: boolean;
   date?: string; // reminders only — day to jump to
-  actionPhrase?: string | null; // nudges only
+  actionPhrase?: string | null; // nudges/coach only
   nudgeType?: "habit_gap" | "workout_gap" | "goal_pacing"; // nudges only
 }
 

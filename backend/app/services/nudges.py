@@ -18,7 +18,14 @@ from app.services.tools import (
     habit_occurrences,
 )
 
-NudgeType = Literal["habit_gap", "workout_gap", "goal_pacing"]
+NudgeType = Literal[
+    "habit_gap", "workout_gap", "goal_pacing", "streak_milestone", "goal_ahead"
+]
+
+# Exact-value milestones only (not "streak >= N") — a streak that keeps
+# growing day over day passes through each of these once and only once, so
+# no persisted "already celebrated" state is needed to avoid repeating it.
+_STREAK_MILESTONES = (7, 14, 30, 50, 100, 200, 365)
 
 
 @dataclass
@@ -59,6 +66,25 @@ def _habit_miss_streak(habit: Habit, today: date) -> int:
             if cursor.isoformat() in completed:
                 break
             streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+def _habit_hit_streak(habit: Habit, today: date) -> int:
+    """Consecutive completed active days, mirroring the frontend's
+    getHabitStreak: an unfinished "today" doesn't zero out an otherwise
+    intact streak — counting starts from yesterday until today is done."""
+    completed = set(habit.completed_dates or [])
+    cursor = today
+    if _is_habit_active(habit, cursor) and cursor.isoformat() not in completed:
+        cursor -= timedelta(days=1)
+    streak = 0
+    for _ in range(3650):
+        if _is_habit_active(habit, cursor):
+            if cursor.isoformat() in completed:
+                streak += 1
+            else:
+                break
         cursor -= timedelta(days=1)
     return streak
 
@@ -151,6 +177,68 @@ async def goal_pacing_candidates(
     return out
 
 
+async def streak_milestone_candidates(
+    db: AsyncSession, user_id: str, today: date
+) -> list[NudgeCandidate]:
+    habits = (await db.scalars(select(Habit).where(Habit.user_id == user_id))).all()
+    out = []
+    for h in habits:
+        streak = _habit_hit_streak(h, today)
+        if streak in _STREAK_MILESTONES:
+            out.append(
+                NudgeCandidate(
+                    type="streak_milestone",
+                    subject_id=h.id,
+                    subject_title=h.title,
+                    metric={"streak": streak},
+                )
+            )
+    return out
+
+
+async def goal_ahead_candidates(
+    db: AsyncSession, user_id: str, today: date
+) -> list[NudgeCandidate]:
+    keys = current_period_keys(today)
+    goals = (
+        await db.scalars(
+            select(Goal).where(Goal.user_id == user_id, Goal.period_key.in_(keys.values()))
+        )
+    ).all()
+    out = []
+    for g in goals:
+        start, end = period_bounds(g.period, g.period_key)
+        span_days = (end - start).days + 1
+        elapsed = max(0.0, min(1.0, ((today - start).days + 1) / span_days))
+        info = await goal_to_dict(db, user_id, g)
+        if info["mode"] not in ("manual", "tasks") or info["total"] <= 0:
+            continue
+        progress_fraction = info["current"] / info["total"]
+        if info["done"]:
+            # Finished with real time to spare — always worth celebrating.
+            if elapsed <= 0.7:
+                out.append(
+                    NudgeCandidate(
+                        type="goal_ahead",
+                        subject_id=g.id,
+                        subject_title=g.title,
+                        metric={"elapsed": elapsed, "done_early": True},
+                    )
+                )
+            continue
+        lead = progress_fraction - elapsed
+        if elapsed >= 0.15 and lead >= 0.25:
+            out.append(
+                NudgeCandidate(
+                    type="goal_ahead",
+                    subject_id=g.id,
+                    subject_title=g.title,
+                    metric={"elapsed": elapsed, "progress_fraction": progress_fraction, "lead": lead},
+                )
+            )
+    return out
+
+
 async def evaluate(
     db: AsyncSession, user_id: str, today: date, excluded: set[str]
 ) -> NudgeCandidate | None:
@@ -203,20 +291,30 @@ async def suggest_evening_slot(
 
 
 async def suggest_habit_slot(
-    db: AsyncSession, user_id: str, habit: Habit, today: date
+    db: AsyncSession, user_id: str, habit: Habit, today: date, now_minutes: int | None = None
 ) -> dict[str, Any] | None:
     """The habit's own scheduled time, today, if nothing else occupies it. A
     habit already has a designated time of day (e.g. a wake-up routine at
     6am) — suggesting some unrelated evening slot for it doesn't make sense,
     unlike workout_gap which has no single row to anchor a "usual time" to.
 
+    `now_minutes`, when given, is the time this suggestion will actually be
+    read at (not necessarily when this function runs) — the coach plans
+    checkpoints ahead of when they fire. If the habit's usual time has
+    already passed by then, "today at 7am" is a stale, nonsensical thing to
+    offer, so this returns None rather than guessing a different day/time
+    (rolling to tomorrow would need to re-verify the habit is even active
+    then, which isn't worth it for what's just a "nice to have" slot).
+
     Deliberately doesn't reuse tools.py's _overlapping: that also checks
     habit_occurrences for the date, which would always find this exact habit
     occupying its own usual time and report a false conflict against itself —
     a habit is trivially "free" at its own designated slot; only a genuinely
     different event or habit colliding with it should count."""
-    date_str = today.isoformat()
     start, duration = habit.start_minutes, habit.duration_minutes
+    if now_minutes is not None and start < now_minutes:
+        return None
+    date_str = today.isoformat()
     end = start + duration
 
     event_conflicts = (
@@ -249,7 +347,7 @@ async def suggest_slot_for_candidate(
         habit = await db.get(Habit, candidate.subject_id)
         if habit is None or habit.user_id != user_id:
             return None
-        return await suggest_habit_slot(db, user_id, habit, today)
+        return await suggest_habit_slot(db, user_id, habit, today, now_minutes)
     if candidate.type == "workout_gap":
         return await suggest_evening_slot(db, user_id, today, now_minutes)
     return None  # goal_pacing has no one-tap action, so no slot is needed
@@ -258,8 +356,8 @@ async def suggest_slot_for_candidate(
 def build_action_phrase(
     candidate: NudgeCandidate, slot: dict[str, Any] | None, today: date
 ) -> str | None:
-    if candidate.type == "goal_pacing":
-        return None  # no one-tap action — the assistant shouldn't guess progress
+    if candidate.type in ("goal_pacing", "streak_milestone", "goal_ahead"):
+        return None  # informational/celebratory only — nothing to offer to do
     if slot is None:
         return f"Add {candidate.subject_title} to today's schedule"
     hh, mm = divmod(slot["start_minutes"], 60)

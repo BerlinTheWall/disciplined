@@ -85,7 +85,11 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
                   className="flex items-start gap-3 p-3 rounded-2xl bg-surface text-left"
                 >
                   <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                    {entry.kind === "nudge" ? <Sparkles size={16} /> : <Bell size={16} />}
+                    {entry.kind === "nudge" || entry.kind === "coach" ? (
+                      <Sparkles size={16} />
+                    ) : (
+                      <Bell size={16} />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>

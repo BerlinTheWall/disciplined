@@ -6,7 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import auth, briefing, chat, events, goals, habits, meals, nudges, tts, workouts
+from app.routers import (
+    auth,
+    briefing,
+    chat,
+    coach,
+    events,
+    goals,
+    habits,
+    meals,
+    nudges,
+    tts,
+    workouts,
+)
 
 # uvicorn configures its own loggers and leaves the root alone, so without this
 # nothing the app itself logs during startup ever reaches the deploy log.
@@ -43,6 +55,7 @@ app.include_router(chat.router)
 app.include_router(tts.router)
 app.include_router(briefing.router)
 app.include_router(nudges.router)
+app.include_router(coach.router)
 
 
 @app.get("/api/health")

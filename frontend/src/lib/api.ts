@@ -151,6 +151,25 @@ export interface NudgeResponse {
   suggestedSlot: NudgeSuggestedSlot | null;
 }
 
+export interface CoachWindow {
+  label: string;
+  startMinutes: number;
+  endMinutes: number;
+}
+
+export interface CoachCheckpoint {
+  windowLabel: string;
+  fireAtMinutes: number;
+  title: string;
+  body: string;
+  actionPhrase: string | null;
+  subjectKey: string;
+}
+
+export interface CoachPlanResponse {
+  checkpoints: CoachCheckpoint[];
+}
+
 export interface BriefingPayload {
   dayLabel: string;
   name: string;
@@ -217,6 +236,15 @@ export const api = {
       request("/api/nudges/check", {
         method: "POST",
         body: JSON.stringify({ nowMinutes, excludedKeys, clientDate: todayISODate() }),
+      }),
+  },
+  coach: {
+    // Proposes today's remaining check-in windows; the server decides how
+    // many actually get filled (coach_tier) and composes each via Gemini.
+    plan: (nowMinutes: number, windows: CoachWindow[]): Promise<CoachPlanResponse> =>
+      request("/api/coach/plan", {
+        method: "POST",
+        body: JSON.stringify({ nowMinutes, windows, clientDate: todayISODate() }),
       }),
   },
   // Natural-voice audio (WAV) for a spoken line. Binary, so it bypasses the

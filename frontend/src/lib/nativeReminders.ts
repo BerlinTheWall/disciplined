@@ -28,9 +28,12 @@ export interface NativeReminder {
 // iOS caps pending local notifications at 64 per app; keep headroom.
 const MAX_SCHEDULED = 60;
 
-// Stable int32 notification id derived from the reminder key, so a resync
-// replaces an item's notification instead of stacking duplicates.
-function notifId(key: string): number {
+// Stable notification id derived from a key, so a resync replaces an item's
+// notification instead of stacking duplicates. Always positive — reminders
+// own the positive id space, coach check-ins (lib/coach.ts) own the negative
+// one, so each module's cancel-before-reschedule only ever touches its own
+// pending notifications, never the other's.
+export function notifId(key: string): number {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
   return Math.abs(h) || 1;
@@ -119,10 +122,11 @@ export function syncNativeReminders(upcoming: NativeReminder[]) {
 // SILENTLY (the plugin only sets a sound when one is passed).
 async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string> | null) {
   const pending = await LocalNotifications.getPending();
-  if (pending.notifications.length > 0) {
-    await LocalNotifications.cancel({
-      notifications: pending.notifications.map((n) => ({ id: n.id })),
-    });
+  // Only ever touch reminder-owned (positive-id) notifications here — coach
+  // check-ins (negative ids) are a separate resync cycle, see notifId above.
+  const ours = pending.notifications.filter((n) => n.id > 0);
+  if (ours.length > 0) {
+    await LocalNotifications.cancel({ notifications: ours.map((n) => ({ id: n.id })) });
   }
   if (batch.length === 0) return;
   await LocalNotifications.schedule({

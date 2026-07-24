@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, X } from "lucide-react";
 
 import { api } from "@/lib/api";
+import { initCoachNotifications, scheduleCoachPlan } from "@/lib/coach";
 import { todayISODate } from "@/lib/date";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore } from "@/store/chatStore";
@@ -65,12 +66,17 @@ export default function NudgeHost({ onOpenGoals }: Props) {
   const dismissTimer = useRef<number>(undefined);
 
   useEffect(() => {
+    initCoachNotifications();
+
     let cancelled = false;
     let debounceTimer: number | undefined;
     const debounced = () => {
       window.clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(() => {
-        if (!cancelled) void runCheck();
+        if (!cancelled) {
+          void runCheck();
+          scheduleCoachPlan();
+        }
       }, CHECK_DEBOUNCE_MS);
     };
 

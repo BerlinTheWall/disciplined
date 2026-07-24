@@ -291,6 +291,87 @@ async def write_nudge(candidate: NudgeCandidate, slot: dict | None) -> str:
     return text
 
 
+COACH_INSTRUCTION = """You are the user's personal coach inside Disciplined, a day-planner app. \
+This is a scheduled check-in you're initiating yourself — the user didn't ask, and it will be \
+read as a phone notification, possibly hours from now. Write ONLY the notification body.
+
+Rules:
+- Plain prose, 1-2 short sentences. No markdown, no bullet points, no emojis, no greeting like \
+"Hi" or the person's name.
+- Reference only the specific facts given to you. Never invent details.
+- Because this may be read well after it's written, phrase anything uncertain as a question or \
+open-ended check-in rather than a flat claim — e.g. "How did the workout go today?" not "You \
+still haven't worked out." Never assert something that could have already changed by the time \
+this is read.
+- If the signal is a win (a streak milestone or comfortably ahead of pace on a goal), be \
+genuinely warm and celebratory — this is encouragement, not a status report.
+- If the signal is a gap or falling behind, be encouraging and low-pressure, like a coach who \
+believes in you — never guilt-trip, scold, or nag.
+- If a concrete action is offered below, end with a natural, low-pressure yes/no offer to take it.
+- Tone: warm, personal, brief — like a coach who's genuinely in your corner, not a compliance \
+system."""
+
+
+def write_coach_prompt(candidate: NudgeCandidate, slot: dict | None, window_label: str) -> str:
+    lines = [
+        f"Check-in window: {window_label}",
+        f"What you noticed: {candidate.type}",
+        f"Subject: {candidate.subject_title}",
+    ]
+    if candidate.type == "workout_gap":
+        lines.append(f"Days since the last completed workout: {candidate.metric['gap_days']}")
+        lines.append("Proposed action: offer to schedule one, at the slot below if given.")
+    elif candidate.type == "habit_gap":
+        lines.append(f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}")
+        lines.append(
+            "Proposed action: offer to schedule a slot for it today, if a slot is given below."
+        )
+    elif candidate.type == "streak_milestone":
+        lines.append(f"Current streak: {candidate.metric['streak']} days in a row.")
+        lines.append("Proposed action: none — just celebrate this.")
+    elif candidate.type == "goal_ahead":
+        if candidate.metric.get("done_early"):
+            lines.append("This goal is already fully done, well ahead of its deadline.")
+        else:
+            pct = round(candidate.metric["progress_fraction"] * 100)
+            elapsed_pct = round(candidate.metric["elapsed"] * 100)
+            lines.append(
+                f"This goal is {pct}% done while only {elapsed_pct}% of its period has "
+                "elapsed — comfortably ahead of pace."
+            )
+        lines.append("Proposed action: none — just celebrate this.")
+    else:  # goal_pacing
+        pct = round(candidate.metric["elapsed"] * 100)
+        lines.append(f"This goal's period is {pct}% elapsed and it's behind pace and not done yet.")
+        lines.append("Proposed action: none — just point out it needs attention.")
+    if slot is not None:
+        when = "today" if slot["date"] == date.today().isoformat() else "tomorrow"
+        lines.append(
+            f"A free slot exists {when} at {fmt_minutes(slot['start_minutes'])} "
+            f"for {slot['duration_minutes']} minutes."
+        )
+    elif candidate.type in ("workout_gap", "habit_gap"):
+        lines.append("No specific free slot was found nearby.")
+    return "\n".join(lines)
+
+
+async def write_coach_message(candidate: NudgeCandidate, slot: dict | None, window_label: str) -> str:
+    client = get_client()
+    response = await client.aio.models.generate_content(
+        model=settings.gemini_model,
+        contents=write_coach_prompt(candidate, slot, window_label),
+        config=types.GenerateContentConfig(
+            system_instruction=COACH_INSTRUCTION,
+            temperature=0.7,
+            thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
+        ),
+    )
+    text = _response_text(response)
+    if not text:
+        raise RuntimeError("empty coach message from the model")
+    return text
+
+
 def _to_contents(history: list[ChatMessage], message: str) -> list[types.Content]:
     contents = [
         types.Content(role=m.role, parts=[types.Part(text=m.content)]) for m in history
