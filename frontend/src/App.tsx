@@ -10,8 +10,6 @@ import OnboardingWizard from "./components/onboarding/OnboardingWizard";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
-import SigmaManager from "./components/sigma/SigmaManager";
-import SigmaMode from "./components/SigmaMode";
 import AddItemSheet from "./components/timeline/AddItemSheet";
 import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
@@ -35,7 +33,6 @@ import { useOnboardingStore } from "./store/onboardingStore";
 import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
-import { useSigmaAccess } from "./store/sigmaStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
 import { useWorkoutFocusStore } from "./store/workoutFocusStore";
@@ -74,7 +71,6 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isPlanOpen, setIsPlanOpen] = useState(false);
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false);
-  const sigmaAccess = useSigmaAccess();
   // Schedule view style (daily timeline vs weekly grid) is a persisted setting,
   // toggled from the header and the Settings sheet.
   const viewMode = useSettingsStore((s) => s.scheduleView) as ViewMode;
@@ -414,15 +410,6 @@ function App() {
 
       {/* Global push-to-talk — floats above the nav on every page */}
       <VoiceAssistant />
-
-      {/* Personal-use gimmick, visible only to the one account it was built
-          for — renders nothing for anyone else, or when Sigma Mode is off */}
-      {sigmaAccess && (
-        <>
-          <SigmaMode />
-          <SigmaManager />
-        </>
-      )}
 
       {/* First-launch setup wizard (plan your first day), then the spotlight
           tour — gated so the tour can't react to the wizard's task creation.

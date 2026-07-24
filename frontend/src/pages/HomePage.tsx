@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight, Check, Clock, Loader2, Square, Volume2 } from "lucide-react";
 
-import SigmaHomeSection from "@/components/sigma/SigmaHomeSection";
 import { useNow } from "@/hooks/useNow";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { prefetchAssistantVoice } from "@/hooks/useSpeech";
@@ -20,7 +19,6 @@ import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { useSigmaAccess, useSigmaStore } from "@/store/sigmaStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Priority } from "@/types/task";
 
@@ -173,9 +171,6 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
   const weekGoals = useGoalStore((s) => s.goals)
     .filter((g) => g.period === "week" && g.periodKey === currentPeriodKey("week"))
     .sort((a, b) => a.order - b.order);
-  const sigmaEnabled = useSigmaStore((s) => s.on);
-  const sigmaAccess = useSigmaAccess();
-  const sigmaOn = sigmaEnabled && sigmaAccess;
   const tasks = useTaskStore((s) => s.tasks);
   const toggleTaskCompleted = useTaskStore((s) => s.toggleTaskCompleted);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
@@ -408,10 +403,6 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
           {loading ? "Preparing…" : reading ? "Stop" : "Day Summary"}
         </motion.button>
       </div>
-
-      {/* Sigma Mode's own section — hype videos/photos/audio you've uploaded.
-          Nothing renders here unless Sigma Mode is on. */}
-      {sigmaOn && <SigmaHomeSection />}
 
       {/* Today's rings — tasks, habits, and movement, each filling with today's
           completion. Close every ring that has something planned for a perfect day. */}
