@@ -85,19 +85,29 @@ function TypingDots() {
 }
 
 export default function ChatSheet() {
-  const [isOpen, busy, messages, closeChat, clearChat, send, confirmPending, cancelPending] =
-    useChatStore(
-      useShallow((state) => [
-        state.isOpen,
-        state.busy,
-        state.messages,
-        state.closeChat,
-        state.clearChat,
-        state.send,
-        state.confirmPending,
-        state.cancelPending,
-      ])
-    );
+  const [
+    isOpen,
+    busy,
+    messages,
+    closeChat,
+    clearChat,
+    send,
+    confirmPending,
+    cancelPending,
+    keepAlive,
+  ] = useChatStore(
+    useShallow((state) => [
+      state.isOpen,
+      state.busy,
+      state.messages,
+      state.closeChat,
+      state.clearChat,
+      state.send,
+      state.confirmPending,
+      state.cancelPending,
+      state.keepAlive,
+    ])
+  );
 
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -205,7 +215,10 @@ export default function ChatSheet() {
         <input
           type="text"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            keepAlive();
+          }}
           placeholder={listening ? "Listening…" : "Message the assistant…"}
           className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
         />

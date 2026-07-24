@@ -91,6 +91,7 @@ export default function VoiceAssistant() {
     // Unlock audio playback while we're inside the tap — the reply that needs
     // it arrives seconds from now, past the mobile gesture window.
     primeAudioChannel();
+    useChatStore.getState().openChat();
     setText("");
     setPhase("listening");
     start();

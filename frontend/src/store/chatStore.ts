@@ -56,7 +56,16 @@ interface Actions {
   confirmPending: (index: number) => Promise<void>;
   // Discards a proposed action without running it.
   cancelPending: (index: number) => void;
+  // Resets the auto-close countdown — call on any activity that isn't
+  // already covered above (e.g. the user actively typing a reply).
+  keepAlive: () => void;
 }
+
+// The sheet auto-closes after this long with no activity — opening it,
+// sending/receiving a message, confirming/cancelling a proposal, or typing
+// all reset the countdown. Never fires while a request is actually in
+// flight (armed only once a response/error has settled).
+const AUTO_CLOSE_MS = 10_000;
 
 // Only real exchanges go back to Gemini as context, capped to keep requests small.
 function toHistory(messages: ChatBubble[]): ChatMessage[] {
@@ -66,129 +75,159 @@ function toHistory(messages: ChatBubble[]): ChatMessage[] {
     .map((m) => ({ role: m.role, content: m.content }));
 }
 
-export const useChatStore = create<State & Actions>()((set, get) => ({
-  isOpen: false,
-  busy: false,
-  messages: [],
+export const useChatStore = create<State & Actions>()((set, get) => {
+  let autoCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
-  openChat: () => set({ isOpen: true }),
-  closeChat: () => set({ isOpen: false }),
-  clearChat: () => set({ messages: [] }),
+  function armAutoClose() {
+    window.clearTimeout(autoCloseTimer);
+    autoCloseTimer = window.setTimeout(() => {
+      if (get().isOpen) set({ isOpen: false });
+    }, AUTO_CLOSE_MS);
+  }
 
-  send: async (text) => {
-    const msgs = get().messages;
+  return {
+    isOpen: false,
+    busy: false,
+    messages: [],
 
-    // "Just say yes" shortcut: only eligible while the pending proposal is
-    // still the very last message — this is what decides confirmation, not
-    // the model, so it either matches a real, current proposal or it
-    // doesn't and falls through to a normal chat turn below.
-    const last = msgs[msgs.length - 1];
-    if (
-      last?.role === "model" &&
-      last.pendingActions?.length &&
-      !last.resolved &&
-      AFFIRMATIVE_RE.test(text.trim())
-    ) {
-      set((state) => ({ messages: [...state.messages, { role: "user", content: text }] }));
-      await get().confirmPending(msgs.length - 1);
-      return { reply: "", actions: [], pendingActions: [] };
-    }
+    openChat: () => {
+      armAutoClose();
+      set({ isOpen: true });
+    },
+    closeChat: () => {
+      window.clearTimeout(autoCloseTimer);
+      set({ isOpen: false });
+    },
+    clearChat: () => set({ messages: [] }),
+    keepAlive: () => armAutoClose(),
 
-    const history = toHistory(msgs);
-    set((state) => ({
-      busy: true,
-      messages: [...state.messages, { role: "user", content: text }],
-    }));
-    try {
-      const res = await api.chat(text, history);
+    send: async (text) => {
+      // Cancel any pending auto-close for the duration of this request — it's
+      // rearmed once the response (or error) actually settles below, never
+      // while something's still in flight.
+      window.clearTimeout(autoCloseTimer);
+      const msgs = get().messages;
+
+      // "Just say yes" shortcut: only eligible while the pending proposal is
+      // still the very last message — this is what decides confirmation, not
+      // the model, so it either matches a real, current proposal or it
+      // doesn't and falls through to a normal chat turn below.
+      const last = msgs[msgs.length - 1];
+      if (
+        last?.role === "model" &&
+        last.pendingActions?.length &&
+        !last.resolved &&
+        AFFIRMATIVE_RE.test(text.trim())
+      ) {
+        set((state) => ({ messages: [...state.messages, { role: "user", content: text }] }));
+        await get().confirmPending(msgs.length - 1);
+        return { reply: "", actions: [], pendingActions: [] };
+      }
+
+      const history = toHistory(msgs);
       set((state) => ({
-        busy: false,
-        messages: [
-          ...state.messages,
-          {
-            role: "model",
-            content: res.reply,
-            pendingActions: res.pendingActions.length ? res.pendingActions : undefined,
-          },
-        ],
+        busy: true,
+        messages: [...state.messages, { role: "user", content: text }],
       }));
-      // Best-effort: the chat turn itself already succeeded (the reply above
-      // reflects it), so a refresh failure here shouldn't surface as a chat
-      // error — it would wrongly suggest the action itself failed. Worst
-      // case, the UI stays stale until the next natural refresh/reload.
-      // Only genuinely-executed mutations count — every mutating tool is now
-      // gated to pending_confirmation, so this is normally a no-op here and
-      // only ever fires for real from confirmPending below.
-      const domains = new Set(
-        res.actions
-          .filter((a) => !isPendingResult(a.result))
-          .map((a) => CHAT_TOOL_DOMAIN[a.tool])
-          .filter(Boolean)
-      );
-      await Promise.all([...domains].map((d) => REFRESHERS[d]())).catch((e) =>
-        console.warn("[chat] post-action refresh failed", e)
-      );
-      // The assistant always says its reply out loud — typed or spoken input
-      // alike. A new reply cuts off whatever was still being read.
-      stopSpeaking();
-      void speakAssistant(res.reply);
-      return res;
-    } catch (e) {
-      set((state) => ({
-        busy: false,
-        messages: [
-          ...state.messages,
-          {
-            role: "model",
-            content: e instanceof Error ? e.message : "Something went wrong — please try again.",
-            error: true,
-          },
-        ],
-      }));
-      throw e;
-    }
-  },
+      try {
+        const res = await api.chat(text, history);
+        set((state) => ({
+          busy: false,
+          messages: [
+            ...state.messages,
+            {
+              role: "model",
+              content: res.reply,
+              pendingActions: res.pendingActions.length ? res.pendingActions : undefined,
+            },
+          ],
+        }));
+        // Best-effort: the chat turn itself already succeeded (the reply above
+        // reflects it), so a refresh failure here shouldn't surface as a chat
+        // error — it would wrongly suggest the action itself failed. Worst
+        // case, the UI stays stale until the next natural refresh/reload.
+        // Only genuinely-executed mutations count — every mutating tool is now
+        // gated to pending_confirmation, so this is normally a no-op here and
+        // only ever fires for real from confirmPending below.
+        const domains = new Set(
+          res.actions
+            .filter((a) => !isPendingResult(a.result))
+            .map((a) => CHAT_TOOL_DOMAIN[a.tool])
+            .filter(Boolean)
+        );
+        await Promise.all([...domains].map((d) => REFRESHERS[d]())).catch((e) =>
+          console.warn("[chat] post-action refresh failed", e)
+        );
+        // The assistant always says its reply out loud — typed or spoken input
+        // alike. A new reply cuts off whatever was still being read.
+        stopSpeaking();
+        void speakAssistant(res.reply);
+        armAutoClose();
+        return res;
+      } catch (e) {
+        set((state) => ({
+          busy: false,
+          messages: [
+            ...state.messages,
+            {
+              role: "model",
+              content: e instanceof Error ? e.message : "Something went wrong — please try again.",
+              error: true,
+            },
+          ],
+        }));
+        armAutoClose();
+        throw e;
+      }
+    },
 
-  confirmPending: async (index) => {
-    const bubble = get().messages[index];
-    if (!bubble?.pendingActions?.length || bubble.resolved) return;
-    const pendingActions = bubble.pendingActions;
-    set((state) => ({
-      busy: true,
-      messages: state.messages.map((m, i) => (i === index ? { ...m, resolved: true } : m)),
-    }));
-    try {
-      const { ok } = await api.confirmChatActions(pendingActions);
-      const domains = new Set(pendingActions.map((a) => CHAT_TOOL_DOMAIN[a.tool]).filter(Boolean));
-      await Promise.all([...domains].map((d) => REFRESHERS[d]())).catch((e) =>
-        console.warn("[chat] post-confirm refresh failed", e)
-      );
+    confirmPending: async (index) => {
+      const bubble = get().messages[index];
+      if (!bubble?.pendingActions?.length || bubble.resolved) return;
+      window.clearTimeout(autoCloseTimer);
+      const pendingActions = bubble.pendingActions;
       set((state) => ({
-        busy: false,
-        messages: [
-          ...state.messages,
-          {
-            role: "model",
-            content: ok ? "Done." : "Something went wrong — please check and try again.",
-          },
-        ],
+        busy: true,
+        messages: state.messages.map((m, i) => (i === index ? { ...m, resolved: true } : m)),
       }));
-    } catch {
-      set((state) => ({
-        busy: false,
-        messages: [
-          ...state.messages,
-          { role: "model", content: "Something went wrong confirming that.", error: true },
-        ],
-      }));
-    }
-  },
+      try {
+        const { ok } = await api.confirmChatActions(pendingActions);
+        const domains = new Set(
+          pendingActions.map((a) => CHAT_TOOL_DOMAIN[a.tool]).filter(Boolean)
+        );
+        await Promise.all([...domains].map((d) => REFRESHERS[d]())).catch((e) =>
+          console.warn("[chat] post-confirm refresh failed", e)
+        );
+        set((state) => ({
+          busy: false,
+          messages: [
+            ...state.messages,
+            {
+              role: "model",
+              content: ok ? "Done." : "Something went wrong — please check and try again.",
+            },
+          ],
+        }));
+        armAutoClose();
+      } catch {
+        set((state) => ({
+          busy: false,
+          messages: [
+            ...state.messages,
+            { role: "model", content: "Something went wrong confirming that.", error: true },
+          ],
+        }));
+        armAutoClose();
+      }
+    },
 
-  cancelPending: (index) => {
-    set((state) => ({
-      messages: state.messages
-        .map((m, i) => (i === index ? { ...m, resolved: true } : m))
-        .concat([{ role: "model", content: "Okay, cancelled." }]),
-    }));
-  },
-}));
+    cancelPending: (index) => {
+      set((state) => ({
+        messages: state.messages
+          .map((m, i) => (i === index ? { ...m, resolved: true } : m))
+          .concat([{ role: "model", content: "Okay, cancelled." }]),
+      }));
+      armAutoClose();
+    },
+  };
+});
