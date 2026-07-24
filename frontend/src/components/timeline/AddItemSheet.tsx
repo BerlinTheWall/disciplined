@@ -85,9 +85,17 @@ interface AddItemSheetProps {
   isOpen: boolean;
   onClose: () => void;
   editItem?: EditItem | null;
+  // Which tab a fresh (non-editing) sheet opens on — task by default, habit
+  // when opened from a habit-specific entry point (e.g. the Habits page).
+  defaultMode?: "task" | "habit";
 }
 
-export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheetProps) {
+export default function AddItemSheet({
+  isOpen,
+  onClose,
+  editItem,
+  defaultMode,
+}: AddItemSheetProps) {
   const [selectedDate, updateTask, addTask, deleteTask, toggleTaskCompleted] = useTaskStore(
     useShallow((state) => [
       state.selectedDate,
@@ -201,7 +209,7 @@ export default function AddItemSheet({ isOpen, onClose, editItem }: AddItemSheet
   }, [editItem, isOpen]);
 
   function resetForm() {
-    setMode("task");
+    setMode(defaultMode ?? "task");
     setTitle("");
     setDate(selectedDate);
     setTime("09:00");
