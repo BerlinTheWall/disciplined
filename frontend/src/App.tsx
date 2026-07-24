@@ -5,7 +5,6 @@ import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
-import NotificationBell from "./components/NotificationBell";
 import NudgeHost from "./components/NudgeHost";
 import OnboardingWizard from "./components/onboarding/OnboardingWizard";
 import ReminderHost from "./components/ReminderHost";
@@ -211,7 +210,15 @@ function App() {
       case "expenses":
         return <ExpensesPage />;
       case "profile":
-        return <ProfilePage />;
+        return (
+          <ProfilePage
+            onOpenSchedule={(date) => {
+              useTaskStore.getState().setSelectedDate(date);
+              go("schedule");
+            }}
+            onOpenGoals={() => go("goals")}
+          />
+        );
     }
   }
 
@@ -272,14 +279,7 @@ function App() {
               outgoing profile button still occupied space for a few frames and
               pushed the incoming controls past the right edge until it
               unmounted (they visibly snapped back in). */}
-          <div className="absolute right-0 inset-y-0 flex items-center gap-2">
-            <NotificationBell
-              onOpenSchedule={(date) => {
-                useTaskStore.getState().setSelectedDate(date);
-                go("schedule");
-              }}
-              onOpenGoals={() => go("goals")}
-            />
+          <div className="absolute right-0 inset-y-0 flex items-center">
             <AnimatePresence mode="popLayout">
               {activePage === "home" && (
                 <motion.button

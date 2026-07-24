@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { spring, tap } from "@/lib/motion";
 import type { Page } from "@/lib/pages";
+import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 
 interface BottomNavProps {
   active: Page;
@@ -16,6 +17,7 @@ interface BottomNavProps {
 export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNavProps) {
   const [isScrolling, setIsScrolling] = useState(false);
   const stopTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const unreadCount = useNotificationHistoryStore((s) => s.entries.filter((e) => !e.read).length);
 
   useEffect(() => {
     const onScroll = () => {
@@ -121,6 +123,11 @@ export default function BottomNav({ active, onChange, onAdd, fabOpen }: BottomNa
                 >
                   <Icon size={24} strokeWidth={2} />
                 </motion.span>
+                {t.key === "profile" && unreadCount > 0 && (
+                  <span className="absolute top-0 right-1.5 z-20 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </span>
               <span
                 className={`text-[11px] ${

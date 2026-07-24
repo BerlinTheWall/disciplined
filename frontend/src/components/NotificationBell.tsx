@@ -49,11 +49,11 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
         onClick={open}
         whileTap={tap}
         aria-label="Notifications"
-        className="relative p-1 text-fg-faint"
+        className="relative w-10 h-10 rounded-full bg-surface-subtle text-fg-muted flex items-center justify-center shrink-0"
       >
-        <Bell size={22} />
+        <Bell size={18} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
