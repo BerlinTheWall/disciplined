@@ -145,14 +145,14 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
                             whileTap={tap}
                             className="h-7 px-3 rounded-full bg-fg text-fg-inverse text-xs font-semibold"
                           >
-                            Agree
+                            Yes
                           </motion.button>
                           <motion.button
                             onClick={() => respondDisagree(entry)}
                             whileTap={tap}
                             className="h-7 px-3 rounded-full bg-surface-raised text-fg text-xs font-medium"
                           >
-                            Disagree
+                            Dismiss
                           </motion.button>
                         </div>
                       )}

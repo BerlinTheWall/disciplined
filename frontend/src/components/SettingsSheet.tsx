@@ -173,8 +173,11 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   }
 
   // Voices for the picker: prefer the ones matching the UI language so the
-  // list stays scannable; fall back to everything the OS offers.
-  const voices = useVoices();
+  // list stays scannable; fall back to everything the OS offers. Windows/
+  // Chrome's bundled "Microsoft ..." SAPI voices (David, Mark, Zira, …) are
+  // robotic offline synthesis, unlike Google's network voices or Apple's
+  // on-device ones — excluded so only natural-sounding voices show up.
+  const voices = useVoices().filter((v) => !/^Microsoft\b/i.test(v.name));
   const langPrefix = (navigator.language || "en").slice(0, 2).toLowerCase();
   const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(langPrefix));
   const voiceOptions = langVoices.length > 0 ? langVoices : voices;
