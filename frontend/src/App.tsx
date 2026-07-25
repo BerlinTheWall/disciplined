@@ -5,6 +5,7 @@ import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
 import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
+import NotificationBell from "./components/NotificationBell";
 import NudgeHost from "./components/NudgeHost";
 import OnboardingWizard from "./components/onboarding/OnboardingWizard";
 import ReminderHost from "./components/ReminderHost";
@@ -177,6 +178,11 @@ function App() {
     });
   }, []);
 
+  function goToSchedule(date: string) {
+    useTaskStore.getState().setSelectedDate(date);
+    go("schedule");
+  }
+
   function openFab() {
     if (activePage === "expenses") setIsGroceryAddOpen(true);
     else setIsAddOpen(true);
@@ -208,15 +214,7 @@ function App() {
       case "expenses":
         return <ExpensesPage />;
       case "profile":
-        return (
-          <ProfilePage
-            onOpenSchedule={(date) => {
-              useTaskStore.getState().setSelectedDate(date);
-              go("schedule");
-            }}
-            onOpenGoals={() => go("goals")}
-          />
-        );
+        return <ProfilePage />;
     }
   }
 
@@ -359,6 +357,17 @@ function App() {
                       </button>
                     ))}
                   </div>
+                </motion.div>
+              )}
+              {activePage === "profile" && (
+                <motion.div
+                  key="profile-controls"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={spring.snappy}
+                >
+                  <NotificationBell onOpenSchedule={goToSchedule} onOpenGoals={() => go("goals")} />
                 </motion.div>
               )}
             </AnimatePresence>

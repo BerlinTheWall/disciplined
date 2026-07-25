@@ -4,12 +4,12 @@ import { Sparkles, X } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { initCoachNotifications, scheduleCoachPlan } from "@/lib/coach";
-import { todayISODate } from "@/lib/date";
+import { addDaysISO, todayISODate } from "@/lib/date";
 import { spring, tap } from "@/lib/motion";
 import { useChatStore } from "@/store/chatStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
-import { useNudgeStore } from "@/store/nudgeStore";
+import { DISMISS_COOLDOWN_DAYS, useNudgeStore } from "@/store/nudgeStore";
 import { useTaskStore } from "@/store/taskStore";
 
 // Debounces bursts of foreground/data-change events into one check.
@@ -17,15 +17,6 @@ const CHECK_DEBOUNCE_MS = 1500;
 // Auto-dismiss mirrors ReminderHost's banner timing but a touch longer, since
 // a nudge asks a real yes/no question rather than just naming an event.
 const AUTO_DISMISS_MS = 15_000;
-// How long an explicitly (or automatically) dismissed nudge stays suppressed
-// for that exact subject, so declining once doesn't mean forever.
-const DISMISS_COOLDOWN_DAYS = 3;
-
-function addDaysISO(dateISO: string, days: number): string {
-  const d = new Date(dateISO + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 async function runCheck() {
   const today = todayISODate();

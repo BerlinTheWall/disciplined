@@ -3,9 +3,11 @@ import { motion } from "framer-motion";
 import { Bell, Sparkles } from "lucide-react";
 
 import BottomSheet from "./BottomSheet";
+import { addDaysISO, todayISODate } from "@/lib/date";
 import { tap } from "@/lib/motion";
 import { useChatStore } from "@/store/chatStore";
-import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
+import { useNotificationHistoryStore, type HistoryEntry } from "@/store/notificationHistoryStore";
+import { DISMISS_COOLDOWN_DAYS, useNudgeStore } from "@/store/nudgeStore";
 
 interface Props {
   onOpenSchedule: (date: string) => void;
@@ -26,20 +28,37 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
     markAllRead();
   }
 
-  function handleTap(entry: (typeof entries)[number]) {
+  function handleTap(entry: HistoryEntry) {
     setIsOpen(false);
-    if (entry.kind === "reminder") {
-      if (entry.date) onOpenSchedule(entry.date);
-      return;
-    }
+    if (entry.date) onOpenSchedule(entry.date);
+  }
+
+  // "Agree" mirrors NudgeHost's live "Yes" action — send the nudge's action
+  // phrase as if the user typed it, or fall back to opening Goals for the
+  // ones (goal_pacing) that don't carry one.
+  function respondAgree(entry: HistoryEntry) {
+    useNotificationHistoryStore.getState().setResponse(entry.id, "agreed");
     if (entry.actionPhrase) {
+      setIsOpen(false);
       useChatStore.getState().openChat();
       void useChatStore
         .getState()
         .send(entry.actionPhrase)
         .catch(() => {});
     } else {
+      setIsOpen(false);
       onOpenGoals();
+    }
+  }
+
+  // "Disagree" mirrors NudgeHost's "Not now" — for nudges (not coach
+  // check-ins, which are server-planned per day and have no cooldown key)
+  // this also suppresses that exact subject for a few days.
+  function respondDisagree(entry: HistoryEntry) {
+    useNotificationHistoryStore.getState().setResponse(entry.id, "disagreed");
+    if (entry.kind === "nudge" && entry.nudgeType && entry.subjectId) {
+      const key = `${entry.nudgeType}:${entry.subjectId}`;
+      useNudgeStore.getState().dismiss(key, addDaysISO(todayISODate(), DISMISS_COOLDOWN_DAYS));
     }
   }
 
@@ -78,25 +97,69 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {entries.map((entry) => (
-                <button
-                  key={entry.id}
-                  onClick={() => handleTap(entry)}
-                  className="flex items-start gap-3 p-3 rounded-2xl bg-surface text-left"
-                >
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                    {entry.kind === "nudge" || entry.kind === "coach" ? (
+              {entries.map((entry) => {
+                // Nudges/coach check-ins are the AI's proactive suggestions —
+                // they get a firing date and an explicit Agree/Disagree
+                // response instead of reminders' plain tap-to-jump.
+                if (entry.kind !== "nudge" && entry.kind !== "coach") {
+                  return (
+                    <button
+                      key={entry.id}
+                      onClick={() => handleTap(entry)}
+                      className="flex items-start gap-3 p-3 rounded-2xl bg-surface text-left"
+                    >
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
+                        <Bell size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
+                        <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+                      </div>
+                    </button>
+                  );
+                }
+
+                const dateLabel = new Date(entry.firedAt).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                });
+                return (
+                  <div key={entry.id} className="flex items-start gap-3 p-3 rounded-2xl bg-surface">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
                       <Sparkles size={16} />
-                    ) : (
-                      <Bell size={16} />
-                    )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
+                        <span className="text-[11px] text-fg-faint shrink-0">{dateLabel}</span>
+                      </div>
+                      <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+                      {entry.response ? (
+                        <p className="text-xs text-fg-faint mt-2 italic">
+                          {entry.response === "agreed" ? "You agreed" : "You disagreed"}
+                        </p>
+                      ) : (
+                        <div className="flex gap-2 mt-2">
+                          <motion.button
+                            onClick={() => respondAgree(entry)}
+                            whileTap={tap}
+                            className="h-7 px-3 rounded-full bg-fg text-fg-inverse text-xs font-semibold"
+                          >
+                            Agree
+                          </motion.button>
+                          <motion.button
+                            onClick={() => respondDisagree(entry)}
+                            whileTap={tap}
+                            className="h-7 px-3 rounded-full bg-surface-raised text-fg text-xs font-medium"
+                          >
+                            Disagree
+                          </motion.button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
-                    <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
-                  </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

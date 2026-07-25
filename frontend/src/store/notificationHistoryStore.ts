@@ -15,12 +15,15 @@ export interface HistoryEntry {
   date?: string; // reminders only — day to jump to
   actionPhrase?: string | null; // nudges/coach only
   nudgeType?: "habit_gap" | "workout_gap" | "goal_pacing"; // nudges only
+  subjectId?: string; // nudges only — pairs with nudgeType for the dismiss-cooldown key
+  response?: "agreed" | "disagreed"; // nudges/coach only, once the user has acted on it
 }
 
 interface NotificationHistoryState {
   entries: HistoryEntry[];
-  addEntry: (entry: Omit<HistoryEntry, "read">) => void;
+  addEntry: (entry: Omit<HistoryEntry, "read" | "response">) => void;
   markAllRead: () => void;
+  setResponse: (id: string, response: "agreed" | "disagreed") => void;
 }
 
 const MAX_ENTRIES = 50;
@@ -40,6 +43,11 @@ export const useNotificationHistoryStore = create<NotificationHistoryState>()(
 
       markAllRead: () =>
         set((state) => ({ entries: state.entries.map((e) => ({ ...e, read: true })) })),
+
+      setResponse: (id, response) =>
+        set((state) => ({
+          entries: state.entries.map((e) => (e.id === id ? { ...e, response } : e)),
+        })),
     }),
     { name: "disciplined-notification-history" }
   )

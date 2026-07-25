@@ -3,6 +3,10 @@ import { persist } from "zustand/middleware";
 
 import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 
+// How long an explicitly (or automatically) dismissed nudge stays suppressed
+// for that exact subject, so declining once doesn't mean forever.
+export const DISMISS_COOLDOWN_DAYS = 3;
+
 export interface NudgeAlert {
   type: "habit_gap" | "workout_gap" | "goal_pacing";
   subjectId: string;
@@ -49,6 +53,7 @@ export const useNudgeStore = create<NudgeState>()(
             firedAt: Date.now(),
             actionPhrase: alert.actionPhrase,
             nudgeType: alert.type,
+            subjectId: alert.subjectId,
           });
         }
         set({ current: alert });

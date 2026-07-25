@@ -15,7 +15,6 @@ import type { LucideIcon } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useChoose } from "@/components/ConfirmDialog";
-import NotificationBell from "@/components/NotificationBell";
 import { CalorieBars, Heatmap, MacroBar, Ring, Stat } from "@/components/profile/ProfileCharts";
 import ProfileDetailSheet, {
   type ProfileDetailKind,
@@ -94,12 +93,7 @@ function Card({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ProfilePageProps {
-  onOpenSchedule: (date: string) => void;
-  onOpenGoals: () => void;
-}
-
-export default function ProfilePage({ onOpenSchedule, onOpenGoals }: ProfilePageProps) {
+export default function ProfilePage() {
   const tasks = useTaskStore((s) => s.tasks);
   const habits = useHabitStore((s) => s.habits);
   const meals = useMealStore((s) => s.meals);
@@ -255,9 +249,6 @@ export default function ProfilePage({ onOpenSchedule, onOpenGoals }: ProfilePage
               <p className="text-xl font-bold text-fg truncate">{name}</p>
               <p className="text-sm text-fg-faint truncate">{tagline}</p>
             </div>
-          )}
-          {!editing && (
-            <NotificationBell onOpenSchedule={onOpenSchedule} onOpenGoals={onOpenGoals} />
           )}
           {editing ? (
             <motion.button

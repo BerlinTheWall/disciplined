@@ -41,6 +41,10 @@ export function addDays(date: Date, days: number) {
   return d;
 }
 
+export function addDaysISO(iso: string, days: number) {
+  return toISODate(addDays(parseISODate(iso), days));
+}
+
 export function formatMonthYear(date: Date) {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
