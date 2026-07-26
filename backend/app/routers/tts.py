@@ -5,18 +5,20 @@ import logging
 import wave
 from collections import OrderedDict
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
-from google.genai import errors as genai_errors
-from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
 from app.config import settings
 from app.models import User
-from app.services.gemini import get_client
 
 router = APIRouter(prefix="/api/tts", tags=["tts"])
 logger = logging.getLogger("uvicorn.error")
+
+_SYNTHESIZE_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
+_TIMEOUT = httpx.Timeout(10.0)
+_SAMPLE_RATE = 24000
 
 
 class TTSRequest(BaseModel):
@@ -24,21 +26,31 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1500)
 
 
-# Synthesized audio, keyed by (model, voice, text). Repeat requests — page
-# reloads, several devices asking for the same day briefing — cost no Gemini
-# quota at all. In-memory LRU: a restart just means one fresh synthesis.
+# Synthesized audio, keyed by (voice, text). Repeat requests — page reloads,
+# several devices asking for the same day briefing — cost no quota at all.
+# In-memory LRU: a restart just means one fresh synthesis.
 _audio_cache: OrderedDict[str, bytes] = OrderedDict()
-_AUDIO_CACHE_MAX = 24  # WAVs run ~0.3–2 MB, so worst case a few dozen MB
+_AUDIO_CACHE_MAX = 24  # WAVs run ~0.3–1 MB, so worst case a few dozen MB
 
 
 def _cache_key(text: str) -> str:
-    raw = f"{settings.gemini_tts_model}|{settings.gemini_tts_voice}|{text}"
+    raw = f"{settings.google_tts_voice}|{text}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
-    """Gemini TTS returns raw 16-bit mono PCM; wrap it in a WAV container so
-    browsers can play it directly."""
+def _language_code(voice: str) -> str:
+    """"en-US-Neural2-C" -> "en-US"."""
+    parts = voice.split("-")
+    return "-".join(parts[:2]) if len(parts) >= 2 else "en-US"
+
+
+def _pcm_to_wav(pcm: bytes, rate: int = _SAMPLE_RATE) -> bytes:
+    """Google's REST API already returns LINEAR16 with a WAV header attached,
+    but wrap defensively in case that ever changes — this is also the format
+    iOS's UNNotificationSound requires (see reminderAudio.ts), and what every
+    caller on the natural-voice path already expects."""
+    if pcm[:4] == b"RIFF":
+        return pcm
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
@@ -50,8 +62,15 @@ def _pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
 
 @router.post("")
 async def tts(body: TTSRequest, user: User = Depends(get_current_user)) -> Response:
-    """Natural-voice speech for reminder lines. The client falls back to the
-    device's local voice whenever this endpoint is unreachable or errors."""
+    """Natural-voice speech for reminder lines, via Google Cloud Text-to-Speech
+    (a dedicated TTS API — far lower latency and cost than routing audio
+    through a generative model). The client falls back to the device's local
+    voice whenever this endpoint is unreachable or errors."""
+    if not settings.google_tts_api_key:
+        raise HTTPException(
+            status_code=503, detail="GOOGLE_TTS_API_KEY is not set (see backend/.env.example)"
+        )
+
     key = _cache_key(body.text)
     cached = _audio_cache.get(key)
     if cached is not None:
@@ -59,35 +78,34 @@ async def tts(body: TTSRequest, user: User = Depends(get_current_user)) -> Respo
         return Response(content=cached, media_type="audio/wav")
 
     try:
-        client = get_client()
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_tts_model,
-            contents=body.text,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=settings.gemini_tts_voice
-                        )
-                    )
-                ),
-            ),
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                _SYNTHESIZE_URL,
+                params={"key": settings.google_tts_api_key},
+                json={
+                    "input": {"text": body.text},
+                    "voice": {
+                        "languageCode": _language_code(settings.google_tts_voice),
+                        "name": settings.google_tts_voice,
+                    },
+                    "audioConfig": {
+                        "audioEncoding": "LINEAR16",
+                        "sampleRateHertz": _SAMPLE_RATE,
+                    },
+                },
+            )
+        resp.raise_for_status()
+        wav = _pcm_to_wav(base64.b64decode(resp.json()["audioContent"]))
+    except httpx.HTTPStatusError as exc:
+        logger.exception("TTS Google Cloud error")
+        raise HTTPException(
+            status_code=502, detail=f"Text-to-speech failed ({exc.response.status_code})."
         )
-        part = response.candidates[0].content.parts[0]
-        data = part.inline_data.data
-        if isinstance(data, str):
-            data = base64.b64decode(data)
-        wav = _pcm_to_wav(data)
-        _audio_cache[key] = wav
-        while len(_audio_cache) > _AUDIO_CACHE_MAX:
-            _audio_cache.popitem(last=False)
-        return Response(content=wav, media_type="audio/wav")
-    except RuntimeError as exc:  # missing API key
-        raise HTTPException(status_code=503, detail=str(exc))
-    except genai_errors.APIError as exc:
-        logger.exception("TTS Gemini error")
-        raise HTTPException(status_code=502, detail=f"Text-to-speech failed ({exc.code}).")
     except Exception:
         logger.exception("TTS failed")
         raise HTTPException(status_code=502, detail="Text-to-speech failed.")
+
+    _audio_cache[key] = wav
+    while len(_audio_cache) > _AUDIO_CACHE_MAX:
+        _audio_cache.popitem(last=False)
+    return Response(content=wav, media_type="audio/wav")
