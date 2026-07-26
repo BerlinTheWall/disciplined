@@ -10,9 +10,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "ios": "npm run build && npx cap sync ios && npx cap open ios"
+    "ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "android": "npm run build && npx cap sync android && npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
     "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
