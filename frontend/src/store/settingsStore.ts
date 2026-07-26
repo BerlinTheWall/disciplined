@@ -37,6 +37,13 @@ interface SettingsState {
   // back to the device voice when the server is unreachable.
   naturalVoice: boolean;
   setNaturalVoice: (on: boolean) => void;
+  // Prefer the on-device neural voice (Piper, via WASM) — same quality tier
+  // as natural voice but synthesized locally after a one-time model
+  // download, so it costs nothing per use and needs no network. Tried before
+  // naturalVoice when both are on; each still falls through to the other,
+  // then to the device voice, if it isn't ready or fails.
+  neuralVoice: boolean;
+  setNeuralVoice: (on: boolean) => void;
   // Speak the day briefing on the first app open of each day (opt-in). When
   // the browser blocks unprompted audio, the Home page shows a tap-to-listen
   // prompt instead.
@@ -75,6 +82,8 @@ export const useSettingsStore = create<SettingsState>()(
       setVoiceURI: (uri) => set({ voiceURI: uri }),
       naturalVoice: true,
       setNaturalVoice: (on) => set({ naturalVoice: on }),
+      neuralVoice: false,
+      setNeuralVoice: (on) => set({ neuralVoice: on }),
       morningBriefing: false,
       setMorningBriefing: (on) => set({ morningBriefing: on }),
       morningBriefingFromMinutes: null,

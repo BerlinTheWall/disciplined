@@ -7,6 +7,7 @@ import { SpeechRecognition as NativeSpeechRecognition } from "@capgo/capacitor-s
 import { create } from "zustand";
 
 import { api } from "@/lib/api";
+import { isNeuralVoiceDownloaded, synthesizeNeuralVoice } from "@/lib/neuralVoice";
 import { useSettingsStore } from "@/store/settingsStore";
 
 // Voice input/output. Speech-to-text has two implementations behind one hook:
@@ -366,11 +367,16 @@ async function fetchSpeech(text: string, timeoutMs?: number): Promise<Blob | nul
 }
 
 // Warm the cache for text that's about to be spoken (e.g. the day briefing,
-// generated while the page is still being looked at). No-op when the natural
-// voice is off or the audio is already cached/being fetched.
-export function prefetchAssistantVoice(text: string, timeoutMs = 30_000) {
-  if (!useSettingsStore.getState().naturalVoice) return;
-  void fetchSpeech(text, timeoutMs);
+// generated while the page is still being looked at) — whichever voice tier
+// speakAssistant will actually reach for first, so nothing gets warmed (and,
+// for natural voice, billed) needlessly for a tier that won't be used.
+export async function prefetchAssistantVoice(text: string, timeoutMs = 30_000) {
+  const { neuralVoice, naturalVoice } = useSettingsStore.getState();
+  if (neuralVoice && (await isNeuralVoiceDownloaded())) {
+    void synthesizeNeuralVoice(text);
+    return;
+  }
+  if (naturalVoice) void fetchSpeech(text, timeoutMs);
 }
 
 interface SpeakCallbacks {
@@ -391,6 +397,66 @@ export const useSpeechState = create<{ pending: boolean; speaking: boolean }>(()
   speaking: false,
 }));
 
+// Plays a pre-synthesized clip (natural voice or on-device neural voice —
+// both produce an audio Blob, unlike the device voice's speechSynthesis
+// path) through the shared audio channel. Resolves true only once playback
+// has actually started; any failure (blocked autoplay, playback error)
+// resolves false so the caller can fall back to the next voice tier.
+function playAudioBlob(
+  blob: Blob,
+  text: string,
+  { onStart, onDone, onWord }: SpeakCallbacks = {}
+): Promise<boolean> {
+  return (async () => {
+    try {
+      const url = URL.createObjectURL(blob);
+      // Prefer the gesture-unlocked channel so playback works when this runs
+      // long after the tap (mobile browsers block fresh elements there).
+      const audio = audioChannel ?? new Audio();
+      audio.src = url;
+      const finish = () => {
+        URL.revokeObjectURL(url);
+        if (currentAudio === audio) currentAudio = null;
+        audio.onended = null;
+        onDone?.();
+      };
+      audio.onended = finish;
+      await audio.play();
+      currentAudio = audio;
+      onStart?.();
+      // A plain audio clip carries no per-word timing, so estimate it: weight
+      // each word by character count (a rough stand-in for how long it takes
+      // to say) and map the clip's current playback fraction onto that scale.
+      if (onWord) {
+        const tokens = wordTokens(text);
+        if (tokens.length) {
+          const weights = tokens.map((t) => t.word.length + 1);
+          const total = weights.reduce((a, b) => a + b, 0);
+          let acc = 0;
+          const cumulative = weights.map((w) => (acc += w));
+          let raf = 0;
+          const tick = () => {
+            const dur = audio.duration;
+            if (dur && isFinite(dur) && dur > 0) {
+              const frac = Math.min(audio.currentTime / dur, 1);
+              const idx = cumulative.findIndex((c) => c / total >= frac);
+              onWord(idx === -1 ? tokens.length - 1 : idx);
+            }
+            raf = requestAnimationFrame(tick);
+          };
+          raf = requestAnimationFrame(tick);
+          const stopTicking = () => cancelAnimationFrame(raf);
+          audio.addEventListener("ended", stopTicking, { once: true });
+          audio.addEventListener("pause", stopTicking, { once: true });
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+}
+
 // Fetches the human-like AI voice from the backend and plays it. Resolves true
 // only once playback has started; any failure (offline server, missing key,
 // blocked autoplay) resolves false so the caller can fall back.
@@ -398,67 +464,38 @@ async function playNaturalVoice(
   text: string,
   { onStart, onDone, onWord, timeoutMs }: SpeakCallbacks = {}
 ): Promise<boolean> {
-  try {
-    const blob = await fetchSpeech(text, timeoutMs);
-    if (!blob) return false;
-    const url = URL.createObjectURL(blob);
-    // Prefer the gesture-unlocked channel so playback works when this runs
-    // long after the tap (mobile browsers block fresh elements there).
-    const audio = audioChannel ?? new Audio();
-    audio.src = url;
-    const finish = () => {
-      URL.revokeObjectURL(url);
-      if (currentAudio === audio) currentAudio = null;
-      audio.onended = null;
-      onDone?.();
-    };
-    audio.onended = finish;
-    await audio.play();
-    currentAudio = audio;
-    onStart?.();
-    // A plain audio clip carries no per-word timing, so estimate it: weight
-    // each word by character count (a rough stand-in for how long it takes
-    // to say) and map the clip's current playback fraction onto that scale.
-    if (onWord) {
-      const tokens = wordTokens(text);
-      if (tokens.length) {
-        const weights = tokens.map((t) => t.word.length + 1);
-        const total = weights.reduce((a, b) => a + b, 0);
-        let acc = 0;
-        const cumulative = weights.map((w) => (acc += w));
-        let raf = 0;
-        const tick = () => {
-          const dur = audio.duration;
-          if (dur && isFinite(dur) && dur > 0) {
-            const frac = Math.min(audio.currentTime / dur, 1);
-            const idx = cumulative.findIndex((c) => c / total >= frac);
-            onWord(idx === -1 ? tokens.length - 1 : idx);
-          }
-          raf = requestAnimationFrame(tick);
-        };
-        raf = requestAnimationFrame(tick);
-        const stopTicking = () => cancelAnimationFrame(raf);
-        audio.addEventListener("ended", stopTicking, { once: true });
-        audio.addEventListener("pause", stopTicking, { once: true });
-      }
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  const blob = await fetchSpeech(text, timeoutMs);
+  if (!blob) return false;
+  return playAudioBlob(blob, text, { onStart, onDone, onWord });
 }
 
-// Natural voice only, reporting whether audio actually started. Auto-play
-// attempts (no user gesture) need this: Audio.play() rejects when the browser
-// blocks unprompted sound, while the device-voice path fails silently.
-export function speakNaturalOnly(text: string, onDone?: () => void): Promise<boolean> {
-  if (!useSettingsStore.getState().naturalVoice) return Promise.resolve(false);
-  return playNaturalVoice(text, { onDone, timeoutMs: 30_000 });
+// Synthesizes with the on-device neural voice (see lib/neuralVoice.ts) and
+// plays it. Resolves false — never throws — when the voice isn't downloaded
+// or inference fails, so the caller falls through to the next voice tier.
+async function playNeuralVoice(
+  text: string,
+  { onStart, onDone, onWord }: SpeakCallbacks = {}
+): Promise<boolean> {
+  const blob = await synthesizeNeuralVoice(text);
+  if (!blob) return false;
+  return playAudioBlob(blob, text, { onStart, onDone, onWord });
 }
 
-// Assistant speech: the natural (server) voice when enabled and reachable, the
-// local device voice otherwise. Queued, so stacked reminders don't collide.
-// Updates useSpeechState so UIs can show "preparing voice" / "speaking".
+// Neural/natural voice only (no device fallback), reporting whether audio
+// actually started. Auto-play attempts (no user gesture) need this:
+// Audio.play() rejects when the browser blocks unprompted sound, while the
+// device-voice path fails silently either way.
+export async function speakNaturalOnly(text: string, onDone?: () => void): Promise<boolean> {
+  const { neuralVoice, naturalVoice } = useSettingsStore.getState();
+  if (neuralVoice && (await playNeuralVoice(text, { onDone }))) return true;
+  if (naturalVoice) return playNaturalVoice(text, { onDone, timeoutMs: 30_000 });
+  return false;
+}
+
+// Assistant speech, in priority order: the on-device neural voice (free,
+// offline, once downloaded), then the natural (server) voice, then the local
+// device voice. Queued, so stacked reminders don't collide. Updates
+// useSpeechState so UIs can show "preparing voice" / "speaking".
 export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {}) {
   const { onStart, onDone, onWord, timeoutMs } = callbacks;
   useSpeechState.setState({ pending: true });
@@ -470,8 +507,15 @@ export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {
     useSpeechState.setState({ pending: false, speaking: false });
     onDone?.();
   };
+  const { neuralVoice, naturalVoice } = useSettingsStore.getState();
   if (
-    useSettingsStore.getState().naturalVoice &&
+    neuralVoice &&
+    (await playNeuralVoice(text, { onStart: wrapStart, onDone: wrapDone, onWord }))
+  ) {
+    return;
+  }
+  if (
+    naturalVoice &&
     (await playNaturalVoice(text, { onStart: wrapStart, onDone: wrapDone, onWord, timeoutMs }))
   ) {
     return;
