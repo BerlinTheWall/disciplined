@@ -44,10 +44,15 @@ class Settings(BaseSettings):
     # this tool-calling workload it adds cost, not quality. 0 disables; raise
     # (or set -1 for dynamic) if scheduling answers ever get noticeably worse.
     gemini_thinking_budget: int = 0
-    # Natural-voice reminders. Voice names: Zephyr (bright), Puck (upbeat),
-    # Aoede (breezy), Kore (firm), Leda (youthful), Charon (informative), …
-    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
-    gemini_tts_voice: str = "Zephyr"
+    # Natural-voice reminders, via Google Cloud Text-to-Speech (a dedicated TTS
+    # API — far lower latency and cost than routing audio through a generative
+    # model). API key from a Google Cloud project with the "Cloud Text-to-Speech
+    # API" enabled: https://console.cloud.google.com/apis/library/texttospeech.googleapis.com
+    google_tts_api_key: str = ""
+    # Any Neural2/Studio voice name works; the language code is derived from it
+    # (e.g. "en-US-Neural2-C" -> "en-US"). Full list:
+    # https://cloud.google.com/text-to-speech/docs/voices
+    google_tts_voice: str = "en-US-Neural2-C"
     # Railway injects DATABASE_URL; docker-compose.yml serves the local default.
     database_url: str = "postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined"
     # Signs auth tokens — set a long random value in .env for anything public.
