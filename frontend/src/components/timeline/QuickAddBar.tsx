@@ -91,14 +91,8 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   const choose = useChoose();
   const prompt = usePrompt();
 
-  const [chatBusy, openChat, closeChat, sendChat, keepAlive] = useChatStore(
-    useShallow((state) => [
-      state.busy,
-      state.openChat,
-      state.closeChat,
-      state.send,
-      state.keepAlive,
-    ])
+  const [chatBusy, openChat, closeChat, sendChat] = useChatStore(
+    useShallow((state) => [state.busy, state.openChat, state.closeChat, state.send])
   );
 
   const [text, setText] = useState("");
@@ -645,10 +639,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         <input
           type="text"
           value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            keepAlive();
-          }}
+          onChange={(e) => setText(e.target.value)}
           onFocus={openChat}
           placeholder={PLACEHOLDER}
           className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"

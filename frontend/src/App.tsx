@@ -18,6 +18,7 @@ import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
 import TutorialHost from "./components/TutorialHost";
 import VoiceAssistant from "./components/VoiceAssistant";
+import { useLeftEdgeSwipe } from "./hooks/useEdgeSwipe";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
@@ -79,6 +80,13 @@ function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const onboardingDone = useOnboardingStore((s) => s.done);
+
+  // Swiping in from the very left edge opens the side menu (standard drawer
+  // gesture). Off while the menu or any sheet is already up, or during setup.
+  const anySheetOpen = isAddOpen || isPlanOpen || isGroceryAddOpen || isSettingsOpen;
+  useLeftEdgeSwipe(() => setIsSideMenuOpen(true), {
+    enabled: onboardingDone && !isSideMenuOpen && !anySheetOpen,
+  });
 
   // Apply the chosen ambient background preset (per theme) to the app's --app-bg.
   const background = useSettingsStore((s) => s.background);

@@ -56,16 +56,7 @@ interface Actions {
   confirmPending: (index: number) => Promise<void>;
   // Discards a proposed action without running it.
   cancelPending: (index: number) => void;
-  // Resets the auto-close countdown — call on any activity that isn't
-  // already covered above (e.g. the user actively typing a reply).
-  keepAlive: () => void;
 }
-
-// The sheet auto-closes after this long with no activity — opening it,
-// sending/receiving a message, confirming/cancelling a proposal, or typing
-// all reset the countdown. Never fires while a request is actually in
-// flight (armed only once a response/error has settled).
-const AUTO_CLOSE_MS = 10_000;
 
 // Only real exchanges go back to Gemini as context, capped to keep requests small.
 function toHistory(messages: ChatBubble[]): ChatMessage[] {
@@ -76,36 +67,16 @@ function toHistory(messages: ChatBubble[]): ChatMessage[] {
 }
 
 export const useChatStore = create<State & Actions>()((set, get) => {
-  let autoCloseTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function armAutoClose() {
-    window.clearTimeout(autoCloseTimer);
-    autoCloseTimer = window.setTimeout(() => {
-      if (get().isOpen) set({ isOpen: false });
-    }, AUTO_CLOSE_MS);
-  }
-
   return {
     isOpen: false,
     busy: false,
     messages: [],
 
-    openChat: () => {
-      armAutoClose();
-      set({ isOpen: true });
-    },
-    closeChat: () => {
-      window.clearTimeout(autoCloseTimer);
-      set({ isOpen: false });
-    },
+    openChat: () => set({ isOpen: true }),
+    closeChat: () => set({ isOpen: false }),
     clearChat: () => set({ messages: [] }),
-    keepAlive: () => armAutoClose(),
 
     send: async (text) => {
-      // Cancel any pending auto-close for the duration of this request — it's
-      // rearmed once the response (or error) actually settles below, never
-      // while something's still in flight.
-      window.clearTimeout(autoCloseTimer);
       const msgs = get().messages;
 
       // "Just say yes" shortcut: only eligible while the pending proposal is
@@ -162,7 +133,6 @@ export const useChatStore = create<State & Actions>()((set, get) => {
         // alike. A new reply cuts off whatever was still being read.
         stopSpeaking();
         void speakAssistant(res.reply);
-        armAutoClose();
         return res;
       } catch (e) {
         set((state) => ({
@@ -176,7 +146,6 @@ export const useChatStore = create<State & Actions>()((set, get) => {
             },
           ],
         }));
-        armAutoClose();
         throw e;
       }
     },
@@ -184,7 +153,6 @@ export const useChatStore = create<State & Actions>()((set, get) => {
     confirmPending: async (index) => {
       const bubble = get().messages[index];
       if (!bubble?.pendingActions?.length || bubble.resolved) return;
-      window.clearTimeout(autoCloseTimer);
       const pendingActions = bubble.pendingActions;
       set((state) => ({
         busy: true,
@@ -208,7 +176,6 @@ export const useChatStore = create<State & Actions>()((set, get) => {
             },
           ],
         }));
-        armAutoClose();
       } catch {
         set((state) => ({
           busy: false,
@@ -217,7 +184,6 @@ export const useChatStore = create<State & Actions>()((set, get) => {
             { role: "model", content: "Something went wrong confirming that.", error: true },
           ],
         }));
-        armAutoClose();
       }
     },
 
@@ -227,7 +193,6 @@ export const useChatStore = create<State & Actions>()((set, get) => {
           .map((m, i) => (i === index ? { ...m, resolved: true } : m))
           .concat([{ role: "model", content: "Okay, cancelled." }]),
       }));
-      armAutoClose();
     },
   };
 });
