@@ -8,6 +8,7 @@ import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
 import NotificationBell from "./components/NotificationBell";
 import NudgeHost from "./components/NudgeHost";
 import OnboardingWizard from "./components/onboarding/OnboardingWizard";
+import PullToRefreshIndicator from "./components/PullToRefreshIndicator";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
@@ -19,10 +20,12 @@ import WeekHeader from "./components/timeline/WeekHeader";
 import TutorialHost from "./components/TutorialHost";
 import VoiceAssistant from "./components/VoiceAssistant";
 import { useLeftEdgeSwipe } from "./hooks/useEdgeSwipe";
+import { usePullToRefresh } from "./hooks/usePullToRefresh";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
 import { PAGE_ORDER, type Page } from "./lib/pages";
+import { refreshAll } from "./lib/sync";
 import ExpensesPage from "./pages/ExpensesPage";
 import GoalsPage from "./pages/GoalsPage";
 import HabitsPage from "./pages/HabitsPage";
@@ -80,6 +83,16 @@ function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const onboardingDone = useOnboardingStore((s) => s.done);
+
+  // Pull-to-refresh: attaches to whichever page's scrollable container is
+  // currently mounted (see the callback ref itself for why) and re-fetches
+  // every synced domain from the server.
+  const {
+    containerRef: pullContainerRef,
+    pull,
+    dragging: pullDragging,
+    refreshing,
+  } = usePullToRefresh(refreshAll);
 
   // Swiping in from the very left edge opens the side menu (standard drawer
   // gesture). Off while the menu or any sheet is already up, or during setup.
@@ -385,9 +398,11 @@ function App() {
 
       {/* Page body — slides between pages */}
       <div className="relative flex-1 overflow-hidden">
+        <PullToRefreshIndicator pull={pull} dragging={pullDragging} refreshing={refreshing} />
         <AnimatePresence mode="popLayout" custom={dir} initial={false}>
           <motion.div
             key={activePage}
+            ref={pullContainerRef}
             custom={dir}
             variants={pageVariants}
             initial="enter"
