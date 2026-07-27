@@ -24,6 +24,8 @@ _SAMPLE_RATE = 24000
 class TTSRequest(BaseModel):
     # Long enough for a full day briefing, short enough to bound cost/latency.
     text: str = Field(min_length=1, max_length=1500)
+    # None uses settings.google_tts_voice.
+    voice: str | None = None
 
 
 # Synthesized audio, keyed by (voice, text). Repeat requests — page reloads,
@@ -33,13 +35,13 @@ _audio_cache: OrderedDict[str, bytes] = OrderedDict()
 _AUDIO_CACHE_MAX = 24  # WAVs run ~0.3–1 MB, so worst case a few dozen MB
 
 
-def _cache_key(text: str) -> str:
-    raw = f"{settings.google_tts_voice}|{text}"
+def _cache_key(voice: str, text: str) -> str:
+    raw = f"{voice}|{text}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _language_code(voice: str) -> str:
-    """"en-US-Neural2-C" -> "en-US"."""
+    """"en-US-Chirp3-HD-Aoede" -> "en-US"."""
     parts = voice.split("-")
     return "-".join(parts[:2]) if len(parts) >= 2 else "en-US"
 
@@ -60,33 +62,22 @@ def _pcm_to_wav(pcm: bytes, rate: int = _SAMPLE_RATE) -> bytes:
     return buf.getvalue()
 
 
-@router.post("")
-async def tts(body: TTSRequest, user: User = Depends(get_current_user)) -> Response:
-    """Natural-voice speech for reminder lines, via Google Cloud Text-to-Speech
-    (a dedicated TTS API — far lower latency and cost than routing audio
-    through a generative model). The client falls back to the device's local
-    voice whenever this endpoint is unreachable or errors."""
+async def _synthesize_google(text: str, voice: str | None) -> bytes:
     if not settings.google_tts_api_key:
         raise HTTPException(
             status_code=503, detail="GOOGLE_TTS_API_KEY is not set (see backend/.env.example)"
         )
-
-    key = _cache_key(body.text)
-    cached = _audio_cache.get(key)
-    if cached is not None:
-        _audio_cache.move_to_end(key)
-        return Response(content=cached, media_type="audio/wav")
-
+    voice_name = voice or settings.google_tts_voice
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
                 _SYNTHESIZE_URL,
                 params={"key": settings.google_tts_api_key},
                 json={
-                    "input": {"text": body.text},
+                    "input": {"text": text},
                     "voice": {
-                        "languageCode": _language_code(settings.google_tts_voice),
-                        "name": settings.google_tts_voice,
+                        "languageCode": _language_code(voice_name),
+                        "name": voice_name,
                     },
                     "audioConfig": {
                         "audioEncoding": "LINEAR16",
@@ -95,12 +86,30 @@ async def tts(body: TTSRequest, user: User = Depends(get_current_user)) -> Respo
                 },
             )
         resp.raise_for_status()
-        wav = _pcm_to_wav(base64.b64decode(resp.json()["audioContent"]))
+        return _pcm_to_wav(base64.b64decode(resp.json()["audioContent"]))
     except httpx.HTTPStatusError as exc:
         logger.exception("TTS Google Cloud error")
         raise HTTPException(
             status_code=502, detail=f"Text-to-speech failed ({exc.response.status_code})."
         )
+
+
+@router.post("")
+async def tts(body: TTSRequest, user: User = Depends(get_current_user)) -> Response:
+    """Natural-voice speech for reminder lines, via Google Cloud Text-to-Speech.
+    The client falls back to the device's local voice whenever this endpoint
+    is unreachable or errors."""
+    voice = body.voice or settings.google_tts_voice
+    key = _cache_key(voice, body.text)
+    cached = _audio_cache.get(key)
+    if cached is not None:
+        _audio_cache.move_to_end(key)
+        return Response(content=cached, media_type="audio/wav")
+
+    try:
+        wav = await _synthesize_google(body.text, voice)
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("TTS failed")
         raise HTTPException(status_code=502, detail="Text-to-speech failed.")

@@ -252,7 +252,7 @@ export const api = {
   // device voice". The abort keeps a slow server from stalling a reminder —
   // longer, user-initiated reads (day briefings) pass a more patient timeout,
   // since synthesis time grows with text length.
-  tts: async (text: string, timeoutMs = 10_000): Promise<Blob> => {
+  tts: async (text: string, timeoutMs = 10_000, voice?: string): Promise<Blob> => {
     const token = getToken();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -263,7 +263,7 @@ export const api = {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, voice }),
         signal: controller.signal,
       });
       if (!res.ok) throw new ApiError(res.status, "text-to-speech failed");

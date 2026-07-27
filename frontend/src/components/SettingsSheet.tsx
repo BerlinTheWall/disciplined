@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { GraduationCap, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
@@ -10,13 +10,8 @@ import { speak, speakAssistant, stopSpeaking, useVoices } from "@/hooks/useSpeec
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
-import {
-  downloadNeuralVoice,
-  isNeuralVoiceDownloaded,
-  neuralVoiceSupported,
-  removeNeuralVoice,
-} from "@/lib/neuralVoice";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
+import { GOOGLE_VOICES, useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -126,113 +121,6 @@ function ChipRow<T>({
   );
 }
 
-// The on-device neural voice's toggle, one-time model download (with
-// progress), and removal. Kept as its own component since download/removal
-// are async side effects with their own loading/error UI, unlike the plain
-// persisted toggles above it.
-function NeuralVoiceRow() {
-  const [neuralVoice, setNeuralVoice] = useSettingsStore(
-    useShallow((state) => [state.neuralVoice, state.setNeuralVoice])
-  );
-  const [downloaded, setDownloaded] = useState<boolean | null>(null); // null = still checking
-  const [progress, setProgress] = useState<number | null>(null); // 0-1 while downloading
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void isNeuralVoiceDownloaded().then((ok) => {
-      if (!cancelled) setDownloaded(ok);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function handleDownload() {
-    setError(null);
-    setProgress(0);
-    try {
-      await downloadNeuralVoice(setProgress);
-      setDownloaded(true);
-      void speakAssistant("Hi! I'll be reading your reminders from now on, fully offline.");
-    } catch (e) {
-      console.warn("[settings] neural voice download failed", e);
-      setError("Download failed — check your connection and try again.");
-    } finally {
-      setProgress(null);
-    }
-  }
-
-  async function handleRemove() {
-    await removeNeuralVoice();
-    setDownloaded(false);
-  }
-
-  function toggle() {
-    const next = !neuralVoice;
-    setNeuralVoice(next);
-    if (next && downloaded) {
-      void speakAssistant("Hi! I'll be reading your reminders from now on, fully offline.");
-    } else if (!next) {
-      stopSpeaking();
-    }
-  }
-
-  if (!neuralVoiceSupported) return null;
-
-  return (
-    <>
-      <Row
-        title="On-device AI voice"
-        subtitle="Free and private — synthesized on your device instead of a server"
-        on={neuralVoice}
-        onToggle={toggle}
-      />
-      <Collapse open={neuralVoice}>
-        <div className="px-4 py-3">
-          {downloaded ? (
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-fg-faint">Voice downloaded and ready</p>
-              <motion.button
-                onClick={() => void handleRemove()}
-                whileTap={tap}
-                className="text-xs font-medium text-red-400"
-              >
-                Remove
-              </motion.button>
-            </div>
-          ) : progress !== null ? (
-            <div>
-              <p className="text-xs text-fg-faint mb-2">
-                Downloading voice… {Math.round(progress * 100)}%
-              </p>
-              <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-fg"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-fg-faint">
-                {error ?? "One-time download (~60MB), then works fully offline"}
-              </p>
-              <motion.button
-                onClick={() => void handleDownload()}
-                whileTap={tap}
-                className="shrink-0 rounded-full bg-surface-raised px-3 py-1.5 text-xs font-medium text-fg"
-              >
-                Download
-              </motion.button>
-            </div>
-          )}
-        </div>
-      </Collapse>
-    </>
-  );
-}
-
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const [altStyle, setAltStyle, background, setBackground] = useSettingsStore(
     useShallow((state) => [
@@ -251,24 +139,19 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setDefaultReminderMinutes,
       ])
     );
-  const [
-    speakReminders,
-    setSpeakReminders,
-    voiceURI,
-    setVoiceURI,
-    naturalVoice,
-    setNaturalVoice,
-    neuralVoice,
-  ] = useSettingsStore(
-    useShallow((state) => [
-      state.speakReminders,
-      state.setSpeakReminders,
-      state.voiceURI,
-      state.setVoiceURI,
-      state.naturalVoice,
-      state.setNaturalVoice,
-      state.neuralVoice,
-    ])
+  const [speakReminders, setSpeakReminders, voiceURI, setVoiceURI, naturalVoice, setNaturalVoice] =
+    useSettingsStore(
+      useShallow((state) => [
+        state.speakReminders,
+        state.setSpeakReminders,
+        state.voiceURI,
+        state.setVoiceURI,
+        state.naturalVoice,
+        state.setNaturalVoice,
+      ])
+    );
+  const [googleVoice, setGoogleVoice] = useGoogleVoiceStore(
+    useShallow((state) => [state.voice, state.setVoice])
   );
   const [
     morningBriefing,
@@ -308,6 +191,12 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   function pickVoice(uri: string | null) {
     setVoiceURI(uri);
     speak("This is how reminders will sound.", { voiceURI: uri });
+  }
+
+  function pickGoogleVoice(voice: string) {
+    setGoogleVoice(voice);
+    // Preview through the real path, same as toggling Natural voice on.
+    void speakAssistant("Hi! I'll be reading your reminders from now on.");
   }
 
   function toggleSpeakReminders() {
@@ -379,9 +268,6 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             <Row title="Speak reminders" on={speakReminders} onToggle={toggleSpeakReminders} />
           </Collapse>
           <Collapse open={remindersEnabled && speakReminders}>
-            <NeuralVoiceRow />
-          </Collapse>
-          <Collapse open={remindersEnabled && speakReminders}>
             <Row
               title="Natural voice"
               subtitle="Human-like AI voice; falls back to the device voice offline"
@@ -389,7 +275,17 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               onToggle={toggleNaturalVoice}
             />
           </Collapse>
-          <Collapse open={remindersEnabled && speakReminders && !naturalVoice && !neuralVoice}>
+          <Collapse open={remindersEnabled && speakReminders && naturalVoice}>
+            <ChipRow
+              title="Voice"
+              options={GOOGLE_VOICES}
+              keyOf={(v) => v.id}
+              labelOf={(v) => v.label}
+              selected={(v) => googleVoice === v.id}
+              onSelect={(v) => pickGoogleVoice(v.id)}
+            />
+          </Collapse>
+          <Collapse open={remindersEnabled && speakReminders && !naturalVoice}>
             <ChipRow
               title="Device voice"
               options={voiceChoices}

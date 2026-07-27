@@ -2,7 +2,7 @@ import { registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 
 import { api } from "./api";
-import { synthesizeNeuralVoice } from "@/lib/neuralVoice";
+import { useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
 // Local native plugin (vendor/reminder-voice): renders the iOS device voice
@@ -27,13 +27,11 @@ const ReminderVoice = registerPlugin<ReminderVoicePlugin>("ReminderVoice");
 // sound names. The notification is then scheduled with that file as its
 // sound: when it fires, the phone speaks the reminder through the speaker.
 //
-// Three tiers, tried in order and each falling through to the next: the
-// on-device neural voice (free, offline, once its model is downloaded — see
-// lib/neuralVoice.ts), the natural (Gemini backend) voice, and — always
-// available — the native on-device voice rendered straight into a sound file
-// by the ReminderVoice plugin. Neural and natural files are final once
-// written; only a device-fallback file gets re-attempted on a later sync, to
-// upgrade it once a better tier becomes available.
+// Two tiers, tried in order: the natural (Google Cloud TTS backend) voice,
+// falling back to — always available — the native on-device voice rendered
+// straight into a sound file by the ReminderVoice plugin. A natural-voice
+// file is final once written; only a device-fallback file gets re-attempted
+// on a later sync, to upgrade it once the natural voice becomes available.
 //
 // Files are cached by a hash of the spoken text (the line is deterministic
 // per reminder — see assistantReminderLine's variantSeed) and pruned once no
@@ -58,7 +56,7 @@ async function naturalWav(text: string): Promise<Blob | null> {
   if (!useSettingsStore.getState().naturalVoice) return null;
   if (Date.now() - naturalFailedAt < NATURAL_RETRY_COOLDOWN_MS) return null;
   try {
-    return await api.tts(text, 20_000);
+    return await api.tts(text, 20_000, useGoogleVoiceStore.getState().voice);
   } catch (e) {
     naturalFailedAt = Date.now();
     console.warn("[reminders] natural voice unavailable, using offline voice", e);
@@ -66,26 +64,14 @@ async function naturalWav(text: string): Promise<Blob | null> {
   }
 }
 
-// The on-device neural voice, when the setting allows — free and offline
-// once its model is downloaded, so tried before the natural (Gemini) voice.
-// synthesizeNeuralVoice itself resolves null (never throws) when the model
-// isn't downloaded yet or inference fails, so there's no cooldown to track
-// here the way there is for the network-dependent natural voice above.
-async function neuralWav(text: string): Promise<Blob | null> {
-  if (!useSettingsStore.getState().neuralVoice) return null;
-  return synthesizeNeuralVoice(text);
-}
-
 // Fallback-voiced files carry a -d suffix (device voice; -r was the retired
 // robot voice) so a later sync can tell them apart and upgrade them to the
-// neural or natural voice once one is available. Neural/natural files (no
-// suffix, or -n) are final — never re-attempted once written.
+// natural voice once it's available again.
 const isFallbackFile = (filename: string) =>
   filename.endsWith("-d.caf") || filename.endsWith("-r.wav");
-const canUpgradeFallback = () =>
-  useSettingsStore.getState().neuralVoice ||
-  (useSettingsStore.getState().naturalVoice &&
-    Date.now() - naturalFailedAt >= NATURAL_RETRY_COOLDOWN_MS);
+const canTryNatural = () =>
+  useSettingsStore.getState().naturalVoice &&
+  Date.now() - naturalFailedAt >= NATURAL_RETRY_COOLDOWN_MS;
 
 function textHash(text: string): string {
   let h = 5381;
@@ -123,18 +109,6 @@ const inFlight = new Map<string, Promise<string | null>>();
 async function ensureSound(text: string, hash: string): Promise<string | null> {
   try {
     const line = text.slice(0, MAX_TEXT_CHARS);
-
-    const neural = await neuralWav(line);
-    if (neural) {
-      const filename = `rem-${hash}-n.wav`;
-      await Filesystem.writeFile({
-        path: `${SOUND_DIR}/${filename}`,
-        data: await blobToBase64(neural),
-        directory: Directory.Library,
-        recursive: true,
-      });
-      return filename;
-    }
 
     const natural = await naturalWav(line);
     if (natural) {
@@ -190,9 +164,9 @@ export async function prepareReminderSounds(
     const hash = textHash(text);
     wanted.add(hash);
     const existing = index[hash];
-    // A neural- or natural-voice file is final; a fallback-voiced one still
-    // works but gets re-synthesized (upgraded) once a better tier is ready.
-    if (existing && (!isFallbackFile(existing) || !canUpgradeFallback())) {
+    // A natural-voice file is final; a fallback-voiced one still works but
+    // gets re-synthesized (upgraded) when the natural voice is back.
+    if (existing && (!isFallbackFile(existing) || !canTryNatural())) {
       ready.set(text, existing);
       continue;
     }
