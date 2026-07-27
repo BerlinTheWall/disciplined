@@ -204,18 +204,6 @@ export async function startSync(): Promise<void> {
   window.addEventListener("pagehide", flushAll);
 }
 
-// Pull-to-refresh: re-fetch every domain from the server at once. Swallows
-// failures (offline, unreachable backend) — same as startSync, this just
-// leaves the stores as they were rather than surfacing an error for a
-// gesture with no error UI of its own.
-export async function refreshAll(): Promise<void> {
-  await Promise.all(
-    Object.values(syncers).map((s) =>
-      s.refresh().catch((e) => console.warn("[sync] refresh failed", e))
-    )
-  );
-}
-
 // For the chat assistant: after a chat turn whose actions mutated a domain,
 // pull the server's version of that domain into its store.
 export async function refreshEvents(): Promise<void> {

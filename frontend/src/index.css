@@ -148,10 +148,6 @@ body {
   -webkit-tap-highlight-color: transparent;
   /* No double-tap-to-zoom (pinch zoom is blocked by the viewport meta). */
   touch-action: manipulation;
-  /* Stops the browser's own native pull-to-refresh/reload (Android Chrome
-     especially) from competing with the app's custom one — see
-     hooks/usePullToRefresh.ts, and overscroll-y-contain on its container. */
-  overscroll-behavior-y: contain;
 }
 
 input,
