@@ -36,13 +36,13 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
     // fires far too often to route every sample through setState first.
     const gesture = { startY: null as number | null, active: false, pull: 0 };
 
-    function onTouchStart(e: TouchEvent) {
+    function start(y: number) {
       if (el!.scrollTop > 0) return;
-      gesture.startY = e.touches[0].clientY;
+      gesture.startY = y;
       gesture.active = true;
     }
 
-    function onTouchMove(e: TouchEvent) {
+    function move(y: number, preventDefault: () => void) {
       if (!gesture.active || gesture.startY === null) return;
       if (el!.scrollTop > 0) {
         // Scrolled away mid-gesture (e.g. content grew) — abandon the pull.
@@ -52,7 +52,7 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
         setPull(0);
         return;
       }
-      const delta = e.touches[0].clientY - gesture.startY;
+      const delta = y - gesture.startY;
       if (delta <= 0) {
         gesture.pull = 0;
         setPull(0);
@@ -60,13 +60,13 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
       }
       // Only now — once it's clearly a downward pull at the very top — steal
       // the gesture from native scroll/bounce.
-      e.preventDefault();
+      preventDefault();
       setDragging(true);
       gesture.pull = Math.min(delta * RESISTANCE, MAX_PULL);
       setPull(gesture.pull);
     }
 
-    async function onTouchEnd() {
+    async function end() {
       if (!gesture.active) return;
       gesture.active = false;
       gesture.startY = null;
@@ -85,9 +85,19 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
       }
     }
 
-    // touchmove must be non-passive — this is the one browsers otherwise
-    // treat as passive by default, and preventDefault() inside a passive
-    // listener is a silent no-op (the page would scroll/bounce underneath).
+    // ── Touch: the real, shipped gesture (iOS/Android, and touch-capable
+    // browsers). touchmove must be non-passive — the one event type browsers
+    // otherwise default to passive, where preventDefault() is a silent no-op
+    // and the page would scroll/bounce underneath.
+    function onTouchStart(e: TouchEvent) {
+      start(e.touches[0].clientY);
+    }
+    function onTouchMove(e: TouchEvent) {
+      move(e.touches[0].clientY, () => e.preventDefault());
+    }
+    function onTouchEnd() {
+      void end();
+    }
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: true });
@@ -98,6 +108,34 @@ export function usePullToRefresh(onRefresh: () => Promise<void>) {
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
+
+    // ── Mouse: dev-only convenience so this is testable on a desktop without
+    // a touchscreen. Never registered in production — the shipped app is
+    // touch-only, and a global mousedown listener would risk fighting the
+    // app's other mouse/pointer-drag features (task reordering, week swipe).
+    if (import.meta.env.DEV) {
+      function onMouseDown(e: MouseEvent) {
+        start(e.clientY);
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      }
+      function onMouseMove(e: MouseEvent) {
+        move(e.clientY, () => e.preventDefault());
+      }
+      function onMouseUp() {
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+        void end();
+      }
+      el.addEventListener("mousedown", onMouseDown);
+      const touchCleanup = cleanupRef.current;
+      cleanupRef.current = () => {
+        touchCleanup();
+        el.removeEventListener("mousedown", onMouseDown);
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+      };
+    }
   }, []);
 
   return { containerRef, pull, dragging, refreshing };

@@ -410,7 +410,7 @@ function App() {
             exit="exit"
             transition={spring.gentle}
             data-scroll-lock
-            className="absolute inset-0 overflow-y-auto px-4"
+            className="absolute inset-0 overflow-y-auto overscroll-y-contain px-4"
             // Clear the floating nav (its height + offset) plus a gap, so the
             // last card never hides behind it. Uses --nav-bottom so the gap is
             // consistent across notch / non-notch devices.
