@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { api, setToken, type AuthUser } from "@/lib/api";
+import { useProfileStore } from "@/store/profileStore";
 
 // The signed-in account. The JWT itself lives in localStorage via api.ts
 // (setToken); this store holds who is logged in and drives the auth gate.
@@ -36,6 +37,17 @@ const USER_DATA_STORE_KEYS = [
   "disciplined-reminders",
 ];
 
+// The profile hub's display name (useProfileStore) is local-only, not synced
+// from the account — logout resets it to the generic "You" default (see
+// USER_DATA_STORE_KEYS below). Seed it from the account's real displayName
+// right after sign-in, but only while it's still that untouched default, so
+// a name customized on this device is never clobbered.
+function seedProfileName(displayName: string) {
+  if (useProfileStore.getState().name === "You") {
+    useProfileStore.getState().setName(displayName);
+  }
+}
+
 export const useAuthStore = create<State & Actions>()(
   persist(
     (set) => ({
@@ -43,11 +55,13 @@ export const useAuthStore = create<State & Actions>()(
       login: async (email, password) => {
         const { token, user } = await api.auth.login(email, password);
         setToken(token);
+        seedProfileName(user.displayName);
         set({ user });
       },
       register: async (email, password, displayName) => {
         const { token, user } = await api.auth.register(email, password, displayName);
         setToken(token);
+        seedProfileName(user.displayName);
         set({ user });
       },
       logout: () => {

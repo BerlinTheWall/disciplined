@@ -12,7 +12,7 @@ interface State {
 }
 
 const initialState: State = {
-  name: "Hooman",
+  name: "You",
   tagline: "Staying disciplined",
   avatar: null,
 };
