@@ -17,6 +17,12 @@ class User(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
+    first_name: Mapped[str] = mapped_column(String, default="")
+    last_name: Mapped[str] = mapped_column(String, default="")
+    # Kept alongside first/last (rather than computed on read) since it's
+    # what the rest of the app actually displays — signup fills it in as
+    # "first last", but it stays independently editable later without having
+    # to touch the name fields.
     display_name: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
     # Soft-gated: the account is fully usable before this flips (see

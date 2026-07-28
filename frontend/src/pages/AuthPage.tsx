@@ -10,7 +10,6 @@ import VerifyEmailSheet from "@/components/auth/VerifyEmailSheet";
 import { ApiError } from "@/lib/api";
 import { spring, tap } from "@/lib/motion";
 import { useAuthStore } from "@/store/authStore";
-import { useProfileStore } from "@/store/profileStore";
 import { useThemeStore } from "@/store/themeStore";
 
 type Mode = "login" | "signup";
@@ -58,7 +57,6 @@ function AppleIcon() {
 export default function AuthPage() {
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
-  const setProfileName = useProfileStore((s) => s.setName);
   const theme = useThemeStore((s) => s.theme);
 
   const [mode, setMode] = useState<Mode>("login");
@@ -96,9 +94,9 @@ export default function AuthPage() {
     setBusy(true);
     try {
       if (isSignup) {
-        const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
-        await register(email.trim(), password, displayName);
-        setProfileName(displayName);
+        // Store also seeds the profile hub's name from firstName — see
+        // authStore's seedProfileName.
+        await register(email.trim(), password, firstName.trim(), lastName.trim());
         setVerifyFor({ email: email.trim(), reason: "signup" });
       } else {
         await login(email.trim(), password);

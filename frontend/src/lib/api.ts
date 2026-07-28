@@ -94,6 +94,8 @@ function resource<T extends { id: string }>(name: string): ApiResource<T> {
 export interface AuthUser {
   id: string;
   email: string;
+  firstName: string;
+  lastName: string;
   displayName: string;
   emailVerified: boolean;
   timezone?: string;
@@ -209,12 +211,13 @@ export const api = {
     register: (
       email: string,
       password: string,
-      displayName: string,
+      firstName: string,
+      lastName: string,
       timezone?: string
     ): Promise<MessageResponse> =>
       request("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email, password, displayName, timezone }),
+        body: JSON.stringify({ email, password, firstName, lastName, timezone }),
       }),
     login: (email: string, password: string): Promise<AuthResponse> =>
       request("/api/auth/login", {

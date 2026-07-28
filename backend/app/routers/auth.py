@@ -54,10 +54,14 @@ async def register(
     if existing is not None:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     is_first_user = (await db.scalar(select(func.count()).select_from(User))) == 0
+    first_name = body.first_name.strip()
+    last_name = body.last_name.strip()
     user = User(
         email=email,
         hashed_password=hash_password(body.password),
-        display_name=body.display_name.strip(),
+        first_name=first_name,
+        last_name=last_name,
+        display_name=f"{first_name} {last_name}".strip(),
         created_at=datetime.now(timezone.utc).isoformat(),
         timezone=body.timezone,
     )
@@ -135,19 +139,16 @@ async def resend_verification(
 async def forgot_password(
     body: ForgotPasswordRequest, background: BackgroundTasks, db: AsyncSession = Depends(get_db)
 ):
-    # Same response whether or not the email has an account — don't leak
-    # which addresses exist.
-    generic = MessageResponse(message="If that email has an account, a reset code is on its way.")
     user = await db.scalar(select(User).where(User.email == body.email.lower()))
     if user is None:
-        return generic
+        raise HTTPException(status_code=404, detail="No account found with that email.")
     if await seconds_until_resend(db, user.id, "reset") > 0:
-        return generic  # already sent recently
+        return MessageResponse(message="A reset code was already sent — check your email.")
     await _send_code(
         db, background, user, "reset", "Reset your password",
         "Enter this code in Disciplined to reset your password:",
     )
-    return generic
+    return MessageResponse(message="A reset code has been sent to your email.")
 
 
 @router.post("/reset-password", response_model=AuthResponse)

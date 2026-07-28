@@ -189,4 +189,17 @@ textarea,
     -webkit-appearance: none;
     margin: 0;
   }
+
+  /* useScrollLock (hooks/useScrollLock.ts) freezes this element's overflow
+     while a sheet/modal is open. Without a permanently reserved gutter, that
+     toggle removes/restores the scrollbar and changes the content's width,
+     forcing a reflow of the whole page on the same frame the sheet starts
+     animating — on a busy day (many task rows) that reflow is expensive
+     enough to visibly stutter the sheet's entrance. Reserving the gutter
+     always means the width never changes, so locking never reflows.
+     Desktop-with-classic-scrollbars only; overlay-scrollbar platforms
+     (touch devices, macOS default) don't reserve any width regardless. */
+  [data-scroll-lock] {
+    scrollbar-gutter: stable;
+  }
 }

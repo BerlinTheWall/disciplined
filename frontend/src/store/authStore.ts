@@ -16,7 +16,7 @@ interface Actions {
   // Doesn't sign anyone in — the account isn't usable until verifyEmail
   // succeeds (see routers/auth.py). Callers should follow this with the
   // verify-code step, not treat it like login/verifyEmail.
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => void;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendVerification: (email: string) => Promise<string>;
@@ -50,12 +50,12 @@ const USER_DATA_STORE_KEYS = [
 
 // The profile hub's display name (useProfileStore) is local-only, not synced
 // from the account — logout resets it to the generic "You" default (see
-// USER_DATA_STORE_KEYS below). Seed it from the account's real displayName
-// right after sign-in, but only while it's still that untouched default, so
-// a name customized on this device is never clobbered.
-function seedProfileName(displayName: string) {
+// USER_DATA_STORE_KEYS below). Seed it from the account's first name right
+// after sign-in, but only while it's still that untouched default, so a name
+// customized on this device is never clobbered.
+function seedProfileName(firstName: string) {
   if (useProfileStore.getState().name === "You") {
-    useProfileStore.getState().setName(displayName);
+    useProfileStore.getState().setName(firstName);
   }
 }
 
@@ -66,12 +66,12 @@ export const useAuthStore = create<State & Actions>()(
       login: async (email, password) => {
         const { token, user } = await api.auth.login(email, password);
         setToken(token);
-        seedProfileName(user.displayName);
+        seedProfileName(user.firstName);
         set({ user });
       },
-      register: async (email, password, displayName) => {
-        await api.auth.register(email, password, displayName, deviceTimezone());
-        seedProfileName(displayName);
+      register: async (email, password, firstName, lastName) => {
+        await api.auth.register(email, password, firstName, lastName, deviceTimezone());
+        seedProfileName(firstName);
       },
       logout: () => {
         setToken(null);
@@ -83,7 +83,7 @@ export const useAuthStore = create<State & Actions>()(
       verifyEmail: async (email, code) => {
         const { token, user } = await api.auth.verifyEmail(email, code);
         setToken(token);
-        seedProfileName(user.displayName);
+        seedProfileName(user.firstName);
         set({ user });
       },
       resendVerification: async (email) => {

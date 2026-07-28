@@ -21,7 +21,8 @@ class CamelModel(BaseModel):
 class RegisterRequest(CamelModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)  # bcrypt truncates past 72 bytes
-    display_name: str = Field(min_length=1, max_length=200)
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
     # IANA zone name from the device (Intl.DateTimeFormat().resolvedOptions().timeZone) —
     # optional since a browser could in principle fail to resolve one.
     timezone: str | None = None
@@ -35,6 +36,8 @@ class LoginRequest(CamelModel):
 class UserOut(CamelModel):
     id: str
     email: str
+    first_name: str
+    last_name: str
     display_name: str
     email_verified: bool
     timezone: str | None = None
