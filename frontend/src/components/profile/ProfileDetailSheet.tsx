@@ -47,6 +47,7 @@ import { useExpenseStore } from "@/store/expenseStore";
 import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useMealStore } from "@/store/mealStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 
@@ -149,6 +150,7 @@ function Analysis({ text }: { text: string }) {
       setStatus("idle");
       return;
     }
+    if (!useSettingsStore.getState().voiceEnabled) return;
     // Unlock the audio channel synchronously in the tap handler — the actual
     // playback starts later, after an async fetch, outside the gesture window
     // mobile browsers otherwise require.

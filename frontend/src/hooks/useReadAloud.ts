@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { primeAudioChannel, speakAssistant, speakNaturalOnly, stopSpeaking } from "./useSpeech";
+import { useSettingsStore } from "@/store/settingsStore";
 
 type ReadState = "idle" | "loading" | "reading";
 
@@ -22,6 +23,7 @@ function toggle(text: string) {
     setRead("idle");
     return;
   }
+  if (!useSettingsStore.getState().voiceEnabled) return;
   stopSpeaking();
   // toggle() runs in a tap — unlock audio for the playback that starts
   // after synthesis finishes, outside the mobile gesture window.

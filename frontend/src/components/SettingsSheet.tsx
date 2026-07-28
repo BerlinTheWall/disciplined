@@ -6,7 +6,7 @@ import { useShallow } from "zustand/shallow";
 import BottomSheet from "./BottomSheet";
 import Collapse from "./Collapse";
 import Switch from "./Switch";
-import { speak, speakAssistant, stopSpeaking, useVoices } from "@/hooks/useSpeech";
+import { speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
@@ -20,15 +20,6 @@ import { useTutorialStore } from "@/store/tutorialStore";
 interface SettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-// "Microsoft David - English (United States)" → "David"; "Google US English"
-// → "US English". Keeps the voice chips short enough to scan.
-function voiceLabel(v: SpeechSynthesisVoice) {
-  return v.name
-    .replace(/^(Microsoft|Google|Apple) /, "")
-    .replace(/ ?[-–—] .*$/, "")
-    .replace(/ \(.*\)$/, "");
 }
 
 // Earliest auto-play time choices for the morning briefing; opening the app
@@ -139,17 +130,9 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setDefaultReminderMinutes,
       ])
     );
-  const [speakReminders, setSpeakReminders, voiceURI, setVoiceURI, naturalVoice, setNaturalVoice] =
-    useSettingsStore(
-      useShallow((state) => [
-        state.speakReminders,
-        state.setSpeakReminders,
-        state.voiceURI,
-        state.setVoiceURI,
-        state.naturalVoice,
-        state.setNaturalVoice,
-      ])
-    );
+  const [voiceEnabled, setVoiceEnabled] = useSettingsStore(
+    useShallow((state) => [state.voiceEnabled, state.setVoiceEnabled])
+  );
   const [googleVoice, setGoogleVoice] = useGoogleVoiceStore(
     useShallow((state) => [state.voice, state.setVoice])
   );
@@ -167,44 +150,18 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     ])
   );
 
-  function toggleNaturalVoice() {
-    const next = !naturalVoice;
-    setNaturalVoice(next);
-    // Preview through the real path — hearing the fallback voice here means
-    // the server isn't reachable, which is exactly what the user should know.
-    if (next) void speakAssistant("Hi! I'll be reading your reminders from now on.");
-    else stopSpeaking();
-  }
-
-  // Voices for the picker: prefer the ones matching the UI language so the
-  // list stays scannable; fall back to everything the OS offers. Windows/
-  // Chrome's bundled "Microsoft ..." SAPI voices (David, Mark, Zira, …) are
-  // robotic offline synthesis, unlike Google's network voices or Apple's
-  // on-device ones — excluded so only natural-sounding voices show up.
-  const voices = useVoices().filter((v) => !/^Microsoft\b/i.test(v.name));
-  const langPrefix = (navigator.language || "en").slice(0, 2).toLowerCase();
-  const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(langPrefix));
-  const voiceOptions = langVoices.length > 0 ? langVoices : voices;
-  // null is a real choice (the system default), so it rides along as an option.
-  const voiceChoices: (SpeechSynthesisVoice | null)[] = [null, ...voiceOptions];
-
-  function pickVoice(uri: string | null) {
-    setVoiceURI(uri);
-    speak("This is how reminders will sound.", { voiceURI: uri });
-  }
-
   function pickGoogleVoice(voice: string) {
     setGoogleVoice(voice);
-    // Preview through the real path, same as toggling Natural voice on.
-    void speakAssistant("Hi! I'll be reading your reminders from now on.");
+    // Preview through the real path, same as toggling Voice on.
+    void speakAssistant("Hi, this is how I'll sound.");
   }
 
-  function toggleSpeakReminders() {
-    const next = !speakReminders;
-    setSpeakReminders(next);
-    // Speaking from this tap doubles as the browser's audio unlock and shows
+  function toggleVoiceEnabled() {
+    const next = !voiceEnabled;
+    setVoiceEnabled(next);
+    // Speaking from this tap doubles as the audio unlock and shows
     // immediately what the feature sounds like.
-    if (next) speak("Reminders will be read aloud, like this.");
+    if (next) void speakAssistant("I'll read things aloud from now on.");
     else stopSpeaking();
   }
 
@@ -264,18 +221,16 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               onSelect={(o) => setDefaultReminderMinutes(o.value)}
             />
           </Collapse>
-          <Collapse open={remindersEnabled}>
-            <Row title="Speak reminders" on={speakReminders} onToggle={toggleSpeakReminders} />
-          </Collapse>
-          <Collapse open={remindersEnabled && speakReminders}>
-            <Row
-              title="Natural voice"
-              subtitle="Human-like AI voice; falls back to the device voice offline"
-              on={naturalVoice}
-              onToggle={toggleNaturalVoice}
-            />
-          </Collapse>
-          <Collapse open={remindersEnabled && speakReminders && naturalVoice}>
+        </Section>
+
+        <Section title="Voice">
+          <Row
+            title="Spoken voice"
+            subtitle="Read reminders, AI replies, and summaries aloud"
+            on={voiceEnabled}
+            onToggle={toggleVoiceEnabled}
+          />
+          <Collapse open={voiceEnabled}>
             <ChipRow
               title="Voice"
               options={GOOGLE_VOICES}
@@ -285,23 +240,15 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               onSelect={(v) => pickGoogleVoice(v.id)}
             />
           </Collapse>
-          <Collapse open={remindersEnabled && speakReminders && !naturalVoice}>
-            <ChipRow
-              title="Device voice"
-              options={voiceChoices}
-              keyOf={(v) => v?.voiceURI ?? "default"}
-              labelOf={(v) => (v ? voiceLabel(v) : "Default")}
-              selected={(v) => voiceURI === (v?.voiceURI ?? null)}
-              onSelect={(v) => pickVoice(v?.voiceURI ?? null)}
+          <Collapse open={voiceEnabled}>
+            <Row
+              title="Morning briefing"
+              subtitle="Hear your day on the first open of each day"
+              on={morningBriefing}
+              onToggle={() => setMorningBriefing(!morningBriefing)}
             />
           </Collapse>
-          <Row
-            title="Morning briefing"
-            subtitle="Hear your day on the first open of each day"
-            on={morningBriefing}
-            onToggle={() => setMorningBriefing(!morningBriefing)}
-          />
-          <Collapse open={morningBriefing}>
+          <Collapse open={voiceEnabled && morningBriefing}>
             <ChipRow
               title="Not before"
               options={BRIEFING_FROM_OPTIONS}

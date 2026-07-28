@@ -156,7 +156,7 @@ async function doSync() {
   syncing = true;
   try {
     const batch = latest.slice(0, MAX_SCHEDULED);
-    const speak = useSettingsStore.getState().speakReminders;
+    const speak = useSettingsStore.getState().voiceEnabled;
 
     // Pass 1 — immediate: schedule with whatever spoken audio is already
     // cached, so quitting the app mid-sync never leaves stale notifications.

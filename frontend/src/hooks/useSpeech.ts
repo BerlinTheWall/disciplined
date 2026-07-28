@@ -14,9 +14,10 @@ import { useSettingsStore } from "@/store/settingsStore";
 // the browser's SpeechRecognition API (Chrome/Edge/Safari; Firefox lacks it),
 // and — in the packaged iOS app, where WKWebView has no Web Speech API at
 // all — the OS speech recognizer via @capacitor-community/speech-recognition.
-// Text-to-speech uses speechSynthesis, which WKWebView does support.
-// SpeechRecognition is missing from TypeScript's DOM lib, so the minimal
-// surface we use is declared here.
+// Text-to-speech is the natural AI voice only (see googleVoiceStore) — audio
+// fetched from the backend and played back; there is no device-voice
+// fallback. SpeechRecognition is missing from TypeScript's DOM lib, so the
+// minimal surface we use is declared here.
 
 const isNativeSpeech = Capacitor.isNativePlatform();
 
@@ -217,84 +218,6 @@ export function wordTokens(text: string): { word: string; start: number }[] {
   return [...text.matchAll(/\S+/g)].map((m) => ({ word: m[0], start: m.index ?? 0 }));
 }
 
-export const speechOutputSupported = typeof window !== "undefined" && "speechSynthesis" in window;
-
-// The OS-provided voices. They load asynchronously in Chrome — empty on first
-// call, then voiceschanged fires — so UI should use the useVoices hook below.
-export function useVoices() {
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  useEffect(() => {
-    if (!speechOutputSupported) return;
-    const update = () => setVoices(window.speechSynthesis.getVoices());
-    update();
-    window.speechSynthesis.addEventListener("voiceschanged", update);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", update);
-  }, []);
-  return voices;
-}
-
-// interrupt (default) replaces whatever is currently being spoken — right for
-// chat replies. Pass interrupt: false to queue behind the current utterance
-// instead, so back-to-back reminders don't cut each other off.
-// The voice is the user's choice from Settings (voiceURI overrides it; the
-// system default is used when unset or when the saved voice no longer exists).
-export function speak(
-  text: string,
-  {
-    interrupt = true,
-    voiceURI,
-    onDone,
-    onStart,
-    onWord,
-  }: {
-    interrupt?: boolean;
-    voiceURI?: string | null;
-    onDone?: () => void;
-    onStart?: () => void;
-    // Real per-word timing from the browser's own boundary event — exact,
-    // unlike the estimate playNaturalVoice has to make for a plain audio clip.
-    onWord?: (index: number) => void;
-  } = {}
-) {
-  if (!speechOutputSupported) {
-    onDone?.();
-    return;
-  }
-  if (interrupt) window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  const uri = voiceURI !== undefined ? voiceURI : useSettingsStore.getState().voiceURI;
-  const voice = uri
-    ? window.speechSynthesis.getVoices().find((v) => v.voiceURI === uri)
-    : undefined;
-  if (voice) {
-    utterance.voice = voice;
-    utterance.lang = voice.lang;
-  } else {
-    utterance.lang = navigator.language || "en-US";
-  }
-  if (onStart) utterance.onstart = onStart;
-  if (onDone) {
-    utterance.onend = onDone;
-    utterance.onerror = onDone;
-  }
-  if (onWord) {
-    const tokens = wordTokens(text);
-    utterance.onboundary = (event) => {
-      if (event.name && event.name !== "word") return;
-      let idx = 0;
-      for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i].start <= event.charIndex) idx = i;
-        else break;
-      }
-      onWord(idx);
-    };
-  }
-  window.speechSynthesis.speak(utterance);
-  // Chromium sometimes leaves the queue in a paused state for hidden tabs —
-  // nudging resume() is harmless when playing and un-sticks it when not.
-  window.speechSynthesis.resume();
-}
-
 // The natural-voice clip currently playing, so stopSpeaking can cut it off.
 let currentAudio: HTMLAudioElement | null = null;
 
@@ -316,21 +239,12 @@ export function primeAudioChannel() {
     audioChannel.src = SILENT_WAV;
     void audioChannel.play().catch(() => {});
   }
-  // Unlock the fallback voice the same way (silent, zero-length utterance).
-  if ("speechSynthesis" in window && !window.speechSynthesis.speaking) {
-    const u = new SpeechSynthesisUtterance(" ");
-    u.volume = 0;
-    window.speechSynthesis.speak(u);
-  }
 }
 
 export function stopSpeaking() {
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
-  }
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
   }
   useSpeechState.setState({ pending: false, speaking: false });
 }
@@ -371,10 +285,10 @@ async function fetchSpeech(text: string, timeoutMs?: number): Promise<Blob | nul
 }
 
 // Warm the cache for text that's about to be spoken (e.g. the day briefing,
-// generated while the page is still being looked at). No-op when the natural
-// voice is off or the audio is already cached/being fetched.
+// generated while the page is still being looked at). No-op when voice is off
+// or the audio is already cached/being fetched.
 export function prefetchAssistantVoice(text: string, timeoutMs = 30_000) {
-  if (!useSettingsStore.getState().naturalVoice) return;
+  if (!useSettingsStore.getState().voiceEnabled) return;
   void fetchSpeech(text, timeoutMs);
 }
 
@@ -396,11 +310,9 @@ export const useSpeechState = create<{ pending: boolean; speaking: boolean }>(()
   speaking: false,
 }));
 
-// Plays a pre-synthesized clip (the natural voice's audio Blob, unlike the
-// device voice's speechSynthesis path) through the shared audio channel.
-// Resolves true only once playback has actually started; any failure
-// (blocked autoplay, playback error) resolves false so the caller can fall
-// back to the device voice.
+// Plays a pre-synthesized clip (the natural voice's audio Blob) through the
+// shared audio channel. Resolves true only once playback has actually
+// started; any failure (blocked autoplay, playback error) resolves false.
 function playAudioBlob(
   blob: Blob,
   text: string,
@@ -468,19 +380,24 @@ async function playNaturalVoice(
   return playAudioBlob(blob, text, { onStart, onDone, onWord });
 }
 
-// Natural voice only, reporting whether audio actually started. Auto-play
-// attempts (no user gesture) need this: Audio.play() rejects when the browser
-// blocks unprompted sound, while the device-voice path fails silently.
+// Reporting whether audio actually started. Auto-play attempts (no user
+// gesture) need this: Audio.play() rejects when the browser blocks unprompted
+// sound. No-ops when the voice master switch is off.
 export function speakNaturalOnly(text: string, onDone?: () => void): Promise<boolean> {
-  if (!useSettingsStore.getState().naturalVoice) return Promise.resolve(false);
+  if (!useSettingsStore.getState().voiceEnabled) return Promise.resolve(false);
   return playNaturalVoice(text, { onDone, timeoutMs: 30_000 });
 }
 
-// Assistant speech: the natural (server) voice when enabled and reachable, the
-// local device voice otherwise. Queued, so stacked reminders don't collide.
-// Updates useSpeechState so UIs can show "preparing voice" / "speaking".
+// Assistant speech (reminders, chat replies, read-aloud summaries) — the only
+// voice is the natural one (see googleVoiceStore); there is no fallback.
+// No-ops when the voice master switch is off. Updates useSpeechState so UIs
+// can show "preparing voice" / "speaking".
 export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {}) {
   const { onStart, onDone, onWord, timeoutMs } = callbacks;
+  if (!useSettingsStore.getState().voiceEnabled) {
+    onDone?.();
+    return;
+  }
   useSpeechState.setState({ pending: true });
   const wrapStart = () => {
     useSpeechState.setState({ pending: false, speaking: true });
@@ -490,11 +407,11 @@ export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {
     useSpeechState.setState({ pending: false, speaking: false });
     onDone?.();
   };
-  if (
-    useSettingsStore.getState().naturalVoice &&
-    (await playNaturalVoice(text, { onStart: wrapStart, onDone: wrapDone, onWord, timeoutMs }))
-  ) {
-    return;
-  }
-  speak(text, { interrupt: false, onStart: wrapStart, onDone: wrapDone, onWord });
+  const played = await playNaturalVoice(text, {
+    onStart: wrapStart,
+    onDone: wrapDone,
+    onWord,
+    timeoutMs,
+  });
+  if (!played) wrapDone();
 }

@@ -223,7 +223,7 @@ const spokenKeys = new Set<string>();
 // phrased like a personal assistant and spoken with the natural voice when
 // the server can provide it.
 function speakReminder(reminder: ReminderAlert) {
-  if (!useSettingsStore.getState().speakReminders) return;
+  if (!useSettingsStore.getState().voiceEnabled) return;
   if (spokenKeys.has(reminder.key)) return;
   spokenKeys.add(reminder.key);
   const startAt = parseISODate(reminder.date).getTime() + reminder.startMinutes * 60_000;
@@ -299,14 +299,14 @@ function handleReminderAction(action: string, data: ReminderNotificationData) {
         useHabitStore.getState().toggleHabitCompleted(data.id, data.date);
       }
     }
-    if (useSettingsStore.getState().speakReminders) {
+    if (useSettingsStore.getState().voiceEnabled) {
       void speakAssistant("Nice — marked as done.");
     }
   } else if (action === "snooze") {
     snooze(data.key, Date.now() + SNOOZE_MS);
     // A snoozed reminder should speak again when it comes back.
     spokenKeys.delete(data.key);
-    if (useSettingsStore.getState().speakReminders) {
+    if (useSettingsStore.getState().voiceEnabled) {
       void speakAssistant("Okay — I'll remind you again in 10 minutes.");
     }
   }
@@ -411,11 +411,11 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
       if (state.snoozes !== prev.snoozes) run();
     });
     // Flipping the master switch re-syncs (or clears) the native schedule;
-    // toggling spoken reminders re-syncs to attach or drop the audio.
+    // toggling voice re-syncs to attach or drop the audio.
     const unsubSettings = useSettingsStore.subscribe((state, prev) => {
       if (
         state.remindersEnabled !== prev.remindersEnabled ||
-        state.speakReminders !== prev.speakReminders
+        state.voiceEnabled !== prev.voiceEnabled
       )
         run();
     });

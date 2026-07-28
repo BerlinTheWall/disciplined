@@ -1,37 +1,21 @@
-import { registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 
 import { api } from "./api";
 import { useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
-// Local native plugin (vendor/reminder-voice): renders the iOS device voice
-// straight into Library/Sounds — the natural-sounding offline fallback.
-interface ReminderVoicePlugin {
-  synthesizeToSound(options: {
-    text: string;
-    fileName: string;
-    language?: string;
-    rate?: number;
-  }): Promise<{ fileName: string }>;
-}
-const ReminderVoice = registerPlugin<ReminderVoicePlugin>("ReminderVoice");
-
 // Spoken notification sounds for the packaged iOS app.
 //
 // iOS never runs app code when a notification is delivered, so live TTS is
 // impossible with the app closed. Instead, while the app is open, each
-// upcoming reminder's spoken line is synthesized ahead of time (WAV/CAF — a
-// format UNNotificationSound accepts) and saved under the app's
-// Library/Sounds directory, which is exactly where iOS resolves notification
-// sound names. The notification is then scheduled with that file as its
-// sound: when it fires, the phone speaks the reminder through the speaker.
-//
-// Two tiers, tried in order: the natural (Google Cloud TTS backend) voice,
-// falling back to — always available — the native on-device voice rendered
-// straight into a sound file by the ReminderVoice plugin. A natural-voice
-// file is final once written; only a device-fallback file gets re-attempted
-// on a later sync, to upgrade it once the natural voice becomes available.
+// upcoming reminder's spoken line is synthesized ahead of time (the natural
+// AI voice — see googleVoiceStore — via the backend, WAV) and saved under the
+// app's Library/Sounds directory, which is exactly where iOS resolves
+// notification sound names. The notification is then scheduled with that
+// file as its sound: when it fires, the phone speaks the reminder through the
+// speaker. There is no device-voice fallback — if synthesis fails (offline,
+// server unreachable), the reminder just keeps the default notification
+// sound until a later sync can retry.
 //
 // Files are cached by a hash of the spoken text (the line is deterministic
 // per reminder — see assistantReminderLine's variantSeed) and pruned once no
@@ -53,25 +37,16 @@ let naturalFailedAt = 0;
 
 // The natural voice, when the setting allows and it isn't cooling down.
 async function naturalWav(text: string): Promise<Blob | null> {
-  if (!useSettingsStore.getState().naturalVoice) return null;
+  if (!useSettingsStore.getState().voiceEnabled) return null;
   if (Date.now() - naturalFailedAt < NATURAL_RETRY_COOLDOWN_MS) return null;
   try {
     return await api.tts(text, 20_000, useGoogleVoiceStore.getState().voice);
   } catch (e) {
     naturalFailedAt = Date.now();
-    console.warn("[reminders] natural voice unavailable, using offline voice", e);
+    console.warn("[reminders] natural voice unavailable, skipping spoken sound", e);
     return null;
   }
 }
-
-// Fallback-voiced files carry a -d suffix (device voice; -r was the retired
-// robot voice) so a later sync can tell them apart and upgrade them to the
-// natural voice once it's available again.
-const isFallbackFile = (filename: string) =>
-  filename.endsWith("-d.caf") || filename.endsWith("-r.wav");
-const canTryNatural = () =>
-  useSettingsStore.getState().naturalVoice &&
-  Date.now() - naturalFailedAt >= NATURAL_RETRY_COOLDOWN_MS;
 
 function textHash(text: string): string {
   let h = 5381;
@@ -111,23 +86,14 @@ async function ensureSound(text: string, hash: string): Promise<string | null> {
     const line = text.slice(0, MAX_TEXT_CHARS);
 
     const natural = await naturalWav(line);
-    if (natural) {
-      const filename = `rem-${hash}.wav`;
-      await Filesystem.writeFile({
-        path: `${SOUND_DIR}/${filename}`,
-        data: await blobToBase64(natural),
-        directory: Directory.Library,
-        recursive: true,
-      });
-      return filename;
-    }
+    if (!natural) return null; // scheduled with the default sound; next sync retries
 
-    // Device-voice fallback, rendered natively straight into Library/Sounds.
-    const filename = `rem-${hash}-d.caf`;
-    await ReminderVoice.synthesizeToSound({
-      text: line,
-      fileName: filename,
-      language: navigator.language || undefined,
+    const filename = `rem-${hash}.wav`;
+    await Filesystem.writeFile({
+      path: `${SOUND_DIR}/${filename}`,
+      data: await blobToBase64(natural),
+      directory: Directory.Library,
+      recursive: true,
     });
     return filename;
   } catch (e) {
@@ -164,9 +130,8 @@ export async function prepareReminderSounds(
     const hash = textHash(text);
     wanted.add(hash);
     const existing = index[hash];
-    // A natural-voice file is final; a fallback-voiced one still works but
-    // gets re-synthesized (upgraded) when the natural voice is back.
-    if (existing && (!isFallbackFile(existing) || !canTryNatural())) {
+    // A synthesized file is final — no need to redo it.
+    if (existing) {
       ready.set(text, existing);
       continue;
     }

@@ -25,18 +25,12 @@ interface SettingsState {
   // Reminder lead time pre-selected for newly created items; null = none.
   defaultReminderMinutes: number | null;
   setDefaultReminderMinutes: (minutes: number | null) => void;
-  // Read reminders aloud (text-to-speech) when they fire, in addition to the
-  // banner/notification. Opt-in — unexpected audio is worse than none.
-  speakReminders: boolean;
-  setSpeakReminders: (on: boolean) => void;
-  // voiceURI of the chosen speech voice; null = the system default. Applies to
-  // everything the app speaks (reminders and chat replies).
-  voiceURI: string | null;
-  setVoiceURI: (uri: string | null) => void;
-  // Prefer the human-like AI voice from the backend for reminders, falling
-  // back to the device voice when the server is unreachable.
-  naturalVoice: boolean;
-  setNaturalVoice: (on: boolean) => void;
+  // Master switch for every spoken voice in the app — reminders firing,
+  // assistant chat replies, and read-aloud summaries/briefings. Opt-in —
+  // unexpected audio is worse than none. The only voice used is the natural
+  // AI voice (see googleVoiceStore); there is no device-voice fallback.
+  voiceEnabled: boolean;
+  setVoiceEnabled: (on: boolean) => void;
   // Speak the day briefing on the first app open of each day (opt-in). When
   // the browser blocks unprompted audio, the Home page shows a tap-to-listen
   // prompt instead.
@@ -69,12 +63,8 @@ export const useSettingsStore = create<SettingsState>()(
       setRemindersEnabled: (on) => set({ remindersEnabled: on }),
       defaultReminderMinutes: null,
       setDefaultReminderMinutes: (minutes) => set({ defaultReminderMinutes: minutes }),
-      speakReminders: false,
-      setSpeakReminders: (on) => set({ speakReminders: on }),
-      voiceURI: null,
-      setVoiceURI: (uri) => set({ voiceURI: uri }),
-      naturalVoice: true,
-      setNaturalVoice: (on) => set({ naturalVoice: on }),
+      voiceEnabled: false,
+      setVoiceEnabled: (on) => set({ voiceEnabled: on }),
       morningBriefing: false,
       setMorningBriefing: (on) => set({ morningBriefing: on }),
       morningBriefingFromMinutes: null,
