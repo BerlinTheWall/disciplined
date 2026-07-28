@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     # from it (e.g. "en-US-Chirp3-HD-Aoede" -> "en-US"). Full list:
     # https://cloud.google.com/text-to-speech/docs/voices
     google_tts_voice: str = "en-US-Chirp3-HD-Aoede"
+    # Transactional email (verification codes, password reset) via Resend's
+    # HTTP API. Blank in dev is fine — services/email.py falls back to
+    # logging the email instead of sending it, so signup/reset stay testable
+    # without an account. Get a key at https://resend.com/api-keys.
+    resend_api_key: str = ""
+    # Resend's shared sandbox sender works with no domain setup but can only
+    # send to the address you signed up with — verify a domain and switch
+    # this once real users need to receive mail.
+    email_from: str = "Disciplined <onboarding@resend.dev>"
     # Railway injects DATABASE_URL; docker-compose.yml serves the local default.
     database_url: str = "postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined"
     # Signs auth tokens — set a long random value in .env for anything public.

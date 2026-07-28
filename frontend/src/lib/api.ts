@@ -95,11 +95,17 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
+  emailVerified: boolean;
+  timezone?: string;
 }
 
 export interface AuthResponse {
   token: string;
   user: AuthUser;
+}
+
+export interface MessageResponse {
+  message: string;
 }
 
 export interface ChatMessage {
@@ -198,10 +204,17 @@ export const CHAT_TOOL_DOMAIN: Record<string, "events" | "habits" | "goals"> = {
 
 export const api = {
   auth: {
-    register: (email: string, password: string, displayName: string): Promise<AuthResponse> =>
+    // No token back — the account isn't usable (including logging in) until
+    // the code this sends is confirmed via verifyEmail below.
+    register: (
+      email: string,
+      password: string,
+      displayName: string,
+      timezone?: string
+    ): Promise<MessageResponse> =>
       request("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email, password, displayName }),
+        body: JSON.stringify({ email, password, displayName, timezone }),
       }),
     login: (email: string, password: string): Promise<AuthResponse> =>
       request("/api/auth/login", {
@@ -209,6 +222,30 @@ export const api = {
         body: JSON.stringify({ email, password }),
       }),
     me: (): Promise<AuthUser> => request("/api/auth/me"),
+    // Public (email + code, not the bearer token) — this is the only way in
+    // for an unverified account, so it can't require the session it grants.
+    verifyEmail: (email: string, code: string): Promise<AuthResponse> =>
+      request("/api/auth/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ email, code }),
+      }),
+    resendVerification: (email: string): Promise<MessageResponse> =>
+      request("/api/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    forgotPassword: (email: string): Promise<MessageResponse> =>
+      request("/api/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    resetPassword: (email: string, code: string, newPassword: string): Promise<AuthResponse> =>
+      request("/api/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ email, code, newPassword }),
+      }),
+    updateTimezone: (timezone: string): Promise<AuthUser> =>
+      request("/api/auth/timezone", { method: "PATCH", body: JSON.stringify({ timezone }) }),
   },
   events: resource<Task>("events"),
   goals: resource<Goal>("goals"),

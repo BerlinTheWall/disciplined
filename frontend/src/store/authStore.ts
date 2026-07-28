@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { api, setToken, type AuthUser } from "@/lib/api";
+import { deviceTimezone } from "@/lib/timezone";
 import { useProfileStore } from "@/store/profileStore";
 
 // The signed-in account. The JWT itself lives in localStorage via api.ts
@@ -12,8 +13,18 @@ interface State {
 
 interface Actions {
   login: (email: string, password: string) => Promise<void>;
+  // Doesn't sign anyone in — the account isn't usable until verifyEmail
+  // succeeds (see routers/auth.py). Callers should follow this with the
+  // verify-code step, not treat it like login/verifyEmail.
   register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => void;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<string>;
+  forgotPassword: (email: string) => Promise<string>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  // No-op when the device's current zone matches what's stored (the common
+  // case on every launch) — only actually calls the API when it's changed.
+  syncTimezone: () => Promise<void>;
 }
 
 // Keys of the stores holding user content. Cleared on logout so the next
@@ -50,7 +61,7 @@ function seedProfileName(displayName: string) {
 
 export const useAuthStore = create<State & Actions>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       login: async (email, password) => {
         const { token, user } = await api.auth.login(email, password);
@@ -59,10 +70,8 @@ export const useAuthStore = create<State & Actions>()(
         set({ user });
       },
       register: async (email, password, displayName) => {
-        const { token, user } = await api.auth.register(email, password, displayName);
-        setToken(token);
-        seedProfileName(user.displayName);
-        set({ user });
+        await api.auth.register(email, password, displayName, deviceTimezone());
+        seedProfileName(displayName);
       },
       logout: () => {
         setToken(null);
@@ -70,6 +79,32 @@ export const useAuthStore = create<State & Actions>()(
         set({ user: null });
         // Reload so the sync module and all stores start from a clean slate.
         window.location.reload();
+      },
+      verifyEmail: async (email, code) => {
+        const { token, user } = await api.auth.verifyEmail(email, code);
+        setToken(token);
+        seedProfileName(user.displayName);
+        set({ user });
+      },
+      resendVerification: async (email) => {
+        const { message } = await api.auth.resendVerification(email);
+        return message;
+      },
+      forgotPassword: async (email) => {
+        const { message } = await api.auth.forgotPassword(email);
+        return message;
+      },
+      resetPassword: async (email, code, newPassword) => {
+        const { token, user } = await api.auth.resetPassword(email, code, newPassword);
+        setToken(token);
+        set({ user });
+      },
+      syncTimezone: async () => {
+        const user = get().user;
+        const tz = deviceTimezone();
+        if (!user || !tz || tz === user.timezone) return;
+        const updated = await api.auth.updateTimezone(tz).catch(() => null);
+        if (updated) set({ user: updated });
       },
     }),
     { name: "disciplined-auth" }

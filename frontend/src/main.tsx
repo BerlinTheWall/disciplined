@@ -47,6 +47,21 @@ function Root() {
     if (userId) void startSync();
   }, [userId]);
 
+  // Keep the account's stored timezone matching the device's — so someone
+  // who travels doesn't have to do anything for it to catch up. Checked on
+  // every launch and every foreground (backgrounding a WKWebView doesn't
+  // reload the page, so a tab/app switch is the only signal a real trip
+  // gets); syncTimezone itself no-ops when nothing's actually changed.
+  useEffect(() => {
+    if (!userId) return;
+    void useAuthStore.getState().syncTimezone();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void useAuthStore.getState().syncTimezone();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [userId]);
+
   // api.ts announces a rejected token (expired, or the user was deleted) —
   // drop back to the login page instead of silently failing every request.
   useEffect(() => {

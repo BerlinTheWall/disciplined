@@ -19,11 +19,43 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String)
     display_name: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    # Soft-gated: the account is fully usable before this flips (see
+    # routers/auth.py) — it only marks whether a person actually owns the
+    # inbox behind their email, for account-recovery purposes.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # IANA zone name (e.g. "America/New_York"), set from the device at signup
+    # and kept in sync by the frontend whenever it notices the device's zone
+    # has changed (see PATCH /api/auth/timezone) — so it tracks someone who
+    # travels instead of freezing at wherever they signed up. Nullable: older
+    # accounts and anything created before this existed have none yet.
+    timezone: Mapped[str | None] = mapped_column(String, nullable=True)
     # Caps how many proactive coach check-ins fire per day (see
     # services/coach.py's TIER_BUDGET). No billing exists yet, so this
     # defaults everyone to the top tier; wiring real subscriptions later is
     # just writing to this column instead of building the budget logic.
     coach_tier: Mapped[str] = mapped_column(String, default="plus")  # "free" | "plus"
+
+
+class EmailCode(Base):
+    """One-time codes emailed for email verification and password reset.
+
+    Codes are stored hashed (sha256 — not bcrypt: these are short-lived,
+    rate-limited, and attempt-capped, so a fast hash is fine and lets lookup
+    stay a simple equality check) so a DB dump alone can't be used to claim
+    someone's account. `purpose` keeps verify and reset codes from being
+    interchangeable even though they share a table.
+    """
+
+    __tablename__ = "email_codes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    purpose: Mapped[str] = mapped_column(String)  # "verify" | "reset"
+    code_hash: Mapped[str] = mapped_column(String)
+    expires_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
 
 
 class Event(Base):
