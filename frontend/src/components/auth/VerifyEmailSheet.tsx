@@ -72,7 +72,7 @@ export default function VerifyEmailSheet({ isOpen, onClose, email, message }: Pr
       <div className="w-10 h-1 rounded-full bg-border-strong mx-auto mb-5" />
       <h2 className="text-xl font-bold text-fg mb-1.5">Verify your email</h2>
       <p className="text-sm text-fg-faint mb-5">
-        {message ?? `Enter the code we sent to ${email}.`}
+        {message ?? `Enter the code we sent to ${email}`}
       </p>
       <form onSubmit={submit}>
         <input

@@ -33,6 +33,30 @@ export class ApiError extends Error {
   }
 }
 
+// FastAPI's own error shape (`detail: string`, e.g. our HTTPExceptions) vs.
+// its 422 validation-error shape (`detail: [{ msg, loc, ... }]`, straight
+// from Pydantic) are different — the plain-string branch was the only one
+// handled, so any request Pydantic itself rejected (a malformed email, a
+// too-short field, ...) fell through to the generic "METHOD /path failed
+// with 422" fallback instead of the field's actual complaint.
+function errorMessageFromBody(body: unknown): string | null {
+  if (typeof body !== "object" || body === null || !("detail" in body)) return null;
+  const detail = (body as { detail: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0] as { msg?: unknown } | undefined;
+    if (first && typeof first.msg === "string") {
+      // Pydantic's email-validator message is "value is not a valid email
+      // address: <specific reason>" — the reason after the colon is the
+      // actually useful part; everything else just needs capitalizing.
+      const email = first.msg.match(/^value is not a valid email address:\s*(.+)$/i);
+      const msg = (email ? email[1] : first.msg).replace(/^Value error,\s*/i, "");
+      return msg.charAt(0).toUpperCase() + msg.slice(1);
+    }
+  }
+  return null;
+}
+
 // Login token, kept as a plain localStorage entry (not in a zustand store) so
 // it is readable here without importing any store and before stores hydrate.
 const TOKEN_KEY = "disciplined-token";
@@ -63,8 +87,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let detail = `${init?.method ?? "GET"} ${path} failed with ${res.status}`;
     try {
-      const body = await res.json();
-      if (typeof body.detail === "string") detail = body.detail;
+      detail = errorMessageFromBody(await res.json()) ?? detail;
     } catch {
       // no JSON body — keep the generic message
     }
