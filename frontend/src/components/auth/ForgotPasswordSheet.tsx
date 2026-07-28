@@ -64,6 +64,14 @@ export default function ForgotPasswordSheet({ isOpen, onClose, initialEmail = ""
   async function sendCode() {
     if (busy || !email.trim()) return;
     setError(null);
+    // Not wrapped in a <form>/type="submit" like the login/signup fields
+    // (this button just triggers a fetch), so the browser's native
+    // type="email" check never runs here — catch it ourselves instead of
+    // letting a malformed address reach the server as a 422.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
     setBusy(true);
     try {
       const message = await forgotPassword(email.trim());
