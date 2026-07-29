@@ -76,8 +76,12 @@ export const useAuthStore = create<State & Actions>()(
       logout: () => {
         setToken(null);
         for (const key of USER_DATA_STORE_KEYS) localStorage.removeItem(key);
-        set({ user: null });
-        // Reload so the sync module and all stores start from a clean slate.
+        // Clear the persisted auth directly rather than set({ user: null }) —
+        // a store update would re-render the app to the login page right
+        // away, which then flashes again after the reload below finishes.
+        // Reloading with storage already cleared shows the splash first,
+        // then the login page, exactly once.
+        localStorage.removeItem("disciplined-auth");
         window.location.reload();
       },
       verifyEmail: async (email, code) => {
