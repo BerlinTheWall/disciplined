@@ -97,7 +97,7 @@ export default function VoiceAssistant() {
                   {phase === "listening" ? "Listening…" : "That didn't work"}
                 </p>
                 <p className="text-sm text-fg mt-0.5 whitespace-pre-wrap break-words">
-                  {text || (phase === "listening" ? "Say something like “move gym to 6”" : "")}
+                  {text || (phase === "listening" ? "Say something like “Add a task ...”" : "")}
                 </p>
               </div>
               <motion.button

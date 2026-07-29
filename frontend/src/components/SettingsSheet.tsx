@@ -6,7 +6,7 @@ import { useShallow } from "zustand/shallow";
 import BottomSheet from "./BottomSheet";
 import Collapse from "./Collapse";
 import Switch from "./Switch";
-import { speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
+import { primeAudioChannel, speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
@@ -152,6 +152,10 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
 
   function pickGoogleVoice(voice: string) {
     setGoogleVoice(voice);
+    // Cut off whatever preview (this voice or the other one) is still
+    // playing — previews shouldn't overlap.
+    stopSpeaking();
+    primeAudioChannel();
     // Preview through the real path, same as toggling Voice on.
     void speakAssistant("Hi, this is how I'll sound.");
   }
@@ -159,10 +163,13 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   function toggleVoiceEnabled() {
     const next = !voiceEnabled;
     setVoiceEnabled(next);
+    stopSpeaking();
     // Speaking from this tap doubles as the audio unlock and shows
     // immediately what the feature sounds like.
-    if (next) void speakAssistant("I'll read things aloud from now on.");
-    else stopSpeaking();
+    if (next) {
+      primeAudioChannel();
+      void speakAssistant("I'll read things aloud from now on.");
+    }
   }
 
   const { theme, toggleTheme } = useThemeStore();
