@@ -46,6 +46,12 @@ const USER_DATA_STORE_KEYS = [
   "disciplined-preferences",
   "disciplined-profile",
   "disciplined-reminders",
+  // Actual reminder/nudge content and per-item dismissal state — both
+  // reference the previous account's task/habit/goal ids and text, and were
+  // missing here entirely, which is exactly how a new account on the same
+  // device ended up seeing the old account's notifications.
+  "disciplined-notification-history",
+  "disciplined-nudges",
 ];
 
 // The profile hub's display name (useProfileStore) is local-only, not synced
