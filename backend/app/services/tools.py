@@ -67,9 +67,10 @@ def habit_active_on(h: Habit, d: date) -> bool:
     Mirrored exactly by frontend/src/lib/habits.ts::isHabitActiveOnDate — keep
     both in sync if this changes.
 
-    freq="weekly" + interval<=1 (or no anchor_date) is byte-for-byte the
-    original weekday-only check, so every pre-existing habit (migrated with
-    exactly that shape) behaves identically to before this was added."""
+    A habit with no anchor_date at all (every habit created before start dates
+    were tracked) stays unbounded, matching its original behavior —
+    freq="weekly" + interval<=1 + no anchor is byte-for-byte the original
+    weekday-only check."""
     if d.isoformat() in (h.skipped_dates or []):
         return False
     freq = h.freq or "weekly"
@@ -88,11 +89,13 @@ def habit_active_on(h: Habit, d: date) -> bool:
     js_weekday = (d.weekday() + 1) % 7  # python Mon=0 -> frontend Sun=0
     if js_weekday not in (h.days_of_week or []):
         return False
-    if interval <= 1 or not h.anchor_date:
-        return True
     anchor = _parse_anchor(h.anchor_date)
     if anchor is None:
-        return True  # matches the "interval<=1 or no anchor_date" fallback above
+        return True
+    if d < anchor:  # never show an occurrence before the habit's start date
+        return False
+    if interval <= 1:
+        return True
     week_diff = (_monday_of(d) - _monday_of(anchor)).days // 7
     return week_diff >= 0 and week_diff % interval == 0
 

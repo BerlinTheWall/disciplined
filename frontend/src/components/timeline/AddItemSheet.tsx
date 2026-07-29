@@ -356,19 +356,22 @@ export default function AddItemSheet({
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
 
-    // Only load-bearing when interval>1 or monthly; NULL for a plain weekly
-    // habit, matching the backend's "no anchor = original weekday model"
-    // shortcut. Preserves an existing habit's original anchor month when just
-    // tweaking other fields, so an interval>1 phase or a monthly habit's
-    // cycle doesn't silently reset each time it's edited.
+    // Doubles as both the interval/monthly cycle anchor and, for a plain
+    // weekly habit, its start date — isHabitActiveOnDate never shows an
+    // occurrence before it. Preserves an existing habit's original anchor
+    // when just tweaking other fields, so its cycle/start doesn't silently
+    // reset each time it's edited; a legacy habit with no anchor (created
+    // before this existed) stays unbounded rather than gaining one from an
+    // unrelated edit. A brand-new plain weekly habit gets `date` (the day
+    // it's being created for) as its start.
     const needsAnchor = freq === "monthly" || repeatInterval > 1;
     const existingAnchor =
       isEditing && editItem!.type === "habit" ? editItem!.data.anchorDate : undefined;
-    const anchorDate = !needsAnchor
-      ? null
-      : freq === "monthly"
+    const anchorDate = needsAnchor
+      ? freq === "monthly"
         ? resolveMonthlyAnchor(dayOfMonth, existingAnchor ?? date)
-        : existingAnchor || date;
+        : existingAnchor || date
+      : existingAnchor || (isEditing ? null : date);
 
     // Type changed while editing: create the item on the other side, then
     // remove the original. Each store syncs its own create/delete.

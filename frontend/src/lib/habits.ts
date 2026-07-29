@@ -32,9 +32,9 @@ export function anchorDay(anchorDate: string | null | undefined): number | undef
 // date". Mirrored exactly by backend/app/services/tools.py::habit_active_on
 // — keep both in sync if this changes.
 //
-// freq="weekly" + interval<=1 (or no anchorDate) is byte-for-byte the
-// original weekday-only check, so every pre-existing habit behaves
-// identically to before this was added.
+// A habit with no anchorDate at all (every habit created before start dates
+// were tracked) stays unbounded, matching its original behavior — freq="weekly"
+// + interval<=1 + no anchor is byte-for-byte the original weekday-only check.
 export function isHabitActiveOnDate(habit: Habit, date: Date) {
   if (habit.skippedDates?.includes(toISODate(date))) return false;
   const freq = habit.freq ?? "weekly";
@@ -51,9 +51,11 @@ export function isHabitActiveOnDate(habit: Habit, date: Date) {
   }
 
   if (!habit.daysOfWeek.includes(date.getDay())) return false;
-  if (interval <= 1 || !habit.anchorDate) return true;
   const anchor = parseAnchor(habit.anchorDate);
-  if (!anchor) return true; // matches the "interval<=1 or no anchorDate" fallback above
+  if (!anchor) return true;
+  // Never show an occurrence before the habit's start date, regardless of interval.
+  if (date < anchor) return false;
+  if (interval <= 1) return true;
   const weekDiff = Math.round(
     (mondayOf(date).getTime() - mondayOf(anchor).getTime()) / (86_400_000 * 7)
   );
