@@ -142,9 +142,15 @@ function WeeklyPill({ top, durationMinutes, color, icon, completed, onOpen }: We
 
   return (
     <div className="absolute" style={{ top, left: "50%", transform: "translateX(-50%)" }}>
-      <button
-        onClick={onOpen}
-        className="rounded-full flex items-center justify-center text-white shadow-sm active:scale-95 transition-transform"
+      <motion.button
+        onClick={(e) => {
+          // handleOpen already selects the day itself — stop this from also
+          // bubbling to the day column's onClick, which would select it again.
+          e.stopPropagation();
+          onOpen();
+        }}
+        whileTap={tap}
+        className="rounded-full flex items-center justify-center text-white shadow-sm"
         style={{
           width: WEEKLY_PILL_WIDTH,
           height: pillHeight,
@@ -153,7 +159,7 @@ function WeeklyPill({ top, durationMinutes, color, icon, completed, onOpen }: We
         }}
       >
         <IconComponent size={13} />
-      </button>
+      </motion.button>
     </div>
   );
 }
@@ -289,8 +295,12 @@ export default function WeeklyTimeline({ anchorDate }: WeeklyTimelineProps) {
     }
   }
 
-  // Tapping a pill opens a detail popup (instead of toggling directly).
+  // Tapping a pill opens a detail popup (instead of toggling directly) and
+  // selects that day — explicitly, rather than relying on the click bubbling
+  // up to the day column's own onClick, so the popup always shows on the
+  // first tap even for a day other than the one currently selected.
   function handleOpen(item: DayItem, iso: string) {
+    setSelectedDate(iso);
     let streak: number | undefined;
     if (item.type === "habit") {
       const habit = habits.find((h) => h.id === item.id);

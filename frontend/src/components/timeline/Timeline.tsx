@@ -10,7 +10,7 @@ import SwipePager from "./SwipePager";
 import TaskDetailSheet from "./TaskDetailSheet";
 import WeeklyTimeline from "./WeeklyTimeline";
 import type { ViewMode } from "@/App";
-import { addDays, toISODate } from "@/lib/date";
+import { addDays, getWeekDates, toISODate } from "@/lib/date";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Habit } from "@/types/habits";
@@ -46,12 +46,15 @@ export default function Timeline({ viewMode }: TimelineProps) {
   if (viewMode === "weekly") {
     // Swipe the week grid to move a whole week at a time; the pager reveals the
     // neighbouring weeks as you drag.
+    // Keyed by the week's Monday, not the exact selected day — selecting a
+    // different day within the same week (e.g. tapping a task on another day)
+    // must not remount the panel, or it loses whatever it just opened.
     return (
       <SwipePager
         controller={sharedController}
         onPrev={() => shiftSelectedDate(-7)}
         onNext={() => shiftSelectedDate(7)}
-        pageKey={(offset) => toISODate(addDays(selectedDateObj, offset * 7))}
+        pageKey={(offset) => toISODate(getWeekDates(addDays(selectedDateObj, offset * 7))[0])}
         renderPage={(offset) => (
           <WeeklyTimeline anchorDate={addDays(selectedDateObj, offset * 7)} />
         )}
