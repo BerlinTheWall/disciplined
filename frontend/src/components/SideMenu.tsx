@@ -1,10 +1,10 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { animate, AnimatePresence, motion, useMotionValue, type PanInfo } from "framer-motion";
 import { Lock, LogOut, Palette, Settings, X } from "lucide-react";
 
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { tap } from "@/lib/motion";
+import { spring, tap } from "@/lib/motion";
 import { ALL_TABS, type Page } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -13,6 +13,14 @@ import { useThemeStore } from "@/store/themeStore";
 // out of the side menu. Everything else — meals, recipes, food, workout,
 // habits, expenses — lives here.
 const HIDDEN_FROM_MENU: Page[] = ["schedule"];
+
+// w-72. Drag distance/constraints are in px, not %, so they line up with the
+// drawer's actual on-screen width.
+const DRAWER_WIDTH = 288;
+// A partial swipe left of this many px, or a fast-enough flick regardless of
+// distance, commits the close; anything short of that springs back open.
+const CLOSE_DISTANCE = 80;
+const CLOSE_VELOCITY = 500;
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -33,6 +41,15 @@ export default function SideMenu({
   const logout = useAuthStore((s) => s.logout);
   useScrollLock(isOpen);
 
+  const x = useMotionValue(0);
+  function onDragEnd(_: unknown, info: PanInfo) {
+    if (info.offset.x < -CLOSE_DISTANCE || info.velocity.x < -CLOSE_VELOCITY) {
+      onClose();
+    } else {
+      animate(x, 0, spring.gentle);
+    }
+  }
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -49,14 +66,20 @@ export default function SideMenu({
           {/* Drawer */}
           <motion.div
             className="fixed top-0 left-0 bottom-0 w-72 bg-surface z-50 flex flex-col shadow-2xl"
-            initial={{ x: "-100%" }}
+            style={{ x }}
+            initial={{ x: -DRAWER_WIDTH }}
             animate={{ x: 0 }}
-            exit={{ x: "-100%" }}
+            exit={{ x: -DRAWER_WIDTH }}
             transition={{
               type: "spring",
               damping: 28,
               stiffness: 300,
             }}
+            drag="x"
+            dragDirectionLock
+            dragConstraints={{ left: -DRAWER_WIDTH, right: 0 }}
+            dragElastic={0}
+            onDragEnd={onDragEnd}
           >
             {/* Header — top padding adds the iOS safe-area inset (0 on devices
                 without a notch) so the logo clears the status bar, same as the
