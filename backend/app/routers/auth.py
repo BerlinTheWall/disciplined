@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from math import ceil
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select, update
@@ -23,6 +24,14 @@ from app.services.codes import consume_code, issue_code, seconds_until_resend
 from app.services.email import code_email_html, send_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_MINUTES = 15
+
+
+def _minutes_label(seconds: float) -> str:
+    minutes = max(1, ceil(seconds / 60))
+    return f"{minutes} minute{'s' if minutes != 1 else ''}"
 
 
 async def _adopt_orphan_rows(db: AsyncSession, user_id: str) -> None:
@@ -82,9 +91,43 @@ async def register(
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await db.scalar(select(User).where(User.email == body.email.lower()))
-    if user is None or not verify_password(body.password, user.hashed_password):
+    if user is None:
         # One message for both cases so the endpoint doesn't reveal which emails exist.
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    now = datetime.now(timezone.utc)
+    if user.login_locked_until is not None:
+        locked_until = datetime.fromisoformat(user.login_locked_until)
+        if locked_until > now:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Try again in {_minutes_label((locked_until - now).total_seconds())}.",
+            )
+        # Lockout has expired — a fresh set of attempts, not a continuation.
+        user.failed_login_attempts = 0
+        user.login_locked_until = None
+
+    if not verify_password(body.password, user.hashed_password):
+        user.failed_login_attempts += 1
+        remaining = LOGIN_MAX_ATTEMPTS - user.failed_login_attempts
+        if remaining <= 0:
+            user.login_locked_until = (now + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)).isoformat()
+            await db.commit()
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Try again in {_minutes_label(LOGIN_LOCKOUT_MINUTES * 60)}.",
+            )
+        await db.commit()
+        detail = "Incorrect email or password"
+        if remaining <= 2:
+            detail += f" ({remaining} attempt{'s' if remaining != 1 else ''} left before your account is temporarily locked)"
+        raise HTTPException(status_code=401, detail=detail)
+
+    if user.failed_login_attempts > 0:
+        user.failed_login_attempts = 0
+        user.login_locked_until = None
+        await db.commit()
+
     if not user.email_verified:
         # 403 (not 401): the credentials are correct, the account just isn't
         # usable yet — the frontend uses this status to route straight to the

@@ -72,24 +72,45 @@ export function setToken(token: string | null): void {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...init,
+    });
+  } catch {
+    // fetch only rejects when no HTTP response ever came back at all — no
+    // connection, DNS failure, the backend isn't running, CORS block, etc.
+    // navigator.onLine distinguishes "you have no connection" from "you're
+    // online but the backend specifically is unreachable" (status 0 marks
+    // this as neither a real 2xx/4xx/5xx — never confuse it with one).
+    throw new ApiError(
+      0,
+      navigator.onLine
+        ? "Can't reach the server right now. Please try again in a moment."
+        : "You're offline. Check your connection and try again."
+    );
+  }
   // An expired/revoked token means every call will fail — tell the app shell
   // to log out. A 401 from the auth endpoints is just wrong credentials.
   if (res.status === 401 && !path.startsWith("/api/auth/")) {
     window.dispatchEvent(new Event("api-unauthorized"));
   }
   if (!res.ok) {
-    let detail = `${init?.method ?? "GET"} ${path} failed with ${res.status}`;
+    // A response that arrived but wasn't ours (e.g. a proxy's plain HTML
+    // error page) leaves no detail to parse — 5xx there means the server is
+    // actually broken, not that the request itself was invalid.
+    let detail =
+      res.status >= 500
+        ? "Something went wrong on our end. Please try again in a moment."
+        : `Request failed (${res.status}).`;
     try {
       detail = errorMessageFromBody(await res.json()) ?? detail;
     } catch {
-      // no JSON body — keep the generic message
+      // no JSON body — keep the status-based fallback
     }
     throw new ApiError(res.status, detail);
   }

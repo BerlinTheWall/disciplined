@@ -107,9 +107,13 @@ export default function AuthPage() {
         // Correct credentials, unverified account — see routers/auth.py.
         setVerifyFor({ email: email.trim(), reason: "login" });
       } else if (err instanceof ApiError) {
+        // Network/offline failures land here too now — api.ts's request()
+        // always throws an ApiError with an already-specific message
+        // (offline vs. unreachable vs. a real server error), so there's
+        // nothing left to guess at in this branch.
         setError(err.message);
       } else {
-        setError("Can't reach the server — is the backend running?");
+        setError("Something went wrong. Please try again.");
       }
     } finally {
       setBusy(false);

@@ -35,6 +35,11 @@ class User(Base):
     # travels instead of freezing at wherever they signed up. Nullable: older
     # accounts and anything created before this existed have none yet.
     timezone: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Login brute-force lockout (see routers/auth.py's login()). Resets to 0
+    # on any successful login, or automatically once login_locked_until
+    # passes — a lockout always grants a clean slate rather than stacking.
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    login_locked_until: Mapped[str | None] = mapped_column(String, nullable=True)  # ISO datetime, UTC
     # Caps how many proactive coach check-ins fire per day (see
     # services/coach.py's TIER_BUDGET). No billing exists yet, so this
     # defaults everyone to the top tier; wiring real subscriptions later is
