@@ -37,9 +37,11 @@ def normalize_database_url(url: str) -> str:
 
 class Settings(BaseSettings):
     gemini_api_key: str = ""
-    # flash rather than flash-lite: lite kept asking for details instead of
-    # calling tools, and claimed changes it never made (see chat history).
-    gemini_model: str = "gemini-2.5-flash"
+    # Default is flash — flash-lite previously kept asking for details instead
+    # of calling tools, and claimed changes it never made (see chat history).
+    # Currently overridden to flash-lite via GEMINI_MODEL in .env for cost;
+    # revisit if tool-calling reliability regresses.
+    gemini_model: str = "gemini-2.5-flash-lite"
     # 2.5 Flash "thinks" by default and bills thinking as output tokens — for
     # this tool-calling workload it adds cost, not quality. 0 disables; raise
     # (or set -1 for dynamic) if scheduling answers ever get noticeably worse.

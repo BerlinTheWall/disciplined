@@ -10,7 +10,11 @@ import {
   useSpeechState,
 } from "@/hooks/useSpeech";
 import { spring, tap } from "@/lib/motion";
+import { describePendingAction } from "@/lib/pendingAction";
 import { useChatStore, type ChatBubble } from "@/store/chatStore";
+import { useGoalStore } from "@/store/goalStore";
+import { useHabitStore } from "@/store/habitStore";
+import { useTaskStore } from "@/store/taskStore";
 import BottomSheet from "../BottomSheet";
 
 // Bottom sheet showing the assistant conversation. Opened by the schedule
@@ -25,6 +29,9 @@ function Bubble({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const tasks = useTaskStore((s) => s.tasks);
+  const habits = useHabitStore((s) => s.habits);
+  const goals = useGoalStore((s) => s.goals);
   const isUser = message.role === "user";
   const showActions = !isUser && message.pendingActions?.length && !message.resolved;
   return (
@@ -45,6 +52,18 @@ function Bubble({
       >
         {message.content}
       </p>
+      {showActions && (
+        <div className="max-w-[80%] mt-1.5 rounded-xl border border-fg/10 bg-surface-raised px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint mb-1">
+            This will run exactly as follows
+          </p>
+          {message.pendingActions!.map((action, i) => (
+            <p key={i} className="text-[13px] text-fg">
+              {describePendingAction(action, { tasks, habits, goals })}
+            </p>
+          ))}
+        </div>
+      )}
       {showActions && (
         <div className="flex gap-2 mt-1.5">
           <motion.button

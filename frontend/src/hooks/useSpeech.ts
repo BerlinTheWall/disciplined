@@ -67,12 +67,12 @@ interface SpeechHandlers {
   onError?: (message: string) => void;
 }
 
-// How long of a pause ends a native utterance. The Web Speech API detects
-// silence itself; iOS's recognizer keeps listening until told to stop, so the
-// hook finalizes after a pause (short once something was heard, longer while
-// still waiting for the first words).
-const NATIVE_SILENCE_MS = 3_000;
-const NATIVE_NO_SPEECH_MS = 7_000;
+// How long of a pause auto-cuts listening and hands off whatever was heard so
+// far to the assistant. Applied on both platforms: iOS's native recognizer
+// keeps listening until told to stop, and the browser's own endpointing isn't
+// reliably 7s (varies by browser, often much shorter) — so both are driven by
+// this same explicit timer instead of trusting either platform's default.
+const SILENCE_TIMEOUT_MS = 7_000;
 
 export function useSpeechRecognition(handlers: SpeechHandlers) {
   const [listening, setListening] = useState(false);
@@ -91,10 +91,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
 
   function armSilenceTimer() {
     clearTimeout(silenceTimer.current);
-    silenceTimer.current = setTimeout(
-      () => void nativeStop(true),
-      nativeText.current ? NATIVE_SILENCE_MS : NATIVE_NO_SPEECH_MS
-    );
+    silenceTimer.current = setTimeout(() => void nativeStop(true), SILENCE_TIMEOUT_MS);
   }
 
   async function nativeStart() {
@@ -157,6 +154,31 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
   }
 
   // ── Browser ────────────────────────────────────────────────────────
+  const browserText = useRef("");
+  const browserSilenceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Guards against the browser's own onresult/onend firing after we've
+  // already force-finalized on the silence timer (both paths would otherwise
+  // race to call onFinal for the same utterance).
+  const browserFinalized = useRef(false);
+
+  function armBrowserSilenceTimer(rec: SpeechRecognitionLike) {
+    clearTimeout(browserSilenceTimer.current);
+    browserSilenceTimer.current = setTimeout(() => {
+      if (browserFinalized.current) return;
+      browserFinalized.current = true;
+      const text = browserText.current.trim();
+      browserText.current = "";
+      try {
+        rec.abort();
+      } catch {
+        // already stopped
+      }
+      recRef.current = null;
+      setListening(false);
+      if (text) handlersRef.current.onFinal(text);
+    }, SILENCE_TIMEOUT_MS);
+  }
+
   function start() {
     if (isNativeSpeech) {
       void nativeStart();
@@ -168,6 +190,8 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
     rec.lang = navigator.language || "en-US";
     rec.interimResults = true;
     rec.continuous = false; // one utterance per tap
+    browserFinalized.current = false;
+    browserText.current = "";
     rec.onresult = (event) => {
       let final = "";
       let interim = "";
@@ -176,10 +200,18 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
         if (result.isFinal) final += result[0].transcript;
         else interim += result[0].transcript;
       }
-      if (final.trim()) handlersRef.current.onFinal(final.trim());
-      else if (interim) handlersRef.current.onInterim?.(interim);
+      if (final.trim()) {
+        browserFinalized.current = true;
+        clearTimeout(browserSilenceTimer.current);
+        handlersRef.current.onFinal(final.trim());
+      } else if (interim) {
+        browserText.current = interim;
+        handlersRef.current.onInterim?.(interim);
+        armBrowserSilenceTimer(rec);
+      }
     };
     rec.onend = () => {
+      clearTimeout(browserSilenceTimer.current);
       recRef.current = null;
       setListening(false);
     };
@@ -188,6 +220,7 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
     };
     recRef.current = rec;
     setListening(true);
+    armBrowserSilenceTimer(rec); // also covers total silence — no speech at all yet
     rec.start();
   }
 
@@ -197,11 +230,13 @@ export function useSpeechRecognition(handlers: SpeechHandlers) {
       void nativeStop(true);
       return;
     }
+    clearTimeout(browserSilenceTimer.current);
     recRef.current?.stop();
   }
 
   useEffect(
     () => () => {
+      clearTimeout(browserSilenceTimer.current);
       recRef.current?.abort();
       if (nativeActive.current) void nativeStop(false);
     },
