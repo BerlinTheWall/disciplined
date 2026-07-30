@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 
+import { rehydrateOnAccountChange, userScopedStorage } from "@/lib/userScopedStorage";
 import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 
 // How long an explicitly (or automatically) dismissed nudge stays suppressed
@@ -61,6 +62,7 @@ export const useNudgeStore = create<NudgeState>()(
     }),
     {
       name: "disciplined-nudges",
+      storage: createJSONStorage(() => userScopedStorage("disciplined-nudges")),
       partialize: (state) => ({
         lastShownDate: state.lastShownDate,
         dismissedUntil: state.dismissedUntil,
@@ -68,3 +70,5 @@ export const useNudgeStore = create<NudgeState>()(
     }
   )
 );
+
+rehydrateOnAccountChange(useNudgeStore);

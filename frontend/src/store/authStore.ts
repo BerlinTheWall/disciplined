@@ -46,13 +46,14 @@ const USER_DATA_STORE_KEYS = [
   "disciplined-preferences",
   "disciplined-profile",
   "disciplined-reminders",
-  // Actual reminder/nudge content and per-item dismissal state — both
-  // reference the previous account's task/habit/goal ids and text, and were
-  // missing here entirely, which is exactly how a new account on the same
-  // device ended up seeing the old account's notifications.
-  "disciplined-notification-history",
-  "disciplined-nudges",
 ];
+// Notification history and nudge state (disciplined-notification-history,
+// disciplined-nudges) are deliberately NOT here: they have no server copy to
+// restore from, so wiping them on every logout would be a real, permanent
+// loss. Instead they're namespaced per-account via userScopedStorage (see
+// lib/userScopedStorage.ts) — each account's data lives under its own key,
+// so switching accounts on one device neither leaks the previous account's
+// notifications nor destroys them.
 
 // The profile hub's display name (useProfileStore) is local-only, not synced
 // from the account — logout resets it to the generic "You" default (see

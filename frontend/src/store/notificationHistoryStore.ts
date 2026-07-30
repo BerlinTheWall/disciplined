@@ -1,5 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+
+import { rehydrateOnAccountChange, userScopedStorage } from "@/lib/userScopedStorage";
 
 // A record of a reminder or nudge that actually became visible to the user
 // (banner shown, notification delivered, or tapped to reopen the app) — the
@@ -49,6 +51,11 @@ export const useNotificationHistoryStore = create<NotificationHistoryState>()(
           entries: state.entries.map((e) => (e.id === id ? { ...e, response } : e)),
         })),
     }),
-    { name: "disciplined-notification-history" }
+    {
+      name: "disciplined-notification-history",
+      storage: createJSONStorage(() => userScopedStorage("disciplined-notification-history")),
+    }
   )
 );
+
+rehydrateOnAccountChange(useNotificationHistoryStore);
