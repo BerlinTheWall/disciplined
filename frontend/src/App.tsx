@@ -35,6 +35,7 @@ import { useOnboardingStore } from "./store/onboardingStore";
 import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
+import { useSyncStatusStore } from "./store/syncStatusStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
 import { useWorkoutFocusStore } from "./store/workoutFocusStore";
@@ -80,6 +81,10 @@ function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const onboardingDone = useOnboardingStore((s) => s.done);
+  // A small dot on the menu button when there's something to say about sync
+  // (pending changes, or actively pushing) — full detail lives in SideMenu,
+  // reached the same way this dot is seen.
+  const syncPending = useSyncStatusStore((s) => s.pendingCount > 0 || s.syncing);
 
   // Swiping in from the very left edge opens the side menu (standard drawer
   // gesture). Off while the menu or any sheet is already up, or during setup.
@@ -249,9 +254,12 @@ function App() {
               onClick={() => setIsSideMenuOpen(true)}
               data-tour="menu"
               whileTap={tap}
-              className="p-1 -ml-1 text-fg-faint"
+              className="relative p-1 -ml-1 text-fg-faint"
             >
               <Menu size={26} />
+              {syncPending && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500" />
+              )}
             </motion.button>
 
             <div className="relative h-10 flex items-center overflow-hidden">

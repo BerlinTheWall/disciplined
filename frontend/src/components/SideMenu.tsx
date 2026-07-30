@@ -1,5 +1,5 @@
 import { animate, AnimatePresence, motion, useMotionValue, type PanInfo } from "framer-motion";
-import { Lock, LogOut, Palette, Settings, X } from "lucide-react";
+import { CloudOff, Lock, LogOut, Palette, RefreshCw, Settings, X } from "lucide-react";
 
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
@@ -7,6 +7,7 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { spring, tap } from "@/lib/motion";
 import { ALL_TABS, type Page } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
+import { useSyncStatusStore } from "@/store/syncStatusStore";
 import { useThemeStore } from "@/store/themeStore";
 
 // Pages reachable from the bottom nav (Home/Calendar/Profile), so they're left
@@ -39,6 +40,7 @@ export default function SideMenu({
 }: SideMenuProps) {
   const { theme, toggleTheme } = useThemeStore();
   const logout = useAuthStore((s) => s.logout);
+  const { pendingCount, syncing } = useSyncStatusStore();
   useScrollLock(isOpen);
 
   const x = useMotionValue(0);
@@ -175,6 +177,25 @@ export default function SideMenu({
                 <Switch on={theme === "dark"} onToggle={toggleTheme} label="Dark mode" />
               </div>
             </div>
+
+            {/* Sync status — only shown when there's something to say; hidden
+                once everything's confirmed synced, matching how nudges and
+                reminders only surface when relevant rather than sitting here
+                permanently. */}
+            {(syncing || pendingCount > 0) && (
+              <div className="flex items-center gap-3 mx-3 px-4 py-3 rounded-2xl bg-surface-alt mb-1 text-fg-muted">
+                {syncing ? (
+                  <RefreshCw size={18} strokeWidth={1.8} className="animate-spin shrink-0" />
+                ) : (
+                  <CloudOff size={18} strokeWidth={1.8} className="shrink-0" />
+                )}
+                <span className="text-sm font-medium">
+                  {syncing
+                    ? "Syncing…"
+                    : `${pendingCount} change${pendingCount === 1 ? "" : "s"} pending — will sync automatically`}
+                </span>
+              </div>
+            )}
 
             {/* Log out */}
             <div className="px-3 pb-10">
