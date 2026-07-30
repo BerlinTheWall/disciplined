@@ -352,11 +352,11 @@ export default function AuthPage() {
         isOpen={!!verifyFor}
         onClose={() => setVerifyFor(null)}
         email={verifyFor?.email ?? ""}
-        message={
-          verifyFor?.reason === "login"
-            ? "This account hasn't been verified yet. Enter your code, or resend a new one below."
-            : undefined
-        }
+        message={verifyFor?.reason === "login" ? "This account hasn't been verified yet." : undefined}
+        // Signup already triggered a send from register() itself; a blocked
+        // login hasn't sent anything yet, so this is what actually gets a
+        // code moving instead of the sheet just sitting there empty.
+        autoSendOnOpen={verifyFor?.reason === "login"}
       />
     </div>
   );

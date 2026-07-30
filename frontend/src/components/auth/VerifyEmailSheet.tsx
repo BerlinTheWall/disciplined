@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LoaderCircle } from "lucide-react";
 
@@ -15,13 +15,23 @@ interface Props {
   onClose: () => void;
   email: string;
   message?: string;
+  // Signup already gets a code from register() itself — this is only for the
+  // blocked-login case, where nothing has been sent yet and the sheet would
+  // otherwise open on an empty code with no way to know that.
+  autoSendOnOpen?: boolean;
 }
 
 // Verification is a hard gate on login (see routers/auth.py) — this sheet is
 // the one way in for an unverified account, reached either right after
 // signup or when a login attempt comes back 403. Success logs the user
 // straight in (verifyEmail returns a fresh token), same as ForgotPasswordSheet.
-export default function VerifyEmailSheet({ isOpen, onClose, email, message }: Props) {
+export default function VerifyEmailSheet({
+  isOpen,
+  onClose,
+  email,
+  message,
+  autoSendOnOpen,
+}: Props) {
   const verifyEmail = useAuthStore((s) => s.verifyEmail);
   const resendVerification = useAuthStore((s) => s.resendVerification);
 
@@ -29,6 +39,29 @@ export default function VerifyEmailSheet({ isOpen, onClose, email, message }: Pr
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Adjust state during render (rather than in the effect below) for the
+  // synchronous "about to auto-send" reset — the effect is left to do only
+  // the actual async call and its own promise-callback state updates, which
+  // is the part React's rules actually want inside an effect.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen && autoSendOnOpen) {
+      setError(null);
+      setBusy(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen || !autoSendOnOpen) return;
+    resendVerification(email)
+      .then(setNotice)
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : "Something went wrong — try again.");
+      })
+      .finally(() => setBusy(false));
+  }, [isOpen, autoSendOnOpen, email, resendVerification]);
 
   function close() {
     onClose();

@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
+import SwipePager from "./SwipePager";
 import { isLightColor } from "@/lib/color";
 import { parseISODate, toISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
@@ -25,14 +26,6 @@ const MONTH_NAMES = [
   "November",
   "December",
 ];
-
-// The month grid slides in from the side you're heading toward (dir 0 on
-// first render skips the slide entirely).
-const monthVariants = {
-  enter: (d: number) => ({ x: d > 0 ? 56 : d < 0 ? -56 : 0, opacity: d === 0 ? 1 : 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (d: number) => ({ x: d > 0 ? -56 : d < 0 ? 56 : 0, opacity: 0 }),
-};
 
 /* ---- month/year scroll wheels ------------------------------------ */
 
@@ -135,15 +128,11 @@ export default function CalendarMonth({
 
   const selected = parseISODate(value);
   const [view, setView] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
-  // +1 sliding forward, -1 back — drives which side the next month enters from.
-  const [dir, setDir] = useState(0);
   // Tapping the "July 2026" heading flips the day grid into month/year wheels.
   const [wheelOpen, setWheelOpen] = useState(false);
   const todayIso = toISODate(new Date());
   const y = view.getFullYear();
   const m = view.getMonth();
-  const firstWeekday = new Date(y, m, 1).getDay();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
   const onSelColor = isLightColor(color) ? "#111827" : "#ffffff";
 
   // Colors of the items already scheduled on a given day, for the dot row.
@@ -156,8 +145,67 @@ export default function CalendarMonth({
   }
 
   function shiftMonth(delta: number) {
-    setDir(delta);
     setView(new Date(y, m + delta, 1));
+  }
+
+  // Renders one month's day grid, for a given offset from the currently viewed
+  // month (used by both the settled page and its swiped-in neighbours).
+  function renderMonthGrid(offset: number) {
+    const gy = new Date(y, m + offset, 1).getFullYear();
+    const gm = new Date(y, m + offset, 1).getMonth();
+    const firstWeekday = new Date(gy, gm, 1).getDay();
+    const daysInMonth = new Date(gy, gm + 1, 0).getDate();
+    // Always pad out to 6 full rows (42 cells) so every month's grid is the
+    // same height — otherwise 4-vs-6-row months jump the sheet's height as
+    // you swipe between them. Padding cells mirror a real day cell's markup
+    // (invisibly) so a fully-empty last row still reserves its height instead
+    // of collapsing to nothing.
+    const trailingPad = 42 - firstWeekday - daysInMonth;
+    const pad = (key: string) => (
+      <span key={key} className="flex flex-col items-center gap-1 py-0.5" aria-hidden>
+        <span className="w-9 h-9" />
+        <span className="h-1.5" />
+      </span>
+    );
+    return (
+      <div className="grid grid-cols-7 gap-y-1">
+        {Array.from({ length: firstWeekday }, (_, i) => pad(`pad-lead-${i}`))}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const iso = toISODate(new Date(gy, gm, i + 1));
+          const isSelected = iso === value;
+          const isToday = iso === todayIso;
+          const dots = dayMarkers(iso).slice(0, 3);
+          return (
+            <button
+              key={iso}
+              onClick={() => onChange(iso)}
+              className="flex flex-col items-center gap-1 py-0.5"
+            >
+              <span
+                className="w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold"
+                style={
+                  isSelected
+                    ? { backgroundColor: color, color: onSelColor }
+                    : { color: isToday ? color : "var(--fg)" }
+                }
+              >
+                {i + 1}
+              </span>
+              <span className="flex gap-0.5 h-1.5">
+                {dots.map((c, j) => (
+                  <span
+                    key={j}
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+        {Array.from({ length: trailingPad }, (_, i) => pad(`pad-trail-${i}`))}
+      </div>
+    );
   }
 
   return (
@@ -225,57 +273,17 @@ export default function CalendarMonth({
           ))}
         </div>
 
-        <div className="relative overflow-x-clip">
-          <AnimatePresence mode="popLayout" custom={dir} initial={false}>
-            <motion.div
-              key={`${y}-${m}`}
-              custom={dir}
-              variants={monthVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="grid grid-cols-7 gap-y-1"
-            >
-              {Array.from({ length: firstWeekday }, (_, i) => (
-                <span key={`pad-${i}`} />
-              ))}
-              {Array.from({ length: daysInMonth }, (_, i) => {
-                const iso = toISODate(new Date(y, m, i + 1));
-                const isSelected = iso === value;
-                const isToday = iso === todayIso;
-                const dots = dayMarkers(iso).slice(0, 3);
-                return (
-                  <button
-                    key={iso}
-                    onClick={() => onChange(iso)}
-                    className="flex flex-col items-center gap-1 py-0.5"
-                  >
-                    <span
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold"
-                      style={
-                        isSelected
-                          ? { backgroundColor: color, color: onSelColor }
-                          : { color: isToday ? color : "var(--fg)" }
-                      }
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="flex gap-0.5 h-1.5">
-                      {dots.map((c, j) => (
-                        <span
-                          key={j}
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </span>
-                  </button>
-                );
-              })}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+        {/* Swipe the grid to move a month at a time, following the finger like the
+            day/week pagers elsewhere in the timeline. */}
+        <SwipePager
+          onPrev={() => shiftMonth(-1)}
+          onNext={() => shiftMonth(1)}
+          pageKey={(offset) => {
+            const d = new Date(y, m + offset, 1);
+            return `${d.getFullYear()}-${d.getMonth()}`;
+          }}
+          renderPage={renderMonthGrid}
+        />
       </Collapse>
     </div>
   );
