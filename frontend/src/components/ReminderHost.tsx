@@ -169,7 +169,8 @@ function collectUpcoming(now: number): NativeReminder[] {
     title: string,
     date: string,
     startMinutes: number,
-    minutesBefore: number
+    minutesBefore: number,
+    icon: IconKey
   ) => {
     const key = `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`;
     const startAt = new Date(date + "T00:00:00").getTime() + startMinutes * 60_000;
@@ -188,6 +189,7 @@ function collectUpcoming(now: number): NativeReminder[] {
         title,
         startMinutes,
         Math.round((startAt - fireAt) / 60_000),
+        icon,
         seed
       ),
       fireAt,
@@ -197,7 +199,7 @@ function collectUpcoming(now: number): NativeReminder[] {
 
   for (const t of useTaskStore.getState().tasks) {
     if (t.reminderMinutesBefore == null || t.completed) continue;
-    consider("task", t.id, t.title, t.date, t.startMinutes, t.reminderMinutesBefore);
+    consider("task", t.id, t.title, t.date, t.startMinutes, t.reminderMinutesBefore, t.icon);
   }
   for (let d = 0; d < NATIVE_HORIZON_DAYS; d++) {
     const day = new Date();
@@ -206,7 +208,7 @@ function collectUpcoming(now: number): NativeReminder[] {
     for (const h of useHabitStore.getState().habits) {
       if (h.reminderMinutesBefore == null || !isHabitActiveOnDate(h, day)) continue;
       if (h.completedDates.includes(iso)) continue;
-      consider("habit", h.id, h.title, iso, h.startMinutes, h.reminderMinutesBefore);
+      consider("habit", h.id, h.title, iso, h.startMinutes, h.reminderMinutesBefore, h.icon);
     }
   }
 
@@ -228,7 +230,9 @@ function speakReminder(reminder: ReminderAlert) {
   spokenKeys.add(reminder.key);
   const startAt = parseISODate(reminder.date).getTime() + reminder.startMinutes * 60_000;
   const minutesUntil = Math.round((startAt - Date.now()) / 60_000);
-  void speakAssistant(assistantReminderLine(reminder.title, reminder.startMinutes, minutesUntil));
+  void speakAssistant(
+    assistantReminderLine(reminder.title, reminder.startMinutes, minutesUntil, reminder.icon)
+  );
 }
 
 function tick() {

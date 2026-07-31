@@ -13,7 +13,7 @@ import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
 import { GOOGLE_VOICES, useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
-import { useSettingsStore } from "@/store/settingsStore";
+import { useSettingsStore, type VoiceTone } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTutorialStore } from "@/store/tutorialStore";
 
@@ -21,6 +21,23 @@ interface SettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+// Personality of spoken reminder lines (see assistantSpeech.ts); each has a
+// short spoken preview so picking one previews it immediately, same as the
+// voice picker below.
+const VOICE_TONES: Array<{ value: VoiceTone; label: string; preview: string }> = [
+  { value: "warm", label: "Warm", preview: "Hi — I'll keep reminders warm and personal." },
+  {
+    value: "direct",
+    label: "Direct",
+    preview: "Got it. I'll keep reminders short and to the point.",
+  },
+  {
+    value: "motivational",
+    label: "Motivational",
+    preview: "Let's go! I'll bring the energy to your reminders.",
+  },
+];
 
 // Earliest auto-play time choices for the morning briefing; opening the app
 // earlier leaves the briefing armed until the clock passes the chosen time.
@@ -130,8 +147,13 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         state.setDefaultReminderMinutes,
       ])
     );
-  const [voiceEnabled, setVoiceEnabled] = useSettingsStore(
-    useShallow((state) => [state.voiceEnabled, state.setVoiceEnabled])
+  const [voiceEnabled, setVoiceEnabled, voiceTone, setVoiceTone] = useSettingsStore(
+    useShallow((state) => [
+      state.voiceEnabled,
+      state.setVoiceEnabled,
+      state.voiceTone,
+      state.setVoiceTone,
+    ])
   );
   const [googleVoice, setGoogleVoice] = useGoogleVoiceStore(
     useShallow((state) => [state.voice, state.setVoice])
@@ -158,6 +180,13 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     primeAudioChannel();
     // Preview through the real path, same as toggling Voice on.
     void speakAssistant("Hi, this is how I'll sound.");
+  }
+
+  function pickVoiceTone(tone: VoiceTone) {
+    setVoiceTone(tone);
+    stopSpeaking();
+    primeAudioChannel();
+    void speakAssistant(VOICE_TONES.find((t) => t.value === tone)!.preview);
   }
 
   function toggleVoiceEnabled() {
@@ -245,6 +274,16 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               labelOf={(v) => v.label}
               selected={(v) => googleVoice === v.id}
               onSelect={(v) => pickGoogleVoice(v.id)}
+            />
+          </Collapse>
+          <Collapse open={voiceEnabled}>
+            <ChipRow
+              title="Reminder tone"
+              options={VOICE_TONES}
+              keyOf={(t) => t.value}
+              labelOf={(t) => t.label}
+              selected={(t) => voiceTone === t.value}
+              onSelect={(t) => pickVoiceTone(t.value)}
             />
           </Collapse>
           <Collapse open={voiceEnabled}>

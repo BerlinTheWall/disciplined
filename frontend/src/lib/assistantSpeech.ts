@@ -1,8 +1,15 @@
+import type { IconKey } from "@/lib/icons";
 import { useProfileStore } from "@/store/profileStore";
+import { useSettingsStore, type VoiceTone } from "@/store/settingsStore";
 
 // Composes the sentence a reminder speaks — phrased like a personal assistant
-// giving a manager a heads-up, not like a machine reading a log line. Picks a
-// random variant so back-to-back reminders don't sound canned.
+// giving a heads-up, not like a machine reading a log line. Two axes shape
+// the wording: the user's chosen voiceTone (Settings > Voice) and a coarse
+// category guessed from the item's icon (a health reminder reads differently
+// than a work one). Picks a random variant so back-to-back reminders don't
+// sound canned; a caller-provided seed makes the choice stable instead (see
+// reminderAudio.ts — the same reminder must always produce the same
+// sentence, or its pre-synthesized notification audio would need redoing).
 
 // "6 PM", "6:15 PM" — the way a person says a clock time.
 function spokenTime(startMinutes: number) {
@@ -42,37 +49,213 @@ function pick(variants: string[], seed?: number) {
   return variants[Math.floor(Math.random() * variants.length)];
 }
 
+// "Sam, " or "" — folded into the front of a lowercase continuation. Fine for
+// speech (capitalization is inaudible); these lines are never shown as text,
+// only spoken (see ReminderHost.tsx — the visible banner uses a separate,
+// plain `body` string).
+function greet(name: string) {
+  return name ? `${name}, ` : "";
+}
+
+type ReminderCategory = "health" | "work" | "study" | "general";
+
+// Coarse bucket driving which phrasing set a reminder gets. Only the icons
+// with a genuinely different natural tone get their own category — everything
+// else (meals, workouts, shopping, alarms, default) reads fine as general.
+function reminderCategory(icon: IconKey): ReminderCategory {
+  if (icon === "health") return "health";
+  if (icon === "work") return "work";
+  if (icon === "reading") return "study"; // closest icon to studying/exams
+  return "general";
+}
+
+interface LineCtx {
+  name: string;
+  title: string;
+  time: string;
+  lead: string;
+}
+
+type LineSet = Record<
+  ReminderCategory,
+  { now: (c: LineCtx) => string[]; upcoming: (c: LineCtx) => string[] }
+>;
+
+// One entry per voiceTone (Settings > Voice > Tone), each branching further by
+// category and by whether the item is starting now or still ahead.
+const TEMPLATES: Record<VoiceTone, LineSet> = {
+  // Personal-assistant warmth — the original, and still the default.
+  warm: {
+    general: {
+      now: ({ name, title, time }) => [
+        `${greet(name)}it's ${time} — time for ${title}.`,
+        `${title} is starting now.`,
+        `Time for ${title} — it's ${time}.`,
+      ],
+      upcoming: ({ name, title, time, lead }) => [
+        `${greet(name)}quick heads-up — ${title} starts ${lead}, at ${time}.`,
+        `Just a reminder: ${title} is coming up ${lead}.`,
+        `${title} starts ${lead}. That's at ${time}.`,
+      ],
+    },
+    health: {
+      now: ({ name, title }) => [
+        `${greet(name)}it's time for ${title}. Don't skip this one.`,
+        `${greet(name)}just a gentle reminder — it's time for ${title}.`,
+        `${title} is due right now.`,
+      ],
+      upcoming: ({ name, title, time, lead }) => [
+        `${greet(name)}${title} comes up ${lead}, at ${time} — plenty of time to get ready.`,
+        `A gentle heads-up: ${title} is coming up ${lead}.`,
+        `${greet(name)}don't forget — ${title} is coming up ${lead}.`,
+      ],
+    },
+    work: {
+      now: ({ name, title, time }) => [
+        `${greet(name)}it's ${time} — ${title} is starting.`,
+        `Heads up — ${title} is starting now.`,
+        `${title} is starting right now, ${time}.`,
+      ],
+      upcoming: ({ name, title, time, lead }) => [
+        `${greet(name)}${title} starts ${lead}, at ${time} — might be worth wrapping up what you're doing.`,
+        `Just a heads-up: ${title} is coming up ${lead}.`,
+        `${greet(name)}${title} is coming up ${lead}.`,
+      ],
+    },
+    study: {
+      now: ({ name, title }) => [
+        `${greet(name)}it's time for ${title}.`,
+        `${title} is starting now — good luck.`,
+        `Time to focus: ${title} is starting.`,
+      ],
+      upcoming: ({ name, title, time, lead }) => [
+        `${greet(name)}${title} is coming up ${lead}, at ${time} — good time to review your notes.`,
+        `Heads up — ${title} starts ${lead}.`,
+        `${greet(name)}${title} is coming up ${lead}. You've got this.`,
+      ],
+    },
+  },
+
+  // Brisk and efficient — says the fact, adds only what's actionable.
+  direct: {
+    general: {
+      now: ({ title, time }) => [`${title}. It's ${time}.`, `Now: ${title}.`, `${title} — go.`],
+      upcoming: ({ title, time, lead }) => [
+        `${title} ${lead}.`,
+        `${title}, ${lead}.`,
+        `Heads up — ${title}, ${time}.`,
+      ],
+    },
+    health: {
+      now: ({ title }) => [
+        `Time for ${title}.`,
+        `${title} — don't skip it.`,
+        `${title} is due now.`,
+      ],
+      upcoming: ({ title, time, lead }) => [
+        `${title} ${lead}. Don't skip it.`,
+        `Reminder: ${title}, ${lead}.`,
+        `${title} at ${time} — ${lead}.`,
+      ],
+    },
+    work: {
+      now: ({ title, time }) => [
+        `${title} starting now.`,
+        `Go — ${title} is starting.`,
+        `${title}. It's ${time}. You're on.`,
+      ],
+      upcoming: ({ title, time, lead }) => [
+        `${title} ${lead} — you should get moving.`,
+        `Heads up: ${title} starts ${lead}. Time to wrap up.`,
+        `${title} ${lead}, at ${time}. Better get going.`,
+      ],
+    },
+    study: {
+      now: ({ title }) => [
+        `${title}. Let's go.`,
+        `Time for ${title}. Focus up.`,
+        `${title} starts now. No more scrolling.`,
+      ],
+      upcoming: ({ title, time, lead }) => [
+        `${title} ${lead}. Time to get serious.`,
+        `${title} ${lead} — make it count.`,
+        `Heads up: ${title} at ${time}, ${lead}. Get focused.`,
+      ],
+    },
+  },
+
+  // Energetic coach — pushes and encourages, never scolds.
+  motivational: {
+    general: {
+      now: ({ name, title }) => [
+        `${greet(name)}let's go — ${title}, right now!`,
+        `Time to shine: ${title} starts now.`,
+        `${title} is here — make it count.`,
+      ],
+      upcoming: ({ name, title, lead }) => [
+        `${greet(name)}${title} is coming up ${lead} — get ready to crush it.`,
+        `${title} ${lead}. You've got this.`,
+        `Coming up ${lead}: ${title}. Let's make it a good one.`,
+      ],
+    },
+    health: {
+      now: ({ name, title }) => [
+        `${greet(name)}time to take care of yourself — ${title}, right now.`,
+        `${title} time! Your future self will thank you.`,
+        `Don't forget ${title} — you're doing great.`,
+      ],
+      upcoming: ({ name, title, lead }) => [
+        `${greet(name)}${title} is coming up ${lead} — keep taking care of yourself.`,
+        `${title} ${lead}. Small habits, big difference.`,
+        `Heads up — ${title} coming up ${lead}. Stay on top of it.`,
+      ],
+    },
+    work: {
+      now: ({ name, title }) => [
+        `${greet(name)}showtime — ${title} starts now. Go get it.`,
+        `${title} is on! You've prepared for this.`,
+        `Let's go — ${title}, right now.`,
+      ],
+      upcoming: ({ name, title, lead }) => [
+        `${greet(name)}${title} ${lead} — time to get moving, you've got this.`,
+        `${title} ${lead}. Wrap up and get ready to shine.`,
+        `Heads up — ${title} coming up ${lead}. Go show them what you've got.`,
+      ],
+    },
+    study: {
+      now: ({ name, title }) => [
+        `${greet(name)}${title} starts now — this is your moment, focus up.`,
+        `Time to study. ${title} — let's take this seriously.`,
+        `${title} is here. Deep breath, and go get it.`,
+      ],
+      upcoming: ({ name, title, lead }) => [
+        `${greet(name)}${title} is coming up ${lead} — time to buckle down and review.`,
+        `${title} ${lead}. This is worth taking seriously — let's prepare.`,
+        `Heads up — ${title} coming up ${lead}. You've got this, just focus.`,
+      ],
+    },
+  },
+};
+
 export function assistantReminderLine(
   title: string,
   startMinutes: number,
   minutesUntil: number,
+  icon: IconKey = "default",
   variantSeed?: number
 ) {
   const name = useProfileStore.getState().name.trim();
+  const tone = useSettingsStore.getState().voiceTone;
   const time = spokenTime(startMinutes);
+  const lines = TEMPLATES[tone][reminderCategory(icon)];
+  const ctx: LineCtx = {
+    name,
+    title,
+    time,
+    lead: minutesUntil <= 0 ? "" : spokenLead(minutesUntil),
+  };
 
-  if (minutesUntil <= 0) {
-    return pick(
-      [
-        name ? `${name}, it's ${time} — time for ${title}.` : `It's ${time} — time for ${title}.`,
-        `${title} is starting now.`,
-        `Time for ${title} — it's ${time}.`,
-      ],
-      variantSeed
-    );
-  }
-
-  const lead = spokenLead(minutesUntil);
-  return pick(
-    [
-      name
-        ? `${name}, quick heads-up — ${title} starts ${lead}, at ${time}.`
-        : `Quick heads-up — ${title} starts ${lead}, at ${time}.`,
-      `Just a reminder: ${title} is coming up ${lead}.`,
-      `${title} starts ${lead}. That's at ${time}.`,
-    ],
-    variantSeed
-  );
+  return pick(minutesUntil <= 0 ? lines.now(ctx) : lines.upcoming(ctx), variantSeed);
 }
 
 interface BriefingTask {

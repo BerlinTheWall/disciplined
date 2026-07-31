@@ -7,6 +7,7 @@ import type { Page } from "@/lib/pages";
 // App-wide preferences that should survive reloads: schedule view style,
 // visual options, and the reminder behavior toggles.
 export type ScheduleView = "daily" | "weekly";
+export type VoiceTone = "warm" | "direct" | "motivational";
 
 interface SettingsState {
   scheduleView: ScheduleView;
@@ -31,6 +32,12 @@ interface SettingsState {
   // AI voice (see googleVoiceStore); there is no device-voice fallback.
   voiceEnabled: boolean;
   setVoiceEnabled: (on: boolean) => void;
+  // Personality of spoken reminder lines (see assistantSpeech.ts) — warm and
+  // caring, brisk and to-the-point, or an energetic coach. Only reminders
+  // branch phrasing on this today; chat/nudge/coach/briefing text is composed
+  // by Gemini and unaffected.
+  voiceTone: VoiceTone;
+  setVoiceTone: (tone: VoiceTone) => void;
   // Speak the day briefing on the first app open of each day (opt-in). When
   // the browser blocks unprompted audio, the Home page shows a tap-to-listen
   // prompt instead.
@@ -65,6 +72,8 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultReminderMinutes: (minutes) => set({ defaultReminderMinutes: minutes }),
       voiceEnabled: false,
       setVoiceEnabled: (on) => set({ voiceEnabled: on }),
+      voiceTone: "warm",
+      setVoiceTone: (tone) => set({ voiceTone: tone }),
       morningBriefing: false,
       setMorningBriefing: (on) => set({ morningBriefing: on }),
       morningBriefingFromMinutes: null,

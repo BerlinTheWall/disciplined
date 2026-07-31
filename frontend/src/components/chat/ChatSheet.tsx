@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowUp, Mic, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Sparkles, Square, Trash2, Volume2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import { useReadAloud } from "@/hooks/useReadAloud";
 import {
   primeAudioChannel,
   stopSpeaking,
@@ -22,10 +23,16 @@ import BottomSheet from "../BottomSheet";
 
 function Bubble({
   message,
+  isSpeaking,
+  isPreparingSpeech,
+  onToggleSpeak,
   onConfirm,
   onCancel,
 }: {
   message: ChatBubble;
+  isSpeaking: boolean;
+  isPreparingSpeech: boolean;
+  onToggleSpeak: () => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -34,6 +41,7 @@ function Bubble({
   const goals = useGoalStore((s) => s.goals);
   const isUser = message.role === "user";
   const showActions = !isUser && message.pendingActions?.length && !message.resolved;
+  const showSpeakButton = !isUser && !message.error;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -41,17 +49,43 @@ function Bubble({
       transition={spring.snappy}
       className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
     >
-      <p
-        className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
-          isUser
-            ? "bg-surface-inverse text-fg-inverse rounded-br-md"
-            : message.error
-              ? "bg-surface text-[#b07a85] rounded-bl-md"
-              : "bg-surface text-fg rounded-bl-md"
-        }`}
-      >
-        {message.content}
-      </p>
+      <div className="flex items-end gap-1.5">
+        <p
+          className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
+            isUser
+              ? "bg-surface-inverse text-fg-inverse rounded-br-md"
+              : message.error
+                ? "bg-surface text-[#b07a85] rounded-bl-md"
+                : "bg-surface text-fg rounded-bl-md"
+          }`}
+        >
+          {message.content}
+        </p>
+        {showSpeakButton && (
+          <motion.button
+            onClick={onToggleSpeak}
+            whileTap={tap}
+            aria-label={isSpeaking ? "Stop reading aloud" : "Read aloud"}
+            className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mb-0.5 ${
+              isSpeaking ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
+            }`}
+          >
+            {isPreparingSpeech ? (
+              <motion.span
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="flex"
+              >
+                <Loader2 size={13} />
+              </motion.span>
+            ) : isSpeaking ? (
+              <Square size={11} />
+            ) : (
+              <Volume2 size={13} />
+            )}
+          </motion.button>
+        )}
+      </div>
       {showActions && (
         <div className="max-w-[80%] mt-1.5 rounded-xl border border-fg/10 bg-surface-raised px-3 py-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint mb-1">
@@ -124,6 +158,29 @@ export default function ChatSheet() {
   // so there's a visible loader until the assistant is heard.
   const voicePending = useSpeechState((s) => s.pending);
 
+  // Per-message "read aloud" button. useReadAloud is a single global
+  // play/stop state (one voice at a time, same as the Home briefing button),
+  // so which bubble owns it is tracked here. Every read of speakingIndex
+  // below is ANDed with reading/loading, so a stale index once playback goes
+  // idle (naturally finishing, or being stopped some other way) is harmless —
+  // no separate effect needed to reset it.
+  const {
+    reading,
+    loading: speechLoading,
+    toggle: toggleReadAloud,
+    stop: stopReadAloud,
+  } = useReadAloud();
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
+
+  function handleToggleSpeak(index: number, content: string) {
+    // toggleReadAloud() itself just stops when something's already playing —
+    // it never switches straight to new text — so mirror that here: only
+    // claim this bubble as the active one when we're the one starting it.
+    const wasActive = reading || speechLoading;
+    toggleReadAloud(content);
+    setSpeakingIndex(wasActive ? null : index);
+  }
+
   // Voice input: live transcript shows in the input; a finished utterance is
   // sent right away. The reply is spoken by the chat store itself.
   const {
@@ -149,6 +206,7 @@ export default function ChatSheet() {
     if (!isOpen) {
       stopListening();
       stopSpeaking();
+      stopReadAloud();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -209,6 +267,9 @@ export default function ChatSheet() {
           <Bubble
             key={i}
             message={m}
+            isSpeaking={speakingIndex === i && reading}
+            isPreparingSpeech={speakingIndex === i && speechLoading}
+            onToggleSpeak={() => handleToggleSpeak(i, m.content)}
             onConfirm={() => void confirmPending(i)}
             onCancel={() => cancelPending(i)}
           />
