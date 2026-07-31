@@ -114,6 +114,8 @@ class Habit(Base):
     freq: Mapped[str] = mapped_column(String, default="weekly")  # "weekly" | "monthly"
     interval: Mapped[int] = mapped_column(Integer, default=1)
     anchor_date: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Last day this habit is active; NULL means it never ends.
+    end_date: Mapped[str | None] = mapped_column(String, nullable=True)
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
     workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)

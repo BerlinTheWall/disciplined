@@ -17,6 +17,8 @@ export interface Habit {
   // The cycle's first occurrence, the reference point interval math counts
   // from. Only meaningful when interval > 1 or freq is "monthly".
   anchorDate?: string | null;
+  // Last day this habit is active; null/unset = never ends.
+  endDate?: string | null;
   reminderMinutesBefore?: number | null; // minutes before start to notify; null/unset = no reminder
   completedDates: string[]; // ISO dates this habit was checked off, e.g. "2026-06-17"
   skippedDates?: string[]; // ISO dates the user deleted just this occurrence for

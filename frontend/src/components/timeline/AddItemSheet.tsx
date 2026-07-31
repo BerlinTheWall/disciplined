@@ -42,7 +42,7 @@ import TimeWheel from "./TimeWheel";
 import NumberWheel from "@/components/NumberWheel";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { isLightColor } from "@/lib/color";
-import { formatFullDate, relativeDayLabel } from "@/lib/date";
+import { addDaysISO, formatFullDate, formatShortDate, relativeDayLabel } from "@/lib/date";
 import { anchorDay } from "@/lib/habits";
 import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -144,6 +144,7 @@ export default function AddItemSheet({
   const [freq, setFreq] = useState<"weekly" | "monthly">("weekly");
   const [repeatInterval, setRepeatInterval] = useState(1);
   const [dayOfMonth, setDayOfMonth] = useState(1);
+  const [endDate, setEndDate] = useState<string | null>(null);
   const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
   const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
@@ -193,6 +194,7 @@ export default function AddItemSheet({
           new Date(selectedDate + "T00:00:00").getDate()
         )
       );
+      setEndDate(editItem.type === "habit" ? (editItem.data.endDate ?? null) : null);
       setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
       setRecipeId(editItem.data.recipeId ?? undefined);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
@@ -223,6 +225,7 @@ export default function AddItemSheet({
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
     setFreq("weekly");
     setRepeatInterval(1);
+    setEndDate(null);
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
     setPriority(null);
@@ -372,6 +375,8 @@ export default function AddItemSheet({
         ? resolveMonthlyAnchor(dayOfMonth, existingAnchor ?? date)
         : existingAnchor || date
       : existingAnchor || (isEditing ? null : date);
+    // Never let a picked end date sit before the habit's own start.
+    const finalEndDate = endDate && anchorDate && endDate < anchorDate ? anchorDate : endDate;
 
     // Type changed while editing: create the item on the other side, then
     // remove the original. Each store syncs its own create/delete.
@@ -388,6 +393,7 @@ export default function AddItemSheet({
           freq,
           interval: repeatInterval,
           anchorDate,
+          endDate: finalEndDate,
           reminderMinutesBefore: reminder,
           workoutSessionId,
           recipeId,
@@ -447,6 +453,7 @@ export default function AddItemSheet({
           freq,
           interval: repeatInterval,
           anchorDate,
+          endDate: finalEndDate,
           reminderMinutesBefore: reminder,
           workoutSessionId: workoutSessionId ?? null,
           recipeId: recipeId ?? null,
@@ -480,6 +487,7 @@ export default function AddItemSheet({
           freq,
           interval: repeatInterval,
           anchorDate,
+          endDate: finalEndDate,
           reminderMinutesBefore: reminder,
           workoutSessionId,
           recipeId,
@@ -930,6 +938,50 @@ export default function AddItemSheet({
           )}
         </div>
       )}
+
+      <div className="mt-4">
+        <label className="text-xs font-medium text-fg-muted mb-2 block">Ends</label>
+        <div className="flex gap-2 mb-3 flex-wrap">
+          <motion.button
+            whileTap={tap}
+            className={chipCls(endDate === null)}
+            onClick={() => setEndDate(null)}
+          >
+            Never
+          </motion.button>
+          {(
+            [
+              ["1 week", 7],
+              ["2 weeks", 14],
+              ["1 month", 30],
+            ] as const
+          ).map(([label, days]) => {
+            const iso = addDaysISO(date, days);
+            return (
+              <motion.button
+                key={label}
+                whileTap={tap}
+                className={chipCls(endDate === iso)}
+                onClick={() => setEndDate(iso)}
+              >
+                {label}
+              </motion.button>
+            );
+          })}
+          <motion.button
+            whileTap={tap}
+            className={chipCls(
+              endDate !== null && ![7, 14, 30].some((n) => endDate === addDaysISO(date, n))
+            )}
+            onClick={() => setEndDate((d) => d ?? addDaysISO(date, 14))}
+          >
+            Custom
+          </motion.button>
+        </div>
+        <Collapse open={endDate !== null}>
+          <CalendarMonth value={endDate ?? date} color={color} onChange={setEndDate} />
+        </Collapse>
+      </div>
     </div>
   );
 
@@ -1140,6 +1192,9 @@ export default function AddItemSheet({
                     mode === "task"
                       ? "One-time"
                       : repeatSummary(freq, repeatInterval, daysOfWeek, dayOfMonth)
+                  }
+                  hint={
+                    mode === "habit" && endDate ? `Ends ${formatShortDate(endDate)}` : undefined
                   }
                   onPress={() => setOpenRow("repeat")}
                 />

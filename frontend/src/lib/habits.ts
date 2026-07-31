@@ -17,15 +17,15 @@ function daysInMonth(year: number, month: number): number {
 // null on anything unparseable — a habit degrades to "doesn't fire" instead
 // of propagating NaN comparisons into the calendar/streak/reminder code that
 // calls isHabitActiveOnDate in a loop.
-function parseAnchor(anchorDate: string | null | undefined): Date | null {
-  if (!anchorDate) return null;
-  const d = new Date(anchorDate + "T00:00:00");
+function parseDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso + "T00:00:00");
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // Just the day-of-month component, for display (e.g. "Monthly on the 15th").
 export function anchorDay(anchorDate: string | null | undefined): number | undefined {
-  return parseAnchor(anchorDate)?.getDate();
+  return parseDate(anchorDate)?.getDate();
 }
 
 // Single source of truth for "does this habit have an occurrence on this
@@ -37,11 +37,13 @@ export function anchorDay(anchorDate: string | null | undefined): number | undef
 // + interval<=1 + no anchor is byte-for-byte the original weekday-only check.
 export function isHabitActiveOnDate(habit: Habit, date: Date) {
   if (habit.skippedDates?.includes(toISODate(date))) return false;
+  const end = parseDate(habit.endDate);
+  if (end && date > end) return false;
   const freq = habit.freq ?? "weekly";
   const interval = Math.max(1, habit.interval ?? 1);
 
   if (freq === "monthly") {
-    const anchor = parseAnchor(habit.anchorDate);
+    const anchor = parseDate(habit.anchorDate);
     if (!anchor) return false;
     const monthDiff =
       (date.getFullYear() - anchor.getFullYear()) * 12 + (date.getMonth() - anchor.getMonth());
@@ -51,7 +53,7 @@ export function isHabitActiveOnDate(habit: Habit, date: Date) {
   }
 
   if (!habit.daysOfWeek.includes(date.getDay())) return false;
-  const anchor = parseAnchor(habit.anchorDate);
+  const anchor = parseDate(habit.anchorDate);
   if (!anchor) return true;
   // Never show an occurrence before the habit's start date, regardless of interval.
   if (date < anchor) return false;

@@ -6,7 +6,7 @@ import { repeatSummary } from "@/components/timeline/addItemOptions";
 import AddItemSheet from "@/components/timeline/AddItemSheet";
 import TaskDetailSheet from "@/components/timeline/TaskDetailSheet";
 import type { EditItem } from "@/components/timeline/Timeline";
-import { todayISODate } from "@/lib/date";
+import { formatShortDate, todayISODate } from "@/lib/date";
 import { anchorDay, getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { tap } from "@/lib/motion";
@@ -65,6 +65,7 @@ export default function HabitsPage() {
         const streak = getHabitStreak(habit, today);
         const isActiveToday = isHabitActiveOnDate(habit, today);
         const completedToday = habit.completedDates.includes(todayISO);
+        const isEnded = !!habit.endDate && habit.endDate < todayISO;
 
         return (
           <div
@@ -121,6 +122,11 @@ export default function HabitsPage() {
                   </div>
                 </>
               )}
+              {habit.endDate && (
+                <p className="text-[11px] text-fg-faint mt-1">
+                  Ends {formatShortDate(habit.endDate)}
+                </p>
+              )}
             </div>
 
             {/* Streak + today status */}
@@ -142,7 +148,9 @@ export default function HabitsPage() {
                   {completedToday ? "Done" : "Pending"}
                 </span>
               )}
-              {!isActiveToday && <span className="text-xs text-fg-disabled">Off today</span>}
+              {!isActiveToday && (
+                <span className="text-xs text-fg-disabled">{isEnded ? "Ended" : "Off today"}</span>
+              )}
             </div>
           </div>
         );

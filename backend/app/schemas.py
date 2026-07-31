@@ -172,6 +172,8 @@ class HabitBase(CamelModel):
     # The cycle's first occurrence — only load-bearing when interval>1 or
     # freq="monthly"; NULL/interval=1 behaves like the original weekday-only model.
     anchor_date: str | None = None
+    # Last day this habit is active; NULL means it never ends.
+    end_date: str | None = None
 
     @field_validator("anchor_date")
     @classmethod
@@ -184,6 +186,17 @@ class HabitBase(CamelModel):
             raise ValueError(f"anchor_date is not a valid calendar date: {value!r}") from exc
         return value
 
+    @field_validator("end_date")
+    @classmethod
+    def _validate_end_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            _date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"end_date is not a valid calendar date: {value!r}") from exc
+        return value
+
 
 class HabitCreate(HabitBase):
     id: str | None = None
@@ -194,6 +207,8 @@ class HabitCreate(HabitBase):
             raise ValueError("anchor_date is required when freq is monthly or interval > 1")
         if self.freq == "monthly" and self.interval > 12:
             raise ValueError("monthly interval can't exceed 12")
+        if self.anchor_date is not None and self.end_date is not None and self.end_date < self.anchor_date:
+            raise ValueError("end_date can't be before anchor_date")
         return self
 
 
@@ -212,6 +227,7 @@ class HabitUpdate(CamelModel):
     freq: Literal["weekly", "monthly"] | None = None
     interval: int | None = Field(default=None, ge=1, le=24)
     anchor_date: str | None = None
+    end_date: str | None = None
 
     @field_validator("anchor_date")
     @classmethod
@@ -222,6 +238,17 @@ class HabitUpdate(CamelModel):
             _date.fromisoformat(value)
         except ValueError as exc:
             raise ValueError(f"anchor_date is not a valid calendar date: {value!r}") from exc
+        return value
+
+    @field_validator("end_date")
+    @classmethod
+    def _validate_end_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            _date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"end_date is not a valid calendar date: {value!r}") from exc
         return value
 
 

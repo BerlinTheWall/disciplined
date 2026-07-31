@@ -50,14 +50,14 @@ def _monday_of(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def _parse_anchor(anchor_date: str | None) -> date | None:
+def _parse_date(value: str | None) -> date | None:
     """None on anything unparseable — a habit degrades to "doesn't fire"
     instead of taking down the whole system-prompt build (and therefore the
     entire chat feature for that user) on one malformed row."""
-    if not anchor_date:
+    if not value:
         return None
     try:
-        return date.fromisoformat(anchor_date)
+        return date.fromisoformat(value)
     except ValueError:
         return None
 
@@ -73,11 +73,14 @@ def habit_active_on(h: Habit, d: date) -> bool:
     weekday-only check."""
     if d.isoformat() in (h.skipped_dates or []):
         return False
+    end = _parse_date(h.end_date)
+    if end is not None and d > end:
+        return False
     freq = h.freq or "weekly"
     interval = max(1, h.interval or 1)
 
     if freq == "monthly":
-        anchor = _parse_anchor(h.anchor_date)
+        anchor = _parse_date(h.anchor_date)
         if anchor is None:
             return False
         month_diff = (d.year - anchor.year) * 12 + (d.month - anchor.month)
@@ -89,7 +92,7 @@ def habit_active_on(h: Habit, d: date) -> bool:
     js_weekday = (d.weekday() + 1) % 7  # python Mon=0 -> frontend Sun=0
     if js_weekday not in (h.days_of_week or []):
         return False
-    anchor = _parse_anchor(h.anchor_date)
+    anchor = _parse_date(h.anchor_date)
     if anchor is None:
         return True
     if d < anchor:  # never show an occurrence before the habit's start date
@@ -189,13 +192,16 @@ def habit_recurrence_label(h: Habit) -> str:
     interval = max(1, h.interval or 1)
     if freq == "monthly":
         if interval == 1:
-            return "monthly"
-        if interval == 12:
-            return "yearly"
-        return f"every {interval} months"
-    days = h.days_of_week or []
-    base = "daily" if len(days) == 7 else "on " + ", ".join(_WEEKDAY_ABBR[d] for d in sorted(days))
-    return base if interval <= 1 else f"every {interval} weeks ({base})"
+            label = "monthly"
+        elif interval == 12:
+            label = "yearly"
+        else:
+            label = f"every {interval} months"
+    else:
+        days = h.days_of_week or []
+        base = "daily" if len(days) == 7 else "on " + ", ".join(_WEEKDAY_ABBR[d] for d in sorted(days))
+        label = base if interval <= 1 else f"every {interval} weeks ({base})"
+    return f"{label} until {h.end_date}" if h.end_date else label
 
 FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
@@ -429,6 +435,15 @@ FUNCTION_DECLARATIONS = [
                         "Ignored when freq is monthly."
                     ),
                 ),
+                "end_date": types.Schema(
+                    type=types.Type.STRING,
+                    description=(
+                        _DATE_DESC + " Optional — the last day this habit is active. Resolve a "
+                        "relative duration ('for two weeks', 'until the end of the month') into "
+                        "a concrete date yourself, same as any other date. Omit for a habit that "
+                        "never ends."
+                    ),
+                ),
                 "start_minutes": types.Schema(
                     type=types.Type.INTEGER,
                     description=_MINUTES_DESC + " Omit to default to 9:00 AM.",
@@ -480,6 +495,10 @@ FUNCTION_DECLARATIONS = [
                     type=types.Type.ARRAY,
                     items=types.Schema(type=types.Type.INTEGER),
                     description="New days it repeats on. " + _WEEKDAY_DESC,
+                ),
+                "end_date": types.Schema(
+                    type=types.Type.STRING,
+                    description=_DATE_DESC + " New end date. Omit to leave unchanged.",
                 ),
                 "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
                 "duration_minutes": types.Schema(
@@ -815,6 +834,7 @@ async def _create_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
         freq=freq,
         interval=interval,
         anchor_date=anchor_date,
+        end_date=args.get("end_date"),
         days_of_week=args.get("days_of_week") or ([] if freq == "monthly" else [0, 1, 2, 3, 4, 5, 6]),
         user_id=user_id,
     )
@@ -835,6 +855,7 @@ def _habit_summary(habit: Habit) -> dict[str, Any]:
         "freq": habit.freq,
         "interval": habit.interval,
         "anchor_date": habit.anchor_date,
+        "end_date": habit.end_date,
     }
 
 
@@ -858,6 +879,8 @@ async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
         habit.interval = int(args["interval"])
     if "anchor_date" in args and args["anchor_date"] is not None:
         habit.anchor_date = args["anchor_date"]
+    if "end_date" in args and args["end_date"] is not None:
+        habit.end_date = args["end_date"]
     if habit.freq == "monthly":
         habit.interval = min(habit.interval, 12)
     # Auto-heal: an update that pushes freq/interval into "needs an anchor"

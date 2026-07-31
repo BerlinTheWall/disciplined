@@ -174,6 +174,14 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
               </InfoRow>
             )}
 
+            {item.type === "habit" && item.data.endDate && (
+              <InfoRow icon={Calendar} label="Ends">
+                <span className="text-sm font-medium text-fg">
+                  {formatFullDate(item.data.endDate)}
+                </span>
+              </InfoRow>
+            )}
+
             {item.type === "habit" && streak > 0 && (
               <InfoRow icon={Flame} label="Streak">
                 <span className="flex items-center gap-1 text-sm font-medium text-[#b5895f]">

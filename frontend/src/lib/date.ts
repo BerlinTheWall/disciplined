@@ -86,3 +86,8 @@ export function formatFullDate(iso: string) {
     year: "numeric",
   });
 }
+
+// "Jan 5" — compact form used in list rows and field-row hints.
+export function formatShortDate(iso: string) {
+  return parseISODate(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
