@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import type { NudgeType } from "@/lib/api";
 import { rehydrateOnAccountChange, userScopedStorage } from "@/lib/userScopedStorage";
 
 // A record of a reminder or nudge that actually became visible to the user
@@ -16,7 +17,7 @@ export interface HistoryEntry {
   read: boolean;
   date?: string; // reminders only — day to jump to
   actionPhrase?: string | null; // nudges/coach only
-  nudgeType?: "habit_gap" | "workout_gap" | "goal_pacing"; // nudges only
+  nudgeType?: NudgeType; // nudges only
   subjectId?: string; // nudges only — pairs with nudgeType for the dismiss-cooldown key
   response?: "agreed" | "disagreed"; // nudges/coach only, once the user has acted on it
 }

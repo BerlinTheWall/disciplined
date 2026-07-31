@@ -7,9 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas import NudgeRequest, NudgeResponse, NudgeSuggestedSlot
+from app.schemas import NudgeRequest, NudgeResponse, NudgeSuggestedSlot, PendingAction
 from app.services.gemini import resolve_today, write_nudge
-from app.services.nudges import build_action_phrase, evaluate, suggest_slot_for_candidate
+from app.services.nudges import (
+    build_action_phrase,
+    build_pending_action,
+    evaluate,
+    suggest_slot_for_candidate,
+)
 
 router = APIRouter(prefix="/api/nudges", tags=["nudges"])
 logger = logging.getLogger("uvicorn.error")
@@ -24,7 +29,7 @@ async def check_nudge(
     """Deterministic signal check first (cheap) — only calls Gemini if a
     candidate is actually found, so a quiet day costs nothing."""
     today = resolve_today(body.client_date)
-    candidate = await evaluate(db, user.id, today, set(body.excluded_keys))
+    candidate = await evaluate(db, user.id, today, set(body.excluded_keys), body.now_minutes)
     if candidate is None:
         return NudgeResponse()
 
@@ -38,10 +43,12 @@ async def check_nudge(
         logger.exception("nudge Gemini error")
         raise HTTPException(status_code=502, detail=f"Nudge failed ({exc.code}).")
 
+    pending = build_pending_action(candidate, slot, today)
     return NudgeResponse(
         type=candidate.type,
         subject_id=candidate.subject_id,
         message=message,
         action_phrase=build_action_phrase(candidate, slot, today),
         suggested_slot=NudgeSuggestedSlot(**slot) if slot else None,
+        pending_action=PendingAction(**pending) if pending else None,
     )

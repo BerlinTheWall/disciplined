@@ -195,12 +195,28 @@ export interface NudgeSuggestedSlot {
   durationMinutes: number;
 }
 
+export type NudgeType =
+  | "habit_gap"
+  | "workout_gap"
+  | "goal_pacing"
+  | "streak_milestone"
+  | "goal_ahead"
+  | "streak_risk_today"
+  | "habit_event_conflict"
+  | "workout_variety"
+  | "tasks_overdue"
+  | "habit_weekday_pattern";
+
 export interface NudgeResponse {
-  type: "habit_gap" | "workout_gap" | "goal_pacing" | null;
+  type: NudgeType | null;
   subjectId: string | null;
   message: string | null;
   actionPhrase: string | null;
   suggestedSlot: NudgeSuggestedSlot | null;
+  // The literal {tool, args} a "Yes" tap executes directly via
+  // confirmChatActions — bypasses Gemini entirely, so approving it can never
+  // be misinterpreted.
+  pendingAction: PendingAction | null;
 }
 
 export interface CoachWindow {
@@ -215,6 +231,7 @@ export interface CoachCheckpoint {
   title: string;
   body: string;
   actionPhrase: string | null;
+  pendingAction: PendingAction | null;
   subjectKey: string;
 }
 

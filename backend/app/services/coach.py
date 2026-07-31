@@ -16,14 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User
 from app.services.gemini import write_coach_message
 from app.services.nudges import (
-    NudgeCandidate,
+    all_candidates,
     build_action_phrase,
-    goal_ahead_candidates,
-    goal_pacing_candidates,
-    habit_gap_candidates,
-    streak_milestone_candidates,
+    build_pending_action,
+    candidate_priority,
     suggest_slot_for_candidate,
-    workout_gap_candidate,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -40,6 +37,11 @@ _TITLES = {
     "workout_gap": "Workout check-in",
     "habit_gap": "Habit check-in",
     "goal_pacing": "Goal check-in",
+    "streak_risk_today": "Streak at risk",
+    "habit_event_conflict": "Schedule conflict",
+    "workout_variety": "Mix it up",
+    "tasks_overdue": "Overdue tasks",
+    "habit_weekday_pattern": "Pattern noticed",
 }
 
 
@@ -57,22 +59,8 @@ class CoachCheckpointResult:
     title: str
     body: str
     action_phrase: str | None
+    pending_action: dict | None
     subject_key: str
-
-
-def _candidate_priority(c: NudgeCandidate) -> tuple[int, float]:
-    """Positive signals lead — a coach that only ever raises problems stops
-    feeling like encouragement — then the worst deficit first within each
-    remaining category."""
-    if c.type == "streak_milestone":
-        return (0, -c.metric["streak"])
-    if c.type == "goal_ahead":
-        return (1, -c.metric.get("lead", 1 - c.metric["elapsed"]))
-    if c.type == "workout_gap":
-        return (2, -c.metric["gap_days"])
-    if c.type == "habit_gap":
-        return (3, -c.metric["miss_streak"])
-    return (4, -c.metric["margin"])  # goal_pacing
 
 
 async def plan_checkpoints(
@@ -87,18 +75,11 @@ async def plan_checkpoints(
     if not open_windows:
         return []
 
-    candidates: list[NudgeCandidate] = []
-    candidates += await habit_gap_candidates(db, user.id, today)
-    candidates += await goal_pacing_candidates(db, user.id, today)
-    candidates += await streak_milestone_candidates(db, user.id, today)
-    candidates += await goal_ahead_candidates(db, user.id, today)
-    workout = await workout_gap_candidate(db, user.id, today)
-    if workout is not None:
-        candidates.append(workout)
+    candidates = await all_candidates(db, user.id, today, now_minutes)
     if not candidates:
         return []
 
-    candidates.sort(key=_candidate_priority)
+    candidates.sort(key=candidate_priority)
 
     results: list[CoachCheckpointResult] = []
     seen: set[str] = set()
@@ -128,6 +109,7 @@ async def plan_checkpoints(
                 title=_TITLES.get(candidate.type, "Coach check-in"),
                 body=body,
                 action_phrase=build_action_phrase(candidate, slot, today),
+                pending_action=build_pending_action(candidate, slot, today),
                 subject_key=subject_key,
             )
         )

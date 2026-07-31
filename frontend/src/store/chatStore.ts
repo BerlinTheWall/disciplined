@@ -23,6 +23,17 @@ function isPendingResult(result: unknown): boolean {
   return typeof result === "object" && result !== null && "pending_confirmation" in result;
 }
 
+// Shared by confirmPending below and by anything else that executes a
+// PendingAction outside the chat pipeline (see NudgeHost's and coach.ts's
+// direct one-tap confirmations) — one place that knows how to turn a batch
+// of executed tools into "which stores need refreshing."
+export async function refreshForActions(actions: PendingAction[]): Promise<void> {
+  const domains = new Set(actions.map((a) => CHAT_TOOL_DOMAIN[a.tool]).filter(Boolean));
+  await Promise.all([...domains].map((d) => REFRESHERS[d]())).catch((e) =>
+    console.warn("[chat] post-action refresh failed", e)
+  );
+}
+
 // Conversation state for the assistant chat sheet. Deliberately not persisted —
 // a chat is a session thing; the schedule it changes is what persists.
 
@@ -160,12 +171,7 @@ export const useChatStore = create<State & Actions>()((set, get) => {
       }));
       try {
         const { ok } = await api.confirmChatActions(pendingActions);
-        const domains = new Set(
-          pendingActions.map((a) => CHAT_TOOL_DOMAIN[a.tool]).filter(Boolean)
-        );
-        await Promise.all([...domains].map((d) => REFRESHERS[d]())).catch((e) =>
-          console.warn("[chat] post-confirm refresh failed", e)
-        );
+        await refreshForActions(pendingActions);
         set((state) => ({
           busy: false,
           messages: [

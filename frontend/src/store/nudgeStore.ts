@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import type { NudgeType, PendingAction } from "@/lib/api";
 import { rehydrateOnAccountChange, userScopedStorage } from "@/lib/userScopedStorage";
 import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 
@@ -9,10 +10,15 @@ import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 export const DISMISS_COOLDOWN_DAYS = 3;
 
 export interface NudgeAlert {
-  type: "habit_gap" | "workout_gap" | "goal_pacing";
+  type: NudgeType;
   subjectId: string;
   message: string;
-  // null for goal_pacing — it gets a "View" action instead of a chat send.
+  // Preferred over actionPhrase when present — executed directly via
+  // confirmChatActions, no chat round-trip. See NudgeHost's "Yes" handler.
+  pendingAction: PendingAction | null;
+  // Fallback for types with no single safe one-tap action (opens chat with
+  // this phrase instead) — null too for purely informational types, which
+  // get a "View" action instead.
   actionPhrase: string | null;
 }
 

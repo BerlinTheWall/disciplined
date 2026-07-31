@@ -266,25 +266,90 @@ or nag; this is a friendly heads-up, not a scolding.
 - Tone: warm, brief, matter-of-fact."""
 
 
+def _describe_candidate(candidate: NudgeCandidate) -> list[str]:
+    """The metric-specific lines shared by write_nudge_prompt and
+    write_coach_prompt — kept in one place so the two surfaces never
+    describe the same signal differently."""
+    if candidate.type == "workout_gap":
+        return [
+            f"Days since the last completed workout: {candidate.metric['gap_days']}",
+            "Proposed action: offer to schedule one, at the slot below if given.",
+        ]
+    if candidate.type == "habit_gap":
+        return [
+            f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}",
+            "Proposed action: offer to schedule a slot for it today, if a slot is given below.",
+        ]
+    if candidate.type == "streak_risk_today":
+        return [
+            f"Current streak: {candidate.metric['streak']} days in a row, and today's usual "
+            "window has already passed without it being marked done — the streak is still "
+            "alive but at risk.",
+            "Proposed action: offer a catch-up slot for later today, if a slot is given below.",
+        ]
+    if candidate.type == "habit_event_conflict":
+        habit_time = fmt_minutes(candidate.metric["habit_start_minutes"])
+        return [
+            f"The event \"{candidate.subject_title}\" now overlaps the habit "
+            f"\"{candidate.metric['habit_title']}\" (usually at {habit_time}).",
+            "Proposed action: offer to move the event to the free slot below, if given.",
+        ]
+    if candidate.type == "workout_variety":
+        return [
+            f"The last {candidate.metric['count']} completed workouts were all "
+            f"\"{candidate.metric['repeated_type']}\" sessions.",
+            "Proposed action: none — just point out the pattern and suggest mixing it up "
+            "in conversation.",
+        ]
+    if candidate.type == "tasks_overdue":
+        return [
+            f"{candidate.metric['count']} tasks are overdue (scheduled before today, still "
+            "not marked done).",
+            "Proposed action: offer to help reschedule them — no single slot, this needs a "
+            "conversation.",
+        ]
+    if candidate.type == "habit_weekday_pattern":
+        pct = round(candidate.metric["skip_rate"] * 100)
+        return [
+            f"This habit is skipped on {candidate.metric['weekday_name']} much more often "
+            f"than its other scheduled days (about {pct}% of {candidate.metric['weekday_name']} "
+            "occurrences missed).",
+            f"Proposed action: offer to drop {candidate.metric['weekday_name']} from its "
+            "schedule, if the user agrees it's not working.",
+        ]
+    if candidate.type == "streak_milestone":
+        return [
+            f"Current streak: {candidate.metric['streak']} days in a row.",
+            "Proposed action: none — just celebrate this.",
+        ]
+    if candidate.type == "goal_ahead":
+        if candidate.metric.get("done_early"):
+            first = "This goal is already fully done, well ahead of its deadline."
+        else:
+            pct = round(candidate.metric["progress_fraction"] * 100)
+            elapsed_pct = round(candidate.metric["elapsed"] * 100)
+            first = (
+                f"This goal is {pct}% done while only {elapsed_pct}% of its period has "
+                "elapsed — comfortably ahead of pace."
+            )
+        return [first, "Proposed action: none — just celebrate this."]
+    pct = round(candidate.metric["elapsed"] * 100)  # goal_pacing
+    return [
+        f"This goal's period is {pct}% elapsed and it's behind pace and not done yet.",
+        "Proposed action: none — just point out it needs attention.",
+    ]
+
+
 def write_nudge_prompt(candidate: NudgeCandidate, slot: dict | None) -> str:
     lines = [f"What you noticed: {candidate.type}", f"Subject: {candidate.subject_title}"]
-    if candidate.type == "workout_gap":
-        lines.append(f"Days since the last completed workout: {candidate.metric['gap_days']}")
-        lines.append("Proposed action: offer to schedule one, at the slot below if given.")
-    elif candidate.type == "habit_gap":
-        lines.append(f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}")
-        lines.append("Proposed action: offer to schedule a slot for it today, if a slot is given below.")
-    else:
-        pct = round(candidate.metric["elapsed"] * 100)
-        lines.append(f"This goal's period is {pct}% elapsed and it's behind pace and not done yet.")
-        lines.append("Proposed action: none — just point out it needs attention.")
+    lines += _describe_candidate(candidate)
     if slot is not None:
         when = "today" if slot["date"] == date.today().isoformat() else "tomorrow"
         lines.append(
             f"A free slot exists {when} at {fmt_minutes(slot['start_minutes'])} "
             f"for {slot['duration_minutes']} minutes."
         )
-    else:
+    elif candidate.type in _SLOT_SEEKING_TYPES:
         lines.append("No specific free slot was found nearby.")
     return "\n".join(lines)
 
@@ -328,45 +393,23 @@ believes in you — never guilt-trip, scold, or nag.
 system."""
 
 
+_SLOT_SEEKING_TYPES = ("workout_gap", "habit_gap", "streak_risk_today", "habit_event_conflict")
+
+
 def write_coach_prompt(candidate: NudgeCandidate, slot: dict | None, window_label: str) -> str:
     lines = [
         f"Check-in window: {window_label}",
         f"What you noticed: {candidate.type}",
         f"Subject: {candidate.subject_title}",
     ]
-    if candidate.type == "workout_gap":
-        lines.append(f"Days since the last completed workout: {candidate.metric['gap_days']}")
-        lines.append("Proposed action: offer to schedule one, at the slot below if given.")
-    elif candidate.type == "habit_gap":
-        lines.append(f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}")
-        lines.append(
-            "Proposed action: offer to schedule a slot for it today, if a slot is given below."
-        )
-    elif candidate.type == "streak_milestone":
-        lines.append(f"Current streak: {candidate.metric['streak']} days in a row.")
-        lines.append("Proposed action: none — just celebrate this.")
-    elif candidate.type == "goal_ahead":
-        if candidate.metric.get("done_early"):
-            lines.append("This goal is already fully done, well ahead of its deadline.")
-        else:
-            pct = round(candidate.metric["progress_fraction"] * 100)
-            elapsed_pct = round(candidate.metric["elapsed"] * 100)
-            lines.append(
-                f"This goal is {pct}% done while only {elapsed_pct}% of its period has "
-                "elapsed — comfortably ahead of pace."
-            )
-        lines.append("Proposed action: none — just celebrate this.")
-    else:  # goal_pacing
-        pct = round(candidate.metric["elapsed"] * 100)
-        lines.append(f"This goal's period is {pct}% elapsed and it's behind pace and not done yet.")
-        lines.append("Proposed action: none — just point out it needs attention.")
+    lines += _describe_candidate(candidate)
     if slot is not None:
         when = "today" if slot["date"] == date.today().isoformat() else "tomorrow"
         lines.append(
             f"A free slot exists {when} at {fmt_minutes(slot['start_minutes'])} "
             f"for {slot['duration_minutes']} minutes."
         )
-    elif candidate.type in ("workout_gap", "habit_gap"):
+    elif candidate.type in _SLOT_SEEKING_TYPES:
         lines.append("No specific free slot was found nearby.")
     return "\n".join(lines)
 

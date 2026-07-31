@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas import CoachCheckpoint, CoachPlanRequest, CoachPlanResponse
+from app.schemas import CoachCheckpoint, CoachPlanRequest, CoachPlanResponse, PendingAction
 from app.services.coach import CoachWindowInput, plan_checkpoints
 from app.services.gemini import resolve_today
 
@@ -34,6 +34,7 @@ async def plan(
                 title=c.title,
                 body=c.body,
                 action_phrase=c.action_phrase,
+                pending_action=PendingAction(**c.pending_action) if c.pending_action else None,
                 subject_key=c.subject_key,
             )
             for c in checkpoints

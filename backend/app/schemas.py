@@ -434,12 +434,31 @@ class NudgeSuggestedSlot(CamelModel):
     duration_minutes: int
 
 
+NudgeTypeLiteral = Literal[
+    "habit_gap",
+    "workout_gap",
+    "goal_pacing",
+    "streak_milestone",
+    "goal_ahead",
+    "streak_risk_today",
+    "habit_event_conflict",
+    "workout_variety",
+    "tasks_overdue",
+    "habit_weekday_pattern",
+]
+
+
 class NudgeResponse(CamelModel):
-    type: Literal["habit_gap", "workout_gap", "goal_pacing"] | None = None
+    type: NudgeTypeLiteral | None = None
     subject_id: str | None = None
     message: str | None = None
     action_phrase: str | None = None
     suggested_slot: NudgeSuggestedSlot | None = None
+    # The literal {tool, args} a "Yes" tap executes directly via
+    # POST /api/chat/confirm — None when there's nothing safe to one-tap
+    # (celebratory/informational types), in which case the client falls back
+    # to action_phrase or a plain "View" action.
+    pending_action: PendingAction | None = None
 
 
 # ---- Proactive coach ----
@@ -463,6 +482,10 @@ class CoachCheckpoint(CamelModel):
     title: str
     body: str
     action_phrase: str | None = None
+    # Same one-tap-execution payload as NudgeResponse.pending_action — see
+    # its comment. Delivered via a local notification, so a tap on it (see
+    # frontend/src/lib/coach.ts) runs this directly too.
+    pending_action: PendingAction | None = None
     # "{type}:{subject_id}" — used for the local-notification id and to route
     # a tap back to the right chat action.
     subject_key: str

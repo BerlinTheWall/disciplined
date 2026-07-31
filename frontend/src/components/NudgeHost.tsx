@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { initCoachNotifications, scheduleCoachPlan } from "@/lib/coach";
 import { addDaysISO, todayISODate } from "@/lib/date";
 import { spring, tap } from "@/lib/motion";
-import { useChatStore } from "@/store/chatStore";
+import { refreshForActions, useChatStore } from "@/store/chatStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { DISMISS_COOLDOWN_DAYS, useNudgeStore } from "@/store/nudgeStore";
@@ -41,6 +41,7 @@ async function runCheck() {
     type: res.type,
     subjectId: res.subjectId!,
     message: res.message!,
+    pendingAction: res.pendingAction,
     actionPhrase: res.actionPhrase,
   });
 }
@@ -137,7 +138,14 @@ export default function NudgeHost({ onOpenGoals }: Props) {
                     onClick={() => {
                       const alert = current;
                       useNudgeStore.getState().setCurrent(null);
-                      if (alert.actionPhrase) {
+                      if (alert.pendingAction) {
+                        // Executed directly — no chat round-trip, so "Yes"
+                        // can't be misinterpreted by the model.
+                        void api
+                          .confirmChatActions([alert.pendingAction])
+                          .then(() => refreshForActions([alert.pendingAction!]))
+                          .catch(() => {});
+                      } else if (alert.actionPhrase) {
                         useChatStore.getState().openChat();
                         void useChatStore
                           .getState()
@@ -150,7 +158,7 @@ export default function NudgeHost({ onOpenGoals }: Props) {
                     whileTap={tap}
                     className="h-8 px-4 rounded-full bg-fg text-fg-inverse text-[13px] font-semibold"
                   >
-                    {current.actionPhrase ? "Yes" : "View"}
+                    {current.pendingAction || current.actionPhrase ? "Yes" : "View"}
                   </motion.button>
                   <motion.button
                     onClick={dismissAndCooldown}

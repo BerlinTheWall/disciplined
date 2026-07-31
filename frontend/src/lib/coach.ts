@@ -1,9 +1,9 @@
 import { LocalNotifications } from "@capacitor/local-notifications";
 
-import { api, type CoachWindow } from "./api";
+import { api, type CoachWindow, type PendingAction } from "./api";
 import { todayISODate } from "./date";
 import { isNativeReminderPlatform, notifId } from "./nativeReminders";
-import { useChatStore } from "@/store/chatStore";
+import { refreshForActions, useChatStore } from "@/store/chatStore";
 import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 
 // Proactive coach check-ins: LLM-composed messages (see
@@ -28,22 +28,31 @@ export const COACH_WINDOWS: CoachWindow[] = [
 interface CoachNotificationData {
   kind: "coach";
   subjectKey: string;
+  pendingAction: PendingAction | null;
   actionPhrase: string | null;
 }
 
 let initialized = false;
 
-// Tapping a coach notification opens the chat sheet and, if the checkpoint
-// carried a concrete action, sends it as if the user asked for it — same
-// pattern as NotificationBell's nudge-tap handler. A separate listener (vs.
-// extending nativeReminders.ts's) because coach payloads deliberately don't
-// carry a `key` field, so that module's own listener already ignores them.
+// Tapping a coach notification with a pending action executes it directly
+// (same one-tap path as NudgeHost's "Yes" — no chat round-trip). Otherwise
+// it falls back to opening chat and sending the action phrase, same as
+// before. A separate listener (vs. extending nativeReminders.ts's) because
+// coach payloads deliberately don't carry a `key` field, so that module's
+// own listener already ignores them.
 export function initCoachNotifications() {
   if (initialized || !isNativeReminderPlatform) return;
   initialized = true;
   void LocalNotifications.addListener("localNotificationActionPerformed", (event) => {
     const data = event.notification.extra as CoachNotificationData | undefined;
     if (data?.kind !== "coach") return;
+    if (data.pendingAction) {
+      void api
+        .confirmChatActions([data.pendingAction])
+        .then(() => refreshForActions([data.pendingAction!]))
+        .catch(() => {});
+      return;
+    }
     useChatStore.getState().openChat();
     if (data.actionPhrase) {
       void useChatStore
@@ -120,7 +129,12 @@ async function planAndScheduleCoachCheckins() {
         title: c.title,
         body: c.body,
         fireAt: fireAt.getTime(),
-        data: { kind: "coach", subjectKey: c.subjectKey, actionPhrase: c.actionPhrase },
+        data: {
+          kind: "coach",
+          subjectKey: c.subjectKey,
+          pendingAction: c.pendingAction,
+          actionPhrase: c.actionPhrase,
+        },
       };
     });
     await scheduleCoachBatch(batch);
