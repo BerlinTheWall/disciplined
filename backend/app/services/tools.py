@@ -30,6 +30,7 @@ def event_to_dict(e: Event) -> dict[str, Any]:
         "duration_minutes": e.duration_minutes,
         "completed": e.completed,
         "priority": e.priority,
+        "reminder_minutes_before": e.reminder_minutes_before,
     }
 
 
@@ -171,6 +172,11 @@ def current_period_keys(today: date) -> dict[str, str]:
 
 _MINUTES_DESC = "Minutes since midnight, e.g. 540 = 9:00 AM, 810 = 1:30 PM."
 _DATE_DESC = 'ISO date string, e.g. "2026-07-05".'
+_REMINDER_DESC = (
+    "Minutes before start to send a reminder notification (0 = at start time, e.g. 10 = 10 "
+    "minutes before). Omit to leave unchanged; to remove an existing reminder entirely, tell "
+    "the user to do it in the app — that can't be done through chat."
+)
 # Spelled out day-by-day, not "0=Sunday..6=Saturday" — leaving the model to
 # compute e.g. "Thursday is index 4" itself is exactly the kind of small
 # arithmetic smaller models get wrong (confirmed: a "Thursday" request landed
@@ -245,6 +251,28 @@ FUNCTION_DECLARATIONS = [
                 ),
             },
             required=["title", "date"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="update_event",
+        description=(
+            "Change an existing event's title, duration, or reminder. Omit any field you're "
+            "not changing — only the given ones are updated. To change its date or start time "
+            "instead, use move_event."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "event_id": types.Schema(type=types.Type.STRING, description="ID of the event."),
+                "title": types.Schema(type=types.Type.STRING, description="New title."),
+                "duration_minutes": types.Schema(
+                    type=types.Type.INTEGER, description="New duration in minutes."
+                ),
+                "reminder_minutes_before": types.Schema(
+                    type=types.Type.INTEGER, description=_REMINDER_DESC
+                ),
+            },
+            required=["event_id"],
         ),
     ),
     types.FunctionDeclaration(
@@ -467,8 +495,9 @@ FUNCTION_DECLARATIONS = [
     types.FunctionDeclaration(
         name="update_habit",
         description=(
-            "Change an existing habit's title, days, time, duration, icon, or how often it "
-            "repeats. Omit any field you're not changing — only the given ones are updated."
+            "Change an existing habit's title, days, time, duration, reminder, icon, or how "
+            "often it repeats. Omit any field you're not changing — only the given ones are "
+            "updated."
         ),
         parameters=types.Schema(
             type=types.Type.OBJECT,
@@ -503,6 +532,9 @@ FUNCTION_DECLARATIONS = [
                 "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
                 "duration_minutes": types.Schema(
                     type=types.Type.INTEGER, description="New duration in minutes."
+                ),
+                "reminder_minutes_before": types.Schema(
+                    type=types.Type.INTEGER, description=_REMINDER_DESC
                 ),
                 "icon": types.Schema(
                     type=types.Type.STRING,
@@ -548,6 +580,7 @@ FUNCTION_DECLARATIONS = [
 # Tools that change data — the client uses this to know when to refetch.
 MUTATING_TOOLS = {
     "create_event",
+    "update_event",
     "move_event",
     "delete_event",
     "swap_events",
@@ -665,6 +698,22 @@ async def _create_event(db: AsyncSession, user_id: str, args: dict) -> dict:
     db.add(event)
     await db.commit()
     return {"created": event_to_dict(event)}
+
+
+async def _update_event(db: AsyncSession, user_id: str, args: dict) -> dict:
+    event = await _get_event(db, user_id, args["event_id"])
+    if event is None:
+        return await _missing_event_error(db, user_id, args["event_id"])
+    if "title" in args and args["title"] is not None:
+        event.title = args["title"]
+    if "duration_minutes" in args and args["duration_minutes"] is not None:
+        # Keep it from spilling past midnight, same clamp the app's own edit
+        # sheet applies when duration is changed without moving the start time.
+        event.duration_minutes = max(1, min(int(args["duration_minutes"]), 24 * 60 - event.start_minutes))
+    if "reminder_minutes_before" in args and args["reminder_minutes_before"] is not None:
+        event.reminder_minutes_before = int(args["reminder_minutes_before"])
+    await db.commit()
+    return {"updated": event_to_dict(event)}
 
 
 async def _list_events(db: AsyncSession, user_id: str, args: dict) -> dict:
@@ -856,6 +905,7 @@ def _habit_summary(habit: Habit) -> dict[str, Any]:
         "interval": habit.interval,
         "anchor_date": habit.anchor_date,
         "end_date": habit.end_date,
+        "reminder_minutes_before": habit.reminder_minutes_before,
     }
 
 
@@ -871,6 +921,8 @@ async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
         habit.start_minutes = int(args["start_minutes"])
     if "duration_minutes" in args and args["duration_minutes"] is not None:
         habit.duration_minutes = int(args["duration_minutes"])
+    if "reminder_minutes_before" in args and args["reminder_minutes_before"] is not None:
+        habit.reminder_minutes_before = int(args["reminder_minutes_before"])
     if "icon" in args and args["icon"] is not None:
         habit.icon = args["icon"]
     if "freq" in args and args["freq"] is not None:
@@ -912,6 +964,7 @@ async def _delete_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
 
 _EXECUTORS = {
     "create_event": _create_event,
+    "update_event": _update_event,
     "list_events": _list_events,
     "move_event": _move_event,
     "delete_event": _delete_event,
