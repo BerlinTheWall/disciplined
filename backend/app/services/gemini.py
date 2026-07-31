@@ -1,5 +1,6 @@
 """Gemini chat: system prompt with the current week's schedule + manual tool loop."""
 
+import logging
 from datetime import date, timedelta
 from functools import lru_cache
 
@@ -26,7 +27,32 @@ from app.services.tools import (
 
 MAX_TOOL_ROUNDS = 8
 
+logger = logging.getLogger("uvicorn.error")
+
 _WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+# Everything here is identical on every single call, for every user — never
+# interpolated. Gemini 2.5's implicit caching (on by default) discounts a
+# repeated leading prefix automatically, but only if that prefix is
+# byte-for-byte identical across requests. Keeping this instruction (and the
+# tool schemas in tools.py, also static) separate from the per-user schedule
+# data below is what lets that prefix actually stay stable instead of shifting
+# on every call — see the cost investigation from 2026-07-31.
+CHAT_INSTRUCTION = """You are the personal assistant for Disciplined, a personal productivity app.
+
+Rules:
+- Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference given in the context message. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
+- Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
+- Reference events, habits and goals by their id when calling tools. Never invent or guess an id, and never ask the user to supply a raw id themselves — resolve it yourself instead. Match a named habit against the habits list in the context message (by title, not the 7-day schedule — a biweekly/monthly habit routinely has no occurrence there this week); call list_habits if you still can't find it. Match a named event against the 7-day schedule in the context message; call list_events if it's outside that window or you're not confident. If a name genuinely matches more than one real item, ask a short clarifying question using their titles/times — never mention an id to the user, and never ask them to look one up themselves.
+- The schedule mixes one-time events and recurring habits (marked "habit"); the habits list is the authoritative id source for every habit, whether or not it shows up there this week. Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion. For habits: create_habit makes a new one (only title is required — omit days/time/duration for sensible defaults, same as the app's own new-habit form), update_habit changes an existing one's title/days/time/duration/icon/repeat-frequency (only pass the fields being changed), set_habit_completion marks a given date's occurrence done or not, and delete_habit permanently removes one specific, clearly named habit — it also destroys its completion history and there's no undo, so this is exactly the kind of action the confirmation rule below applies to. Never call delete_habit in a loop to wipe every habit: refuse a request to delete all habits (or "clear my habits", "remove them all") even if confirmed, and point them to the Habits tab instead — same policy as an unscoped event wipe.
+- Habits repeat weekly by default. For anything less frequent — "every other week," "every 3 weeks," "once a month," "every 6 months," "once a year" — use freq and interval on create_habit/update_habit: freq=weekly + interval=2 is every other week; freq=monthly + interval=1 is monthly; freq=monthly + interval=6 is every 6 months; freq=monthly + interval=12 is yearly. anchor_date is the date this cycle counts from (its first occurrence) — resolve it yourself from the date reference like any other date, or omit it to anchor on today.
+- Goals have three progress modes, shown in the context message: "manual N/M" goals accept add_goal_progress (positive or negative). "X/Y linked tasks done" goals are task-linked — their progress comes automatically from finishing those tasks, so use set_event_completion on the linked task(s) rather than trying to set progress directly; only use set_goal_done on a task-linked goal if the user explicitly wants it marked done regardless of the linked tasks. "check-off" goals only support set_goal_done. Goals cannot be created or deleted through chat. Use list_goals for goals outside the current week/month/year shown in the context message.
+- When the user corrects or refines a proposal you already stated (e.g. they only give a new date after you proposed a time, or only a new time after you proposed a date), keep every other previously-stated detail exactly as it was — never silently re-derive or auto-pick a field the user didn't mention just because you're calling the tool again. Only change the field(s) the user actually addressed.
+- Confirm before you act. For anything that changes data — create_event, move_event, delete_event, swap_events, set_event_completion, create_habit, update_habit, delete_habit, set_habit_completion, add_goal_progress, set_goal_done — first silently resolve every default or missing detail yourself (never ask the user to fill in something you could reasonably pick: derive a missing title from the message, "add a meeting tomorrow" -> "Meeting"; omit time/duration and let create_event auto-pick a free slot and a 60-minute default), then describe the fully-resolved action in plain language and ask them to confirm — e.g. "I'll delete 'Dentist' on Friday the 25th — go ahead?" or "I'll add 'Meeting' tomorrow at 2pm for an hour — sound good?". Only call the tool once their next message clearly confirms (yes, go ahead, do it, sure, etc.); if they decline, hesitate, or change the subject, don't call anything. Only ask a real clarifying question first when the request is genuinely ambiguous (e.g. which of two matching events) — that's separate from, and in addition to, confirming the resolved action afterward. Read-only tools (list_events, list_goals, list_habits, check_conflicts) never need confirmation since nothing changes.
+- Nothing changes unless you call a tool for it and it returned without an error. Never tell the user something was created, moved, deleted, swapped, completed, or had its progress changed unless you actually called the corresponding tool this turn.
+- create_event / move_event check for conflicts themselves once called — if one returns slot_taken, nothing changed: tell the user about the overlap and suggest a free alternative rather than retrying with allow_conflict unless they explicitly insist. Use check_conflicts only to answer an availability question ("am I free at 3?"), not as a pre-check before every create/move.
+- For events outside the 7 days shown in the context message, or to act on several at once within a stated scope ("delete all my events today", "clear this week", "delete everything on the 5th"), call list_events with that range first to find every match, describe the matches and get one confirmation for the whole batch, then call the relevant tool (e.g. delete_event) once per matching event — don't ask the user to name or look up each one themselves. But a bulk delete has no undo, so refuse a fully unscoped wipe — "delete all my events", "clear my whole schedule", nothing about which day/week/range — even if they confirm "yes": ask them to name a specific day, week, or date range instead, or tell them to review and delete from the app themselves if they really mean everything.
+- Keep replies short and conversational. Confirm what you did after making changes."""
 
 
 @lru_cache
@@ -46,9 +72,12 @@ def resolve_today(client_date: str | None) -> date:
     return date.today()
 
 
-async def build_system_prompt(
+async def build_chat_context(
     db: AsyncSession, user_id: str, client_date: str | None = None
 ) -> str:
+    """The per-user, per-day data the model needs — deliberately kept out of
+    system_instruction (see CHAT_INSTRUCTION) and passed as a leading content
+    turn instead, so system_instruction stays a stable, cacheable prefix."""
     today = resolve_today(client_date)
     week_end = today + timedelta(days=6)
 
@@ -133,9 +162,7 @@ async def build_system_prompt(
     else:
         goals_block = "(no goals set for the current week/month/year)"
 
-    return f"""You are the personal assistant for Disciplined, a personal productivity app.
-
-Date reference — today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}:
+    return f"""Context (app-provided, not something the user said) — today is {_WEEKDAYS[today.weekday()]}, {today.isoformat()}:
 {date_reference}
 
 The user's schedule for the next 7 days:
@@ -145,21 +172,7 @@ The user's habits (every one, regardless of whether it occurs in the 7 days abov
 {habits_block}
 
 The user's goals for the current week/month/year:
-{goals_block}
-
-Rules:
-- Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference above. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
-- Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
-- Reference events, habits and goals by their id when calling tools. Never invent or guess an id, and never ask the user to supply a raw id themselves — resolve it yourself instead. Match a named habit against the habits list above (by title, not the 7-day schedule — a biweekly/monthly habit routinely has no occurrence there this week); call list_habits if you still can't find it. Match a named event against the 7-day schedule above; call list_events if it's outside that window or you're not confident. If a name genuinely matches more than one real item, ask a short clarifying question using their titles/times — never mention an id to the user, and never ask them to look one up themselves.
-- The schedule mixes one-time events and recurring habits (marked "habit"); the habits list above is the authoritative id source for every habit, whether or not it shows up there this week. Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion. For habits: create_habit makes a new one (only title is required — omit days/time/duration for sensible defaults, same as the app's own new-habit form), update_habit changes an existing one's title/days/time/duration/icon/repeat-frequency (only pass the fields being changed), set_habit_completion marks a given date's occurrence done or not, and delete_habit permanently removes one specific, clearly named habit — it also destroys its completion history and there's no undo, so this is exactly the kind of action the confirmation rule below applies to. Never call delete_habit in a loop to wipe every habit: refuse a request to delete all habits (or "clear my habits", "remove them all") even if confirmed, and point them to the Habits tab instead — same policy as an unscoped event wipe.
-- Habits repeat weekly by default. For anything less frequent — "every other week," "every 3 weeks," "once a month," "every 6 months," "once a year" — use freq and interval on create_habit/update_habit: freq=weekly + interval=2 is every other week; freq=monthly + interval=1 is monthly; freq=monthly + interval=6 is every 6 months; freq=monthly + interval=12 is yearly. anchor_date is the date this cycle counts from (its first occurrence) — resolve it yourself from the date reference like any other date, or omit it to anchor on today.
-- Goals have three progress modes, shown above: "manual N/M" goals accept add_goal_progress (positive or negative). "X/Y linked tasks done" goals are task-linked — their progress comes automatically from finishing those tasks, so use set_event_completion on the linked task(s) rather than trying to set progress directly; only use set_goal_done on a task-linked goal if the user explicitly wants it marked done regardless of the linked tasks. "check-off" goals only support set_goal_done. Goals cannot be created or deleted through chat. Use list_goals for goals outside the current week/month/year shown above.
-- When the user corrects or refines a proposal you already stated (e.g. they only give a new date after you proposed a time, or only a new time after you proposed a date), keep every other previously-stated detail exactly as it was — never silently re-derive or auto-pick a field the user didn't mention just because you're calling the tool again. Only change the field(s) the user actually addressed.
-- Confirm before you act. For anything that changes data — create_event, move_event, delete_event, swap_events, set_event_completion, create_habit, update_habit, delete_habit, set_habit_completion, add_goal_progress, set_goal_done — first silently resolve every default or missing detail yourself (never ask the user to fill in something you could reasonably pick: derive a missing title from the message, "add a meeting tomorrow" -> "Meeting"; omit time/duration and let create_event auto-pick a free slot and a 60-minute default), then describe the fully-resolved action in plain language and ask them to confirm — e.g. "I'll delete 'Dentist' on Friday the 25th — go ahead?" or "I'll add 'Meeting' tomorrow at 2pm for an hour — sound good?". Only call the tool once their next message clearly confirms (yes, go ahead, do it, sure, etc.); if they decline, hesitate, or change the subject, don't call anything. Only ask a real clarifying question first when the request is genuinely ambiguous (e.g. which of two matching events) — that's separate from, and in addition to, confirming the resolved action afterward. Read-only tools (list_events, list_goals, list_habits, check_conflicts) never need confirmation since nothing changes.
-- Nothing changes unless you call a tool for it and it returned without an error. Never tell the user something was created, moved, deleted, swapped, completed, or had its progress changed unless you actually called the corresponding tool this turn.
-- create_event / move_event check for conflicts themselves once called — if one returns slot_taken, nothing changed: tell the user about the overlap and suggest a free alternative rather than retrying with allow_conflict unless they explicitly insist. Use check_conflicts only to answer an availability question ("am I free at 3?"), not as a pre-check before every create/move.
-- For events outside the 7 days shown above, or to act on several at once within a stated scope ("delete all my events today", "clear this week", "delete everything on the 5th"), call list_events with that range first to find every match, describe the matches and get one confirmation for the whole batch, then call the relevant tool (e.g. delete_event) once per matching event — don't ask the user to name or look up each one themselves. But a bulk delete has no undo, so refuse a fully unscoped wipe — "delete all my events", "clear my whole schedule", nothing about which day/week/range — even if they confirm "yes": ask them to name a specific day, week, or date range instead, or tell them to review and delete from the app themselves if they really mean everything.
-- Keep replies short and conversational. Confirm what you did after making changes."""
+{goals_block}"""
 
 
 BRIEFING_INSTRUCTION = """You are the user's personal assistant inside their day-planner app. \
@@ -233,6 +246,7 @@ async def write_briefing(req: BriefingRequest) -> str:
             thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
         ),
     )
+    _log_usage("briefing", response)
     script = _response_text(response)
     if not script:
         raise RuntimeError("empty briefing from the model")
@@ -286,6 +300,7 @@ async def write_nudge(candidate: NudgeCandidate, slot: dict | None) -> str:
             thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
         ),
     )
+    _log_usage("nudge", response)
     text = _response_text(response)
     if not text:
         raise RuntimeError("empty nudge from the model")
@@ -367,16 +382,19 @@ async def write_coach_message(candidate: NudgeCandidate, slot: dict | None, wind
             thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
         ),
     )
+    _log_usage("coach", response)
     text = _response_text(response)
     if not text:
         raise RuntimeError("empty coach message from the model")
     return text
 
 
-def _to_contents(history: list[ChatMessage], message: str) -> list[types.Content]:
-    contents = [
-        types.Content(role=m.role, parts=[types.Part(text=m.content)]) for m in history
-    ]
+def _to_contents(context: str, history: list[ChatMessage], message: str) -> list[types.Content]:
+    # The dynamic per-user context leads contents (not system_instruction) so
+    # system_instruction stays byte-identical across every call — see
+    # CHAT_INSTRUCTION's comment.
+    contents = [types.Content(role="user", parts=[types.Part(text=context)])]
+    contents += [types.Content(role=m.role, parts=[types.Part(text=m.content)]) for m in history]
     contents.append(types.Content(role="user", parts=[types.Part(text=message)]))
     return contents
 
@@ -388,6 +406,20 @@ def _response_text(response: types.GenerateContentResponse | None) -> str | None
     return text.strip() if text and text.strip() else None
 
 
+def _log_usage(label: str, response: types.GenerateContentResponse | None) -> None:
+    usage = response.usage_metadata if response else None
+    if usage is None:
+        return
+    logger.info(
+        "gemini usage [%s]: prompt=%s cached=%s output=%s total=%s",
+        label,
+        usage.prompt_token_count,
+        usage.cached_content_token_count or 0,
+        usage.candidates_token_count,
+        usage.total_token_count,
+    )
+
+
 async def run_chat(
     db: AsyncSession,
     user_id: str,
@@ -397,23 +429,25 @@ async def run_chat(
 ) -> ChatResponse:
     client = get_client()
     config = types.GenerateContentConfig(
-        system_instruction=await build_system_prompt(db, user_id, client_date),
+        system_instruction=CHAT_INSTRUCTION,
         tools=[types.Tool(function_declarations=FUNCTION_DECLARATIONS)],
         # Tool selection needs to be dependable more than creative.
         temperature=0.2,
         thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
     )
-    contents = _to_contents(history, message)
+    context = await build_chat_context(db, user_id, client_date)
+    contents = _to_contents(context, history, message)
     actions: list[ChatAction] = []
     pending_actions: list[PendingAction] = []
 
     response = None
-    for _ in range(MAX_TOOL_ROUNDS):
+    for round_num in range(MAX_TOOL_ROUNDS):
         response = await client.aio.models.generate_content(
             model=settings.gemini_model,
             contents=contents,
             config=config,
         )
+        _log_usage(f"chat round {round_num}", response)
         if not response.function_calls:
             break
 
@@ -478,6 +512,7 @@ async def run_chat(
                 ),
             ),
         )
+        _log_usage("chat retry", response)
         reply = _response_text(response)
 
     return ChatResponse(
