@@ -148,15 +148,32 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
     </motion.div>
   );
 
+  // Always-available exit: sits above the dim/blockers in every mode so the
+  // tour never traps the user mid-step.
+  const skipButton = (
+    <motion.button
+      key="tutorial-skip"
+      onClick={finish}
+      whileTap={tap}
+      className="fixed z-82 pointer-events-auto text-[13px] font-medium text-white/90 bg-black/40 backdrop-blur px-3 py-1.5 rounded-full"
+      style={{ top: "calc(12px + env(safe-area-inset-top))", right: 16 }}
+    >
+      Skip tour
+    </motion.button>
+  );
+
   // Banner mode: instruction only, the whole screen stays interactive.
   if (current.mode === "banner") {
     return (
-      <div
-        className="fixed inset-x-4 z-[80] pointer-events-none"
-        style={{ top: "calc(12px + env(safe-area-inset-top))" }}
-      >
-        <AnimatePresence mode="wait">{card}</AnimatePresence>
-      </div>
+      <>
+        {skipButton}
+        <div
+          className="fixed inset-x-4 z-[80] pointer-events-none"
+          style={{ top: "calc(12px + env(safe-area-inset-top))" }}
+        >
+          <AnimatePresence mode="wait">{card}</AnimatePresence>
+        </div>
+      </>
     );
   }
 
@@ -164,6 +181,7 @@ export default function TutorialHost({ activePage, isAddOpen, isSideMenuOpen }: 
   // hole. The hole itself has no element over it, so the real control works.
   return (
     <div className="fixed inset-0 z-[80] pointer-events-none">
+      {skipButton}
       {activeHole ? (
         <>
           {/* Dim + ring around the target (the giant shadow is the dim). */}
