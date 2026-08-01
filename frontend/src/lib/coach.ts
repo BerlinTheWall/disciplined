@@ -87,6 +87,7 @@ async function scheduleCoachBatch(batch: ScheduledCheckpoint[]) {
       body: c.body,
       schedule: { at: new Date(c.fireAt) },
       extra: c.data,
+      channelId: "reminders",
     })),
   });
 }

@@ -87,6 +87,18 @@ export async function initNativeReminders(h: NativeReminderHandlers) {
     void requestNativeNotifyPermission();
   }
 
+  // Android only (iOS ignores channels): the plugin's auto-created "default"
+  // channel is importance 3, which plays a sound but never heads-up pops —
+  // easy to miss entirely. Reminders should interrupt, so give them their
+  // own high-importance channel.
+  await LocalNotifications.createChannel({
+    id: "reminders",
+    name: "Reminders",
+    description: "Task and habit reminders",
+    importance: 5,
+    visibility: 1,
+  });
+
   await LocalNotifications.registerActionTypes({
     types: [
       {
@@ -144,6 +156,7 @@ async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string
       schedule: { at: new Date(r.fireAt) },
       actionTypeId: "REMINDER",
       extra: r.data,
+      channelId: "reminders",
       sound: sounds?.get(r.speech) ?? "default",
     })),
   });
