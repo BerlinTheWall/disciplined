@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Flame, Mic, Sun } from "lucide-react";
+import { ArrowLeft, ArrowRight, Flame, Mic, Sun } from "lucide-react";
 
+import FakeWeekPreview from "./FakeWeekPreview";
+import PlanRow from "./PlanRow";
 import logo from "@/assets/logo.svg";
 import { COLOR_OPTIONS, DURATION_OPTIONS } from "@/components/timeline/addItemOptions";
 import TimeWheel from "@/components/timeline/TimeWheel";
@@ -9,7 +11,7 @@ import { isLightColor } from "@/lib/color";
 import { todayISODate } from "@/lib/date";
 import { guessIcon, ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
-import { formatTimeLabel, rangeLabel, timeStringToMinutes } from "@/lib/time";
+import { timeStringToMinutes } from "@/lib/time";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -30,12 +32,12 @@ const WIND_COLOR = VIOLET;
 
 const SUGGESTIONS = ["Answer emails", "Eat lunch", "Go for a walk", "Clean up", "Read", "Workout"];
 
-// Steps: 0 welcome · 1 value props · 2 wake · 3 task title · 4 task time ·
-// 5 duration · 6 color · 7 bed · 8 summary
-const STEP_COUNT = 9;
+// Steps: 0 welcome · 1 value props · 2 fake-week sandbox · 3 wake ·
+// 4 task title · 5 task time · 6 duration · 7 color · 8 bed · 9 summary
+const STEP_COUNT = 10;
 // Accent color per step (drives the highlighted title word, progress bar and
 // primary button — alternating like the reference app).
-const ACCENTS = [ROSE, ROSE, AMBER, ROSE, ROSE, ROSE, BLUE, VIOLET, BLUE];
+const ACCENTS = [ROSE, ROSE, BLUE, AMBER, ROSE, ROSE, ROSE, BLUE, VIOLET, BLUE];
 
 const stepVariants = {
   enter: (d: number) => ({ x: d > 0 ? 40 : -40, opacity: 0 }),
@@ -45,60 +47,6 @@ const stepVariants = {
 
 function taskIcon(title: string): IconKey {
   return guessIcon(title) ?? "default";
-}
-
-// The little plan card that accumulates the task being built.
-function PlanRow({
-  icon,
-  color,
-  title,
-  startMinutes,
-  durationMinutes,
-  done,
-  accent,
-}: {
-  icon: IconKey;
-  color: string;
-  title: string;
-  startMinutes?: number;
-  durationMinutes?: number;
-  done?: boolean;
-  accent: string;
-}) {
-  const Icon = ICONS[icon] ?? ICONS.default;
-  return (
-    <div
-      className="flex items-center gap-3 rounded-2xl border px-3 py-3 bg-surface-alt"
-      style={{ borderColor: `${accent}55` }}
-    >
-      <span
-        className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
-        style={{ backgroundColor: color, color: isLightColor(color) ? "#111827" : "#fff" }}
-      >
-        <Icon size={19} />
-      </span>
-      <div className="flex-1 min-w-0">
-        {startMinutes !== undefined && (
-          <p className="text-xs text-fg-faint tabular-nums">
-            {durationMinutes
-              ? `${rangeLabel(startMinutes, durationMinutes)} (${durationMinutes} mins)`
-              : formatTimeLabel(startMinutes)}
-          </p>
-        )}
-        <p className={`font-semibold truncate ${done ? "line-through text-fg-faint" : "text-fg"}`}>
-          {title}
-        </p>
-      </div>
-      <span
-        className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 ${
-          done ? "text-fg-inverse" : "border-border-strong text-transparent"
-        }`}
-        style={done ? { backgroundColor: accent, borderColor: accent } : undefined}
-      >
-        <Check size={14} strokeWidth={3} />
-      </span>
-    </div>
-  );
 }
 
 export default function OnboardingWizard() {
@@ -119,7 +67,7 @@ export default function OnboardingWizard() {
   const bedMin = timeStringToMinutes(bedTime);
 
   const go = (next: number) => setStep(([cur]) => [next, next >= cur ? 1 : -1]);
-  const canContinue = step !== 3 || title.trim().length > 0;
+  const canContinue = step !== 4 || title.trim().length > 0;
 
   // Done either way — the spotlight tour is superseded (still replayable from
   // Settings), so a new user sees exactly one guided flow.
@@ -190,7 +138,7 @@ export default function OnboardingWizard() {
       <div className="mb-6">
         <PlanRow
           icon={taskIcon(title)}
-          color={step >= 6 ? color : accent}
+          color={step >= 7 ? color : accent}
           title={title.trim()}
           startMinutes={withTime ? taskMin : undefined}
           durationMinutes={withDuration ? duration : undefined}
@@ -315,6 +263,16 @@ export default function OnboardingWizard() {
 
             {step === 2 && (
               <>
+                {heading("Here's a", "sample week")}
+                <p className="text-fg-muted mb-5">
+                  Tap through a few days to see how the assistant would keep up with it.
+                </p>
+                <FakeWeekPreview accent={accent} />
+              </>
+            )}
+
+            {step === 3 && (
+              <>
                 {heading("When did you", "wake up")}
                 <p className="text-fg-muted mb-8">Your day starts here.</p>
                 <div className="flex-1 flex items-center">
@@ -331,7 +289,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <>
                 {heading("What's up", "next")}
                 <p className="text-fg-muted mb-6">Enter something you want to do today.</p>
@@ -362,7 +320,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <>
                 {heading("At what", "time")}
                 <p className="text-fg-muted mb-6">Choose a start time for your task.</p>
@@ -381,7 +339,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
               <>
                 {heading("How", "long")}
                 <p className="text-fg-muted mb-6">Set a duration for your task.</p>
@@ -422,7 +380,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 6 && (
+            {step === 7 && (
               <>
                 {heading("What", "color")}
                 <p className="text-fg-muted mb-6">Pick a color for your task.</p>
@@ -453,7 +411,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 7 && (
+            {step === 8 && (
               <>
                 {heading("When will you", "go to bed")}
                 <p className="text-fg-muted mb-8">
@@ -473,7 +431,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 8 && (
+            {step === 9 && (
               <>
                 <h1 className="text-4xl font-extrabold leading-tight mb-3">
                   <span style={{ color: accent }}>Awesome!</span>{" "}
@@ -510,8 +468,9 @@ export default function OnboardingWizard() {
           </div>
         )}
         {step === 1 && primaryButton("Start planning", () => go(2))}
-        {step >= 2 && step <= 7 && primaryButton("Continue", () => go(step + 1), !canContinue)}
-        {step === 8 && primaryButton("Finish Setup", finishSetup)}
+        {step === 2 && primaryButton("Let's plan my real week", () => go(3))}
+        {step >= 3 && step <= 8 && primaryButton("Continue", () => go(step + 1), !canContinue)}
+        {step === 9 && primaryButton("Finish Setup", finishSetup)}
       </div>
     </div>
   );

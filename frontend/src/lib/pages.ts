@@ -24,3 +24,28 @@ export const ALL_TABS: { id: Page; icon: LucideIcon; label: string; locked?: boo
   { id: "schedule", icon: CalendarDays, label: "Schedule" },
   { id: "expenses", icon: Wallet, label: "Expenses", locked: true },
 ];
+
+// Progressive unlock ("earn the right to add complexity"): a brand-new
+// account only has Schedule for real at first — Habits and Goals stay
+// locked (same padlock treatment as ALL_TABS' permanently-locked entries)
+// until this many days have passed since onboarding finished. Distinct from
+// ALL_TABS.locked, which is permanent and product-scoped (Meals/Workout/
+// Expenses) rather than per-user and time-based.
+export const UNLOCK_AFTER_DAYS: Partial<Record<Page, number>> = {
+  habits: 3,
+  goals: 6,
+};
+
+export function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000));
+}
+
+// completedAt is null both before onboarding finishes and, transiently, for
+// the instant a fresh account is created — either way, nothing progressive
+// is unlocked yet.
+export function isProgressivelyLocked(id: Page, completedAt: string | null): boolean {
+  const need = UNLOCK_AFTER_DAYS[id];
+  if (need === undefined) return false;
+  if (completedAt === null) return true;
+  return daysSince(completedAt) < need;
+}
