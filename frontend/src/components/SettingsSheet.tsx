@@ -221,7 +221,7 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const reminderSubtitle =
     remindersEnabled && permission === "denied"
       ? isNativeReminderPlatform
-        ? "In-app only — allow notifications for Disciplined in iOS Settings for alerts when the app is closed"
+        ? "In-app only — allow notifications for Disciplined in your device Settings for alerts when the app is closed"
         : "In-app only — allow notifications in your browser for alerts when the app is closed"
       : undefined;
 

@@ -79,6 +79,13 @@ export async function initNativeReminders(h: NativeReminderHandlers) {
 
   const { display } = await LocalNotifications.checkPermissions();
   cachedPermission = toPermission(display);
+  // Reminders default to enabled (see settingsStore), so the toggle-on
+  // transition that normally asks for permission never fires for a fresh
+  // install — nobody ever "turns it on". Ask once here instead, covering
+  // that case without re-prompting once the user has answered.
+  if (cachedPermission === "default" && useSettingsStore.getState().remindersEnabled) {
+    void requestNativeNotifyPermission();
+  }
 
   await LocalNotifications.registerActionTypes({
     types: [
