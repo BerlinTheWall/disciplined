@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Palette,
   Repeat,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -64,6 +65,7 @@ import { WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
+import { usePresetStore } from "@/store/presetStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -117,6 +119,7 @@ export default function AddItemSheet({
     );
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const recipes = useRecipeStore((s) => s.recipes);
+  const addPreset = usePresetStore((s) => s.addPreset);
   const confirm = useConfirm();
   const choose = useChoose();
 
@@ -155,6 +158,7 @@ export default function AddItemSheet({
   const [done, setDone] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
   const [suggestDismissed, setSuggestDismissed] = useState(false);
+  const [saveAsPreset, setSaveAsPreset] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -163,6 +167,7 @@ export default function AddItemSheet({
     setOpenRow(null);
     setStyleOpen(false);
     setSuggestDismissed(false);
+    setSaveAsPreset(false);
     if (editItem) {
       setDone(
         editItem.type === "task"
@@ -475,6 +480,16 @@ export default function AddItemSheet({
         });
         useGoalStore.getState().linkTask(goalLink, newTaskId);
         if (goalLink) useGoalStore.getState().setTaskWeight(goalLink, newTaskId, goalWeight);
+        if (saveAsPreset) {
+          addPreset({
+            title: title.trim(),
+            icon,
+            color,
+            durationMinutes: duration,
+            reminderMinutesBefore: reminder,
+            priority,
+          });
+        }
       } else {
         if (freq === "weekly" && daysOfWeek.length === 0) return;
         addHabit({
@@ -1416,7 +1431,7 @@ export default function AddItemSheet({
                       >
                         <HeaderIcon size={18} />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs text-fg-faint">
                           {rangeLabel(startMin, duration)} · {relativeDayLabel(date)}
                         </p>
@@ -1424,6 +1439,23 @@ export default function AddItemSheet({
                           {title.trim() || "Untitled"}
                         </p>
                       </div>
+                      {mode === "task" && !isEditing && (
+                        <motion.button
+                          type="button"
+                          onClick={() => setSaveAsPreset((v) => !v)}
+                          whileTap={tap}
+                          aria-label={
+                            saveAsPreset ? "Remove from one-tap presets" : "Save as one-tap preset"
+                          }
+                          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                            saveAsPreset
+                              ? "bg-surface-inverse text-fg-inverse"
+                              : "bg-surface text-fg-faint"
+                          }`}
+                        >
+                          <Star size={16} fill={saveAsPreset ? "currentColor" : "none"} />
+                        </motion.button>
+                      )}
                     </div>
 
                     {typeLinksBody}

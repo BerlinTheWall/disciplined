@@ -43,7 +43,7 @@ const PRIO_RANK: Record<Priority, number> = { high: 3, medium: 2, low: 1 };
 // Ring accents, one per discipline pillar.
 const RING_TASKS = "#9ec06a"; // soft green
 const RING_HABITS = "#eab464"; // warm amber
-const RING_MOVE = "#60a5fa"; // blue
+const RING_GOALS = "#60a5fa"; // blue
 
 function fmt12(min: number) {
   const h = Math.floor(min / 60) % 24;
@@ -291,20 +291,20 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
   const todo = Math.max(0, pending - inProgress);
   const percent = total ? Math.round((done / total) * 100) : 0;
 
-  // Today's discipline rings: tasks, habits, and movement (workout-linked
-  // tasks), each filling with today's completion. A pillar with nothing
-  // scheduled shows an empty ring and sits out of the "perfect day" count.
+  // Today's discipline rings: tasks, habits, and this week's goals, each
+  // filling with completion. A pillar with nothing scheduled shows an empty
+  // ring and sits out of the "perfect day" count. Goals is week-scoped (not
+  // "today") since that's the only period they actually have.
   const todayTasks = tasks.filter((t) => t.date === today);
-  const workoutTasks = todayTasks.filter((t) => t.workoutSessionId);
-  const plainTasks = todayTasks.filter((t) => !t.workoutSessionId);
   const activeHabitsToday = habits.filter((h) => isHabitActiveOnDate(h, todayObj));
   const habitsDoneToday = activeHabitsToday.filter((h) => h.completedDates.includes(today)).length;
+  const goalsDoneThisWeek = weekGoals.filter((g) => goalProgress(g, tasks).done).length;
   const pillars = [
     {
       label: "Tasks",
       color: RING_TASKS,
-      done: plainTasks.filter((t) => t.completed).length,
-      total: plainTasks.length,
+      done: todayTasks.filter((t) => t.completed).length,
+      total: todayTasks.length,
       rest: "—",
     },
     {
@@ -315,11 +315,11 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
       rest: "—",
     },
     {
-      label: "Movement",
-      color: RING_MOVE,
-      done: workoutTasks.filter((t) => t.completed).length,
-      total: workoutTasks.length,
-      rest: "Rest",
+      label: "Goals",
+      color: RING_GOALS,
+      done: goalsDoneThisWeek,
+      total: weekGoals.length,
+      rest: "—",
     },
   ];
   const ringsApplicable = pillars.filter((p) => p.total > 0).length;
@@ -473,10 +473,15 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
                     </span>
                     {gp.mode !== "check" && (
                       <div className="flex items-center gap-2 shrink-0">
+                        {/* Binary, not proportional — a glanceable "touched this
+                            week" signal rather than a precise percentage. */}
                         <span className="w-12 h-1.5 rounded-full bg-surface-subtle overflow-hidden">
                           <span
                             className="block h-full rounded-full"
-                            style={{ width: `${gp.fraction * 100}%`, backgroundColor: accent }}
+                            style={{
+                              width: gp.fraction > 0 ? "100%" : "0%",
+                              backgroundColor: accent,
+                            }}
                           />
                         </span>
                         <span className="text-xs text-fg-muted tabular-nums">

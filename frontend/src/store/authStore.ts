@@ -50,6 +50,7 @@ const USER_DATA_STORE_KEYS = [
   "disciplined-preferences",
   "disciplined-profile",
   "disciplined-reminders",
+  "disciplined-presets",
 ];
 // Notification history and nudge state (disciplined-notification-history,
 // disciplined-nudges) are deliberately NOT here: they have no server copy to

@@ -97,6 +97,35 @@ export interface LayoutItem {
   durationMinutes: number;
 }
 
+// Walks forward in SNAP_MINUTES steps from `notBefore` until it finds a window
+// of `durationMinutes` that doesn't overlap any existing item, so one-tap
+// preset adds (see PresetRow) land somewhere sane instead of stacking on
+// whatever's already there. Falls back to the tail of the day if it's packed
+// solid, rather than searching forever.
+export function nextFreeSlot(
+  existing: LayoutItem[],
+  durationMinutes: number,
+  notBefore = 0
+): number {
+  const sorted = [...existing].sort((a, b) => a.startMinutes - b.startMinutes);
+  const lastPossibleStart = Math.max(0, 1440 - durationMinutes);
+  let start = Math.min(
+    lastPossibleStart,
+    Math.ceil(Math.max(0, notBefore) / SNAP_MINUTES) * SNAP_MINUTES
+  );
+
+  while (start <= lastPossibleStart) {
+    const end = start + durationMinutes;
+    const conflict = sorted.find(
+      (i) => start < i.startMinutes + i.durationMinutes && end > i.startMinutes
+    );
+    if (!conflict) return start;
+    start =
+      Math.ceil((conflict.startMinutes + conflict.durationMinutes) / SNAP_MINUTES) * SNAP_MINUTES;
+  }
+  return lastPossibleStart;
+}
+
 export interface GapInfo {
   afterId: string;
   beforeId: string;
