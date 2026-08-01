@@ -41,6 +41,7 @@ class UserOut(CamelModel):
     display_name: str
     email_verified: bool
     timezone: str | None = None
+    segment: str | None = None
 
 
 class AuthResponse(CamelModel):
@@ -73,6 +74,10 @@ class ResetPasswordRequest(CamelModel):
 
 class UpdateTimezoneRequest(CamelModel):
     timezone: str
+
+
+class UpdateSegmentRequest(CamelModel):
+    segment: Literal["student", "professional", "manager", "parent"]
 
 
 # ---- Briefing ----

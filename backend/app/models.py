@@ -45,6 +45,11 @@ class User(Base):
     # defaults everyone to the top tier; wiring real subscriptions later is
     # just writing to this column instead of building the budget logic.
     coach_tier: Mapped[str] = mapped_column(String, default="plus")  # "free" | "plus"
+    # Self-reported during onboarding (see OnboardingWizard.tsx's "what best
+    # describes you" step) — picks which fake-week demo they see and doubles
+    # as a segmentation signal. Nullable: optional question, skippable, and
+    # every account created before this existed has none.
+    segment: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class EmailCode(Base):

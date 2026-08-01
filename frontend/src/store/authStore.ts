@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { api, setToken, type AuthUser } from "@/lib/api";
+import { api, setToken, type AuthUser, type UserSegment } from "@/lib/api";
 import { deviceTimezone } from "@/lib/timezone";
 import { useProfileStore } from "@/store/profileStore";
 
@@ -25,6 +25,10 @@ interface Actions {
   // No-op when the device's current zone matches what's stored (the common
   // case on every launch) — only actually calls the API when it's changed.
   syncTimezone: () => Promise<void>;
+  // Fire-and-forget from the onboarding wizard's segment-picker step —
+  // failure is swallowed there too, so a flaky request never blocks moving
+  // on in the wizard over a self-reported, non-essential field.
+  setSegment: (segment: UserSegment) => Promise<void>;
 }
 
 // Keys of the stores holding user content. Cleared on logout so the next
@@ -115,6 +119,10 @@ export const useAuthStore = create<State & Actions>()(
         const tz = deviceTimezone();
         if (!user || !tz || tz === user.timezone) return;
         const updated = await api.auth.updateTimezone(tz).catch(() => null);
+        if (updated) set({ user: updated });
+      },
+      setSegment: async (segment) => {
+        const updated = await api.auth.updateSegment(segment).catch(() => null);
         if (updated) set({ user: updated });
       },
     }),

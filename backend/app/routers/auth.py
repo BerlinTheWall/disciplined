@@ -16,6 +16,7 @@ from app.schemas import (
     RegisterRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    UpdateSegmentRequest,
     UpdateTimezoneRequest,
     UserOut,
     VerifyEmailRequest,
@@ -218,5 +219,16 @@ async def update_timezone(
     db: AsyncSession = Depends(get_db),
 ):
     user.timezone = body.timezone
+    await db.commit()
+    return user
+
+
+@router.patch("/segment", response_model=UserOut)
+async def update_segment(
+    body: UpdateSegmentRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user.segment = body.segment
     await db.commit()
     return user

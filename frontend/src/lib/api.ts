@@ -143,7 +143,13 @@ export interface AuthUser {
   displayName: string;
   emailVerified: boolean;
   timezone?: string;
+  segment?: UserSegment;
 }
+
+// Self-reported during onboarding — picks which fake-week demo is shown
+// (see components/onboarding/FakeWeekPreview.tsx) and doubles as a
+// segmentation signal.
+export type UserSegment = "student" | "professional" | "manager" | "parent";
 
 export interface AuthResponse {
   token: string;
@@ -310,6 +316,8 @@ export const api = {
       }),
     updateTimezone: (timezone: string): Promise<AuthUser> =>
       request("/api/auth/timezone", { method: "PATCH", body: JSON.stringify({ timezone }) }),
+    updateSegment: (segment: UserSegment): Promise<AuthUser> =>
+      request("/api/auth/segment", { method: "PATCH", body: JSON.stringify({ segment }) }),
   },
   events: resource<Task>("events"),
   goals: resource<Goal>("goals"),

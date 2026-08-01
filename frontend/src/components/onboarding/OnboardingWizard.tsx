@@ -1,17 +1,29 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Flame, Mic, Sun } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Baby,
+  Briefcase,
+  Flame,
+  GraduationCap,
+  Mic,
+  Sun,
+  Users,
+} from "lucide-react";
 
 import FakeWeekPreview from "./FakeWeekPreview";
 import PlanRow from "./PlanRow";
 import logo from "@/assets/logo.svg";
 import { COLOR_OPTIONS, DURATION_OPTIONS } from "@/components/timeline/addItemOptions";
 import TimeWheel from "@/components/timeline/TimeWheel";
+import type { UserSegment } from "@/lib/api";
 import { isLightColor } from "@/lib/color";
 import { todayISODate } from "@/lib/date";
 import { guessIcon, ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { timeStringToMinutes } from "@/lib/time";
+import { useAuthStore } from "@/store/authStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -32,12 +44,20 @@ const WIND_COLOR = VIOLET;
 
 const SUGGESTIONS = ["Answer emails", "Eat lunch", "Go for a walk", "Clean up", "Read", "Workout"];
 
-// Steps: 0 welcome · 1 value props · 2 fake-week sandbox · 3 wake ·
-// 4 task title · 5 task time · 6 duration · 7 color · 8 bed · 9 summary
-const STEP_COUNT = 10;
+// Steps: 0 welcome · 1 value props · 2 segment picker · 3 fake-week sandbox ·
+// 4 wake · 5 task title · 6 task time · 7 duration · 8 color · 9 bed ·
+// 10 summary
+const STEP_COUNT = 11;
 // Accent color per step (drives the highlighted title word, progress bar and
 // primary button — alternating like the reference app).
-const ACCENTS = [ROSE, ROSE, BLUE, AMBER, ROSE, ROSE, ROSE, BLUE, VIOLET, BLUE];
+const ACCENTS = [ROSE, ROSE, ROSE, BLUE, AMBER, ROSE, ROSE, ROSE, BLUE, VIOLET, BLUE];
+
+const SEGMENTS: { id: UserSegment; label: string; icon: typeof GraduationCap }[] = [
+  { id: "student", label: "Student", icon: GraduationCap },
+  { id: "professional", label: "Working professional", icon: Briefcase },
+  { id: "manager", label: "Manager / team lead", icon: Users },
+  { id: "parent", label: "Parent / caregiver", icon: Baby },
+];
 
 const stepVariants = {
   enter: (d: number) => ({ x: d > 0 ? 40 : -40, opacity: 0 }),
@@ -54,6 +74,7 @@ export default function OnboardingWizard() {
   const theme = useThemeStore((s) => s.theme);
 
   const [[step, dir], setStep] = useState<[number, number]>([0, 1]);
+  const [segment, setSegment] = useState<UserSegment | null>(null);
   const [wakeTime, setWakeTime] = useState("08:00");
   const [title, setTitle] = useState("");
   const [taskTime, setTaskTime] = useState("11:00");
@@ -67,7 +88,16 @@ export default function OnboardingWizard() {
   const bedMin = timeStringToMinutes(bedTime);
 
   const go = (next: number) => setStep(([cur]) => [next, next >= cur ? 1 : -1]);
-  const canContinue = step !== 4 || title.trim().length > 0;
+  const canContinue = step !== 5 || title.trim().length > 0;
+
+  // Fired the moment they pick one, not just at the end of the wizard — that
+  // way the answer is captured even if they later abandon onboarding partway
+  // through. Failure is swallowed in authStore.setSegment itself; a flaky
+  // request should never block moving on in the wizard.
+  function chooseSegment(id: UserSegment) {
+    setSegment(id);
+    void useAuthStore.getState().setSegment(id);
+  }
 
   // Done either way — the spotlight tour is superseded (still replayable from
   // Settings), so a new user sees exactly one guided flow.
@@ -138,7 +168,7 @@ export default function OnboardingWizard() {
       <div className="mb-6">
         <PlanRow
           icon={taskIcon(title)}
-          color={step >= 7 ? color : accent}
+          color={step >= 8 ? color : accent}
           title={title.trim()}
           startMinutes={withTime ? taskMin : undefined}
           durationMinutes={withDuration ? duration : undefined}
@@ -263,15 +293,47 @@ export default function OnboardingWizard() {
 
             {step === 2 && (
               <>
-                {heading("Here's a", "sample week")}
-                <p className="text-fg-muted mb-5">
-                  Tap through a few days to see how the assistant would keep up with it.
+                {heading("What best", "describes you?")}
+                <p className="text-fg-muted mb-6">
+                  So I can show you something closer to your own week.
                 </p>
-                <FakeWeekPreview accent={accent} />
+                <div className="flex flex-col gap-2.5">
+                  {SEGMENTS.map(({ id, label, icon: Icon }) => (
+                    <motion.button
+                      key={id}
+                      onClick={() => chooseSegment(id)}
+                      whileTap={tap}
+                      className="flex items-center gap-3.5 rounded-2xl px-4 py-4 text-left bg-surface-alt"
+                      style={segment === id ? { boxShadow: `0 0 0 2px ${accent}` } : undefined}
+                    >
+                      <span
+                        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                        style={{
+                          backgroundColor: segment === id ? accent : `${accent}22`,
+                          color: segment === id ? "#fff" : accent,
+                        }}
+                      >
+                        <Icon size={20} />
+                      </span>
+                      <span className="text-[15px] font-medium text-fg">{label}</span>
+                    </motion.button>
+                  ))}
+                </div>
+                <p className="text-xs text-fg-faint mt-4">Optional — you can skip this.</p>
               </>
             )}
 
             {step === 3 && (
+              <>
+                {heading("Here's a", "sample week")}
+                <p className="text-fg-muted mb-5">
+                  Tap through a few days to see how the assistant would keep up with it.
+                </p>
+                <FakeWeekPreview accent={accent} segment={segment} />
+              </>
+            )}
+
+            {step === 4 && (
               <>
                 {heading("When did you", "wake up")}
                 <p className="text-fg-muted mb-8">Your day starts here.</p>
@@ -289,7 +351,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <>
                 {heading("What's up", "next")}
                 <p className="text-fg-muted mb-6">Enter something you want to do today.</p>
@@ -320,7 +382,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
               <>
                 {heading("At what", "time")}
                 <p className="text-fg-muted mb-6">Choose a start time for your task.</p>
@@ -339,7 +401,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 6 && (
+            {step === 7 && (
               <>
                 {heading("How", "long")}
                 <p className="text-fg-muted mb-6">Set a duration for your task.</p>
@@ -380,7 +442,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 7 && (
+            {step === 8 && (
               <>
                 {heading("What", "color")}
                 <p className="text-fg-muted mb-6">Pick a color for your task.</p>
@@ -411,7 +473,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 8 && (
+            {step === 9 && (
               <>
                 {heading("When will you", "go to bed")}
                 <p className="text-fg-muted mb-8">
@@ -431,7 +493,7 @@ export default function OnboardingWizard() {
               </>
             )}
 
-            {step === 9 && (
+            {step === 10 && (
               <>
                 <h1 className="text-4xl font-extrabold leading-tight mb-3">
                   <span style={{ color: accent }}>Awesome!</span>{" "}
@@ -468,9 +530,10 @@ export default function OnboardingWizard() {
           </div>
         )}
         {step === 1 && primaryButton("Start planning", () => go(2))}
-        {step === 2 && primaryButton("Let's plan my real week", () => go(3))}
-        {step >= 3 && step <= 8 && primaryButton("Continue", () => go(step + 1), !canContinue)}
-        {step === 9 && primaryButton("Finish Setup", finishSetup)}
+        {step === 2 && primaryButton("Continue", () => go(3))}
+        {step === 3 && primaryButton("Let's plan my real week", () => go(4))}
+        {step >= 4 && step <= 9 && primaryButton("Continue", () => go(step + 1), !canContinue)}
+        {step === 10 && primaryButton("Finish Setup", finishSetup)}
       </div>
     </div>
   );
