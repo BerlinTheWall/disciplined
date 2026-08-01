@@ -5,15 +5,8 @@ import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { spring, tap } from "@/lib/motion";
-import {
-  ALL_TABS,
-  daysSince,
-  isProgressivelyLocked,
-  UNLOCK_AFTER_DAYS,
-  type Page,
-} from "@/lib/pages";
+import { ALL_TABS, type Page } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { useSyncStatusStore } from "@/store/syncStatusStore";
 import { useThemeStore } from "@/store/themeStore";
 
@@ -48,7 +41,6 @@ export default function SideMenu({
   const { theme, toggleTheme } = useThemeStore();
   const logout = useAuthStore((s) => s.logout);
   const { pendingCount, syncing } = useSyncStatusStore();
-  const onboardingCompletedAt = useOnboardingStore((s) => s.completedAt);
   useScrollLock(isOpen);
 
   const x = useMotionValue(0);
@@ -121,17 +113,8 @@ export default function SideMenu({
               {ALL_TABS.filter(({ id }) => !HIDDEN_FROM_MENU.includes(id)).map(
                 ({ id, icon: Icon, label, locked }) => {
                   const isActive = id === activePage;
-                  const progressivelyLocked = isProgressivelyLocked(id, onboardingCompletedAt);
-                  // Locked entries show a padlock and can't be opened yet — either
-                  // permanently (Meals/Workout/Expenses) or progressively, until
-                  // the user's earned it (see lib/pages.ts's UNLOCK_AFTER_DAYS).
-                  if (locked || progressivelyLocked) {
-                    const need = UNLOCK_AFTER_DAYS[id] ?? 0;
-                    const daysLeft = progressivelyLocked
-                      ? onboardingCompletedAt === null
-                        ? need
-                        : Math.max(0, need - daysSince(onboardingCompletedAt))
-                      : null;
+                  // Locked entries show a padlock and can't be opened yet.
+                  if (locked) {
                     return (
                       <div
                         key={id}
@@ -139,14 +122,7 @@ export default function SideMenu({
                         className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 opacity-45"
                       >
                         <Icon size={20} strokeWidth={1.8} className="text-fg-muted" />
-                        <span className="font-medium text-fg-muted flex-1">
-                          {label}
-                          {daysLeft !== null && (
-                            <span className="block text-xs font-normal text-fg-faint">
-                              Unlocks in {daysLeft} day{daysLeft === 1 ? "" : "s"}
-                            </span>
-                          )}
-                        </span>
+                        <span className="font-medium text-fg-muted flex-1">{label}</span>
                         <Lock size={15} className="text-fg-faint" />
                       </div>
                     );

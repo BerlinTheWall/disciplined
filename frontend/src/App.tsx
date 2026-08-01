@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlignLeft, CalendarPlus, LayoutGrid, Lock, Menu } from "lucide-react";
+import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
@@ -22,13 +22,7 @@ import { useLeftEdgeSwipe } from "./hooks/useEdgeSwipe";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
-import {
-  daysSince,
-  isProgressivelyLocked,
-  PAGE_ORDER,
-  UNLOCK_AFTER_DAYS,
-  type Page,
-} from "./lib/pages";
+import { PAGE_ORDER, type Page } from "./lib/pages";
 import ExpensesPage from "./pages/ExpensesPage";
 import GoalsPage from "./pages/GoalsPage";
 import HabitsPage from "./pages/HabitsPage";
@@ -87,7 +81,6 @@ function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const onboardingDone = useOnboardingStore((s) => s.done);
-  const onboardingCompletedAt = useOnboardingStore((s) => s.completedAt);
   // A small dot on the menu button when there's something to say about sync
   // (pending changes, or actively pushing) — full detail lives in SideMenu,
   // reached the same way this dot is seen.
@@ -210,33 +203,11 @@ function App() {
 
   const fabOpen = activePage === "expenses" ? isGroceryAddOpen : isAddOpen;
 
-  // Guards a still-earning page against any entry point, not just the side
-  // menu's padlock (Home's "view all goals", a nudge's "View" button, the
-  // notification bell) — see lib/pages.ts's UNLOCK_AFTER_DAYS.
-  function lockedNotice(page: Page) {
-    const need = UNLOCK_AFTER_DAYS[page] ?? 0;
-    const daysLeft =
-      onboardingCompletedAt === null ? need : Math.max(0, need - daysSince(onboardingCompletedAt));
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-surface-alt flex items-center justify-center">
-          <Lock size={26} className="text-fg-faint" />
-        </div>
-        <p className="text-lg font-semibold text-fg">{PAGE_TITLES[page]} unlocks soon</p>
-        <p className="text-sm text-fg-muted max-w-[26ch]">
-          Stick with your schedule for {daysLeft} more day{daysLeft === 1 ? "" : "s"} and this opens
-          up.
-        </p>
-      </div>
-    );
-  }
-
   function renderPage() {
     switch (activePage) {
       case "home":
         return <HomePage onViewAll={() => go("schedule")} onOpenGoals={() => go("goals")} />;
       case "goals":
-        if (isProgressivelyLocked("goals", onboardingCompletedAt)) return lockedNotice("goals");
         return <GoalsPage onOpenSchedule={() => go("schedule")} />;
       case "schedule":
         return (
@@ -252,7 +223,6 @@ function App() {
       case "workout":
         return <WorkoutPage />;
       case "habits":
-        if (isProgressivelyLocked("habits", onboardingCompletedAt)) return lockedNotice("habits");
         return <HabitsPage />;
       case "expenses":
         return <ExpensesPage />;
