@@ -30,6 +30,7 @@ import HomePage from "./pages/HomePage";
 import KitchenPage from "./pages/KitchenPage";
 import ProfilePage from "./pages/ProfilePage";
 import WorkoutPage from "./pages/WorkoutPage";
+import { useAuthStore } from "./store/authStore";
 import { useGoalFocusStore } from "./store/goalFocusStore";
 import { useOnboardingStore } from "./store/onboardingStore";
 import { useProfileStore } from "./store/profileStore";
@@ -143,7 +144,7 @@ function App() {
 
   // Avatar in the home header — the way into the profile page. Shows the
   // profile photo when one is set, the initial letter otherwise.
-  const profileName = useProfileStore((s) => s.name);
+  const profileName = useAuthStore((s) => s.user?.displayName ?? "");
   const profileAvatar = useProfileStore((s) => s.avatar);
   const profileInitial = profileName.trim().charAt(0).toUpperCase() || "?";
 

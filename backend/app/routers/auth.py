@@ -16,6 +16,7 @@ from app.schemas import (
     RegisterRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    UpdateDisplayNameRequest,
     UpdateSegmentRequest,
     UpdateTimezoneRequest,
     UserOut,
@@ -230,5 +231,16 @@ async def update_segment(
     db: AsyncSession = Depends(get_db),
 ):
     user.segment = body.segment
+    await db.commit()
+    return user
+
+
+@router.patch("/display-name", response_model=UserOut)
+async def update_display_name(
+    body: UpdateDisplayNameRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user.display_name = body.display_name.strip()
     await db.commit()
     return user

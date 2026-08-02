@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Camera, Check, ChevronRight, Flame, LogOut, Pencil } from "lucide-react";
+import { Camera, Check, ChevronRight, Flame, LoaderCircle, LogOut, Pencil } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { useChoose } from "@/components/ConfirmDialog";
@@ -8,6 +8,7 @@ import { Heatmap, Ring } from "@/components/profile/ProfileCharts";
 import ProfileDetailSheet, {
   type ProfileDetailKind,
 } from "@/components/profile/ProfileDetailSheet";
+import { ApiError } from "@/lib/api";
 import { fileToAvatar } from "@/lib/avatar";
 import { ICONS } from "@/lib/icons";
 import { habitStats, heatmapWeeks, recentScores } from "@/lib/insights";
@@ -66,15 +67,8 @@ function Card({
 export default function ProfilePage() {
   const tasks = useTaskStore((s) => s.tasks);
   const habits = useHabitStore((s) => s.habits);
-  const [name, tagline, avatar, setName, setTagline, setAvatar] = useProfileStore(
-    useShallow((state) => [
-      state.name,
-      state.tagline,
-      state.avatar,
-      state.setName,
-      state.setTagline,
-      state.setAvatar,
-    ])
+  const [tagline, avatar, setTagline, setAvatar] = useProfileStore(
+    useShallow((state) => [state.tagline, state.avatar, state.setTagline, state.setAvatar])
   );
   const choose = useChoose();
   const avatarFileRef = useRef<HTMLInputElement>(null);
@@ -112,7 +106,11 @@ export default function ProfilePage() {
   }
   const account = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const updateDisplayName = useAuthStore((s) => s.updateDisplayName);
+  const name = account?.displayName ?? "";
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Which card's full-detail sheet is open — every showcase card below opens
   // one (see ProfileDetailSheet: month-over-month charts + a written summary).
   const [detail, setDetail] = useState<ProfileDetailKind | null>(null);
@@ -130,10 +128,23 @@ export default function ProfilePage() {
 
   const habitRows = useMemo(() => habitStats(habits), [habits]);
 
-  function saveProfile() {
-    setName(draftName.trim() || "You");
+  async function saveProfile() {
+    const trimmedName = draftName.trim();
     setTagline(draftTagline.trim());
-    setEditing(false);
+    if (trimmedName === name) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateDisplayName(trimmedName || "You");
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : "Couldn't save your name. Try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -169,14 +180,17 @@ export default function ProfilePage() {
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
                 placeholder="Your name"
-                className="w-full bg-surface-subtle rounded-xl px-3 py-2 text-fg font-semibold outline-none"
+                disabled={saving}
+                className="w-full bg-surface-subtle rounded-xl px-3 py-2 text-fg font-semibold outline-none disabled:opacity-60"
               />
               <input
                 value={draftTagline}
                 onChange={(e) => setDraftTagline(e.target.value)}
                 placeholder="A short tagline"
-                className="w-full bg-surface-subtle rounded-xl px-3 py-2 text-sm text-fg-muted outline-none"
+                disabled={saving}
+                className="w-full bg-surface-subtle rounded-xl px-3 py-2 text-sm text-fg-muted outline-none disabled:opacity-60"
               />
+              {saveError && <p className="text-xs text-red-400 px-1">{saveError}</p>}
             </div>
           ) : (
             <div className="flex-1 min-w-0">
@@ -187,11 +201,12 @@ export default function ProfilePage() {
           {editing ? (
             <motion.button
               whileTap={tap}
-              onClick={saveProfile}
-              className="w-10 h-10 rounded-full bg-fg text-fg-inverse flex items-center justify-center shrink-0"
+              onClick={() => void saveProfile()}
+              disabled={saving}
+              className="w-10 h-10 rounded-full bg-fg text-fg-inverse flex items-center justify-center shrink-0 disabled:opacity-60"
               aria-label="Save profile"
             >
-              <Check size={18} />
+              {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={18} />}
             </motion.button>
           ) : (
             <motion.button
@@ -199,6 +214,7 @@ export default function ProfilePage() {
               onClick={() => {
                 setDraftName(name);
                 setDraftTagline(tagline);
+                setSaveError(null);
                 setEditing(true);
               }}
               className="w-10 h-10 rounded-full bg-surface-subtle text-fg-muted flex items-center justify-center shrink-0"

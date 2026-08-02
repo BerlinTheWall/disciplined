@@ -80,6 +80,10 @@ class UpdateSegmentRequest(CamelModel):
     segment: Literal["student", "professional", "manager", "parent"]
 
 
+class UpdateDisplayNameRequest(CamelModel):
+    display_name: str = Field(min_length=1, max_length=100)
+
+
 # ---- Briefing ----
 
 

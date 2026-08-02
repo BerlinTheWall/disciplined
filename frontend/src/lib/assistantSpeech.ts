@@ -1,5 +1,5 @@
 import type { IconKey } from "@/lib/icons";
-import { useProfileStore } from "@/store/profileStore";
+import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore, type VoiceTone } from "@/store/settingsStore";
 
 // Composes the sentence a reminder speaks — phrased like a personal assistant
@@ -244,7 +244,7 @@ export function assistantReminderLine(
   icon: IconKey = "default",
   variantSeed?: number
 ) {
-  const name = useProfileStore.getState().name.trim();
+  const name = (useAuthStore.getState().user?.displayName ?? "").trim();
   const tone = useSettingsStore.getState().voiceTone;
   const time = spokenTime(startMinutes);
   const lines = TEMPLATES[tone][reminderCategory(icon)];
@@ -275,7 +275,7 @@ export function assistantDayBriefing(
   dayLabel: string,
   nowMinutes?: number
 ): string {
-  const name = useProfileStore.getState().name.trim();
+  const name = (useAuthStore.getState().user?.displayName ?? "").trim();
   const day = dayLabel === "Today" ? "today" : dayLabel === "Tomorrow" ? "tomorrow" : dayLabel;
   const prefix = name ? `${name}, ` : "";
 

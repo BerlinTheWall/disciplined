@@ -1,5 +1,5 @@
 import { api, type BriefingItemPayload, type BriefingPayload } from "./api";
-import { useProfileStore } from "@/store/profileStore";
+import { useAuthStore } from "@/store/authStore";
 
 // Fetches the LLM-written briefing script for a day, cached per exact payload
 // so re-opening the same unchanged day doesn't regenerate (or re-bill) it.
@@ -19,7 +19,7 @@ export function fetchBriefingScript(
 ): Promise<string | null> {
   const payload: BriefingPayload = {
     dayLabel,
-    name: useProfileStore.getState().name.trim(),
+    name: (useAuthStore.getState().user?.displayName ?? "").trim(),
     items: [...items].sort((a, b) => a.startMinutes - b.startMinutes),
     streaks,
     nowMinutes,

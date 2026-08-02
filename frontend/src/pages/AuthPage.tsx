@@ -94,8 +94,6 @@ export default function AuthPage() {
     setBusy(true);
     try {
       if (isSignup) {
-        // Store also seeds the profile hub's name from firstName — see
-        // authStore's seedProfileName.
         await register(email.trim(), password, firstName.trim(), lastName.trim());
         setVerifyFor({ email: email.trim(), reason: "signup" });
       } else {

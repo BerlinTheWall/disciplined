@@ -3,7 +3,6 @@ import { persist } from "zustand/middleware";
 
 import { api, setToken, type AuthUser, type UserSegment } from "@/lib/api";
 import { deviceTimezone } from "@/lib/timezone";
-import { useProfileStore } from "@/store/profileStore";
 
 // The signed-in account. The JWT itself lives in localStorage via api.ts
 // (setToken); this store holds who is logged in and drives the auth gate.
@@ -29,6 +28,7 @@ interface Actions {
   // failure is swallowed there too, so a flaky request never blocks moving
   // on in the wizard over a self-reported, non-essential field.
   setSegment: (segment: UserSegment) => Promise<void>;
+  updateDisplayName: (displayName: string) => Promise<void>;
 }
 
 // Keys of the stores holding user content. Cleared on logout so the next
@@ -60,17 +60,6 @@ const USER_DATA_STORE_KEYS = [
 // so switching accounts on one device neither leaks the previous account's
 // notifications nor destroys them.
 
-// The profile hub's display name (useProfileStore) is local-only, not synced
-// from the account — logout resets it to the generic "You" default (see
-// USER_DATA_STORE_KEYS below). Seed it from the account's first name right
-// after sign-in, but only while it's still that untouched default, so a name
-// customized on this device is never clobbered.
-function seedProfileName(firstName: string) {
-  if (useProfileStore.getState().name === "You") {
-    useProfileStore.getState().setName(firstName);
-  }
-}
-
 export const useAuthStore = create<State & Actions>()(
   persist(
     (set, get) => ({
@@ -78,12 +67,10 @@ export const useAuthStore = create<State & Actions>()(
       login: async (email, password) => {
         const { token, user } = await api.auth.login(email, password);
         setToken(token);
-        seedProfileName(user.firstName);
         set({ user });
       },
       register: async (email, password, firstName, lastName) => {
         await api.auth.register(email, password, firstName, lastName, deviceTimezone());
-        seedProfileName(firstName);
       },
       logout: () => {
         setToken(null);
@@ -99,7 +86,6 @@ export const useAuthStore = create<State & Actions>()(
       verifyEmail: async (email, code) => {
         const { token, user } = await api.auth.verifyEmail(email, code);
         setToken(token);
-        seedProfileName(user.firstName);
         set({ user });
       },
       resendVerification: async (email) => {
@@ -125,6 +111,10 @@ export const useAuthStore = create<State & Actions>()(
       setSegment: async (segment) => {
         const updated = await api.auth.updateSegment(segment).catch(() => null);
         if (updated) set({ user: updated });
+      },
+      updateDisplayName: async (displayName) => {
+        const updated = await api.auth.updateDisplayName(displayName);
+        set({ user: updated });
       },
     }),
     { name: "disciplined-auth" }

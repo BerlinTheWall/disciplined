@@ -318,6 +318,11 @@ export const api = {
       request("/api/auth/timezone", { method: "PATCH", body: JSON.stringify({ timezone }) }),
     updateSegment: (segment: UserSegment): Promise<AuthUser> =>
       request("/api/auth/segment", { method: "PATCH", body: JSON.stringify({ segment }) }),
+    updateDisplayName: (displayName: string): Promise<AuthUser> =>
+      request("/api/auth/display-name", {
+        method: "PATCH",
+        body: JSON.stringify({ displayName }),
+      }),
   },
   events: resource<Task>("events"),
   goals: resource<Goal>("goals"),
