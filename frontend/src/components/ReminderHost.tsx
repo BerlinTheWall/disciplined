@@ -175,8 +175,19 @@ function collectUpcoming(now: number): NativeReminder[] {
     const key = `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`;
     const startAt = new Date(date + "T00:00:00").getTime() + startMinutes * 60_000;
     const fireAt = snoozes[key] ?? startAt - minutesBefore * 60_000;
-    // Anything already due is the running scheduler's job, not a future schedule.
-    if (fireAt <= now + 1_000) return;
+    // Keep a due-or-just-fired reminder in the native-scheduled set for a
+    // while past its fire time, not just up to it. Resyncs happen far more
+    // often than once a second (store updates, coach replanning, the
+    // heartbeat) — excluding anything within a second of firing meant a
+    // resync landing in that window would cancel the real OS alarm a moment
+    // before it fired, with nothing left to replace it. Safe to keep it
+    // around this long now that scheduleBatch (nativeReminders.ts) diffs
+    // against what's already scheduled instead of unconditionally
+    // rescheduling, so an unchanged reminder here is never re-fired — it's
+    // simply left alone. REMINDER_GRACE_MS matches how long the foreground
+    // path still treats it as a live miss, so both fallbacks agree on when a
+    // reminder is truly stale.
+    if (fireAt <= now - REMINDER_GRACE_MS) return;
     // Stable variant seed: the same reminder must always produce the same
     // sentence, or every sync would re-synthesize its notification audio.
     let seed = 0;

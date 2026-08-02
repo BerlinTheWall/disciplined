@@ -22,8 +22,9 @@ import { useSettingsStore } from "@/store/settingsStore";
 // scheduled reminder references them.
 
 // Library/Sounds — the location UNNotificationSound(named:) searches after
-// the app bundle.
-const SOUND_DIR = "Sounds";
+// the app bundle. Android has no equivalent lookup, but nativeReminders.ts
+// resolves a playable URI under this same directory for its own TTS alarm.
+export const SOUND_DIR = "Sounds";
 // localStorage index of synthesized files: { [textHash]: filename }.
 const INDEX_KEY = "disciplined-reminder-sounds";
 // Notification sounds cap at 30s; the backend line is one sentence, but guard

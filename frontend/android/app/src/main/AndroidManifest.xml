@@ -33,9 +33,34 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- ReminderTtsPlugin: speaks a reminder aloud on-device when its
+             alarm fires, since Android can't play a runtime-generated file as
+             a scheduled notification's sound (see ReminderTtsPlugin.java). -->
+        <receiver
+            android:name=".ReminderTtsReceiver"
+            android:exported="false" />
+        <service
+            android:name=".ReminderTtsService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="reminder_text_to_speech" />
+        </service>
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Without this, Android refuses to let the alarm-triggered
+         ReminderTtsReceiver start ReminderTtsService in the background at
+         all (ForegroundServiceStartNotAllowedException) — see
+         ReminderTtsPlugin's requestBatteryExemption. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Lets reminders speak within a second or two of firing instead of
+         drifting by several seconds — see ReminderTtsPlugin.scheduleAlarm. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>

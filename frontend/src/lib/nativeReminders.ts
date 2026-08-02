@@ -1,7 +1,9 @@
 import { Capacitor, type PermissionState } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
 import { LocalNotifications } from "@capacitor/local-notifications";
 
-import { lookupReminderSounds, prepareReminderSounds } from "./reminderAudio";
+import { ReminderTts } from "./nativeTts";
+import { lookupReminderSounds, prepareReminderSounds, SOUND_DIR } from "./reminderAudio";
 import type { NotifyPermission, ReminderNotificationData } from "./reminders";
 import { useSettingsStore } from "@/store/settingsStore";
 
@@ -87,17 +89,38 @@ export async function initNativeReminders(h: NativeReminderHandlers) {
     void requestNativeNotifyPermission();
   }
 
-  // Android only (iOS ignores channels): the plugin's auto-created "default"
-  // channel is importance 3, which plays a sound but never heads-up pops —
-  // easy to miss entirely. Reminders should interrupt, so give them their
-  // own high-importance channel.
-  await LocalNotifications.createChannel({
-    id: "reminders",
-    name: "Reminders",
-    description: "Task and habit reminders",
-    importance: 5,
-    visibility: 1,
-  });
+  if (Capacitor.getPlatform() === "android") {
+    // Without this, Android refuses to let the alarm-triggered
+    // ReminderTtsReceiver start its speech service in the background at all
+    // (ForegroundServiceStartNotAllowedException) — the standard exemption
+    // alarm/reminder apps request for exactly this. Keeps asking on each
+    // launch until granted; harmless no-op once it is (see
+    // ReminderTtsPlugin.requestBatteryExemption).
+    const { granted } = await ReminderTts.isBatteryExempt();
+    if (!granted) void ReminderTts.requestBatteryExemption();
+
+    // Same idea, separate permission: without it reminders still speak, just
+    // with several seconds of OS-batching drift instead of firing on time.
+    const { granted: exact } = await ReminderTts.isExactAlarmAllowed();
+    if (!exact) void ReminderTts.requestExactAlarmPermission();
+  }
+
+  // Android only — createChannel is call.unimplemented() on iOS (channels
+  // don't exist there), which rejects rather than no-oping. Left unguarded,
+  // that throw would skip every await after it in this function, silently
+  // breaking registerActionTypes and the action-performed listener below on
+  // iOS. The plugin's auto-created "default" channel is importance 3, which
+  // plays a sound but never heads-up pops — easy to miss entirely. Reminders
+  // should interrupt, so give them their own high-importance channel.
+  if (Capacitor.getPlatform() === "android") {
+    await LocalNotifications.createChannel({
+      id: "reminders",
+      name: "Reminders",
+      description: "Task and habit reminders",
+      importance: 5,
+      visibility: 1,
+    });
+  }
 
   await LocalNotifications.registerActionTypes({
     types: [
@@ -134,32 +157,91 @@ export function syncNativeReminders(upcoming: NativeReminder[]) {
   syncTimer = setTimeout(() => void doSync(), 400);
 }
 
-// Cancel everything pending and schedule the batch. `sounds` maps a
-// reminder's spoken line to its synthesized WAV; reminders without one fall
-// back to "default" — the name resolves to no file, which iOS answers with
-// the standard notification sound. Omitting the field entirely would deliver
-// SILENTLY (the plugin only sets a sound when one is passed).
+// What's currently scheduled with the OS, so a resync only touches ids that
+// actually changed instead of unconditionally cancelling and rescheduling
+// everything every time — resyncs happen far more often than once a reminder
+// nears its fire time (store updates, coach replanning, the heartbeat).
+// Blanket cancel-then-reschedule caused two failures: cancelling everything
+// raced with the OS delivering a reminder that was about to fire (its native
+// alarm got cancelled a moment early and nothing replaced it, so it silently
+// never fired), and separately, rescheduling everything unconditionally
+// re-fired a reminder whose time had already passed again on every
+// subsequent resync, for as long as it stayed in the batch. Diffing against
+// what's already correctly scheduled avoids both: an unchanged, about-to-fire
+// (or just-fired) reminder is never touched at all.
+let scheduledSignatures = new Map<number, string>();
+
+function signatureFor(r: NativeReminder, sound: string): string {
+  return `${r.fireAt}|${r.title}|${r.body}|${sound}`;
+}
+
 async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string> | null) {
-  const pending = await LocalNotifications.getPending();
+  const desired = new Map<number, { r: NativeReminder; sound: string; signature: string }>();
+  for (const r of batch) {
+    const sound = sounds?.get(r.speech) ?? "default";
+    desired.set(notifId(r.key), { r, sound, signature: signatureFor(r, sound) });
+  }
+
   // Only ever touch reminder-owned (positive-id) notifications here — coach
   // check-ins (negative ids) are a separate resync cycle, see notifId above.
-  const ours = pending.notifications.filter((n) => n.id > 0);
-  if (ours.length > 0) {
-    await LocalNotifications.cancel({ notifications: ours.map((n) => ({ id: n.id })) });
+  const toCancel = [...scheduledSignatures.keys()].filter((id) => !desired.has(id));
+  if (toCancel.length > 0) {
+    await LocalNotifications.cancel({ notifications: toCancel.map((id) => ({ id })) });
   }
-  if (batch.length === 0) return;
-  await LocalNotifications.schedule({
-    notifications: batch.map((r) => ({
-      id: notifId(r.key),
-      title: r.title,
-      body: r.body,
-      schedule: { at: new Date(r.fireAt) },
-      actionTypeId: "REMINDER",
-      extra: r.data,
-      channelId: "reminders",
-      sound: sounds?.get(r.speech) ?? "default",
-    })),
-  });
+
+  if (Capacitor.getPlatform() === "android") {
+    // Android can't play a runtime-generated file as a notification sound
+    // (see reminderAudio.ts), so reminders are spoken there via a second,
+    // independent alarm instead of a synthesized sound file. It plays the
+    // exact same natural-voice (Amy/Frank) WAV already synthesized for iOS's
+    // notification sound when one's ready, so the selected voice is honored
+    // there too — falling back to the on-device TTS engine reading the raw
+    // text only if synthesis hasn't produced a file yet.
+    // `sounds` is non-null exactly when the voice setting is on (see doSync).
+    // ReminderTtsPlugin diffs internally against its own stored state, so
+    // it's safe to always pass the full desired set — it only actually
+    // touches AlarmManager for ids that changed.
+    const items = sounds
+      ? await Promise.all(
+          [...desired.values()].map(async ({ r, sound }) => {
+            let soundUri: string | undefined;
+            if (sound !== "default") {
+              try {
+                const { uri } = await Filesystem.getUri({
+                  path: `${SOUND_DIR}/${sound}`,
+                  directory: Directory.Library,
+                });
+                soundUri = uri;
+              } catch {
+                // File isn't actually there yet — fall back to on-device TTS.
+              }
+            }
+            return { id: notifId(r.key), text: r.speech, at: r.fireAt, soundUri };
+          })
+        )
+      : [];
+    await ReminderTts.scheduleBatch({ items });
+  }
+
+  const toSchedule = [...desired.entries()].filter(
+    ([id, v]) => scheduledSignatures.get(id) !== v.signature
+  );
+  if (toSchedule.length > 0) {
+    await LocalNotifications.schedule({
+      notifications: toSchedule.map(([id, { r, sound }]) => ({
+        id,
+        title: r.title,
+        body: r.body,
+        schedule: { at: new Date(r.fireAt) },
+        actionTypeId: "REMINDER",
+        extra: r.data,
+        channelId: "reminders",
+        sound,
+      })),
+    });
+  }
+
+  scheduledSignatures = new Map([...desired.entries()].map(([id, { signature }]) => [id, signature]));
 }
 
 // Synthesizing sounds makes a sync take a while; if another sync is requested
