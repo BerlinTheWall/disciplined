@@ -83,6 +83,18 @@ const stepVariants = {
   exit: (d: number) => ({ x: d > 0 ? -32 : 32, opacity: 0 }),
 };
 
+// Default start time for a freshly opened (non-editing) sheet: the next
+// 5-minute mark, so a new item defaults near "now" rather than a fixed 9am —
+// rounded up (not just now) so it isn't already in the past by the time the
+// form is filled in. Clamped so the default 30-min duration still fits before
+// midnight.
+function nextFiveMinuteMark() {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const rounded = (Math.floor(minutes / 5) + 1) * 5;
+  return Math.min(rounded, MINUTES_PER_DAY - 30);
+}
+
 interface AddItemSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -219,7 +231,7 @@ export default function AddItemSheet({
     setMode(defaultMode ?? "task");
     setTitle("");
     setDate(selectedDate);
-    setTime("09:00");
+    setTime(formatTimeLabel(nextFiveMinuteMark()));
     setDuration(30);
     setCustomMode(false);
     setCustomH("0");
