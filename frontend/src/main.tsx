@@ -11,9 +11,11 @@ import "./index.css";
 import App from "./App.tsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.tsx";
 import SplashScreen from "./components/SplashScreen.tsx";
+import { todayISODate } from "./lib/date.ts";
 import { startSync } from "./lib/sync.ts";
 import AuthPage from "./pages/AuthPage.tsx";
 import { useAuthStore } from "./store/authStore.ts";
+import { useTaskStore } from "./store/taskStore.ts";
 
 // Apply persisted theme before first render to avoid flash
 try {
@@ -57,6 +59,30 @@ function Root() {
     void useAuthStore.getState().syncTimezone();
     const onVisible = () => {
       if (document.visibilityState === "visible") void useAuthStore.getState().syncTimezone();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [userId]);
+
+  // The calendar should always come back to today after a backgrounding —
+  // selectedDate is persisted (see taskStore), so without this someone who
+  // navigated to another day, backgrounded the app, and reopened it (even the
+  // next day) would land right back where they left off instead of on today.
+  // Same visibilitychange signal as syncTimezone above, for the same reason:
+  // backgrounding a WKWebView doesn't reload the page. Skipped when already on
+  // today so a quick tab-switch doesn't replay the day's entrance animation
+  // for no reason (setSelectedDate bumps navNonce).
+  useEffect(() => {
+    if (!userId) return;
+    const backToToday = () => {
+      const todayDate = todayISODate();
+      if (useTaskStore.getState().selectedDate !== todayDate) {
+        useTaskStore.getState().setSelectedDate(todayDate);
+      }
+    };
+    backToToday();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") backToToday();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
