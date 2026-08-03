@@ -64,28 +64,20 @@ function Root() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [userId]);
 
-  // The calendar should always come back to today after a backgrounding —
-  // selectedDate is persisted (see taskStore), so without this someone who
-  // navigated to another day, backgrounded the app, and reopened it (even the
-  // next day) would land right back where they left off instead of on today.
-  // Same visibilitychange signal as syncTimezone above, for the same reason:
-  // backgrounding a WKWebView doesn't reload the page. Skipped when already on
-  // today so a quick tab-switch doesn't replay the day's entrance animation
-  // for no reason (setSelectedDate bumps navNonce).
+  // The calendar should come back to today when the app was actually closed
+  // (killed by the OS, or a plain page reload) and relaunched — but not on a
+  // simple background/foreground cycle (screen lock, switching to another
+  // app) where the process stays alive. Deliberately mount-only, unlike the
+  // timezone effect above: a WKWebView/Android WebView backgrounding doesn't
+  // unmount this component (its JS keeps running), so "on mount" only fires
+  // for a genuine cold start — no visibilitychange listener here on purpose,
+  // that would also fire on every ordinary app-switch and defeat the point.
   useEffect(() => {
     if (!userId) return;
-    const backToToday = () => {
-      const todayDate = todayISODate();
-      if (useTaskStore.getState().selectedDate !== todayDate) {
-        useTaskStore.getState().setSelectedDate(todayDate);
-      }
-    };
-    backToToday();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") backToToday();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    const todayDate = todayISODate();
+    if (useTaskStore.getState().selectedDate !== todayDate) {
+      useTaskStore.getState().setSelectedDate(todayDate);
+    }
   }, [userId]);
 
   // api.ts announces a rejected token (expired, or the user was deleted) —
