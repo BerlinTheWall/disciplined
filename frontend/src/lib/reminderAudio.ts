@@ -17,15 +17,15 @@ import { useSettingsStore } from "@/store/settingsStore";
 // server unreachable), the reminder just keeps the default notification
 // sound until a later sync can retry.
 //
-// Files are cached by a hash of the spoken text (the line is deterministic
-// per reminder — see assistantReminderLine's variantSeed) and pruned once no
-// scheduled reminder references them.
+// Files are cached by a hash of the spoken text plus the selected voice (the
+// line is deterministic per reminder — see assistantReminderLine's
+// variantSeed) and pruned once no scheduled reminder references them.
 
 // Library/Sounds — the location UNNotificationSound(named:) searches after
 // the app bundle. Android has no equivalent lookup, but nativeReminders.ts
 // resolves a playable URI under this same directory for its own TTS alarm.
 export const SOUND_DIR = "Sounds";
-// localStorage index of synthesized files: { [textHash]: filename }.
+// localStorage index of synthesized files: { [soundHash]: filename }.
 const INDEX_KEY = "disciplined-reminder-sounds";
 // Notification sounds cap at 30s; the backend line is one sentence, but guard
 // anyway — synthesis time and file size both grow with text length.
@@ -53,6 +53,18 @@ function textHash(text: string): string {
   let h = 5381;
   for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
   return h.toString(16);
+}
+
+// The chosen Google voice folded into the cache key (same fix as
+// useSpeech.ts's fetchSpeech) — otherwise a line synthesized once under the
+// first-ever voice (Amy, the store's default) would look "already cached"
+// forever, and switching to Frank in Settings would never resynthesize it.
+// This is the pre-scheduled/native path (notification sound on iOS, alarm
+// sound file on Android), so its staleness only shows up once the app is
+// actually closed — while it's open, reminders speak via useSpeech's live,
+// already voice-scoped cache instead.
+function soundHash(text: string): string {
+  return textHash(`${useGoogleVoiceStore.getState().voice}:${text}`);
 }
 
 type SoundIndex = Record<string, string>;
@@ -109,7 +121,7 @@ export function lookupReminderSounds(lines: string[]): Map<string, string> {
   const index = loadIndex();
   const ready = new Map<string, string>();
   for (const text of lines) {
-    const hash = textHash(text);
+    const hash = soundHash(text);
     if (index[hash]) ready.set(text, index[hash]);
   }
   return ready;
@@ -128,7 +140,7 @@ export async function prepareReminderSounds(
 
   let prepared = 0;
   for (const text of lines) {
-    const hash = textHash(text);
+    const hash = soundHash(text);
     wanted.add(hash);
     const existing = index[hash];
     // A synthesized file is final — no need to redo it.

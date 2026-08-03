@@ -23,6 +23,7 @@ import {
 } from "@/lib/reminders";
 import { formatTimeLabel } from "@/lib/time";
 import { setWorkerTimeout } from "@/lib/workerTimer";
+import { useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useNotificationHistoryStore } from "@/store/notificationHistoryStore";
 import { useReminderStore, type ReminderAlert } from "@/store/reminderStore";
@@ -434,6 +435,12 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
       )
         run();
     });
+    // Switching Amy/Frank re-synthesizes the pre-scheduled native audio right
+    // away, instead of waiting for the next incidental resync (a task edit, a
+    // snooze, the heartbeat) to notice the voice changed.
+    const unsubVoice = useGoogleVoiceStore.subscribe((state, prev) => {
+      if (state.voice !== prev.voice) run();
+    });
     const onVisible = () => {
       if (document.visibilityState === "visible") run();
     };
@@ -453,6 +460,7 @@ export default function ReminderHost({ onOpen }: ReminderHostProps) {
       unsubHabits();
       unsubSnoozes();
       unsubSettings();
+      unsubVoice();
       document.removeEventListener("visibilitychange", onVisible);
       navigator.serviceWorker?.removeEventListener("message", onSwMessage);
     };
