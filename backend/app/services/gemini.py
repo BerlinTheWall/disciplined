@@ -153,7 +153,8 @@ async def build_chat_context(
             info = await goal_to_dict(db, user_id, g)
             detail = {
                 "manual": f"manual {info['current']}/{info['total']}",
-                "tasks": f"{info['current']}/{info['total']} linked tasks done",
+                "linked": f"{info['current']}/{info['total']} linked tasks/goals done",
+                "milestones": f"{info['current']}/{info['total']} milestones done",
                 "check": "check-off",
             }[info["mode"]]
             status = "done" if info["done"] else "not done"

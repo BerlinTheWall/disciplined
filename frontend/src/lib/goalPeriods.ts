@@ -51,3 +51,13 @@ export function periodLabel(period: GoalPeriod, key: string): string {
 export function relativePeriodName(period: GoalPeriod, key: string): string | null {
   return key === currentPeriodKey(period) ? `This ${period}` : null;
 }
+
+const PERIOD_GRANULARITY: Record<GoalPeriod, number> = { year: 0, month: 1, week: 2 };
+
+// A goal may only link another goal as a contributor if that goal's period
+// is strictly more granular than its own (year -> month/week, month ->
+// week, week -> none). Period nesting is a strict order, so this rule alone
+// makes a link cycle structurally impossible — no cycle-detection needed.
+export function canLinkGoalPeriod(parent: GoalPeriod, child: GoalPeriod): boolean {
+  return PERIOD_GRANULARITY[child] > PERIOD_GRANULARITY[parent];
+}

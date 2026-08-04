@@ -1,64 +1,102 @@
-import type { Goal } from "@/types/goals";
+import { parseISODate } from "./date";
+import { currentPeriodKey } from "./goalPeriods";
+import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
-// A goal's progress, derived from whichever source applies. Task-linked goals
-// take precedence, then a manual numeric target, else a plain check-off.
+// A goal's progress, derived from exactly one source, chosen implicitly by
+// what's actually set on it: linked tasks/goals (weighted) > milestones
+// (plain count) > a manual numeric target > a bare check-off.
 export interface GoalProgress {
-  mode: "tasks" | "manual" | "check";
+  mode: "linked" | "milestones" | "manual" | "check";
   done: boolean;
   fraction: number; // 0..1, for the bar
   percent: number; // round(fraction * 100)
-  current: number; // manual: progress; tasks: completed count
-  total: number; // manual: target; tasks: linked count
+  current: number; // completed count / manual progress
+  total: number; // linked item count / milestone count / manual target
   linkedTasks: Task[]; // in schedule order, only tasks that still exist
-  // Effective weight (percent of the goal) per linked task id — explicit ones
-  // as set, the rest sharing the remainder evenly.
+  linkedGoals: Goal[]; // only goals that still exist
+  // Effective weight (percent of the goal) per linked task/goal id —
+  // explicit ones as set, the rest sharing the remainder evenly.
   shares: Record<string, number>;
 }
 
-export function goalProgress(goal: Goal, tasks: Task[]): GoalProgress {
-  const ids = goal.taskIds ?? [];
+// `_depth` guards against a malformed link cycle recursing unbounded — real
+// cycles shouldn't exist (linking only ever offers a more-granular-period
+// goal, see canLinkGoalPeriod in goalPeriods.ts), but this keeps a read path
+// safe regardless.
+export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 0): GoalProgress {
+  const taskIds = goal.linkedTaskIds ?? [];
   const linkedTasks =
-    ids.length > 0
+    taskIds.length > 0
       ? tasks
-          .filter((t) => ids.includes(t.id))
+          .filter((t) => taskIds.includes(t.id))
           .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes)
       : [];
 
-  if (linkedTasks.length > 0) {
-    const pinned = goal.taskWeights ?? {};
+  const goalIds = goal.linkedGoalIds ?? [];
+  const linkedGoals =
+    goalIds.length > 0 && _depth < 4 ? goals.filter((g) => goalIds.includes(g.id)) : [];
+
+  if (linkedTasks.length > 0 || linkedGoals.length > 0) {
+    const pinned = goal.weights ?? {};
+    const items: { id: string; done: boolean }[] = [
+      ...linkedTasks.map((t) => ({ id: t.id, done: t.completed })),
+      ...linkedGoals.map((g) => ({
+        id: g.id,
+        done: goalProgress(g, tasks, goals, _depth + 1).done,
+      })),
+    ];
+
     // Sum the explicit weights; the rest split what's left of 100 evenly.
     let pinnedSum = 0;
     const autoIds: string[] = [];
-    for (const t of linkedTasks) {
-      const w = pinned[t.id];
+    for (const it of items) {
+      const w = pinned[it.id];
       if (typeof w === "number") pinnedSum += w;
-      else autoIds.push(t.id);
+      else autoIds.push(it.id);
     }
     const remaining = Math.max(0, 100 - Math.min(100, pinnedSum));
     const autoWeight = autoIds.length ? remaining / autoIds.length : 0;
 
     const shares: Record<string, number> = {};
-    for (const t of linkedTasks) {
-      const w = pinned[t.id];
-      shares[t.id] = typeof w === "number" ? w : autoWeight;
+    for (const it of items) {
+      const w = pinned[it.id];
+      shares[it.id] = typeof w === "number" ? w : autoWeight;
     }
 
-    const completed = linkedTasks.filter((t) => t.completed);
-    const completedPct = completed.reduce((s, t) => s + shares[t.id], 0);
-    // Finishing every linked task always counts as done, even if the assigned
-    // weights sum to less than 100.
-    const allDone = completed.length === linkedTasks.length;
+    const completed = items.filter((it) => it.done);
+    const completedPct = completed.reduce((s, it) => s + shares[it.id], 0);
+    // Finishing every linked item always counts as done, even if the
+    // assigned weights sum to less than 100.
+    const allDone = completed.length === items.length;
     const fraction = allDone ? 1 : Math.min(1, completedPct / 100);
     return {
-      mode: "tasks",
+      mode: "linked",
       done: goal.done || allDone,
       fraction,
       percent: Math.round(fraction * 100),
       current: completed.length,
-      total: linkedTasks.length,
+      total: items.length,
       linkedTasks,
+      linkedGoals,
       shares,
+    };
+  }
+
+  if (goal.milestones && goal.milestones.length > 0) {
+    const total = goal.milestones.length;
+    const current = goal.milestones.filter((m) => m.done).length;
+    const fraction = total > 0 ? current / total : 0;
+    return {
+      mode: "milestones",
+      done: goal.done || current === total,
+      fraction,
+      percent: Math.round(fraction * 100),
+      current,
+      total,
+      linkedTasks,
+      linkedGoals,
+      shares: {},
     };
   }
 
@@ -72,6 +110,7 @@ export function goalProgress(goal: Goal, tasks: Task[]): GoalProgress {
       current: goal.progress,
       total: goal.target,
       linkedTasks,
+      linkedGoals,
       shares: {},
     };
   }
@@ -84,6 +123,62 @@ export function goalProgress(goal: Goal, tasks: Task[]): GoalProgress {
     current: 0,
     total: 0,
     linkedTasks,
+    linkedGoals,
     shares: {},
   };
+}
+
+// ── Pace ──────────────────────────────────────────────────────────────────
+// "On track" / "behind" / "at risk" — how a goal's progress compares to how
+// much of its own period has already elapsed. Only meaningful for the
+// period that's actually running right now (a past period is either done or
+// isn't, and a future one hasn't started), and only for goals with a real
+// fill to compare against a clock — a plain check-off has no partial state
+// to be ahead of or behind.
+
+export type GoalPace = "on-track" | "behind" | "at-risk";
+
+export const GOAL_PACE_COLOR: Record<GoalPace, string> = {
+  "on-track": "#4ade80",
+  behind: "#fbbf24",
+  "at-risk": "#f87171",
+};
+
+export const GOAL_PACE_LABEL: Record<GoalPace, string> = {
+  "on-track": "On track",
+  behind: "Behind",
+  "at-risk": "At risk",
+};
+
+function elapsedFraction(period: GoalPeriod, periodKey: string): number {
+  const now = new Date();
+  if (period === "week") {
+    const monday = parseISODate(periodKey);
+    return Math.min(1, Math.max(0, (now.getTime() - monday.getTime()) / (7 * 86400000)));
+  }
+  if (period === "month") {
+    const [y, m] = periodKey.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const elapsedDays = now.getDate() - 1 + now.getHours() / 24;
+    return Math.min(1, Math.max(0, elapsedDays / daysInMonth));
+  }
+  const y = Number(periodKey);
+  const start = new Date(y, 0, 1).getTime();
+  const end = new Date(y + 1, 0, 1).getTime();
+  return Math.min(1, Math.max(0, (now.getTime() - start) / (end - start)));
+}
+
+export function goalPace(goal: Goal, tasks: Task[], goals: Goal[]): GoalPace | null {
+  if (goal.periodKey !== currentPeriodKey(goal.period)) return null;
+
+  const progress = goalProgress(goal, tasks, goals);
+  if (progress.mode === "check" || progress.done || progress.fraction >= 1) return null;
+
+  const elapsed = elapsedFraction(goal.period, goal.periodKey);
+  if (elapsed <= 0) return null;
+
+  const gap = elapsed - progress.fraction;
+  if (gap <= 0.05) return "on-track";
+  if (gap <= 0.35) return "behind";
+  return "at-risk";
 }

@@ -138,7 +138,17 @@ class WorkoutSession(Base):
 
 
 class Goal(Base):
-    """A weekly/monthly/yearly goal or plan (frontend: Goals & Plans)."""
+    """A weekly/monthly/yearly goal or plan (frontend: Goals & Plans).
+
+    Progress comes from exactly one source, chosen implicitly by what's set
+    (see app.services.tools.goal_to_dict, mirrored by the frontend's
+    goalProgress.ts): linked tasks/goals (weighted) > milestones (plain
+    count) > a numeric target > a bare done flag. `linked_goal_ids` may only
+    reference goals in a strictly more granular period than this one (year
+    -> month/week, month -> week, week -> none) — period nesting is a strict
+    order, so that rule alone makes a link cycle structurally impossible
+    without needing cycle-detection code.
+    """
 
     __tablename__ = "goals"
 
@@ -147,14 +157,22 @@ class Goal(Base):
     period: Mapped[str] = mapped_column(String)  # week|month|year
     period_key: Mapped[str] = mapped_column(String)  # Monday ISO / "YYYY-MM" / "YYYY"
     title: Mapped[str] = mapped_column(String)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)  # private "why", collapsed in the UI
     done: Mapped[bool] = mapped_column(Boolean, default=False)
     target: Mapped[int | None] = mapped_column(Integer, nullable=True)
     progress: Mapped[int] = mapped_column(Integer, default=0)
     priority: Mapped[str | None] = mapped_column(String, nullable=True)  # low|medium|high
     # "order" is a reserved word in SQL — store it under a safe column name.
     order: Mapped[int] = mapped_column("sort_order", Integer, default=0)
-    task_ids: Mapped[list] = mapped_column(JSONB, default=list)  # linked task ids
-    task_weights: Mapped[dict] = mapped_column(JSONB, default=dict)  # taskId -> percent
+    linked_task_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    linked_goal_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    # One weight map for both of the above — a task id and a goal id never
+    # collide (both are uuid4 hex), so they can safely share one dict.
+    weights: Mapped[dict] = mapped_column(JSONB, default=dict)  # id -> percent
+    # Lightweight, embedded sub-steps — not separate Goal rows, since most of
+    # them (a checklist inside one goal) don't deserve their own period slot
+    # or priority the way a real linked goal does.
+    milestones: Mapped[list] = mapped_column(JSONB, default=list)  # [{id, label, done}]
     created_at: Mapped[int] = mapped_column(BigInteger, default=0)  # epoch ms
 
 

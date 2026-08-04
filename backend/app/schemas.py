@@ -270,17 +270,26 @@ class HabitOut(HabitBase):
 GoalPeriod = Literal["week", "month", "year"]
 
 
+class GoalMilestone(CamelModel):
+    id: str
+    label: str
+    done: bool = False
+
+
 class GoalBase(CamelModel):
     period: GoalPeriod
     period_key: str
     title: str
+    note: str | None = None
     done: bool = False
     target: int | None = Field(default=None, ge=1)
     progress: int = Field(default=0, ge=0)
     priority: Priority | None = None
     order: int = 0
-    task_ids: list[str] = []
-    task_weights: dict[str, int] = {}
+    linked_task_ids: list[str] = []
+    linked_goal_ids: list[str] = []
+    weights: dict[str, int] = {}
+    milestones: list[GoalMilestone] = []
     created_at: int = 0
 
 
@@ -292,13 +301,16 @@ class GoalUpdate(CamelModel):
     period: GoalPeriod | None = None
     period_key: str | None = None
     title: str | None = None
+    note: str | None = None
     done: bool | None = None
     target: int | None = Field(default=None, ge=1)
     progress: int | None = Field(default=None, ge=0)
     priority: Priority | None = None
     order: int | None = None
-    task_ids: list[str] | None = None
-    task_weights: dict[str, int] | None = None
+    linked_task_ids: list[str] | None = None
+    linked_goal_ids: list[str] | None = None
+    weights: dict[str, int] | None = None
+    milestones: list[GoalMilestone] | None = None
     created_at: int | None = None
 
 

@@ -1,18 +1,11 @@
-import { useMemo, useState } from "react";
-import { AnimatePresence, motion, Reorder, useDragControls } from "framer-motion";
-import {
-  ArrowDownToLine,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  GripVertical,
-  Plus,
-  Target,
-  X,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowDownToLine, ChevronLeft, ChevronRight, Plus, Target } from "lucide-react";
 
-import { useConfirm } from "@/components/ConfirmDialog";
+import BottomSheet from "@/components/BottomSheet";
+import GoalCard from "@/components/goals/GoalCard";
+import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
+import PeriodPath from "@/components/goals/PeriodPath";
 import {
   currentPeriodKey,
   periodLabel,
@@ -20,13 +13,11 @@ import {
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
-import { goalProgress } from "@/lib/goalProgress";
 import { spring, tap } from "@/lib/motion";
-import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
-import type { Goal, GoalPeriod } from "@/types/goals";
+import type { GoalPeriod } from "@/types/goals";
 import type { Priority, Task } from "@/types/task";
 
 const PERIODS: { key: GoalPeriod; label: string }[] = [
@@ -37,14 +28,13 @@ const PERIODS: { key: GoalPeriod; label: string }[] = [
 
 // Cycle order for the priority circle: none → high → medium → low → none.
 const PRIORITY_CYCLE: (Priority | null)[] = [null, "high", "medium", "low"];
-const ACCENT = "#9ec06a"; // overall period summary bar only
 
 export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => void }) {
   const goals = useGoalStore((s) => s.goals);
   const addGoal = useGoalStore((s) => s.addGoal);
-  const reorder = useGoalStore((s) => s.reorder);
   const rollover = useGoalStore((s) => s.rollover);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
+  const tasks = useTaskStore((s) => s.tasks);
 
   // Tap a linked task → land on its day in the schedule and scroll it into
   // view (DaySchedule consumes the focus id).
@@ -64,10 +54,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const activeKey = keys[period];
   const isCurrent = activeKey === currentPeriodKey(period);
 
-  const [title, setTitle] = useState("");
-  const [target, setTarget] = useState("");
-  const [newPriority, setNewPriority] = useState<Priority | null>(null);
-
   const listed = useMemo(
     () =>
       goals
@@ -75,9 +61,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         .sort((a, b) => a.order - b.order),
     [goals, period, activeKey]
   );
-
-  const tasks = useTaskStore((s) => s.tasks);
-  const doneCount = listed.filter((g) => goalProgress(g, tasks).done).length;
 
   // Unfinished goals from the previous period, offered as one-tap carry-over
   // (current period only).
@@ -96,6 +79,57 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setKeys((k) => ({ ...k, [period]: shiftPeriodKey(period, k[period], delta) }));
   }
 
+  // The path's day-stops (Week view) open that day in the schedule; its
+  // week/month-stops (Month/Year view) zoom the goals list itself in one
+  // level, landing on that sub-period.
+  function openDay(date: string) {
+    setSelectedDate(date);
+    onOpenSchedule?.();
+  }
+  function jumpPeriod(p: GoalPeriod, key: string) {
+    setPeriod(p);
+    setKeys((k) => ({ ...k, [p]: key }));
+  }
+
+  // Carousel scroll → dot pagination. No drag-reorder here on purpose: a
+  // horizontal swipeable carousel and a horizontal drag-to-reorder gesture
+  // would fight each other; priority already keeps the order meaningful.
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  // Reset the dot index during render when the tab/period changes (React's
+  // documented "adjusting state" pattern), rather than in an effect — an
+  // effect calling setState synchronously would trigger a second render for
+  // no reason. The scrollTo below is a genuine external-system side effect
+  // (the DOM node itself), so that part does belong in an effect.
+  const [carouselKey, setCarouselKey] = useState(`${period}:${activeKey}`);
+  if (carouselKey !== `${period}:${activeKey}`) {
+    setCarouselKey(`${period}:${activeKey}`);
+    setCarouselIndex(0);
+  }
+  useEffect(() => {
+    carouselRef.current?.scrollTo({ left: 0 });
+  }, [period, activeKey]);
+  function handleCarouselScroll() {
+    const el = carouselRef.current;
+    const first = el?.children[0] as HTMLElement | undefined;
+    if (!el || !first) return;
+    const cardWidth = first.offsetWidth + 12; // gap-3
+    const idx = Math.round(el.scrollLeft / cardWidth);
+    setCarouselIndex(Math.max(0, Math.min(listed.length - 1, idx)));
+  }
+  function goToCard(i: number) {
+    const card = carouselRef.current?.children[i] as HTMLElement | undefined;
+    card?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
+  const [detailGoalId, setDetailGoalId] = useState<string | null>(null);
+  const detailGoal = goals.find((g) => g.id === detailGoalId) ?? null;
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [target, setTarget] = useState("");
+  const [newPriority, setNewPriority] = useState<Priority | null>(null);
+
   function handleAdd() {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -110,10 +144,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setTitle("");
     setTarget("");
     setNewPriority(null);
+    setAddOpen(false);
   }
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="relative space-y-4 pb-6">
       {/* Horizon toggle with an animated selected pill */}
       <div className="flex items-center bg-surface-raised rounded-xl p-1">
         {PERIODS.map((p) => (
@@ -136,7 +171,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         ))}
       </div>
 
-      {/* Period navigation + summary */}
+      {/* Period navigation + Path */}
       <div>
         <div className="flex items-center justify-between px-1">
           <motion.button
@@ -158,22 +193,69 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
             <ChevronRight size={18} />
           </motion.button>
         </div>
-        {listed.length > 0 && (
-          <div className="mt-2 flex items-center gap-3 px-1">
-            <div className="flex-1 h-1.5 rounded-full bg-surface-subtle overflow-hidden">
-              <motion.div
-                animate={{ width: `${(doneCount / listed.length) * 100}%` }}
-                transition={spring.gentle}
-                className="h-full rounded-full"
-                style={{ backgroundColor: ACCENT }}
-              />
-            </div>
-            <span className="text-xs font-medium text-fg-muted tabular-nums shrink-0">
-              {doneCount}/{listed.length} done
-            </span>
-          </div>
-        )}
+        <div className="mt-3">
+          <PeriodPath
+            period={period}
+            activeKey={activeKey}
+            goals={goals}
+            tasks={tasks}
+            onOpenDay={openDay}
+            onJumpPeriod={jumpPeriod}
+          />
+        </div>
       </div>
+
+      {/* Goal carousel */}
+      {listed.length === 0 ? (
+        <div className="py-12 flex flex-col items-center text-center">
+          <div className="w-14 h-14 rounded-2xl bg-surface-raised flex items-center justify-center mb-3">
+            <Target size={24} className="text-fg-faint" />
+          </div>
+          <p className="text-sm text-fg-faint max-w-52">
+            No goals for this {period} yet. Tap + to add one.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div
+            ref={carouselRef}
+            onScroll={handleCarouselScroll}
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 -mx-4 px-4"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {listed.map((g) => (
+              <GoalCard
+                key={g.id}
+                goal={g}
+                goals={goals}
+                tasks={tasks}
+                onOpen={() => setDetailGoalId(g.id)}
+              />
+            ))}
+          </div>
+          {listed.length > 1 && (
+            <div className="flex justify-center gap-1.5">
+              {listed.map((g, i) => (
+                <button
+                  key={g.id}
+                  onClick={() => goToCard(i)}
+                  aria-label={`Go to ${g.title}`}
+                  className="p-1.5 -m-1.5"
+                >
+                  <span
+                    className="block h-1.5 rounded-full transition-all"
+                    style={{
+                      width: i === carouselIndex ? 16 : 6,
+                      backgroundColor:
+                        i === carouselIndex ? "var(--path-accent)" : "var(--surface-subtle)",
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       {/* Carry-over */}
       <AnimatePresence>
@@ -194,59 +276,49 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         )}
       </AnimatePresence>
 
-      {/* Goal list — drag the handle to reorder */}
-      {listed.length === 0 ? (
-        <div className="py-12 flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-surface-raised flex items-center justify-center mb-3">
-            <Target size={24} className="text-fg-faint" />
-          </div>
-          <p className="text-sm text-fg-faint max-w-52">
-            No goals for this {period} yet. Add one below — link tasks to it and it fills as you
-            finish them.
-          </p>
-        </div>
-      ) : (
-        <Reorder.Group
-          axis="y"
-          values={listed}
-          onReorder={(next) =>
-            reorder(
-              period,
-              activeKey,
-              next.map((g) => g.id)
-            )
-          }
-          className="flex flex-col gap-2.5"
-        >
-          {listed.map((g, i) => (
-            <GoalRow key={g.id} goal={g} index={i} tasks={tasks} onOpenTask={openTask} />
-          ))}
-        </Reorder.Group>
-      )}
+      {/* Floating add button — there's no natural "bottom of the list" once
+          goals are a carousel, so quick-add moves off the always-visible bar
+          and into a deliberate sheet instead. */}
+      <motion.button
+        onClick={() => setAddOpen(true)}
+        whileTap={tap}
+        aria-label="Add a goal"
+        className="fixed right-5 bottom-[calc(84px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-lg z-30"
+      >
+        <Plus size={26} />
+      </motion.button>
 
-      {/* Add a goal */}
-      <div className="pt-1 space-y-2">
+      <BottomSheet
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        className="bg-surface rounded-t-3xl p-5 pb-[calc(20px+env(safe-area-inset-bottom))]"
+      >
+        <p className="text-sm font-semibold text-fg mb-3 capitalize">
+          Add a goal for this {period}
+        </p>
         <div className="flex items-center gap-2">
-          <button
+          <motion.button
             onClick={() =>
               setNewPriority(
                 PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(newPriority) + 1) % PRIORITY_CYCLE.length]
               )
             }
+            whileTap={tap}
             aria-label="Cycle new goal priority"
-            className="w-11 h-11 rounded-xl bg-surface shadow-soft flex items-center justify-center shrink-0"
+            className="w-11 h-11 rounded-xl bg-surface-raised flex items-center justify-center shrink-0"
           >
             <span
               className="w-5 h-5 rounded-full"
               style={{ backgroundColor: goalColor(newPriority) }}
             />
-          </button>
+          </motion.button>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder={`Add a goal for this ${period}…`}
-            className="flex-1 min-w-0 bg-surface rounded-xl px-3.5 py-3 text-[15px] text-fg placeholder-fg-faint shadow-soft focus:outline-none"
+            placeholder="Goal title…"
+            autoFocus
+            className="flex-1 min-w-0 bg-surface-raised rounded-xl px-3.5 py-3 text-[15px] text-fg placeholder-fg-faint focus:outline-none"
           />
           <input
             value={target}
@@ -254,248 +326,37 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             placeholder="of #"
             inputMode="numeric"
-            className="w-14 bg-surface rounded-xl px-2 py-3 text-[15px] text-center text-fg placeholder-fg-faint shadow-soft focus:outline-none"
+            className="w-14 bg-surface-raised rounded-xl px-2 py-3 text-[15px] text-center text-fg placeholder-fg-faint focus:outline-none"
           />
-          <motion.button
-            onClick={handleAdd}
-            whileTap={tap}
-            disabled={!title.trim()}
-            aria-label="Add goal"
-            className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-              title.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
-            }`}
-          >
-            <Plus size={20} />
-          </motion.button>
         </div>
-        <p className="text-[11px] text-fg-faint px-1">
-          Add a number for a progress goal (e.g. “Read” of 12), or link tasks to a goal and it fills
-          as you complete them.
+        <p className="mt-2 text-[11px] text-fg-faint">
+          Add a number for a progress goal (e.g. "Read" of 12) — linking tasks/goals, milestones and
+          a note all happen after, from the goal's own screen.
         </p>
-      </div>
-    </div>
-  );
-}
+        <motion.button
+          onClick={handleAdd}
+          whileTap={tap}
+          disabled={!title.trim()}
+          className={`mt-3 w-full py-3 rounded-xl text-[15px] font-semibold ${
+            title.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
+          }`}
+        >
+          Add goal
+        </motion.button>
+      </BottomSheet>
 
-// ── One goal row ─────────────────────────────────────────────────────────────
-
-function GoalRow({
-  goal,
-  index,
-  tasks,
-  onOpenTask,
-}: {
-  goal: Goal;
-  index: number;
-  tasks: Parameters<typeof goalProgress>[1];
-  onOpenTask: (t: Task) => void;
-}) {
-  const controls = useDragControls();
-  const confirm = useConfirm();
-  const [expanded, setExpanded] = useState(false);
-
-  const p = goalProgress(goal, tasks);
-  const accent = goalColor(goal.priority);
-
-  const toggleDone = () => useGoalStore.getState().toggleDone(goal.id);
-  const cyclePriority = () => {
-    const next =
-      PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(goal.priority) + 1) % PRIORITY_CYCLE.length];
-    useGoalStore.getState().setPriority(goal.id, next);
-  };
-
-  return (
-    <Reorder.Item
-      value={goal}
-      dragListener={false}
-      dragControls={controls}
-      className="relative bg-surface rounded-2xl shadow-soft overflow-hidden"
-    >
-      {/* Priority accent stripe */}
-      <span className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: accent }} />
-
-      <div className="pl-4 pr-3 py-3">
-        <div className="flex items-center gap-2.5">
-          <button
-            onPointerDown={(e) => controls.start(e)}
-            aria-label="Drag to reorder"
-            className="touch-none text-fg-faint -ml-1 cursor-grab active:cursor-grabbing"
-          >
-            <GripVertical size={16} />
-          </button>
-
-          {/* Rank circle: colour = priority (red/yellow/green, blue = none),
-              number = position in the list. Tap to cycle priority, which
-              re-slots the goal by priority (unless you've dragged it). */}
-          <motion.button
-            onClick={cyclePriority}
-            whileTap={tap}
-            aria-label="Priority"
-            className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold text-white"
-            style={{ backgroundColor: accent }}
-          >
-            {index + 1}
-          </motion.button>
-
-          <p
-            className={`flex-1 min-w-0 font-medium truncate ${
-              p.done ? "text-fg-faint line-through" : "text-fg"
-            }`}
-          >
-            {goal.title}
-          </p>
-
-          <motion.button
-            onClick={toggleDone}
-            whileTap={tap}
-            aria-label={p.done ? "Mark not done" : "Mark done"}
-            className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 ${
-              p.done ? "text-fg-inverse" : "border-border-strong text-transparent"
-            }`}
-            style={p.done ? { backgroundColor: accent, borderColor: accent } : undefined}
-          >
-            <Check size={15} strokeWidth={3} />
-          </motion.button>
-
-          {p.mode === "manual" && !p.done && (
-            <motion.button
-              onClick={() => useGoalStore.getState().addProgress(goal.id, 1)}
-              whileTap={tap}
-              aria-label="Add progress"
-              className="w-8 h-8 rounded-full bg-surface-raised text-fg flex items-center justify-center shrink-0"
-            >
-              <Plus size={16} />
-            </motion.button>
-          )}
-
-          <motion.button
-            onClick={async () => {
-              const ok = await confirm({
-                title: "Delete goal?",
-                message: `"${goal.title}" will be removed.`,
-                confirmLabel: "Delete",
-                destructive: true,
-              });
-              if (ok) useGoalStore.getState().deleteGoal(goal.id);
-            }}
-            whileTap={tap}
-            aria-label="Delete goal"
-            className="p-1.5 text-fg-faint shrink-0"
-          >
-            <X size={16} />
-          </motion.button>
-        </div>
-
-        {/* Progress bar for manual + task-linked goals */}
-        {p.mode !== "check" && (
-          <div className="mt-2.5 flex items-center gap-3 pl-[38px]">
-            <div className="flex-1 h-2 rounded-full bg-surface-subtle overflow-hidden">
-              <motion.div
-                animate={{ width: `${p.fraction * 100}%` }}
-                transition={spring.gentle}
-                className="h-full rounded-full"
-                style={{ backgroundColor: accent }}
-              />
-            </div>
-            <span className="text-xs font-medium text-fg-muted tabular-nums shrink-0">
-              {p.mode === "tasks" ? `${p.percent}%` : `${p.current}/${p.total}`}
-            </span>
-          </div>
+      <AnimatePresence>
+        {detailGoal && (
+          <GoalDetailScreen
+            key={detailGoal.id}
+            goal={detailGoal}
+            goals={goals}
+            tasks={tasks}
+            onClose={() => setDetailGoalId(null)}
+            onOpenTask={openTask}
+          />
         )}
-
-        {/* Linked-task controls */}
-        <div className="mt-2 pl-[38px] flex items-center gap-3">
-          {p.mode === "tasks" && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="flex items-center gap-1 text-xs font-medium text-fg-muted"
-            >
-              <ChevronDown
-                size={13}
-                className={`transition-transform ${expanded ? "rotate-180" : ""}`}
-              />
-              {expanded ? "Hide tasks" : "Show tasks"}
-            </button>
-          )}
-          <button
-            onClick={() => useGoalFocusStore.getState().requestAddTask(goal.id)}
-            className="flex items-center gap-1 text-xs font-medium"
-            style={{ color: accent }}
-          >
-            <Plus size={13} />
-            Add task
-          </button>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {expanded && p.linkedTasks.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="pl-[38px] overflow-hidden"
-            >
-              <div className="mt-2 flex flex-col gap-1.5">
-                {p.linkedTasks.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-2.5 rounded-xl bg-surface-alt px-2.5 py-2"
-                  >
-                    <button
-                      onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
-                      aria-label={t.completed ? "Mark task not done" : "Mark task done"}
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        t.completed
-                          ? "bg-fg border-fg text-fg-inverse"
-                          : "border-border-strong text-transparent"
-                      }`}
-                    >
-                      <Check size={11} strokeWidth={3.5} />
-                    </button>
-                    <button
-                      onClick={() => onOpenTask(t)}
-                      className={`flex-1 min-w-0 text-left text-sm truncate ${
-                        t.completed ? "text-fg-faint line-through" : "text-fg"
-                      }`}
-                    >
-                      {t.title}
-                    </button>
-                    {/* Weight — type a %, or leave blank to auto-split the rest */}
-                    <div className="flex items-center shrink-0">
-                      <input
-                        value={
-                          goal.taskWeights?.[t.id] != null ? String(goal.taskWeights[t.id]) : ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/\D/g, "");
-                          useGoalStore
-                            .getState()
-                            .setTaskWeight(goal.id, t.id, raw === "" ? null : parseInt(raw, 10));
-                        }}
-                        placeholder={String(Math.round(p.shares[t.id]))}
-                        inputMode="numeric"
-                        aria-label={`Weight for ${t.title}`}
-                        className="w-8 bg-transparent text-right text-xs font-medium tabular-nums text-fg placeholder-fg-faint focus:outline-none"
-                      />
-                      <span className="text-xs text-fg-faint">%</span>
-                    </div>
-                    <button
-                      onClick={() => useGoalStore.getState().linkTask(null, t.id)}
-                      aria-label="Unlink task"
-                      className="p-1 text-fg-faint shrink-0"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-1.5 text-[11px] text-fg-faint">
-                Type a task's % of the goal, or leave it blank to share the rest evenly.
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </Reorder.Item>
+      </AnimatePresence>
+    </div>
   );
 }

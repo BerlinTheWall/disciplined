@@ -203,8 +203,8 @@ async def goal_pacing_candidates(
         info = await goal_to_dict(db, user_id, g)
         if info["done"]:
             continue
-        if info["mode"] in ("manual", "tasks") and info["total"] > 0:
-            progress_fraction = info["current"] / info["total"]
+        if info["mode"] in ("manual", "linked", "milestones") and info["total"] > 0:
+            progress_fraction = info["fraction"]
             margin = elapsed - progress_fraction
             if elapsed >= 0.5 and margin >= 0.25:
                 out.append(
@@ -261,9 +261,9 @@ async def goal_ahead_candidates(
         span_days = (end - start).days + 1
         elapsed = max(0.0, min(1.0, ((today - start).days + 1) / span_days))
         info = await goal_to_dict(db, user_id, g)
-        if info["mode"] not in ("manual", "tasks") or info["total"] <= 0:
+        if info["mode"] not in ("manual", "linked", "milestones") or info["total"] <= 0:
             continue
-        progress_fraction = info["current"] / info["total"]
+        progress_fraction = info["fraction"]
         if info["done"]:
             # Finished with real time to spare — always worth celebrating.
             if elapsed <= 0.7:

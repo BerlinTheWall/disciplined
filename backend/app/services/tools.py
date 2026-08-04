@@ -124,26 +124,75 @@ async def habit_occurrences(
     return out
 
 
-async def goal_to_dict(db: AsyncSession, user_id: str, g: Goal) -> dict[str, Any]:
+async def goal_to_dict(db: AsyncSession, user_id: str, g: Goal, _depth: int = 0) -> dict[str, Any]:
     """Resolve a goal's progress mode exactly like the frontend's goalProgress.ts:
-    task-linked goals derive progress from their linked events' completion,
-    manual goals from a numeric target, everything else is a plain done flag."""
-    task_ids = g.task_ids or []
-    if task_ids:
-        linked = [
-            e
-            for e in (await db.scalars(select(Event).where(Event.id.in_(task_ids)))).all()
-            if e.user_id == user_id
-        ]
-        completed = sum(1 for e in linked if e.completed)
-        total = len(linked)
-        mode, current = "tasks", completed
+    linked tasks/goals (weighted) > milestones (plain count) > a numeric
+    target > a bare done flag. A goal only ever uses one source, chosen by
+    what's actually set on it.
+
+    `_depth` is a defensive recursion guard for linked-goal rollups — real
+    link cycles shouldn't exist (the UI only offers more-granular-period
+    goals to link, which makes a cycle structurally impossible), but this
+    keeps a malformed row from ever recursing unbounded.
+    """
+    linked_task_ids = g.linked_task_ids or []
+    linked_goal_ids = g.linked_goal_ids or []
+    weights = g.weights or {}
+
+    if linked_task_ids or linked_goal_ids:
+        linked_events = (
+            [
+                e
+                for e in (
+                    await db.scalars(select(Event).where(Event.id.in_(linked_task_ids)))
+                ).all()
+                if e.user_id == user_id
+            ]
+            if linked_task_ids
+            else []
+        )
+        linked_goals = (
+            [
+                lg
+                for lg in (
+                    await db.scalars(select(Goal).where(Goal.id.in_(linked_goal_ids)))
+                ).all()
+                if lg.user_id == user_id
+            ]
+            if linked_goal_ids and _depth < 4
+            else []
+        )
+
+        items: list[tuple[str, bool]] = [(e.id, e.completed) for e in linked_events]
+        for lg in linked_goals:
+            sub = await goal_to_dict(db, user_id, lg, _depth + 1)
+            items.append((lg.id, sub["done"]))
+
+        total = len(items)
+        completed = sum(1 for _, done in items if done)
+        pinned_sum = sum(weights[i] for i, _ in items if i in weights)
+        auto_ids = [i for i, _ in items if i not in weights]
+        remaining = max(0, 100 - min(100, pinned_sum))
+        auto_weight = remaining / len(auto_ids) if auto_ids else 0
+        completed_pct = sum(
+            (weights[i] if i in weights else auto_weight) for i, done in items if done
+        )
+        all_done = total > 0 and completed == total
+        mode, current = "linked", completed
+        fraction = 1.0 if all_done else min(1.0, completed_pct / 100)
+        done = g.done or all_done
+    elif g.milestones:
+        total = len(g.milestones)
+        completed = sum(1 for m in g.milestones if m.get("done"))
+        mode, current = "milestones", completed
+        fraction = completed / total if total else 0.0
         done = g.done or (total > 0 and completed == total)
     elif g.target is not None and g.target > 0:
         mode, current, total = "manual", g.progress, g.target
+        fraction = min(1.0, g.progress / g.target)
         done = g.done or g.progress >= g.target
     else:
-        mode, current, total, done = "check", 0, 0, g.done
+        mode, current, total, fraction, done = "check", 0, 0, (1.0 if g.done else 0.0), g.done
     return {
         "id": g.id,
         "kind": "goal",
@@ -154,6 +203,7 @@ async def goal_to_dict(db: AsyncSession, user_id: str, g: Goal) -> dict[str, Any
         "done": done,
         "current": current,
         "total": total,
+        "fraction": fraction,
         "priority": g.priority,
     }
 
@@ -394,9 +444,10 @@ FUNCTION_DECLARATIONS = [
         name="add_goal_progress",
         description=(
             "Add (or subtract, with a negative delta) to a manual-mode goal's progress. "
-            "Only works on goals with a numeric target and no linked tasks — check the goal's "
-            "mode first (from context or list_goals); for task-linked goals, complete the "
-            "linked task(s) instead, and for check-mode goals use set_goal_done."
+            "Only works on goals with a numeric target and nothing linked — check the goal's "
+            "mode first (from context or list_goals); for linked goals, complete the linked "
+            "task(s)/goal(s) instead, for milestone goals check them off in the app, and for "
+            "check-mode goals use set_goal_done."
         ),
         parameters=types.Schema(
             type=types.Type.OBJECT,
@@ -837,13 +888,22 @@ async def _add_goal_progress(db: AsyncSession, user_id: str, args: dict) -> dict
     if goal is None:
         return {"error": f"No goal with id {args['goal_id']}"}
     info = await goal_to_dict(db, user_id, goal)
-    if info["mode"] == "tasks":
+    if info["mode"] == "linked":
         return {
-            "error": "goal_is_task_linked",
+            "error": "goal_is_linked",
             "message": (
-                "This goal's progress comes from finishing its linked tasks, not something "
-                "settable directly. Use set_event_completion on the linked task(s), or tell "
-                "the user to complete them in the app. If they explicitly want it marked done "
+                "This goal's progress comes from finishing its linked tasks/goals, not "
+                "something settable directly. Use set_event_completion on a linked task, or "
+                "tell the user to complete the linked item(s) in the app. If they explicitly "
+                "want it marked done regardless, use set_goal_done instead."
+            ),
+        }
+    if info["mode"] == "milestones":
+        return {
+            "error": "goal_has_milestones",
+            "message": (
+                "This goal tracks progress through milestones, not a number — tell the user "
+                "to check them off in the app. If they explicitly want it marked done "
                 "regardless, use set_goal_done instead."
             ),
         }

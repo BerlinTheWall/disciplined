@@ -37,6 +37,15 @@
   --app-bg:
     radial-gradient(60% 50% at 12% 6%, rgba(250, 224, 216, 0.45), transparent 72%),
     radial-gradient(60% 50% at 88% 94%, rgba(227, 223, 246, 0.48), transparent 72%), var(--surface);
+
+  /* Goals & Plans path — a single flowing line of stops. Sage green: not a
+     new hue introduced for this, it's what the very first Goals summary
+     bar already used, just reused here. --path-ink is tuned separately from
+     --path-accent for text contrast, since the accent is chosen for the
+     trail/dots, not for small type. */
+  --path-road: #dfe3d6;
+  --path-accent: #7ea852;
+  --path-ink: #3f5c28;
 }
 
 [data-theme="dark"] {
@@ -64,6 +73,10 @@
   --app-bg:
     radial-gradient(60% 50% at 12% 6%, rgba(122, 98, 90, 0.2), transparent 72%),
     radial-gradient(60% 50% at 88% 94%, rgba(98, 94, 130, 0.22), transparent 72%), var(--surface);
+
+  --path-road: #303629;
+  --path-accent: #9ec06a;
+  --path-ink: #c3dc9e;
 }
 
 /* ── SIGMA MODE ────────────────────────────────────────────────────────
@@ -155,6 +168,32 @@ textarea,
 [contenteditable="true"] {
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Goals & Plans path — the pulsing "today" glow (PeriodPath.tsx). Origin
+   needs fill-box, or the scale animates from the viewport corner instead of
+   the circle's own center. */
+.goal-path-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: goal-path-pulse 2.2s ease-in-out infinite;
+}
+@keyframes goal-path-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.12;
+    transform: scale(1.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-path-pulse {
+    animation: none;
+    opacity: 0.3;
+  }
 }
 
 @layer base {

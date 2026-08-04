@@ -217,10 +217,10 @@ export default function AddItemSheet({
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
       const linkedGoal =
         editItem.type === "task"
-          ? useGoalStore.getState().goals.find((g) => g.taskIds.includes(editItem.data.id))
+          ? useGoalStore.getState().goals.find((g) => g.linkedTaskIds.includes(editItem.data.id))
           : undefined;
       setGoalLink(linkedGoal?.id ?? null);
-      setGoalWeight(linkedGoal?.taskWeights?.[editItem.data.id] ?? null);
+      setGoalWeight(linkedGoal?.weights?.[editItem.data.id] ?? null);
       setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
@@ -457,8 +457,7 @@ export default function AddItemSheet({
           recipeId: recipeId ?? null,
         });
         useGoalStore.getState().linkTask(goalLink, editItem!.data.id);
-        if (goalLink)
-          useGoalStore.getState().setTaskWeight(goalLink, editItem!.data.id, goalWeight);
+        if (goalLink) useGoalStore.getState().setWeight(goalLink, editItem!.data.id, goalWeight);
       } else {
         updateHabit(editItem!.data.id, {
           title: title.trim(),
@@ -491,7 +490,7 @@ export default function AddItemSheet({
           recipeId,
         });
         useGoalStore.getState().linkTask(goalLink, newTaskId);
-        if (goalLink) useGoalStore.getState().setTaskWeight(goalLink, newTaskId, goalWeight);
+        if (goalLink) useGoalStore.getState().setWeight(goalLink, newTaskId, goalWeight);
         if (saveAsPreset) {
           addPreset({
             title: title.trim(),

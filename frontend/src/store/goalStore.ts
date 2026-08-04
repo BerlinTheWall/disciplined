@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { canLinkGoalPeriod } from "@/lib/goalPeriods";
 import { priorityRank } from "@/lib/goalPriority";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Priority } from "@/types/task";
@@ -38,15 +39,24 @@ interface GoalState {
   toggleDone: (id: string) => void;
   addProgress: (id: string, delta: number) => void;
   setPriority: (id: string, priority: Priority | null) => void;
-  // Weight a linked task as a percent of the goal; null reverts it to the
-  // even auto-split of the remaining percentage.
-  setTaskWeight: (goalId: string, taskId: string, weight: number | null) => void;
+  setNote: (id: string, note: string) => void;
+  // Weight a linked task or goal as a percent of the parent; null reverts it
+  // to the even auto-split of the remaining percentage.
+  setWeight: (goalId: string, itemId: string, weight: number | null) => void;
   deleteGoal: (id: string) => void;
   // Persist a manual drag order for one period's goals.
   reorder: (period: GoalPeriod, periodKey: string, orderedIds: string[]) => void;
   // Link a task to at most one goal: remove it from every other goal, add it
   // to `goalId` (or nowhere when null).
   linkTask: (goalId: string | null, taskId: string) => void;
+  // Same "at most one parent" rule as linkTask, plus: a goal may only be
+  // linked under a parent in a strictly coarser period (canLinkGoalPeriod) —
+  // silently no-ops otherwise, since the UI never offers an ineligible goal
+  // in the first place.
+  linkGoal: (goalId: string | null, childGoalId: string) => void;
+  addMilestone: (goalId: string, label: string) => void;
+  toggleMilestone: (goalId: string, milestoneId: string) => void;
+  deleteMilestone: (goalId: string, milestoneId: string) => void;
   rollover: (period: GoalPeriod, fromKey: string, toKey: string) => void;
 }
 
@@ -72,8 +82,10 @@ export const useGoalStore = create<GoalState>()(
                 progress: 0,
                 priority,
                 order: Number.MAX_SAFE_INTEGER,
-                taskIds: [],
-                taskWeights: {},
+                linkedTaskIds: [],
+                linkedGoalIds: [],
+                weights: {},
+                milestones: [],
                 createdAt: Date.now(),
               },
             ],
@@ -106,18 +118,34 @@ export const useGoalStore = create<GoalState>()(
           ),
         })),
 
-      setTaskWeight: (goalId, taskId, weight) =>
+      setNote: (id, note) =>
+        set((state) => ({
+          goals: state.goals.map((g) => (g.id === id ? { ...g, note } : g)),
+        })),
+
+      setWeight: (goalId, itemId, weight) =>
         set((state) => ({
           goals: state.goals.map((g) => {
             if (g.id !== goalId) return g;
-            const weights = { ...(g.taskWeights ?? {}) };
-            if (weight === null) delete weights[taskId];
-            else weights[taskId] = Math.max(0, Math.min(100, Math.round(weight)));
-            return { ...g, taskWeights: weights };
+            const weights = { ...g.weights };
+            if (weight === null) delete weights[itemId];
+            else weights[itemId] = Math.max(0, Math.min(100, Math.round(weight)));
+            return { ...g, weights };
           }),
         })),
 
-      deleteGoal: (id) => set((state) => ({ goals: state.goals.filter((g) => g.id !== id) })),
+      deleteGoal: (id) =>
+        set((state) => ({
+          goals: state.goals
+            // Drop the goal itself, and drop it out of anyone who linked it.
+            .filter((g) => g.id !== id)
+            .map((g) => {
+              if (!g.linkedGoalIds.includes(id)) return g;
+              const weights = { ...g.weights };
+              delete weights[id];
+              return { ...g, linkedGoalIds: g.linkedGoalIds.filter((gid) => gid !== id), weights };
+            }),
+        })),
 
       reorder: (period, periodKey, orderedIds) =>
         set((state) => ({
@@ -131,14 +159,75 @@ export const useGoalStore = create<GoalState>()(
       linkTask: (goalId, taskId) =>
         set((state) => ({
           goals: state.goals.map((g) => {
-            const has = g.taskIds.includes(taskId);
-            if (g.id === goalId) return has ? g : { ...g, taskIds: [...g.taskIds, taskId] };
+            const has = g.linkedTaskIds.includes(taskId);
+            if (g.id === goalId)
+              return has ? g : { ...g, linkedTaskIds: [...g.linkedTaskIds, taskId] };
             if (!has) return g;
             // Unlinking: drop the task and any weight it carried.
-            const weights = { ...(g.taskWeights ?? {}) };
+            const weights = { ...g.weights };
             delete weights[taskId];
-            return { ...g, taskIds: g.taskIds.filter((t) => t !== taskId), taskWeights: weights };
+            return { ...g, linkedTaskIds: g.linkedTaskIds.filter((t) => t !== taskId), weights };
           }),
+        })),
+
+      linkGoal: (goalId, childGoalId) =>
+        set((state) => {
+          const child = state.goals.find((g) => g.id === childGoalId);
+          if (!child) return state;
+          return {
+            goals: state.goals.map((g) => {
+              const has = g.linkedGoalIds.includes(childGoalId);
+              if (g.id === goalId) {
+                if (has || g.id === childGoalId || !canLinkGoalPeriod(g.period, child.period)) {
+                  return g;
+                }
+                return { ...g, linkedGoalIds: [...g.linkedGoalIds, childGoalId] };
+              }
+              if (!has) return g;
+              const weights = { ...g.weights };
+              delete weights[childGoalId];
+              return {
+                ...g,
+                linkedGoalIds: g.linkedGoalIds.filter((gid) => gid !== childGoalId),
+                weights,
+              };
+            }),
+          };
+        }),
+
+      addMilestone: (goalId, label) =>
+        set((state) => ({
+          goals: state.goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  milestones: [...g.milestones, { id: crypto.randomUUID(), label, done: false }],
+                }
+              : g
+          ),
+        })),
+
+      toggleMilestone: (goalId, milestoneId) =>
+        set((state) => ({
+          goals: state.goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  milestones: g.milestones.map((m) =>
+                    m.id === milestoneId ? { ...m, done: !m.done } : m
+                  ),
+                }
+              : g
+          ),
+        })),
+
+      deleteMilestone: (goalId, milestoneId) =>
+        set((state) => ({
+          goals: state.goals.map((g) =>
+            g.id === goalId
+              ? { ...g, milestones: g.milestones.filter((m) => m.id !== milestoneId) }
+              : g
+          ),
         })),
 
       rollover: (period, fromKey, toKey) =>
@@ -166,8 +255,10 @@ export const useGoalStore = create<GoalState>()(
               periodKey: toKey,
               progress: 0,
               done: false,
-              taskIds: [],
-              taskWeights: {},
+              linkedTaskIds: [],
+              linkedGoalIds: [],
+              weights: {},
+              milestones: [],
               order: ++next,
               createdAt: Date.now(),
             }));
@@ -176,18 +267,26 @@ export const useGoalStore = create<GoalState>()(
     }),
     {
       name: "disciplined-goals",
-      version: 2,
-      // Backfill fields added over time: priority/order/taskIds (v1) and
-      // taskWeights (v2).
+      version: 3,
+      // Backfill fields added over time: priority/order/taskIds (v1),
+      // taskWeights (v2), and the v3 rebuild — taskIds/taskWeights renamed
+      // to linkedTaskIds/weights, plus new linkedGoalIds/milestones. Reads
+      // straight off whatever old field names are present regardless of the
+      // stored version, so it's safe no matter which version a device is
+      // migrating up from.
       migrate: (persisted) => {
-        const state = persisted as { goals?: Goal[] };
+        const state = persisted as {
+          goals?: (Goal & { taskIds?: string[]; taskWeights?: Record<string, number> })[];
+        };
         if (state.goals) {
           state.goals = state.goals.map((g, i) => ({
             ...g,
             priority: g.priority ?? null,
             order: g.order ?? i,
-            taskIds: g.taskIds ?? [],
-            taskWeights: g.taskWeights ?? {},
+            linkedTaskIds: g.linkedTaskIds ?? g.taskIds ?? [],
+            linkedGoalIds: g.linkedGoalIds ?? [],
+            weights: g.weights ?? g.taskWeights ?? {},
+            milestones: g.milestones ?? [],
           }));
         }
         return state as GoalState;

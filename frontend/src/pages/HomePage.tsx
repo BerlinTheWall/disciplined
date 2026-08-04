@@ -168,7 +168,8 @@ function Chip({ count, label, active }: { count: number; label: string; active?:
 export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
   // This week's goals for the compact Home card — keeping them visible is
   // what makes them stick.
-  const weekGoals = useGoalStore((s) => s.goals)
+  const allGoals = useGoalStore((s) => s.goals);
+  const weekGoals = allGoals
     .filter((g) => g.period === "week" && g.periodKey === currentPeriodKey("week"))
     .sort((a, b) => a.order - b.order);
   const tasks = useTaskStore((s) => s.tasks);
@@ -298,7 +299,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
   const todayTasks = tasks.filter((t) => t.date === today);
   const activeHabitsToday = habits.filter((h) => isHabitActiveOnDate(h, todayObj));
   const habitsDoneToday = activeHabitsToday.filter((h) => h.completedDates.includes(today)).length;
-  const goalsDoneThisWeek = weekGoals.filter((g) => goalProgress(g, tasks).done).length;
+  const goalsDoneThisWeek = weekGoals.filter((g) => goalProgress(g, tasks, allGoals).done).length;
   const pillars = [
     {
       label: "Tasks",
@@ -452,7 +453,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
               className="w-full bg-surface rounded-3xl shadow-card px-4 py-3.5 text-left space-y-2.5"
             >
               {weekGoals.slice(0, 3).map((g) => {
-                const gp = goalProgress(g, tasks);
+                const gp = goalProgress(g, tasks, allGoals);
                 const accent = goalColor(g.priority);
                 return (
                   <div key={g.id} className="flex items-center gap-2.5">
@@ -485,7 +486,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
                           />
                         </span>
                         <span className="text-xs text-fg-muted tabular-nums">
-                          {gp.mode === "tasks" ? `${gp.percent}%` : `${gp.current}/${gp.total}`}
+                          {gp.mode === "linked" ? `${gp.percent}%` : `${gp.current}/${gp.total}`}
                         </span>
                       </div>
                     )}
