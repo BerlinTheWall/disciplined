@@ -25,8 +25,10 @@ import { parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
+import { BUILTIN_PRESETS, type TaskPreset } from "@/lib/presets";
 import { formatDuration, formatTimeLabel, rangeLabel, timeStringToMinutes } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
+import { usePresetStore } from "@/store/presetStore";
 import { useTaskStore } from "@/store/taskStore";
 import BottomSheet from "../BottomSheet";
 import { useConfirm } from "../ConfirmDialog";
@@ -74,6 +76,10 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   );
 
   const confirm = useConfirm();
+  const [userPresets, removePreset] = usePresetStore(
+    useShallow((state) => [state.presets, state.removePreset])
+  );
+  const presets = [...BUILTIN_PRESETS, ...userPresets];
   const [habits, skipHabitOccurrence] = useHabitStore(
     useShallow((state) => [state.habits, state.skipHabitOccurrence])
   );
@@ -235,6 +241,25 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     setColorIndex((i) => i + 1);
     setTitle("");
     inputRef.current?.focus();
+  }
+
+  // One-tap add for a fully-configured recurring task (see lib/presets) —
+  // no title/time/duration decisions left. Chains after whatever's already
+  // planned, same as handleAdd, so the composer's own next start time (and a
+  // manually typed task right after) picks up where the preset left off.
+  function addPresetTask(preset: TaskPreset) {
+    const presetStart = nextStartMinutes();
+    addTask({
+      title: preset.title,
+      startMinutes: presetStart,
+      durationMinutes: preset.durationMinutes,
+      color: preset.color,
+      icon: preset.icon,
+      date: selectedDate,
+      priority: preset.priority,
+      reminderMinutesBefore: preset.reminderMinutesBefore,
+    });
+    setTime(formatTimeLabel(Math.min(presetStart + preset.durationMinutes, MINUTES_PER_DAY - 15)));
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -439,6 +464,52 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
             className="border-t border-border-strong bg-surface px-4 pt-3"
             style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}
           >
+            {/* One-tap presets — added straight to the running list above */}
+            {presets.length > 0 && (
+              <div
+                className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {presets.map((preset) => {
+                  const Icon = ICONS[preset.icon] ?? ICONS.default;
+                  const isCustom = !preset.id.startsWith("builtin-");
+                  return (
+                    <motion.button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => addPresetTask(preset)}
+                      whileTap={tap}
+                      className="relative flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-full bg-surface-raised shrink-0"
+                    >
+                      <span
+                        className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: preset.color, color: "#111827" }}
+                      >
+                        <Icon size={13} />
+                      </span>
+                      <span className="text-sm font-medium text-fg whitespace-nowrap">
+                        {preset.title}
+                      </span>
+                      {isCustom && (
+                        <motion.span
+                          role="button"
+                          aria-label={`Remove ${preset.title} preset`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removePreset(preset.id);
+                          }}
+                          whileTap={tap}
+                          className="ml-0.5 w-4 h-4 rounded-full bg-fg/10 flex items-center justify-center shrink-0 text-fg-faint"
+                        >
+                          <X size={10} />
+                        </motion.span>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Title + add */}
             <div className="flex items-center gap-2 mb-3">
               <input
