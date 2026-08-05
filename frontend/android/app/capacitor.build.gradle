@@ -13,6 +13,7 @@ dependencies {
     implementation project(':capacitor-filesystem')
     implementation project(':capacitor-local-notifications')
     implementation project(':capgo-capacitor-speech-recognition')
+    implementation project(':ebarooni-capacitor-calendar')
 
 }
 

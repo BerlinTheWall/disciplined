@@ -231,6 +231,28 @@ export interface CalendarEventOut {
   allDay: boolean;
 }
 
+// ---- Outlook connection (Microsoft Graph OAuth) ----
+// Separate from device calendar sync above — reads/writes the user's
+// Outlook calendar directly via Microsoft Graph, regardless of whether the
+// account is synced into the phone's own calendar app.
+
+export interface OutlookStatus {
+  connected: boolean;
+  msAccountEmail?: string;
+}
+
+export interface OutlookSyncResult {
+  synced: number;
+  pruned: number;
+}
+
+export interface OutlookPushResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+}
+
 export interface BriefingItemPayload {
   title: string;
   startMinutes: number;
@@ -463,5 +485,14 @@ export const api = {
       request(
         `/api/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
       ),
+  },
+  outlook: {
+    // Returns the Microsoft login URL to open in an in-app browser
+    // (@capacitor/browser) — see lib/outlookAuth.ts.
+    connect: (): Promise<{ authorizeUrl: string }> => request("/api/outlook/connect"),
+    status: (): Promise<OutlookStatus> => request("/api/outlook/status"),
+    disconnect: (): Promise<void> => request("/api/outlook/connection", { method: "DELETE" }),
+    sync: (): Promise<OutlookSyncResult> => request("/api/outlook/sync", { method: "POST" }),
+    push: (): Promise<OutlookPushResult> => request("/api/outlook/push", { method: "POST" }),
   },
 };

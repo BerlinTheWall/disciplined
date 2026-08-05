@@ -7,6 +7,7 @@ from app.crud import upsert
 from app.database import get_db
 from app.models import Event, User
 from app.schemas import EventCreate, EventOut, EventUpdate
+from app.services import outlook_graph
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -72,5 +73,9 @@ async def delete_event(
     user: User = Depends(get_current_user),
 ):
     event = await get_event_or_404(event_id, db, user)
+    # Best-effort — if this Task was mirrored to Outlook (see
+    # outlook_graph.push_outlook_events), remove it there too rather than
+    # leaving it orphaned once event.outlook_event_id is gone with the row.
+    await outlook_graph.maybe_delete_outlook_event(db, user.id, event)
     await db.delete(event)
     await db.commit()

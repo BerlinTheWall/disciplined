@@ -22,6 +22,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Outlook OAuth callback deep link (Settings > Connected
+                 Calendars) — the backend's /api/outlook/callback redirects
+                 here once Microsoft's login/consent finishes, so the in-app
+                 browser (@capacitor/browser) hands control back to the app.
+                 See frontend/src/lib/outlookAuth.ts. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.hooman.disciplined" />
+            </intent-filter>
+
         </activity>
 
         <provider

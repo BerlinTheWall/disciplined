@@ -95,6 +95,18 @@ class Event(Base):
     shopping_list_id: Mapped[str | None] = mapped_column(String, nullable=True)
     workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Set when this Task has been mirrored to the user's connected Outlook
+    # calendar (see app.services.outlook_graph.push_outlook_events) — the
+    # Microsoft Graph event id, so a later push updates in place instead of
+    # duplicating. Unrelated to the device-calendar write path (Settings >
+    # Connected Calendars > "Add new events to" a device calendar instead),
+    # which tracks its own id client-side rather than on this row.
+    outlook_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # title|date|start_minutes|duration_minutes as of the last successful
+    # push — lets push_outlook_events skip a Graph call for a Task that
+    # hasn't actually changed since, instead of re-pushing everything on
+    # every sync.
+    outlook_sync_signature: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class Habit(Base):
@@ -189,6 +201,27 @@ class Goal(Base):
     # or priority the way a real linked goal does.
     milestones: Mapped[list] = mapped_column(JSONB, default=list)  # [{id, label, done}]
     created_at: Mapped[int] = mapped_column(BigInteger, default=0)  # epoch ms
+
+
+class OutlookConnection(Base):
+    """A user's connected Microsoft account (Settings > Connected Calendars >
+    Outlook) — tokens from the Microsoft Graph OAuth flow (see
+    app.services.outlook_graph), one row per user. Distinct from the device
+    calendar path: this reads/writes Outlook directly via Graph regardless of
+    whether the account is synced into the phone's own calendar app.
+    """
+
+    __tablename__ = "outlook_connections"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    ms_account_email: Mapped[str] = mapped_column(String)
+    # Fernet-encrypted (app.services.crypto) — never stored in plaintext.
+    encrypted_access_token: Mapped[str] = mapped_column(String)
+    encrypted_refresh_token: Mapped[str] = mapped_column(String)
+    access_token_expires_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    scope: Mapped[str] = mapped_column(String)
+    connected_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
 
 
 class ExternalCalendarEvent(Base):

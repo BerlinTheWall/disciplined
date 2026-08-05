@@ -598,4 +598,32 @@ class CalendarEventOut(CamelModel):
 class CalendarSyncResponse(CamelModel):
     synced: int
     pruned: int
+
+
+# ---- Outlook connection (Microsoft Graph OAuth) ----
+# Separate from the device-calendar sync above: this reads/writes the user's
+# Outlook calendar directly via Microsoft Graph, regardless of whether the
+# account is synced into the phone's own calendar app. See
+# app.services.outlook_graph.
+
+
+class OutlookConnectResponse(CamelModel):
+    authorize_url: str
+
+
+class OutlookStatusResponse(CamelModel):
+    connected: bool
+    ms_account_email: str | None = None
+
+
+class OutlookSyncResponse(CamelModel):
+    synced: int
+    pruned: int
+
+
+class OutlookPushResponse(CamelModel):
+    created: int
+    updated: int
+    unchanged: int
+    failed: int
     pending_actions: list[PendingAction] = []

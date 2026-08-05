@@ -926,6 +926,11 @@ async def _delete_event(db: AsyncSession, user_id: str, args: dict) -> dict:
     if event is None:
         return await _missing_event_error(db, user_id, args["event_id"])
     deleted = event_to_dict(event)
+    # Local import: outlook_graph imports user_timezone from this module, so
+    # a top-level import here would be circular.
+    from app.services import outlook_graph
+
+    await outlook_graph.maybe_delete_outlook_event(db, user_id, event)
     await db.delete(event)
     await db.commit()
     return {"deleted": deleted}

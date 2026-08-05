@@ -132,44 +132,60 @@ function taskStart(t: Task): Date {
 let pushing = false;
 let pushQueued = false;
 
+// The device-calendar half of a push — separate function so
+// pushTasksToDevice can cleanly branch on writeTarget.kind without this
+// logic running (or its localStorage map being touched) when the target is
+// "outlook" or unset.
+async function pushToDeviceCalendar(writeCalendarId: string): Promise<void> {
+  const tasks = useTaskStore.getState().tasks;
+  const taskIds = new Set(tasks.map((t) => t.id));
+
+  // Deleted locally since the last push -> remove the mirrored event from the device.
+  for (const [taskId, entry] of [...pushMap.entries()]) {
+    if (!taskIds.has(taskId)) {
+      await deleteDeviceEvent(entry.nativeId);
+      pushMap.delete(taskId);
+    }
+  }
+
+  for (const task of tasks) {
+    const signature = taskSignature(task);
+    const existing = pushMap.get(task.id);
+    if (existing?.signature === signature) continue; // unchanged since last push
+    const start = taskStart(task);
+    const end = new Date(start.getTime() + task.durationMinutes * 60_000);
+    if (existing) {
+      const ok = await updateDeviceEvent(existing.nativeId, task.title, start, end);
+      if (ok) pushMap.set(task.id, { nativeId: existing.nativeId, signature });
+    } else {
+      const nativeId = await createDeviceEvent(writeCalendarId, task.title, start, end);
+      if (nativeId) pushMap.set(task.id, { nativeId, signature });
+    }
+  }
+  savePushMap(pushMap);
+}
+
 async function pushTasksToDevice(): Promise<void> {
   if (!deviceCalendarSupported) return;
-  const { writeCalendarId } = useCalendarStore.getState();
+  const { writeTarget } = useCalendarStore.getState();
   if (pushing) {
     pushQueued = true;
     return;
   }
   pushing = true;
   try {
-    const tasks = useTaskStore.getState().tasks;
-    const taskIds = new Set(tasks.map((t) => t.id));
-
-    // Deleted locally since the last push, or no write-calendar configured
-    // anymore -> remove the mirrored event from the device.
-    for (const [taskId, entry] of [...pushMap.entries()]) {
-      if (!writeCalendarId || !taskIds.has(taskId)) {
-        await deleteDeviceEvent(entry.nativeId);
-        pushMap.delete(taskId);
+    if (writeTarget?.kind === "device") {
+      await pushToDeviceCalendar(writeTarget.calendarId);
+    } else if (writeTarget?.kind === "outlook") {
+      // Outlook holds its own tokens server-side and already owns the
+      // user's Event rows — no payload needed, just trigger the backend's
+      // own reconciliation (see backend/app/services/outlook_graph.py).
+      try {
+        await api.outlook.push();
+      } catch (e) {
+        console.warn("[calendar] outlook push failed", e);
       }
     }
-
-    if (writeCalendarId) {
-      for (const task of tasks) {
-        const signature = taskSignature(task);
-        const existing = pushMap.get(task.id);
-        if (existing?.signature === signature) continue; // unchanged since last push
-        const start = taskStart(task);
-        const end = new Date(start.getTime() + task.durationMinutes * 60_000);
-        if (existing) {
-          const ok = await updateDeviceEvent(existing.nativeId, task.title, start, end);
-          if (ok) pushMap.set(task.id, { nativeId: existing.nativeId, signature });
-        } else {
-          const nativeId = await createDeviceEvent(writeCalendarId, task.title, start, end);
-          if (nativeId) pushMap.set(task.id, { nativeId, signature });
-        }
-      }
-    }
-    savePushMap(pushMap);
   } finally {
     pushing = false;
     if (pushQueued) {
@@ -205,9 +221,12 @@ export function initDeviceCalendarSync(): void {
   });
   useCalendarStore.subscribe((state, prev) => {
     if (state.readCalendarIds !== prev.readCalendarIds) void pullDeviceCalendars();
-    if (state.writeCalendarId !== prev.writeCalendarId) {
-      // Switching write-calendars: don't try to move already-mirrored events
-      // to the new one, just start fresh there (see module doc above).
+    if (state.writeTarget !== prev.writeTarget) {
+      // Switching write targets (device calendar, Outlook, or none): don't
+      // try to move already-mirrored device events to the new target, just
+      // abandon them and start fresh (see module doc above). Outlook's own
+      // mapping lives server-side on the Event row, not here, so it's
+      // unaffected by this local reset.
       pushMap = new Map();
       savePushMap(pushMap);
       schedulePush();

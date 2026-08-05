@@ -69,6 +69,17 @@ class Settings(BaseSettings):
     # Signs auth tokens — set a long random value in .env for anything public.
     jwt_secret: str = "dev-secret-change-me"
     access_token_expire_minutes: int = 60 * 24 * 30  # 30 days; no refresh-token flow
+    # Microsoft Graph OAuth (Settings > Connected Calendars > Outlook) — an app
+    # registration in the Microsoft Entra admin center: Calendars.ReadWrite,
+    # offline_access, User.Read delegated permissions, redirect URI set to
+    # this backend's /api/outlook/callback. Blank in dev disables the feature
+    # (routers/outlook.py returns a clear error rather than a broken flow).
+    ms_graph_client_id: str = ""
+    ms_graph_client_secret: str = ""
+    ms_graph_redirect_uri: str = ""
+    # Encrypts stored Microsoft access/refresh tokens at rest (services/crypto.py).
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    token_encryption_key: str = ""
     # Vite dev server origins
     cors_origins: list[str] = [
         "http://localhost:5173",

@@ -13,6 +13,7 @@ import { ConfirmProvider } from "./components/ConfirmDialog.tsx";
 import SplashScreen from "./components/SplashScreen.tsx";
 import { todayISODate } from "./lib/date.ts";
 import { initDeviceCalendarSync } from "./lib/deviceCalendarSync.ts";
+import { initOutlookAuth } from "./lib/outlookAuth.ts";
 import { startSync } from "./lib/sync.ts";
 import AuthPage from "./pages/AuthPage.tsx";
 import { useAuthStore } from "./store/authStore.ts";
@@ -54,6 +55,12 @@ function Root() {
   // until the user connects at least one calendar in Settings.
   useEffect(() => {
     if (userId) initDeviceCalendarSync();
+  }, [userId]);
+
+  // Outlook-via-Microsoft-account connection (separate from the device
+  // calendars above) — also no-ops on web.
+  useEffect(() => {
+    if (userId) initOutlookAuth();
   }, [userId]);
 
   // Keep the account's stored timezone matching the device's — so someone

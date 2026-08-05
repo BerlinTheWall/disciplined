@@ -13,3 +13,6 @@ project(':capacitor-local-notifications').projectDir = new File('../node_modules
 
 include ':capgo-capacitor-speech-recognition'
 project(':capgo-capacitor-speech-recognition').projectDir = new File('../node_modules/@capgo/capacitor-speech-recognition/android')
+
+include ':ebarooni-capacitor-calendar'
+project(':ebarooni-capacitor-calendar').projectDir = new File('../node_modules/@ebarooni/capacitor-calendar/android')
