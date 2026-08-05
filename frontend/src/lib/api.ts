@@ -1,6 +1,7 @@
 import { todayISODate } from "@/lib/date";
 import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
+import type { Interest } from "@/types/interest";
 import type { Meal } from "@/types/meal";
 import type { Task } from "@/types/task";
 import type { WorkoutSession } from "@/types/workout";
@@ -211,7 +212,9 @@ export type NudgeType =
   | "habit_event_conflict"
   | "workout_variety"
   | "tasks_overdue"
-  | "habit_weekday_pattern";
+  | "habit_weekday_pattern"
+  | "interest_gap"
+  | "interest_not_started";
 
 export interface NudgeResponse {
   type: NudgeType | null;
@@ -329,6 +332,14 @@ export const api = {
   habits: resource<Habit>("habits"),
   workouts: resource<WorkoutSession>("workouts"),
   meals: resource<Meal>("meals"),
+  // Hand-rolled rather than resource<Interest>(): there's nothing to PATCH,
+  // just create-or-remove.
+  interests: {
+    list: () => request<Interest[]>("/api/interests"),
+    create: (item: Interest) =>
+      request<Interest>("/api/interests", { method: "POST", body: JSON.stringify(item) }),
+    remove: (id: string) => request<void>(`/api/interests/${id}`, { method: "DELETE" }),
+  },
   // clientDate: the user's local calendar date, so "today"/"tomorrow" resolve
   // against the user's clock even when the server runs in another timezone.
   chat: (message: string, history: ChatMessage[]): Promise<ChatResponse> =>

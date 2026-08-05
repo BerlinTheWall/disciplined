@@ -42,6 +42,8 @@ _TITLES = {
     "workout_variety": "Mix it up",
     "tasks_overdue": "Overdue tasks",
     "habit_weekday_pattern": "Pattern noticed",
+    "interest_gap": "Activity check-in",
+    "interest_not_started": "Something to try",
 }
 
 

@@ -14,6 +14,7 @@ from app.routers import (
     events,
     goals,
     habits,
+    interests,
     meals,
     nudges,
     tts,
@@ -49,6 +50,7 @@ app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(goals.router)
 app.include_router(habits.router)
+app.include_router(interests.router)
 app.include_router(workouts.router)
 app.include_router(meals.router)
 app.include_router(chat.router)

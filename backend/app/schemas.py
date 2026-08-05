@@ -438,6 +438,23 @@ class ConfirmResponse(CamelModel):
     ok: bool  # False if any result contains an "error" key
 
 
+# ---- Interests ----
+
+
+class InterestBase(CamelModel):
+    title: str
+    icon: str = "default"
+    created_at: int = 0
+
+
+class InterestCreate(InterestBase):
+    id: str | None = None
+
+
+class InterestOut(InterestBase):
+    id: str
+
+
 # ---- Nudges ----
 
 
@@ -466,6 +483,8 @@ NudgeTypeLiteral = Literal[
     "workout_variety",
     "tasks_overdue",
     "habit_weekday_pattern",
+    "interest_gap",
+    "interest_not_started",
 ]
 
 

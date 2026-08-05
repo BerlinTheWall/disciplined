@@ -290,6 +290,19 @@ def _describe_candidate(candidate: NudgeCandidate) -> list[str]:
             f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}",
             "Proposed action: offer to schedule a slot for it today, if a slot is given below.",
         ]
+    if candidate.type == "interest_gap":
+        return [
+            f"The user wanted to make time for \"{candidate.subject_title}\" and hasn't in "
+            f"{candidate.metric['gap_days']} days.",
+            "Proposed action: offer to schedule it, at the slot below if given.",
+        ]
+    if candidate.type == "interest_not_started":
+        return [
+            f"{candidate.metric['days_since_added']} days ago the user added "
+            f"\"{candidate.subject_title}\" as something they wanted to start doing, and "
+            "hasn't yet.",
+            "Proposed action: offer to schedule a first session, at the slot below if given.",
+        ]
     if candidate.type == "streak_risk_today":
         return [
             f"Current streak: {candidate.metric['streak']} days in a row, and today's usual "
@@ -403,7 +416,14 @@ believes in you — never guilt-trip, scold, or nag.
 system."""
 
 
-_SLOT_SEEKING_TYPES = ("workout_gap", "habit_gap", "streak_risk_today", "habit_event_conflict")
+_SLOT_SEEKING_TYPES = (
+    "workout_gap",
+    "habit_gap",
+    "streak_risk_today",
+    "habit_event_conflict",
+    "interest_gap",
+    "interest_not_started",
+)
 
 
 def write_coach_prompt(candidate: NudgeCandidate, slot: dict | None, window_label: str) -> str:

@@ -137,6 +137,21 @@ class WorkoutSession(Base):
     exercises: Mapped[list] = mapped_column(JSONB, default=list)  # list of WorkoutExercise dicts
 
 
+class Interest(Base):
+    """A loose, unscheduled activity the user wants to make time for (e.g.
+    "Reading") — lighter than a Habit (no fixed days/time), just a title the
+    nudge engine watches for via completed-event title matches (see
+    app.services.nudges.interest_gap_candidates)."""
+
+    __tablename__ = "interests"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    title: Mapped[str] = mapped_column(String)
+    icon: Mapped[str] = mapped_column(String, default="default")
+    created_at: Mapped[int] = mapped_column(BigInteger, default=0)  # epoch ms, same convention as Goal.created_at
+
+
 class Goal(Base):
     """A weekly/monthly/yearly goal or plan (frontend: Goals & Plans).
 

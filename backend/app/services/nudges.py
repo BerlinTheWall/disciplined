@@ -9,7 +9,7 @@ from typing import Any, Literal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Goal, Habit, WorkoutSession
+from app.models import Event, Goal, Habit, Interest, WorkoutSession
 from app.services.tools import (
     _overlapping,
     current_period_keys,
@@ -29,6 +29,8 @@ NudgeType = Literal[
     "workout_variety",
     "tasks_overdue",
     "habit_weekday_pattern",
+    "interest_gap",
+    "interest_not_started",
 ]
 
 # Exact-value milestones only (not "streak >= N") — a streak that keeps
@@ -52,10 +54,12 @@ _PRIORITY_ORDER: tuple[NudgeType, ...] = (
     "habit_event_conflict",
     "workout_gap",
     "habit_gap",
+    "interest_gap",
     "goal_pacing",
     "habit_weekday_pattern",
     "tasks_overdue",
     "workout_variety",
+    "interest_not_started",
 )
 
 
@@ -79,9 +83,11 @@ def candidate_priority(c: NudgeCandidate) -> tuple[int, float]:
         "streak_risk_today": -c.metric.get("streak", 0),
         "workout_gap": -c.metric.get("gap_days", 0),
         "habit_gap": -c.metric.get("miss_streak", 0),
+        "interest_gap": -c.metric.get("gap_days", 0),
         "goal_pacing": -c.metric.get("margin", 0),
         "habit_weekday_pattern": -c.metric.get("skip_rate", 0),
         "tasks_overdue": -c.metric.get("count", 0),
+        "interest_not_started": -c.metric.get("days_since_added", 0),
     }.get(c.type, 0.0)
     return (rank, secondary)
 
@@ -183,6 +189,70 @@ async def habit_gap_candidates(
                     metric={"miss_streak": miss},
                 )
             )
+    return out
+
+
+async def _last_completed_interest_date(db: AsyncSession, user_id: str, title: str) -> str | None:
+    """Most recent date a completed Event's title matches this interest,
+    case-insensitively — deliberately not a linked-id column (like
+    workout_session_id): any completed event titled "Reading", whether made
+    via this nudge's own one-tap action, through chat, or typed by hand on
+    the Schedule tab, counts. Mirrors how the chat assistant already resolves
+    events by title rather than requiring an explicit link."""
+    return await db.scalar(
+        select(Event.date)
+        .where(
+            Event.user_id == user_id,
+            func.lower(Event.title) == title.lower(),
+            Event.completed.is_(True),
+        )
+        .order_by(Event.date.desc())
+        .limit(1)
+    )
+
+
+async def interest_gap_candidates(
+    db: AsyncSession, user_id: str, today: date
+) -> list[NudgeCandidate]:
+    interests = (await db.scalars(select(Interest).where(Interest.user_id == user_id))).all()
+    out = []
+    for i in interests:
+        last = await _last_completed_interest_date(db, user_id, i.title)
+        if last is None:
+            continue  # never done at all — that's interest_not_started's job, not a gap
+        gap_days = (today - date.fromisoformat(last)).days
+        if gap_days >= 4:
+            out.append(
+                NudgeCandidate(
+                    type="interest_gap",
+                    subject_id=i.id,
+                    subject_title=i.title,
+                    metric={"gap_days": gap_days},
+                )
+            )
+    return out
+
+
+async def interest_not_started_candidates(
+    db: AsyncSession, user_id: str, today: date
+) -> list[NudgeCandidate]:
+    interests = (await db.scalars(select(Interest).where(Interest.user_id == user_id))).all()
+    out = []
+    for i in interests:
+        added = date.fromtimestamp(i.created_at / 1000) if i.created_at else today
+        days_since_added = (today - added).days
+        if days_since_added < 2:
+            continue  # grace period — don't nag the moment it's added
+        if await _last_completed_interest_date(db, user_id, i.title) is not None:
+            continue  # already done at least once — that's interest_gap's job, not this
+        out.append(
+            NudgeCandidate(
+                type="interest_not_started",
+                subject_id=i.id,
+                subject_title=i.title,
+                metric={"days_since_added": days_since_added},
+            )
+        )
     return out
 
 
@@ -481,6 +551,8 @@ async def all_candidates(
     if workout is not None:
         out.append(workout)
     out += await habit_gap_candidates(db, user_id, today)
+    out += await interest_gap_candidates(db, user_id, today)
+    out += await interest_not_started_candidates(db, user_id, today)
     out += await goal_pacing_candidates(db, user_id, today)
     out += await streak_milestone_candidates(db, user_id, today)
     out += await goal_ahead_candidates(db, user_id, today)
@@ -629,7 +701,7 @@ async def suggest_slot_for_candidate(
         if habit is None or habit.user_id != user_id:
             return None
         return await suggest_habit_slot(db, user_id, habit, today, now_minutes)
-    if candidate.type == "workout_gap":
+    if candidate.type in ("workout_gap", "interest_gap", "interest_not_started"):
         return await suggest_evening_slot(db, user_id, today, now_minutes)
     if candidate.type == "streak_risk_today":
         habit = await db.get(Habit, candidate.subject_id)
@@ -652,7 +724,13 @@ def build_pending_action(
     purely informational types, or a slot-needing type where no slot was
     found), in which case the UI falls back to build_action_phrase or a
     plain "View" action."""
-    if candidate.type in ("workout_gap", "habit_gap", "streak_risk_today"):
+    if candidate.type in (
+        "workout_gap",
+        "habit_gap",
+        "streak_risk_today",
+        "interest_gap",
+        "interest_not_started",
+    ):
         if slot is None:
             return None
         title = "Workout" if candidate.type == "workout_gap" else candidate.subject_title
