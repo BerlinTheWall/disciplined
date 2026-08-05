@@ -23,6 +23,18 @@ function isPendingResult(result: unknown): boolean {
   return typeof result === "object" && result !== null && "pending_confirmation" in result;
 }
 
+// confirmChatActions' `results` carry the same {error, message} shape the
+// tools already return to Gemini (e.g. slot_taken) — pull the first one out
+// so a failed confirm tells the user *why* (an overlapping event, etc.)
+// instead of a dead-end generic error they can't act on.
+function describeConfirmFailure(results: unknown[]): string {
+  const failure = results.find(
+    (r): r is { error: string; message?: string } =>
+      typeof r === "object" && r !== null && "error" in r
+  );
+  return failure?.message ?? "Something went wrong — please check and try again.";
+}
+
 // Shared by confirmPending below and by anything else that executes a
 // PendingAction outside the chat pipeline (see NudgeHost's and coach.ts's
 // direct one-tap confirmations) — one place that knows how to turn a batch
@@ -170,7 +182,7 @@ export const useChatStore = create<State & Actions>()((set, get) => {
         messages: state.messages.map((m, i) => (i === index ? { ...m, resolved: true } : m)),
       }));
       try {
-        const { ok } = await api.confirmChatActions(pendingActions);
+        const { ok, results } = await api.confirmChatActions(pendingActions);
         await refreshForActions(pendingActions);
         set((state) => ({
           busy: false,
@@ -178,7 +190,7 @@ export const useChatStore = create<State & Actions>()((set, get) => {
             ...state.messages,
             {
               role: "model",
-              content: ok ? "Done." : "Something went wrong — please check and try again.",
+              content: ok ? "Done." : describeConfirmFailure(results),
             },
           ],
         }));
