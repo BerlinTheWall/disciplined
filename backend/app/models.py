@@ -1,6 +1,6 @@
 ﻿from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, Float, Integer, String
+from sqlalchemy import BigInteger, Boolean, Float, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -189,6 +189,40 @@ class Goal(Base):
     # or priority the way a real linked goal does.
     milestones: Mapped[list] = mapped_column(JSONB, default=list)  # [{id, label, done}]
     created_at: Mapped[int] = mapped_column(BigInteger, default=0)  # epoch ms
+
+
+class ExternalCalendarEvent(Base):
+    """A read-only mirror of an event from a device calendar (Apple/Google/
+    Outlook, whichever accounts the user has added on their phone) — synced
+    in one-way by the frontend via the native EventKit/CalendarContract
+    plugin, purely so the AI weekly planner and timeline can see it. Never
+    editable from disciplined; see app.services.calendar_sync.
+    """
+
+    __tablename__ = "external_calendar_events"
+    __table_args__ = (
+        UniqueConstraint("user_id", "external_event_id", name="uq_external_calendar_event"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    device_calendar_id: Mapped[str] = mapped_column(String, index=True)
+    device_calendar_name: Mapped[str] = mapped_column(String)
+    # Best-effort provider label computed client-side from the plugin's
+    # source-type metadata (EventKit sourceType / Android account type) —
+    # "icloud" | "google" | "outlook" | "other". Display/grouping only, never
+    # relied on for correctness.
+    source_label: Mapped[str] = mapped_column(String, default="other")
+    external_event_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String)
+    location: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Tz-aware UTC datetimes, ISO 8601 — unlike Event's date+start_minutes,
+    # a device calendar event isn't guaranteed single-day or in the app's
+    # displayed timezone.
+    start_at: Mapped[str] = mapped_column(String, index=True)
+    end_at: Mapped[str] = mapped_column(String)
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_synced_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
 
 
 class Meal(Base):

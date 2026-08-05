@@ -26,7 +26,14 @@ logger = logging.getLogger("uvicorn.error")
 # Only tools a week-plan pass is allowed to touch: read-only lookups plus
 # create_event. No delete/update/move — this feature can only ever propose
 # new events, never change or remove anything that already exists.
-_ALLOWED_TOOLS = {"create_event", "check_conflicts", "list_events", "list_goals", "list_habits"}
+_ALLOWED_TOOLS = {
+    "create_event",
+    "check_conflicts",
+    "list_events",
+    "list_calendar_events",
+    "list_goals",
+    "list_habits",
+}
 _WEEK_PLAN_DECLARATIONS = [d for d in FUNCTION_DECLARATIONS if d.name in _ALLOWED_TOOLS]
 
 WEEK_PLAN_MAX_ROUNDS = 10

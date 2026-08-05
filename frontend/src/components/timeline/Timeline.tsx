@@ -4,6 +4,7 @@ import { useShallow } from "zustand/shallow";
 import AddItemSheet from "./AddItemSheet";
 import DaySchedule from "./DaySchedule";
 import DayScheduleCards from "./DayScheduleCards";
+import ExternalCalendarStrip from "./ExternalCalendarStrip";
 import QuickAddBar from "./QuickAddBar";
 import { WeekSwipeContext } from "./swipeController";
 import SwipePager from "./SwipePager";
@@ -65,6 +66,7 @@ export default function Timeline({ viewMode }: TimelineProps) {
   return (
     <>
       <QuickAddBar onEditDetails={setEditItem} />
+      <ExternalCalendarStrip date={selectedDate} />
 
       {/* Swipe the day's schedule to move one day at a time. */}
       <SwipePager

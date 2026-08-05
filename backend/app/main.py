@@ -9,6 +9,7 @@ from app.database import init_db
 from app.routers import (
     auth,
     briefing,
+    calendar,
     chat,
     coach,
     events,
@@ -60,6 +61,7 @@ app.include_router(briefing.router)
 app.include_router(nudges.router)
 app.include_router(coach.router)
 app.include_router(week_plan.router)
+app.include_router(calendar.router)
 
 
 @app.get("/api/health")

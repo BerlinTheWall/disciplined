@@ -12,6 +12,7 @@ import App from "./App.tsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.tsx";
 import SplashScreen from "./components/SplashScreen.tsx";
 import { todayISODate } from "./lib/date.ts";
+import { initDeviceCalendarSync } from "./lib/deviceCalendarSync.ts";
 import { startSync } from "./lib/sync.ts";
 import AuthPage from "./pages/AuthPage.tsx";
 import { useAuthStore } from "./store/authStore.ts";
@@ -47,6 +48,12 @@ function Root() {
   // backend is unreachable — the app then runs on localStorage alone).
   useEffect(() => {
     if (userId) void startSync();
+  }, [userId]);
+
+  // Connected device calendars (Apple/Google/Outlook) — no-ops on web and
+  // until the user connects at least one calendar in Settings.
+  useEffect(() => {
+    if (userId) initDeviceCalendarSync();
   }, [userId]);
 
   // Keep the account's stored timezone matching the device's — so someone

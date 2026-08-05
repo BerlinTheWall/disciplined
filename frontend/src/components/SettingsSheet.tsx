@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { GraduationCap, Heart, Sparkles, X } from "lucide-react";
+import { Calendar as CalendarIcon, GraduationCap, Heart, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
+import CalendarSheet from "./CalendarSheet";
 import Collapse from "./Collapse";
 import InterestsSheet from "./InterestsSheet";
 import Switch from "./Switch";
@@ -132,6 +133,7 @@ function ChipRow<T>({
 
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const [showInterests, setShowInterests] = useState(false);
+  const [showCalendars, setShowCalendars] = useState(false);
   const [altStyle, setAltStyle, background, setBackground] = useSettingsStore(
     useShallow((state) => [
       state.altStyle,
@@ -361,6 +363,17 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             </motion.button>
           </Section>
 
+          <Section title="Calendar">
+            <motion.button
+              onClick={() => setShowCalendars(true)}
+              whileTap={tap}
+              className="flex items-center gap-3 w-full px-4 py-3 text-left"
+            >
+              <span className="text-[15px] font-medium text-fg flex-1">Connected calendars</span>
+              <CalendarIcon size={18} className="text-fg-muted" />
+            </motion.button>
+          </Section>
+
           <Section title="Help">
             <motion.button
               onClick={() => {
@@ -393,6 +406,7 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         </div>
       </BottomSheet>
       <InterestsSheet isOpen={showInterests} onClose={() => setShowInterests(false)} />
+      <CalendarSheet isOpen={showCalendars} onClose={() => setShowCalendars(false)} />
     </>
   );
 }

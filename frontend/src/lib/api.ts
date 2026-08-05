@@ -193,6 +193,44 @@ export interface WeekPlanResponse {
   pendingActions: PendingAction[];
 }
 
+// ---- Device calendar sync (Apple/Google/Outlook, read-only mirror) ----
+
+export interface CalendarEventIn {
+  externalEventId: string;
+  title: string;
+  location?: string;
+  startAt: string; // ISO datetime, UTC
+  endAt: string;
+  allDay: boolean;
+}
+
+export interface CalendarSyncRequest {
+  calendarId: string;
+  calendarName: string;
+  sourceLabel: string;
+  rangeStart: string;
+  rangeEnd: string;
+  events: CalendarEventIn[];
+}
+
+export interface CalendarSyncResult {
+  synced: number;
+  pruned: number;
+}
+
+export interface CalendarEventOut {
+  id: string;
+  deviceCalendarId: string;
+  deviceCalendarName: string;
+  sourceLabel: string;
+  externalEventId: string;
+  title: string;
+  location?: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+}
+
 export interface BriefingItemPayload {
   title: string;
   startMinutes: number;
@@ -414,4 +452,16 @@ export const api = {
     }
   },
   health: () => request<{ status: string }>("/api/health"),
+  // One-way: the frontend reads device calendars via the native plugin (see
+  // lib/deviceCalendarSync.ts) and pushes them here for the AI weekly
+  // planner + timeline to see. Nothing here is ever written back to the
+  // device — read-only mirror.
+  calendarSync: (body: CalendarSyncRequest): Promise<CalendarSyncResult> =>
+    request("/api/calendar/sync", { method: "POST", body: JSON.stringify(body) }),
+  calendarEvents: {
+    list: (start: string, end: string): Promise<CalendarEventOut[]> =>
+      request(
+        `/api/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+      ),
+  },
 };

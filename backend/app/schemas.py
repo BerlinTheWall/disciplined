@@ -553,4 +553,49 @@ class CoachPlanResponse(CamelModel):
 class ChatResponse(CamelModel):
     reply: str
     actions: list[ChatAction] = []
+
+
+# ---- Calendar sync (device calendars -> read-only mirror) ----
+# One-way: the frontend reads Apple/Google/Outlook events via the native
+# EventKit/CalendarContract plugin and pushes them here so the AI weekly
+# planner and timeline can see them. Never editable from disciplined —
+# writing disciplined's own events back to a device calendar happens
+# entirely client-side (see frontend/src/lib/deviceCalendarSync.ts) and
+# never touches this table.
+
+
+class CalendarEventIn(CamelModel):
+    external_event_id: str
+    title: str
+    location: str | None = None
+    start_at: str  # ISO datetime, UTC
+    end_at: str
+    all_day: bool = False
+
+
+class CalendarSyncRequest(CamelModel):
+    calendar_id: str
+    calendar_name: str
+    source_label: str = "other"
+    range_start: str  # ISO datetime, UTC — window this payload is authoritative for
+    range_end: str
+    events: list[CalendarEventIn] = Field(max_length=1000)
+
+
+class CalendarEventOut(CamelModel):
+    id: str
+    device_calendar_id: str
+    device_calendar_name: str
+    source_label: str
+    external_event_id: str
+    title: str
+    location: str | None = None
+    start_at: str
+    end_at: str
+    all_day: bool
+
+
+class CalendarSyncResponse(CamelModel):
+    synced: int
+    pruned: int
     pending_actions: list[PendingAction] = []
