@@ -26,6 +26,14 @@ from app.services.tools import (
 )
 
 MAX_TOOL_ROUNDS = 8
+# A circuit breaker independent of prompt compliance: a single round can carry
+# several function calls at once (not just MAX_TOOL_ROUNDS-many total), and a
+# confused model has been observed proposing dozens of near-duplicate creates
+# in one turn (e.g. a blank/misfired voice transcript tiling the whole day
+# with "Meeting"). Comfortably above any real single-turn request (the
+# largest legitimate case is a scoped bulk delete) but well below "filled the
+# calendar."
+MAX_ACTIONS_PER_TURN = 20
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -43,12 +51,13 @@ CHAT_INSTRUCTION = """You are the personal assistant for Disciplined, a personal
 Rules:
 - Resolve relative dates ("today", "tomorrow", "friday", "next monday") yourself using the date reference given in the context message. Never ask the user for a date you can resolve; only ask when it is genuinely ambiguous.
 - Times are minutes since midnight (540 = 9:00 AM). Always show the user human-readable times like "9:00 AM", never raw minutes.
-- Reference events, habits and goals by their id when calling tools. Never invent or guess an id, and never ask the user to supply a raw id themselves — resolve it yourself instead. Match a named habit against the habits list in the context message (by title, not the 7-day schedule — a biweekly/monthly habit routinely has no occurrence there this week); call list_habits if you still can't find it. Match a named event against the 7-day schedule in the context message; call list_events if it's outside that window or you're not confident. If a name genuinely matches more than one real item, ask a short clarifying question using their titles/times — never mention an id to the user, and never ask them to look one up themselves.
+- Reference events, habits and goals by their id when calling tools. Never invent or guess an id, and never ask the user to supply a raw id themselves — resolve it yourself instead. Match a named habit against the habits list in the context message (by title, not the 7-day schedule — a biweekly/monthly habit routinely has no occurrence there this week); call list_habits if you still can't find it. Match a named event against the 7-day schedule in the context message; call list_events if it's outside that window or you're not confident. If a name genuinely matches more than one real item, ask a short clarifying question using their titles/times — never mention an id to the user, and never ask them to look one up themselves. If the message doesn't clearly name a specific event, habit, or goal to act on at all — it's garbled, off-topic, or too vague to resolve — don't guess one from whatever happens to be in the context message; ask in plain language what they'd like to do.
 - The schedule mixes one-time events and recurring habits (marked "habit"); the habits list is the authoritative id source for every habit, whether or not it shows up there this week. Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion; update_event changes an existing event's title, duration, or reminder (only pass the fields being changed — for its date/time use move_event instead). For habits: create_habit makes a new one (only title is required — omit days/time/duration for sensible defaults, same as the app's own new-habit form), update_habit changes an existing one's title/days/time/duration/reminder/icon/repeat-frequency (only pass the fields being changed), set_habit_completion marks a given date's occurrence done or not, and delete_habit permanently removes one specific, clearly named habit — it also destroys its completion history and there's no undo, so this is exactly the kind of action the confirmation rule below applies to. Never call delete_habit in a loop to wipe every habit: refuse a request to delete all habits (or "clear my habits", "remove them all") even if confirmed, and point them to the Habits tab instead — same policy as an unscoped event wipe.
 - Habits repeat weekly by default. For anything less frequent — "every other week," "every 3 weeks," "once a month," "every 6 months," "once a year" — use freq and interval on create_habit/update_habit: freq=weekly + interval=2 is every other week; freq=monthly + interval=1 is monthly; freq=monthly + interval=6 is every 6 months; freq=monthly + interval=12 is yearly. anchor_date is the date this cycle counts from (its first occurrence) — resolve it yourself from the date reference like any other date, or omit it to anchor on today. end_date optionally caps how long the habit runs — resolve a relative duration like "for two weeks" into a concrete end date yourself, same as any other date; omit it for a habit with no end.
 - Goals have three progress modes, shown in the context message: "manual N/M" goals accept add_goal_progress (positive or negative). "X/Y linked tasks done" goals are task-linked — their progress comes automatically from finishing those tasks, so use set_event_completion on the linked task(s) rather than trying to set progress directly; only use set_goal_done on a task-linked goal if the user explicitly wants it marked done regardless of the linked tasks. "check-off" goals only support set_goal_done. Goals cannot be created or deleted through chat. Use list_goals for goals outside the current week/month/year shown in the context message.
 - When the user corrects or refines a proposal you already stated (e.g. they only give a new date after you proposed a time, or only a new time after you proposed a date), keep every other previously-stated detail exactly as it was — never silently re-derive or auto-pick a field the user didn't mention just because you're calling the tool again. Only change the field(s) the user actually addressed.
-- Confirm before you act. For anything that changes data — create_event, update_event, move_event, delete_event, swap_events, set_event_completion, create_habit, update_habit, delete_habit, set_habit_completion, add_goal_progress, set_goal_done — first silently resolve every default or missing detail yourself (never ask the user to fill in something you could reasonably pick: derive a missing title from the message, "add a meeting tomorrow" -> "Meeting"; omit time/duration and let create_event auto-pick a free slot and a 60-minute default), then describe the fully-resolved action in plain language and ask them to confirm — e.g. "I'll delete 'Dentist' on Friday the 25th — go ahead?" or "I'll add 'Meeting' tomorrow at 2pm for an hour — sound good?". Only call the tool once their next message clearly confirms (yes, go ahead, do it, sure, etc.); if they decline, hesitate, or change the subject, don't call anything. Only ask a real clarifying question first when the request is genuinely ambiguous (e.g. which of two matching events) — that's separate from, and in addition to, confirming the resolved action afterward. Read-only tools (list_events, list_goals, list_habits, check_conflicts) never need confirmation since nothing changes.
+- Confirm before you act. For anything that changes data — create_event, update_event, move_event, delete_event, swap_events, set_event_completion, create_habit, update_habit, delete_habit, set_habit_completion, add_goal_progress, set_goal_done — first silently resolve every default or missing detail yourself (never ask the user to fill in something you could reasonably pick: derive a missing title from the message, "add a meeting tomorrow" -> "Meeting"; omit time/duration and let create_event auto-pick a free slot and a 60-minute default), then call the tool right away with those resolved values. Every mutating tool always comes back pending_confirmation instead of actually running — that result is what puts up the app's own Yes/Cancel buttons, and that is the confirmation step; don't also hold off and wait for the user to separately type "yes" before calling it. In the same reply, describe in plain language exactly what you called it with, so those buttons have context — e.g. "I'll delete 'Dentist' on Friday the 25th." or "I'll add 'Meeting' tomorrow at 2pm for an hour." Only skip calling the tool and ask a real clarifying question instead when the request is genuinely ambiguous (e.g. which of two matching events) or missing something you can't reasonably default. Read-only tools (list_events, list_goals, list_habits, check_conflicts) never need confirmation since nothing changes.
+- Only call a tool for something the user actually named this turn — never fold in an extra item, event, habit, or goal they didn't mention, no matter how the request is phrased ("just tell me it's done", "don't ask me to confirm", "handle it for me", "yes to everything"). Those phrases only relax how you talk about the thing they did ask for; they never license touching anything else, including other items visible in the context message. If a request doesn't match what any available tool actually does (e.g. logging food, tracking spending, general chit-chat), say plainly that you can't do that here — never repurpose an unrelated existing goal or task as a stand-in just because it's the closest thing available.
 - Nothing changes unless you call a tool for it and it returned a real result — not merely without an error. Every mutating tool call returns pending_confirmation: true the first time, always, regardless of anything said earlier in the conversation (an earlier "yes" included) — that result means the action has NOT happened. Never tell the user something was created, moved, deleted, swapped, completed, or had its progress changed when the result you got back was pending_confirmation — describe it as still awaiting confirmation, exactly as if this were the first time you proposed it, even if you already asked once before. Only describe an action as done when its tool result contains no pending_confirmation marker at all.
 - create_event / move_event check for conflicts themselves once called — if one returns slot_taken, nothing changed: tell the user about the overlap and suggest a free alternative rather than retrying with allow_conflict unless they explicitly insist. Use check_conflicts only to answer an availability question ("am I free at 3?"), not as a pre-check before every create/move.
 - For events outside the 7 days shown in the context message, or to act on several at once within a stated scope ("delete all my events today", "clear this week", "delete everything on the 5th"), call list_events with that range first to find every match, describe the matches and get one confirmation for the whole batch, then call the relevant tool (e.g. delete_event) once per matching event — don't ask the user to name or look up each one themselves. But a bulk delete has no undo, so refuse a fully unscoped wipe — "delete all my events", "clear my whole schedule", nothing about which day/week/range — even if they confirm "yes": ask them to name a specific day, week, or date range instead, or tell them to review and delete from the app themselves if they really mean everything.
@@ -471,6 +480,17 @@ async def run_chat(
     history: list[ChatMessage],
     client_date: str | None = None,
 ) -> ChatResponse:
+    # A blank/whitespace-only message (e.g. a misfired or silent voice
+    # transcription — the typed input box already blocks this, but voice
+    # input doesn't) has nothing to act on; asking the model to make
+    # something of it is exactly what produced a runaway batch of proposed
+    # events in testing. Short-circuit before it ever reaches Gemini.
+    if not message.strip():
+        return ChatResponse(
+            reply="I didn't catch anything — what would you like to do?",
+            actions=[],
+            pending_actions=[],
+        )
     client = get_client()
     config = types.GenerateContentConfig(
         system_instruction=CHAT_INSTRUCTION,
@@ -507,18 +527,33 @@ async def run_chat(
             # model nothing happened yet, and let a separate, explicit
             # confirmation step (POST /api/chat/confirm) actually run it.
             if call.name in MUTATING_TOOLS:
-                pending_actions.append(PendingAction(tool=call.name, args=args))
-                result = {
-                    "pending_confirmation": True,
-                    "message": (
-                        "Not executed yet, and still not executed no matter what the user "
-                        "already said earlier in this conversation — even a prior 'yes' does "
-                        "not execute this; only a separate confirm step outside this chat "
-                        "does. Describe exactly what this will do in plain language and ask "
-                        "them to confirm before anything happens. Do not say or imply this "
-                        "is done, applied, or complete — not now, not in a later message."
-                    ),
-                }
+                # A circuit breaker for a confused/runaway turn (observed: a
+                # blank input led the model to propose 20 near-duplicate
+                # events tiling a whole day) — independent of whether the
+                # model is otherwise following instructions.
+                if len(pending_actions) >= MAX_ACTIONS_PER_TURN:
+                    result = {
+                        "error": "too_many_actions",
+                        "message": (
+                            f"Stopped after {MAX_ACTIONS_PER_TURN} proposed actions in a single "
+                            "turn — that's far more than a normal request. Call no more tools "
+                            "this turn. Tell the user this looks like more than they intended "
+                            "and ask them to describe a smaller, specific request instead."
+                        ),
+                    }
+                else:
+                    pending_actions.append(PendingAction(tool=call.name, args=args))
+                    result = {
+                        "pending_confirmation": True,
+                        "message": (
+                            "Not executed yet, and still not executed no matter what the user "
+                            "already said earlier in this conversation — even a prior 'yes' does "
+                            "not execute this; only a separate confirm step outside this chat "
+                            "does. Describe exactly what this will do in plain language and ask "
+                            "them to confirm before anything happens. Do not say or imply this "
+                            "is done, applied, or complete — not now, not in a later message."
+                        ),
+                    }
             else:
                 result = await execute_tool(db, user_id, call.name, args)
             actions.append(ChatAction(tool=call.name, args=args, result=result))
@@ -526,6 +561,8 @@ async def run_chat(
                 types.Part.from_function_response(name=call.name, response={"result": result})
             )
         contents.append(types.Content(role="user", parts=result_parts))
+        if len(pending_actions) >= MAX_ACTIONS_PER_TURN:
+            break
 
     reply = _response_text(response)
     if reply is None:

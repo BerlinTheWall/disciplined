@@ -192,7 +192,9 @@ export default function ChatSheet() {
     onInterim: setText,
     onFinal: (transcript) => {
       setText("");
-      void send(transcript).catch(() => {});
+      const raw = transcript.trim();
+      if (!raw) return; // misfire (silence/noise) — nothing was actually said
+      void send(raw).catch(() => {});
     },
   });
 

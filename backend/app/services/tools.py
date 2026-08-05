@@ -19,6 +19,15 @@ def fmt_minutes(m: int) -> str:
     return f"{m // 60:02d}:{m % 60:02d}"
 
 
+# The model occasionally hands back a nonsensical minutes value (negative,
+# zero, or absurdly large — e.g. misreading "500 hours" as 500 minutes).
+# Every hand-authored edit path (taskStore, habitStore, the quick-add parser)
+# already floors/ceils on the frontend; this is that same guard for the one
+# path that writes straight from the model's own arithmetic.
+def _clamp_minutes(value: int, floor: int, ceiling: int) -> int:
+    return max(floor, min(value, ceiling))
+
+
 def event_to_dict(e: Event) -> dict[str, Any]:
     return {
         "id": e.id,
@@ -222,6 +231,9 @@ def current_period_keys(today: date) -> dict[str, str]:
 
 _MINUTES_DESC = "Minutes since midnight, e.g. 540 = 9:00 AM, 810 = 1:30 PM."
 _DATE_DESC = 'ISO date string, e.g. "2026-07-05".'
+# Always in minutes, spelled out — confirmed a smaller model can otherwise
+# take "500 hours" at face value and pass 500 straight through as minutes.
+_DURATION_DESC_SUFFIX = " Always minutes, even if the user says hours/days — convert it yourself (e.g. \"2 hours\" -> 120, \"90 min\" -> 90)."
 _REMINDER_DESC = (
     "Minutes before start to send a reminder notification (0 = at start time, e.g. 10 = 10 "
     "minutes before). Omit to leave unchanged; to remove an existing reminder entirely, tell "
@@ -280,7 +292,7 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "duration_minutes": types.Schema(
                     type=types.Type.INTEGER,
-                    description="Duration in minutes. Omit to default to 60.",
+                    description="Duration in minutes. Omit to default to 60." + _DURATION_DESC_SUFFIX,
                 ),
                 "allow_conflict": types.Schema(
                     type=types.Type.BOOLEAN,
@@ -316,7 +328,7 @@ FUNCTION_DECLARATIONS = [
                 "event_id": types.Schema(type=types.Type.STRING, description="ID of the event."),
                 "title": types.Schema(type=types.Type.STRING, description="New title."),
                 "duration_minutes": types.Schema(
-                    type=types.Type.INTEGER, description="New duration in minutes."
+                    type=types.Type.INTEGER, description="New duration in minutes." + _DURATION_DESC_SUFFIX
                 ),
                 "reminder_minutes_before": types.Schema(
                     type=types.Type.INTEGER, description=_REMINDER_DESC
@@ -376,7 +388,9 @@ FUNCTION_DECLARATIONS = [
             properties={
                 "date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
                 "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
-                "duration_minutes": types.Schema(type=types.Type.INTEGER, description="Duration in minutes."),
+                "duration_minutes": types.Schema(
+                    type=types.Type.INTEGER, description="Duration in minutes." + _DURATION_DESC_SUFFIX
+                ),
                 "exclude_event_id": types.Schema(
                     type=types.Type.STRING,
                     description="Event ID to ignore (when checking a move of that event).",
@@ -529,7 +543,7 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "duration_minutes": types.Schema(
                     type=types.Type.INTEGER,
-                    description="Duration in minutes. Omit to default to 30.",
+                    description="Duration in minutes. Omit to default to 30." + _DURATION_DESC_SUFFIX,
                 ),
                 "icon": types.Schema(
                     type=types.Type.STRING,
@@ -582,7 +596,7 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "start_minutes": types.Schema(type=types.Type.INTEGER, description=_MINUTES_DESC),
                 "duration_minutes": types.Schema(
-                    type=types.Type.INTEGER, description="New duration in minutes."
+                    type=types.Type.INTEGER, description="New duration in minutes." + _DURATION_DESC_SUFFIX
                 ),
                 "reminder_minutes_before": types.Schema(
                     type=types.Type.INTEGER, description=_REMINDER_DESC
@@ -723,12 +737,14 @@ async def _find_free_slot(db: AsyncSession, user_id: str, date_str: str, duratio
 
 
 async def _create_event(db: AsyncSession, user_id: str, args: dict) -> dict:
-    duration = int(args.get("duration_minutes") or 60)
+    duration = _clamp_minutes(int(args.get("duration_minutes") or 60), 5, 24 * 60)
     start = args.get("start_minutes")
     if start is not None:
-        start = int(start)
+        start = _clamp_minutes(int(start), 0, 24 * 60 - 1)
     else:
         start = await _find_free_slot(db, user_id, args["date"], duration)
+    # Keep it from spilling past midnight, same clamp _update_event applies.
+    duration = _clamp_minutes(duration, 5, 24 * 60 - start)
     if not args.get("allow_conflict"):
         conflicts = await _overlapping(db, user_id, args["date"], start, duration)
         if conflicts:
@@ -929,16 +945,19 @@ async def _set_goal_done(db: AsyncSession, user_id: str, args: dict) -> dict:
 
 async def _create_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
     freq = args.get("freq") or "weekly"
-    interval = int(args.get("interval") or 1)
+    interval = max(1, int(args.get("interval") or 1))
     if freq == "monthly":
         interval = min(interval, 12)  # keeps streak/rate walk-backs within their guard
     anchor_date = args.get("anchor_date")
     if (interval > 1 or freq == "monthly") and not anchor_date:
         anchor_date = date.today().isoformat()
+    start_minutes = _clamp_minutes(int(args.get("start_minutes") or 9 * 60), 0, 24 * 60 - 1)
     habit = Habit(
         title=args["title"],
-        start_minutes=int(args.get("start_minutes") or 9 * 60),
-        duration_minutes=int(args.get("duration_minutes") or 30),
+        start_minutes=start_minutes,
+        duration_minutes=_clamp_minutes(
+            int(args.get("duration_minutes") or 30), 5, 24 * 60 - start_minutes
+        ),
         icon=args.get("icon", "default"),
         freq=freq,
         interval=interval,
@@ -978,9 +997,11 @@ async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
     if "days_of_week" in args and args["days_of_week"] is not None:
         habit.days_of_week = args["days_of_week"]
     if "start_minutes" in args and args["start_minutes"] is not None:
-        habit.start_minutes = int(args["start_minutes"])
+        habit.start_minutes = _clamp_minutes(int(args["start_minutes"]), 0, 24 * 60 - 1)
     if "duration_minutes" in args and args["duration_minutes"] is not None:
-        habit.duration_minutes = int(args["duration_minutes"])
+        habit.duration_minutes = _clamp_minutes(
+            int(args["duration_minutes"]), 5, 24 * 60 - habit.start_minutes
+        )
     if "reminder_minutes_before" in args and args["reminder_minutes_before"] is not None:
         habit.reminder_minutes_before = int(args["reminder_minutes_before"])
     if "icon" in args and args["icon"] is not None:
@@ -988,7 +1009,7 @@ async def _update_habit(db: AsyncSession, user_id: str, args: dict) -> dict:
     if "freq" in args and args["freq"] is not None:
         habit.freq = args["freq"]
     if "interval" in args and args["interval"] is not None:
-        habit.interval = int(args["interval"])
+        habit.interval = max(1, int(args["interval"]))
     if "anchor_date" in args and args["anchor_date"] is not None:
         habit.anchor_date = args["anchor_date"]
     if "end_date" in args and args["end_date"] is not None:
