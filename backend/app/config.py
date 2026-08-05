@@ -77,7 +77,16 @@ class Settings(BaseSettings):
     ms_graph_client_id: str = ""
     ms_graph_client_secret: str = ""
     ms_graph_redirect_uri: str = ""
-    # Encrypts stored Microsoft access/refresh tokens at rest (services/crypto.py).
+    # Google Calendar OAuth (Settings > Connected Calendars > Google) — a
+    # Google Cloud project with the Calendar API enabled and an OAuth Client
+    # ID (Web application), redirect URI set to this backend's
+    # /api/google-calendar/callback. Same shape as the MS_GRAPH_* settings
+    # above; blank disables the feature the same way.
+    google_calendar_client_id: str = ""
+    google_calendar_client_secret: str = ""
+    google_calendar_redirect_uri: str = ""
+    # Encrypts stored Microsoft/Google access/refresh tokens at rest
+    # (services/crypto.py), shared across both providers.
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str = ""
     # Vite dev server origins

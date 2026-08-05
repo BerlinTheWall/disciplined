@@ -107,6 +107,11 @@ class Event(Base):
     # hasn't actually changed since, instead of re-pushing everything on
     # every sync.
     outlook_sync_signature: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Same idea as the outlook_* pair above, for a connected Google Calendar
+    # (see app.services.google_calendar.push_google_events) — independent of
+    # it, since a Task is mirrored to at most one of the two.
+    google_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_sync_signature: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class Habit(Base):
@@ -217,6 +222,26 @@ class OutlookConnection(Base):
     user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     ms_account_email: Mapped[str] = mapped_column(String)
     # Fernet-encrypted (app.services.crypto) — never stored in plaintext.
+    encrypted_access_token: Mapped[str] = mapped_column(String)
+    encrypted_refresh_token: Mapped[str] = mapped_column(String)
+    access_token_expires_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    scope: Mapped[str] = mapped_column(String)
+    connected_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+
+
+class GoogleCalendarConnection(Base):
+    """Same idea as OutlookConnection, for a connected Google account (see
+    app.services.google_calendar). Deliberately its own table rather than a
+    shared/generic "provider" one — the two APIs differ enough (endpoints,
+    response shapes, refresh-token semantics) that isolating them keeps each
+    one's failure modes simple.
+    """
+
+    __tablename__ = "google_calendar_connections"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    google_account_email: Mapped[str] = mapped_column(String)
     encrypted_access_token: Mapped[str] = mapped_column(String)
     encrypted_refresh_token: Mapped[str] = mapped_column(String)
     access_token_expires_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC

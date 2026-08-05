@@ -13,9 +13,15 @@ import {
   sourceLabelFor,
 } from "@/lib/deviceCalendar";
 import { pullDeviceCalendars } from "@/lib/deviceCalendarSync";
+import {
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  googleCalendarSupported,
+} from "@/lib/googleCalendarAuth";
 import { tap } from "@/lib/motion";
 import { connectOutlook, disconnectOutlook, outlookSupported } from "@/lib/outlookAuth";
 import { useCalendarStore } from "@/store/calendarStore";
+import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
 import { useOutlookStore } from "@/store/outlookStore";
 
 interface CalendarSheetProps {
@@ -73,10 +79,14 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
   const [outlookConnected, outlookEmail, outlookLoaded] = useOutlookStore(
     useShallow((s) => [s.connected, s.msAccountEmail, s.loaded])
   );
+  const [googleConnected, googleEmail, googleLoaded] = useGoogleCalendarStore(
+    useShallow((s) => [s.connected, s.googleAccountEmail, s.loaded])
+  );
   const [calendars, setCalendars] = useState<Calendar[] | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [deniedOnce, setDeniedOnce] = useState(false);
   const [connectingOutlook, setConnectingOutlook] = useState(false);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !deviceCalendarSupported || calendars !== null) return;
@@ -88,6 +98,12 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
   useEffect(() => {
     if (isOpen && outlookSupported && !outlookLoaded) void useOutlookStore.getState().refresh();
   }, [isOpen, outlookLoaded]);
+
+  useEffect(() => {
+    if (isOpen && googleCalendarSupported && !googleLoaded) {
+      void useGoogleCalendarStore.getState().refresh();
+    }
+  }, [isOpen, googleLoaded]);
 
   async function connect() {
     setConnecting(true);
@@ -120,6 +136,20 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
     }
   }
 
+  async function toggleGoogleConnection() {
+    if (googleConnected) {
+      if (writeTarget?.kind === "google") setWriteTarget(null);
+      await disconnectGoogleCalendar();
+      return;
+    }
+    setConnectingGoogle(true);
+    try {
+      await connectGoogleCalendar();
+    } finally {
+      setConnectingGoogle(false);
+    }
+  }
+
   function selectRead(id: string) {
     if (writeTarget?.kind === "device" && writeTarget.calendarId === id) setWriteTarget(null);
     toggleReadCalendar(id);
@@ -136,7 +166,12 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
     setWriteTarget(writeTarget?.kind === "outlook" ? null : { kind: "outlook" });
   }
 
-  const showWriteSection = (calendars && calendars.length > 0) || outlookConnected;
+  function selectWriteGoogle() {
+    setWriteTarget(writeTarget?.kind === "google" ? null : { kind: "google" });
+  }
+
+  const showWriteSection =
+    (calendars && calendars.length > 0) || outlookConnected || googleConnected;
 
   return (
     <BottomSheet
@@ -188,9 +223,10 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
                   {connecting ? "Connecting…" : "Connect device calendars"}
                 </motion.button>
                 <p className="text-xs text-fg-faint">
-                  Don&rsquo;t see an expected calendar (e.g. Outlook) after connecting? Many
-                  calendar apps only sync to your phone&rsquo;s calendar if you turn that on inside
-                  the app itself — or connect your Microsoft account directly below instead.
+                  Don&rsquo;t see an expected calendar (e.g. Outlook or Google) after connecting?
+                  Many calendar apps only sync to your phone&rsquo;s calendar if you turn that on
+                  inside the app itself — or connect your Microsoft or Google account directly below
+                  instead.
                 </p>
               </div>
             ) : (
@@ -257,6 +293,44 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
               )}
             </div>
 
+            <div>
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <Mail size={14} className="text-fg-faint" />
+                <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
+                  Google Calendar
+                </p>
+              </div>
+              <p className="text-xs text-fg-faint mb-2">
+                Connects directly to your Google account — sees your Google Calendar regardless of
+                whether it&rsquo;s synced to this device.
+              </p>
+              {!googleCalendarSupported ? (
+                <p className="text-sm text-fg-faint">Available in the iOS and Android app.</p>
+              ) : googleConnected ? (
+                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+                  <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
+                    {googleEmail}
+                  </span>
+                  <motion.button
+                    onClick={() => void toggleGoogleConnection()}
+                    whileTap={tap}
+                    className="text-xs font-semibold text-red-500 shrink-0"
+                  >
+                    Disconnect
+                  </motion.button>
+                </div>
+              ) : (
+                <motion.button
+                  onClick={() => void toggleGoogleConnection()}
+                  disabled={connectingGoogle}
+                  whileTap={tap}
+                  className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
+                >
+                  {connectingGoogle ? "Opening…" : "Connect Google Calendar"}
+                </motion.button>
+              )}
+            </div>
+
             {showWriteSection && (
               <div>
                 <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide mb-1.5">
@@ -282,6 +356,14 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
                       color="#0078d4"
                       selected={writeTarget?.kind === "outlook"}
                       onSelect={selectWriteOutlook}
+                    />
+                  )}
+                  {googleConnected && (
+                    <WriteTargetRow
+                      label={`${googleEmail} (Google)`}
+                      color="#4285f4"
+                      selected={writeTarget?.kind === "google"}
+                      onSelect={selectWriteGoogle}
                     />
                   )}
                 </div>

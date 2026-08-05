@@ -626,4 +626,30 @@ class OutlookPushResponse(CamelModel):
     updated: int
     unchanged: int
     failed: int
+
+
+# ---- Google Calendar connection (Google OAuth) ----
+# Same shape as the Outlook section above, mirrored rather than shared —
+# see app.services.google_calendar for why the two stay separate.
+
+
+class GoogleCalendarConnectResponse(CamelModel):
+    authorize_url: str
+
+
+class GoogleCalendarStatusResponse(CamelModel):
+    connected: bool
+    google_account_email: str | None = None
+
+
+class GoogleCalendarSyncResponse(CamelModel):
+    synced: int
+    pruned: int
+
+
+class GoogleCalendarPushResponse(CamelModel):
+    created: int
+    updated: int
+    unchanged: int
+    failed: int
     pending_actions: list[PendingAction] = []

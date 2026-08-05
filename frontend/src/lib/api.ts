@@ -253,6 +253,27 @@ export interface OutlookPushResult {
   failed: number;
 }
 
+// ---- Google Calendar connection (Google OAuth) ----
+// Same shape as Outlook above, mirrored rather than shared — see
+// backend/app/services/google_calendar.py for why.
+
+export interface GoogleCalendarStatus {
+  connected: boolean;
+  googleAccountEmail?: string;
+}
+
+export interface GoogleCalendarSyncResult {
+  synced: number;
+  pruned: number;
+}
+
+export interface GoogleCalendarPushResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+}
+
 export interface BriefingItemPayload {
   title: string;
   startMinutes: number;
@@ -494,5 +515,17 @@ export const api = {
     disconnect: (): Promise<void> => request("/api/outlook/connection", { method: "DELETE" }),
     sync: (): Promise<OutlookSyncResult> => request("/api/outlook/sync", { method: "POST" }),
     push: (): Promise<OutlookPushResult> => request("/api/outlook/push", { method: "POST" }),
+  },
+  googleCalendar: {
+    // Returns the Google login URL to open in an in-app browser
+    // (@capacitor/browser) — see lib/googleCalendarAuth.ts.
+    connect: (): Promise<{ authorizeUrl: string }> => request("/api/google-calendar/connect"),
+    status: (): Promise<GoogleCalendarStatus> => request("/api/google-calendar/status"),
+    disconnect: (): Promise<void> =>
+      request("/api/google-calendar/connection", { method: "DELETE" }),
+    sync: (): Promise<GoogleCalendarSyncResult> =>
+      request("/api/google-calendar/sync", { method: "POST" }),
+    push: (): Promise<GoogleCalendarPushResult> =>
+      request("/api/google-calendar/push", { method: "POST" }),
   },
 };

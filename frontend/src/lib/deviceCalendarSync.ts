@@ -177,13 +177,20 @@ async function pushTasksToDevice(): Promise<void> {
     if (writeTarget?.kind === "device") {
       await pushToDeviceCalendar(writeTarget.calendarId);
     } else if (writeTarget?.kind === "outlook") {
-      // Outlook holds its own tokens server-side and already owns the
-      // user's Event rows — no payload needed, just trigger the backend's
-      // own reconciliation (see backend/app/services/outlook_graph.py).
+      // Outlook/Google hold their own tokens server-side and already own
+      // the user's Event rows — no payload needed, just trigger the
+      // backend's own reconciliation (see backend/app/services/outlook_graph.py
+      // and google_calendar.py).
       try {
         await api.outlook.push();
       } catch (e) {
         console.warn("[calendar] outlook push failed", e);
+      }
+    } else if (writeTarget?.kind === "google") {
+      try {
+        await api.googleCalendar.push();
+      } catch (e) {
+        console.warn("[calendar] google calendar push failed", e);
       }
     }
   } finally {

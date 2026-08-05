@@ -17,14 +17,13 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Event, OutlookConnection
 from app.schemas import CalendarEventIn, CalendarSyncRequest
-from app.services import crypto
+from app.services import crypto, oauth_state
 from app.services.calendar_sync import sync_calendar_events
 from app.services.tools import user_timezone
 
@@ -35,15 +34,9 @@ TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 SCOPES = "offline_access Calendars.ReadWrite User.Read"
 
-STATE_TOKEN_ALGORITHM = "HS256"
-STATE_TOKEN_TTL_MINUTES = 10
-# Signed with a key *derived from* (not equal to) the session JWT secret —
-# deliberately not the same key auth.get_current_user verifies against. The
-# state param round-trips through a URL to Microsoft's login page (browser
-# history, referrers, server logs on their end) — if it were valid as a
-# session token too, a leaked state value would let someone impersonate the
-# user, not just replay a stale OAuth attempt.
-_STATE_SIGNING_KEY = f"{settings.jwt_secret}|outlook-oauth-state"
+# See app.services.oauth_state — each provider gets its own purpose (and
+# therefore its own derived signing key), so a leaked Outlook state token
+# can't be replayed against Google's callback or vice versa.
 _STATE_PURPOSE = "outlook_oauth_state"
 
 # Read-sync window — matches the device-calendar path's PULL_WINDOW_*
@@ -68,24 +61,6 @@ def _require_configured() -> None:
         )
 
 
-def create_state_token(user_id: str) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=STATE_TOKEN_TTL_MINUTES)
-    return jwt.encode(
-        {"sub": user_id, "purpose": _STATE_PURPOSE, "exp": expires},
-        _STATE_SIGNING_KEY,
-        algorithm=STATE_TOKEN_ALGORITHM,
-    )
-
-
-def verify_state_token(token: str) -> str:
-    """Returns the disciplined user_id that started this OAuth attempt, or
-    raises jwt.InvalidTokenError/ExpiredSignatureError."""
-    payload = jwt.decode(token, _STATE_SIGNING_KEY, algorithms=[STATE_TOKEN_ALGORITHM])
-    if payload.get("purpose") != _STATE_PURPOSE:
-        raise jwt.InvalidTokenError("wrong token purpose")
-    return payload["sub"]
-
-
 def build_authorize_url(user_id: str) -> str:
     _require_configured()
     params = {
@@ -94,9 +69,16 @@ def build_authorize_url(user_id: str) -> str:
         "redirect_uri": settings.ms_graph_redirect_uri,
         "response_mode": "query",
         "scope": SCOPES,
-        "state": create_state_token(user_id),
+        "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id),
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
+
+
+def verify_state_token(token: str) -> str:
+    """Thin wrapper so routers/outlook.py doesn't need to know the purpose
+    string — raises jwt.InvalidTokenError/ExpiredSignatureError, same as
+    oauth_state.verify_state_token."""
+    return oauth_state.verify_state_token(_STATE_PURPOSE, token)
 
 
 async def _fetch_account_email(access_token: str) -> str:

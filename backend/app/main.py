@@ -14,6 +14,7 @@ from app.routers import (
     coach,
     events,
     goals,
+    google_calendar,
     habits,
     interests,
     meals,
@@ -64,6 +65,7 @@ app.include_router(coach.router)
 app.include_router(week_plan.router)
 app.include_router(calendar.router)
 app.include_router(outlook.router)
+app.include_router(google_calendar.router)
 
 
 @app.get("/api/health")

@@ -9,14 +9,14 @@ import { persist } from "zustand/middleware";
 // read one (see the guard in CalendarSheet.tsx) — writing an event that
 // then gets read back in as "external" would be a pointless feedback loop.
 //
-// The write target is a *device* calendar OR the connected Outlook account
-// (Settings > Connected Calendars > Outlook, via Microsoft Graph OAuth) —
-// never both, since mirroring one Task to two places isn't wanted. "device"
-// pushes client-side via the native plugin (lib/deviceCalendar.ts); "outlook"
-// pushes server-side via lib/api.ts's api.outlook.push (the backend holds
-// the Graph tokens, not the device).
+// The write target is a *device* calendar, the connected Outlook account, or
+// the connected Google Calendar account — never more than one at a time,
+// since mirroring one Task to several places isn't wanted. "device" pushes
+// client-side via the native plugin (lib/deviceCalendar.ts); "outlook" and
+// "google" push server-side via api.outlook.push / api.googleCalendar.push
+// (the backend holds those tokens, not the device).
 export type CalendarWriteTarget =
-  { kind: "device"; calendarId: string } | { kind: "outlook" } | null;
+  { kind: "device"; calendarId: string } | { kind: "outlook" } | { kind: "google" } | null;
 
 interface CalendarState {
   readCalendarIds: string[];
