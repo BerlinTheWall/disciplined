@@ -188,6 +188,11 @@ export interface ConfirmActionsResponse {
   ok: boolean;
 }
 
+export interface WeekPlanResponse {
+  message: string;
+  pendingActions: PendingAction[];
+}
+
 export interface BriefingItemPayload {
   title: string;
   startMinutes: number;
@@ -361,6 +366,17 @@ export const api = {
       request("/api/nudges/check", {
         method: "POST",
         body: JSON.stringify({ nowMinutes, excludedKeys, clientDate: todayISODate() }),
+      }),
+  },
+  // Drafts a week's worth of proposed events from the user's goals — a
+  // separate, narrower feature from chat (see backend/app/services/week_plan.py).
+  // Returns pendingActions only; nothing is created until they're passed to
+  // confirmChatActions above, exactly like a chat-proposed action.
+  weekPlan: {
+    generate: (): Promise<WeekPlanResponse> =>
+      request("/api/week-plan", {
+        method: "POST",
+        body: JSON.stringify({ clientDate: todayISODate() }),
       }),
   },
   coach: {

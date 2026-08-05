@@ -438,6 +438,21 @@ class ConfirmResponse(CamelModel):
     ok: bool  # False if any result contains an "error" key
 
 
+# ---- Week plan ----
+# A separate, isolated feature from chat above: it only ever proposes
+# create_event calls (never executes them itself) and reuses PendingAction /
+# POST /api/chat/confirm for actually applying them, same as chat does.
+
+
+class WeekPlanRequest(CamelModel):
+    client_date: str | None = None
+
+
+class WeekPlanResponse(CamelModel):
+    message: str
+    pending_actions: list[PendingAction] = []
+
+
 # ---- Interests ----
 
 

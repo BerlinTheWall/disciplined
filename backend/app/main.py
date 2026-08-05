@@ -18,6 +18,7 @@ from app.routers import (
     meals,
     nudges,
     tts,
+    week_plan,
     workouts,
 )
 
@@ -58,6 +59,7 @@ app.include_router(tts.router)
 app.include_router(briefing.router)
 app.include_router(nudges.router)
 app.include_router(coach.router)
+app.include_router(week_plan.router)
 
 
 @app.get("/api/health")
