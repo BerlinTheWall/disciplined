@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlignLeft, CalendarPlus, LayoutGrid, Menu, Sparkles } from "lucide-react";
+import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
 
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
@@ -40,7 +40,6 @@ import { useSettingsStore } from "./store/settingsStore";
 import { useSyncStatusStore } from "./store/syncStatusStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
-import { useWeekPlanStore } from "./store/weekPlanStore";
 import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 
 const PAGE_TITLES: Record<Page, string> = {
@@ -346,14 +345,6 @@ function App() {
                   >
                     <CalendarPlus size={18} />
                     Day Plan
-                  </motion.button>
-                  <motion.button
-                    onClick={() => useWeekPlanStore.getState().openAndGenerate()}
-                    whileTap={tap}
-                    aria-label="Plan my week"
-                    className="flex items-center justify-center shrink-0 bg-surface-raised rounded-lg h-10 w-10 text-fg"
-                  >
-                    <Sparkles size={18} />
                   </motion.button>
                   <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
                     {(["daily", "weekly"] as const).map((m) => (

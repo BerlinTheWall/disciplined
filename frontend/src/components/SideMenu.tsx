@@ -1,5 +1,5 @@
 import { animate, AnimatePresence, motion, useMotionValue, type PanInfo } from "framer-motion";
-import { CloudOff, Lock, LogOut, Palette, RefreshCw, Settings, X } from "lucide-react";
+import { CloudOff, Lock, LogOut, Palette, RefreshCw, Settings, Sparkles, X } from "lucide-react";
 
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
@@ -9,6 +9,7 @@ import { ALL_TABS, type Page } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
 import { useSyncStatusStore } from "@/store/syncStatusStore";
 import { useThemeStore } from "@/store/themeStore";
+import { useWeekPlanStore } from "@/store/weekPlanStore";
 
 // Pages reachable from the bottom nav (Home/Calendar/Profile), so they're left
 // out of the side menu. Everything else — meals, recipes, food, workout,
@@ -158,6 +159,17 @@ export default function SideMenu({
 
             {/* Settings + Theme */}
             <div className="px-3 py-2">
+              <motion.button
+                onClick={() => {
+                  onClose();
+                  useWeekPlanStore.getState().openAndGenerate();
+                }}
+                whileTap={tap}
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
+              >
+                <Sparkles size={20} className="text-fg-muted" strokeWidth={1.8} />
+                <span className="font-medium text-fg-muted">Plan my week</span>
+              </motion.button>
               <motion.button
                 onClick={() => {
                   onClose();
