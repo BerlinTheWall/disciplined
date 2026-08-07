@@ -24,7 +24,7 @@ async def week_plan(
     the client sends the returned pending_actions to POST /api/chat/confirm
     to actually create them, same as any chat-proposed action."""
     try:
-        return await generate_week_plan(db, user.id, body.client_date)
+        return await generate_week_plan(db, user.id, body.preferences, body.client_date)
     except RuntimeError as exc:  # missing API key
         raise HTTPException(status_code=503, detail=str(exc))
     except genai_errors.APIError as exc:

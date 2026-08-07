@@ -5,6 +5,10 @@ anything is written — POST /api/chat/confirm (already generic and
 chat-agnostic) is what actually applies them, exactly as it does for chat
 and nudges.
 
+Generation is scoped strictly to what the user explicitly picked in the
+wizard (see WeekPlanPreference) — the model doesn't decide what deserves
+time, only how to fit each requested item into the week.
+
 This module intentionally does NOT import from or modify gemini.py's
 run_chat/CHAT_INSTRUCTION, or touch ChatSheet.tsx on the frontend — a bug
 here should not be able to affect the existing chat assistant.
@@ -17,7 +21,7 @@ from google.genai import types
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.schemas import PendingAction, WeekPlanResponse
+from app.schemas import PendingAction, WeekPlanPreference, WeekPlanResponse
 from app.services.gemini import build_chat_context, get_client, resolve_today
 from app.services.tools import FUNCTION_DECLARATIONS, MUTATING_TOOLS, execute_tool
 
@@ -42,30 +46,34 @@ WEEK_PLAN_MAX_ROUNDS = 10
 # MAX_ACTIONS_PER_TURN, tuned up slightly for a 7-day scope.
 WEEK_PLAN_MAX_ACTIONS = 25
 
-WEEK_PLAN_INSTRUCTION = """You are Disciplined's week-planning assistant. You've been asked to build \
-a first draft of the user's schedule for the next 7 days from the context message. The user will \
-review every event you propose before anything is saved, so propose confidently — don't ask \
-clarifying questions, just make reasonable choices.
+_TIME_OF_DAY_BAND = {
+    "morning": "sometime between 6:00 AM and 11:00 AM",
+    "afternoon": "sometime between 12:00 PM and 5:00 PM",
+    "evening": "sometime between 5:00 PM and 9:00 PM",
+    "any": "any reasonable time of day",
+}
+
+WEEK_PLAN_INSTRUCTION = """You are Disciplined's week-planning assistant. The user has already \
+picked, in a wizard, exactly what they want scheduled this week and how often — your only job is \
+to fit each requested item into the next 7 days as create_event calls. Do not add anything the \
+user didn't list, and do not skip anything they did list. The user will review every event you \
+propose before anything is saved, so propose confidently — don't ask clarifying questions.
 
 Rules:
-- Look at the goals listed in the context message, especially any that are behind pace, not yet \
-started, or have no linked tasks. For each one that plausibly needs dedicated time this week, \
-propose one or more create_event calls that would make progress on it.
+- For each item in "What the user wants scheduled" below, propose exactly its stated number of \
+create_event calls this week — spread across different days, not stacked on one day unless the \
+count genuinely requires it.
+- Honor each item's stated time-of-day preference for every occurrence you propose for it.
 - Never propose an event that duplicates something already on the schedule block (a habit \
 occurrence or existing event covering the same thing) — check it first.
 - Only propose events in genuinely free time. The schedule block reflects the real schedule as of \
 now, but it does NOT update as you propose new events in this same session — you must track your \
-own proposals yourself so no two of them ever overlap each other. When unsure, spread proposals \
-across different times of day and different days. Use check_conflicts if you are not confident a \
-slot is free against the real schedule.
-- Titles should be short and specific to the goal (e.g. "Draft project outline", not "Goal work"). \
-Pick a sensible duration (30-90 minutes) and a reasonable time of day for the kind of task.
-- Do not propose more than about 2-3 new events on any single day — the goal is a realistic week, \
-not a maximally full one.
-- If there is genuinely nothing worth proposing (no goals, or the week already covers everything), \
-say so plainly and propose nothing.
-- When you are done proposing (or decide there's nothing to propose), reply with one short \
-(1-2 sentence) plain-language summary of what you added. No markdown, no lists."""
+own proposals yourself so no two of them ever overlap each other, including two occurrences of the \
+same item. Use check_conflicts if you are not confident a slot is free against the real schedule.
+- Titles should be short and specific (e.g. "Reading", "Draft project outline" — the item's own \
+title is usually the right title). Pick a sensible duration (30-90 minutes) for the kind of activity.
+- When you are done proposing, reply with one short (1-2 sentence) plain-language summary of what \
+you added. No markdown, no lists."""
 
 
 def _response_text(response: types.GenerateContentResponse | None) -> str | None:
@@ -75,9 +83,28 @@ def _response_text(response: types.GenerateContentResponse | None) -> str | None
     return text.strip() if text and text.strip() else None
 
 
+def _format_preferences(preferences: list[WeekPlanPreference]) -> str:
+    lines = []
+    for p in preferences:
+        kind_label = "Interest" if p.kind == "interest" else "Goal"
+        times = f"{p.times_per_week}x this week"
+        band = _TIME_OF_DAY_BAND[p.time_of_day]
+        lines.append(f'- {kind_label} "{p.title}" — {times}, {band}')
+    return "\n".join(lines)
+
+
 async def generate_week_plan(
-    db: AsyncSession, user_id: str, client_date: str | None = None
+    db: AsyncSession,
+    user_id: str,
+    preferences: list[WeekPlanPreference],
+    client_date: str | None = None,
 ) -> WeekPlanResponse:
+    if not preferences:
+        return WeekPlanResponse(
+            message="You didn't select anything to plan — go back and pick at least one activity or goal.",
+            pending_actions=[],
+        )
+
     client: genai.Client = get_client()
     today = resolve_today(client_date)
     context = await build_chat_context(db, user_id, client_date)
@@ -88,12 +115,13 @@ async def generate_week_plan(
         temperature=0.4,
         thinking_config=types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget),
     )
+    seed = (
+        f"Plan my week (today is {today.isoformat()}).\n\n"
+        "What the user wants scheduled:\n" + _format_preferences(preferences)
+    )
     contents: list[types.Content] = [
         types.Content(role="user", parts=[types.Part(text=context)]),
-        types.Content(
-            role="user",
-            parts=[types.Part(text=f"Plan my week (today is {today.isoformat()}).")],
-        ),
+        types.Content(role="user", parts=[types.Part(text=seed)]),
     ]
 
     pending_actions: list[PendingAction] = []

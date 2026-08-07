@@ -443,9 +443,25 @@ class ConfirmResponse(CamelModel):
 # create_event calls (never executes them itself) and reuses PendingAction /
 # POST /api/chat/confirm for actually applying them, same as chat does.
 
+WeekPlanTimeOfDay = Literal["morning", "afternoon", "evening", "any"]
+
+
+class WeekPlanPreference(CamelModel):
+    """One item the user explicitly picked in the wizard, with how often and
+    roughly when they want it scheduled this week. Deliberately not looked up
+    server-side from Interest/Goal — the client already has the title, and
+    this feature never needs to touch those tables."""
+
+    kind: Literal["interest", "goal"]
+    id: str
+    title: str
+    times_per_week: int
+    time_of_day: WeekPlanTimeOfDay = "any"
+
 
 class WeekPlanRequest(CamelModel):
     client_date: str | None = None
+    preferences: list[WeekPlanPreference] = []
 
 
 class WeekPlanResponse(CamelModel):

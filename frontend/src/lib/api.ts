@@ -188,6 +188,16 @@ export interface ConfirmActionsResponse {
   ok: boolean;
 }
 
+export type WeekPlanTimeOfDay = "morning" | "afternoon" | "evening" | "any";
+
+export interface WeekPlanPreference {
+  kind: "interest" | "goal";
+  id: string;
+  title: string;
+  timesPerWeek: number;
+  timeOfDay: WeekPlanTimeOfDay;
+}
+
 export interface WeekPlanResponse {
   message: string;
   pendingActions: PendingAction[];
@@ -454,10 +464,10 @@ export const api = {
   // Returns pendingActions only; nothing is created until they're passed to
   // confirmChatActions above, exactly like a chat-proposed action.
   weekPlan: {
-    generate: (): Promise<WeekPlanResponse> =>
+    generate: (preferences: WeekPlanPreference[]): Promise<WeekPlanResponse> =>
       request("/api/week-plan", {
         method: "POST",
-        body: JSON.stringify({ clientDate: todayISODate() }),
+        body: JSON.stringify({ clientDate: todayISODate(), preferences }),
       }),
   },
   coach: {

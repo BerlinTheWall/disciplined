@@ -162,7 +162,7 @@ export default function SideMenu({
               <motion.button
                 onClick={() => {
                   onClose();
-                  useWeekPlanStore.getState().openAndGenerate();
+                  useWeekPlanStore.getState().start();
                 }}
                 whileTap={tap}
                 className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
