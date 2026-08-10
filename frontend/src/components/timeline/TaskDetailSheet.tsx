@@ -27,6 +27,7 @@ import { useRecipeStore } from "@/store/recipeStore";
 import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
 import { useWorkoutStore } from "@/store/workoutStore";
 import BottomSheet from "../BottomSheet";
+import { AppleLogo, GoogleLogo, MicrosoftLogo } from "../icons/ProviderLogos";
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -54,6 +55,20 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
   const linkedRecipe = recipes.find((r) => r.id === data?.recipeId);
   const priority = item?.type === "task" ? item.data.priority : null;
   const streak = item?.type === "habit" ? getHabitStreak(item.data, new Date()) : 0;
+
+  // A task is ever linked to at most one connected-calendar provider — see
+  // frontend/src/lib/deviceCalendarSync.ts and backend outlook_graph.py/
+  // google_calendar.py's reconcile_* for how these fields get set.
+  const syncedProvider =
+    item?.type !== "task"
+      ? null
+      : item.data.googleEventId
+        ? { name: "Google Calendar", Logo: GoogleLogo }
+        : item.data.outlookEventId
+          ? { name: "Outlook", Logo: MicrosoftLogo }
+          : item.data.appleLinked
+            ? { name: "Apple Calendar", Logo: AppleLogo }
+            : null;
 
   return (
     <BottomSheet
@@ -224,6 +239,14 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
                   {item.data.completed ? "Completed" : "Not completed"}
                 </span>
               </InfoRow>
+            )}
+
+            {syncedProvider && (
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-surface-alt">
+                <syncedProvider.Logo size={16} className="text-fg-faint shrink-0" />
+                <span className="flex-1 text-sm text-fg-muted">Synced with</span>
+                <span className="text-sm font-medium text-fg">{syncedProvider.name}</span>
+              </div>
             )}
 
             {linkedSession && (

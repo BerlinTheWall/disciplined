@@ -6,6 +6,7 @@ import { useShallow } from "zustand/shallow";
 import BottomSheet from "./BottomSheet";
 import CalendarSheet from "./CalendarSheet";
 import Collapse from "./Collapse";
+import { AppleLogo, GoogleLogo, MicrosoftLogo } from "./icons/ProviderLogos";
 import InterestsSheet from "./InterestsSheet";
 import Switch from "./Switch";
 import { primeAudioChannel, speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
@@ -141,10 +142,19 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const outlookConnected = useOutlookStore((s) => s.connected);
   const googleConnected = useGoogleCalendarStore((s) => s.connected);
   const connectedCalendarNames = [
-    appleCalendarId && "Apple",
+    appleCalendarId && "Apple Calendar",
     outlookConnected && "Outlook",
-    googleConnected && "Google",
+    googleConnected && "Google Calendar",
   ].filter((name): name is string => Boolean(name));
+  const connectedCalendarSubtitle =
+    connectedCalendarNames.length === 0
+      ? "No calendars connected"
+      : `Connected to ${connectedCalendarNames.join(", ")}`;
+  const connectedCalendarLogos = [
+    appleCalendarId && <AppleLogo key="apple" size={18} className="text-fg-muted" />,
+    outlookConnected && <MicrosoftLogo key="outlook" size={18} />,
+    googleConnected && <GoogleLogo key="google" size={18} />,
+  ].filter(Boolean);
   const [altStyle, setAltStyle, background, setBackground] = useSettingsStore(
     useShallow((state) => [
       state.altStyle,
@@ -382,18 +392,18 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-medium text-fg">Connected calendars</p>
-                <p className="text-xs text-fg-faint mt-0.5">
-                  {connectedCalendarNames.length > 0 ? (
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      {connectedCalendarNames.join(", ")}
-                    </span>
-                  ) : (
-                    "None connected"
+                <p className="text-xs text-fg-faint mt-0.5 flex items-center gap-1.5">
+                  {connectedCalendarNames.length > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   )}
+                  {connectedCalendarSubtitle}
                 </p>
               </div>
-              <CalendarIcon size={18} className="text-fg-muted" />
+              {connectedCalendarLogos.length > 0 ? (
+                <div className="flex items-center gap-1.5 shrink-0">{connectedCalendarLogos}</div>
+              ) : (
+                <CalendarIcon size={18} className="text-fg-muted" />
+              )}
             </motion.button>
           </Section>
 

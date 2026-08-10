@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { Calendar } from "@ebarooni/capacitor-calendar";
 import { motion } from "framer-motion";
-import { Calendar as CalendarIcon, Check, Mail, X } from "lucide-react";
+import { Calendar as CalendarIcon, Check, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
+import { AppleLogo, GoogleLogo, MicrosoftLogo } from "./icons/ProviderLogos";
 import {
   appleCalendarSupported,
   findAppleCalendar,
@@ -201,7 +202,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
         {appleCalendarSupported && (
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
-              <CalendarIcon size={14} className="text-fg-faint" />
+              <AppleLogo size={14} className="text-fg-faint" />
               <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
                 Apple Calendar
               </p>
@@ -212,6 +213,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
             </p>
             {appleCalendarId ? (
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+                <AppleLogo size={16} className="text-fg-faint shrink-0" />
                 <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
                   {appleCalendar?.title ?? "iCloud calendar"}
                 </span>
@@ -252,7 +254,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
 
         <div>
           <div className="flex items-center gap-2.5 mb-1.5">
-            <Mail size={14} className="text-fg-faint" />
+            <MicrosoftLogo size={14} />
             <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
               Outlook (Microsoft account)
             </p>
@@ -263,6 +265,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
           </p>
           {outlookConnected ? (
             <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+              <MicrosoftLogo size={16} className="shrink-0" />
               <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
                 {outlookEmail}
               </span>
@@ -288,7 +291,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
 
         <div>
           <div className="flex items-center gap-2.5 mb-1.5">
-            <Mail size={14} className="text-fg-faint" />
+            <GoogleLogo size={14} />
             <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
               Google Calendar
             </p>
@@ -299,6 +302,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
           </p>
           {googleConnected ? (
             <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+              <GoogleLogo size={16} className="shrink-0" />
               <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
                 {googleEmail}
               </span>
