@@ -39,7 +39,12 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 CALENDAR_BASE = "https://www.googleapis.com/calendar/v3"
-SCOPE = "https://www.googleapis.com/auth/calendar"
+# userinfo.email is required for _fetch_account_email's call to
+# USERINFO_URL below — without it Google rejects that call with
+# insufficient-scope, which previously failed the whole connect silently
+# (the callback's except block caught it and redirected as if nothing
+# happened, with no row ever written to google_calendar_connections).
+SCOPE = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email"
 
 _STATE_PURPOSE = "google_calendar_oauth_state"
 
