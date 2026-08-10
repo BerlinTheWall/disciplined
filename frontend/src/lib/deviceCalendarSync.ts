@@ -86,7 +86,9 @@ function saveAppleLastSynced(iso: string) {
   localStorage.setItem(appleLastSyncedKey(), iso);
 }
 
-function taskSignature(t: Pick<Task, "title" | "date" | "startMinutes" | "durationMinutes">): string {
+function taskSignature(
+  t: Pick<Task, "title" | "date" | "startMinutes" | "durationMinutes">
+): string {
   return `${t.title}|${t.date}|${t.startMinutes}|${t.durationMinutes}`;
 }
 
@@ -304,7 +306,9 @@ let reconcilingAll = false;
 let reconcileAllQueued = false;
 
 async function reconcileConnectedCalendars(): Promise<void> {
-  if (!deviceCalendarSupported) return;
+  // No top-level native gate: Outlook/Google reconcile entirely server-side
+  // and work fine from a plain web tab — only the Apple branch below needs
+  // native EventKit access.
   if (reconcilingAll) {
     reconcileAllQueued = true;
     return;
@@ -348,8 +352,13 @@ function scheduleReconcile() {
 
 let initialized = false;
 
+// Despite the name, this wires up every connected provider, not just
+// Apple — Outlook/Google reconcile entirely server-side and work fine from
+// a plain web tab too, so this no longer gates on native. Only the Apple
+// branch inside reconcileConnectedCalendars/reconcileAppleCalendar itself
+// requires deviceCalendarSupported.
 export function initDeviceCalendarSync(): void {
-  if (initialized || !deviceCalendarSupported) return;
+  if (initialized) return;
   initialized = true;
 
   // Re-read the push map now that a user id is known (it's namespaced per
@@ -371,7 +380,9 @@ export function initDeviceCalendarSync(): void {
     if (state.writeTarget !== prev.writeTarget) scheduleReconcile();
   });
 
-  void CapacitorApp.addListener("resume", () => {
-    void reconcileConnectedCalendars();
-  });
+  if (deviceCalendarSupported) {
+    void CapacitorApp.addListener("resume", () => {
+      void reconcileConnectedCalendars();
+    });
+  }
 }

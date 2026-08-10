@@ -13,23 +13,32 @@ from app.schemas import (
     GoogleCalendarReconcileResponse,
     GoogleCalendarStatusResponse,
 )
-from app.services import google_calendar
+from app.services import google_calendar, oauth_state
 
 router = APIRouter(prefix="/api/google-calendar", tags=["google-calendar"])
 logger = logging.getLogger("uvicorn.error")
 
 # Distinct path from Outlook's own callback scheme (routers/outlook.py) so
 # the frontend's appUrlOpen listener (lib/googleCalendarAuth.ts) can tell
-# the two apart.
+# the two apart. Used for a native-app-initiated connect only — a
+# web-initiated connect instead redirects to the return_to origin passed to
+# /connect (see routers/outlook.py::_redirect_target for the full rationale).
 _APP_CALLBACK_SCHEME = "com.hooman.disciplined://google-calendar-callback"
 
 
+def _redirect_target(return_to: str | None, status: str) -> str:
+    if return_to:
+        return f"{return_to}/?googleCalendarConnected={status}"
+    return f"{_APP_CALLBACK_SCHEME}?status={status}"
+
+
 @router.get("/connect", response_model=GoogleCalendarConnectResponse)
-async def connect(user: User = Depends(get_current_user)):
+async def connect(return_to: str | None = None, user: User = Depends(get_current_user)):
     try:
-        return GoogleCalendarConnectResponse(
-            authorize_url=google_calendar.build_authorize_url(user.id)
+        authorize_url = google_calendar.build_authorize_url(
+            user.id, return_to=oauth_state.sanitize_return_to(return_to)
         )
+        return GoogleCalendarConnectResponse(authorize_url=authorize_url)
     except google_calendar.GoogleCalendarNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -39,21 +48,21 @@ async def callback(code: str | None = None, state: str | None = None, db: AsyncS
     """Hit by Google's redirect after login/consent — see
     routers/outlook.py::callback for the full rationale, identical here."""
     if not code or not state:
-        return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=error")
+        return RedirectResponse(_redirect_target(None, "error"))
     try:
-        user_id = google_calendar.verify_state_token(state)
+        user_id, return_to = google_calendar.verify_state_token(state)
     except jwt.InvalidTokenError:
         logger.warning("Google Calendar callback: invalid/expired state token")
-        return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=error")
+        return RedirectResponse(_redirect_target(None, "error"))
 
     try:
         tokens = await google_calendar.exchange_code_for_tokens(code)
         await google_calendar.store_connection(db, user_id, tokens)
     except Exception:
         logger.exception("Google Calendar OAuth callback failed for user %s", user_id)
-        return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=error")
+        return RedirectResponse(_redirect_target(return_to, "error"))
 
-    return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=success")
+    return RedirectResponse(_redirect_target(return_to, "success"))
 
 
 @router.get("/status", response_model=GoogleCalendarStatusResponse)

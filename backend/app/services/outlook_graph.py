@@ -58,7 +58,7 @@ def _require_configured() -> None:
         )
 
 
-def build_authorize_url(user_id: str) -> str:
+def build_authorize_url(user_id: str, return_to: str | None = None) -> str:
     _require_configured()
     params = {
         "client_id": settings.ms_graph_client_id,
@@ -66,15 +66,15 @@ def build_authorize_url(user_id: str) -> str:
         "redirect_uri": settings.ms_graph_redirect_uri,
         "response_mode": "query",
         "scope": SCOPES,
-        "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id),
+        "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id, return_to=return_to),
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
 
-def verify_state_token(token: str) -> str:
+def verify_state_token(token: str) -> tuple[str, str | None]:
     """Thin wrapper so routers/outlook.py doesn't need to know the purpose
     string — raises jwt.InvalidTokenError/ExpiredSignatureError, same as
-    oauth_state.verify_state_token."""
+    oauth_state.verify_state_token. Returns (user_id, return_to)."""
     return oauth_state.verify_state_token(_STATE_PURPOSE, token)
 
 

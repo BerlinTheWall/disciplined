@@ -9,22 +9,33 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import OutlookConnectResponse, OutlookReconcileResponse, OutlookStatusResponse
-from app.services import outlook_graph
+from app.services import oauth_state, outlook_graph
 
 router = APIRouter(prefix="/api/outlook", tags=["outlook"])
 logger = logging.getLogger("uvicorn.error")
 
 # Where routers/outlook.py's own /callback sends the in-app browser once the
-# token exchange is done — the frontend's appUrlOpen listener
-# (lib/outlookAuth.ts) picks this up and closes the browser. Must match the
-# custom URL scheme registered in AndroidManifest.xml / iOS Info.plist.
+# token exchange is done, for a native-app-initiated connect — the
+# frontend's appUrlOpen listener (lib/outlookAuth.ts) picks this up and
+# closes the browser. Must match the custom URL scheme registered in
+# AndroidManifest.xml / iOS Info.plist. A web-initiated connect instead
+# redirects to the return_to origin passed to /connect (see below).
 _APP_CALLBACK_SCHEME = "com.hooman.disciplined://outlook-callback"
 
 
+def _redirect_target(return_to: str | None, status: str) -> str:
+    if return_to:
+        return f"{return_to}/?outlookConnected={status}"
+    return f"{_APP_CALLBACK_SCHEME}?status={status}"
+
+
 @router.get("/connect", response_model=OutlookConnectResponse)
-async def connect(user: User = Depends(get_current_user)):
+async def connect(return_to: str | None = None, user: User = Depends(get_current_user)):
     try:
-        return OutlookConnectResponse(authorize_url=outlook_graph.build_authorize_url(user.id))
+        authorize_url = outlook_graph.build_authorize_url(
+            user.id, return_to=oauth_state.sanitize_return_to(return_to)
+        )
+        return OutlookConnectResponse(authorize_url=authorize_url)
     except outlook_graph.OutlookNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -34,24 +45,23 @@ async def callback(code: str | None = None, state: str | None = None, db: AsyncS
     """Hit by Microsoft's redirect after login/consent — a plain browser GET,
     not a disciplined-authenticated request. `state` (see
     outlook_graph.create_state_token) is how we recover which user started
-    this. Always ends in a redirect to the app's custom scheme so the in-app
-    browser closes and control returns to disciplined, success or failure."""
+    this, and whether to return to a web origin or the native app."""
     if not code or not state:
-        return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=error")
+        return RedirectResponse(_redirect_target(None, "error"))
     try:
-        user_id = outlook_graph.verify_state_token(state)
+        user_id, return_to = outlook_graph.verify_state_token(state)
     except jwt.InvalidTokenError:
         logger.warning("Outlook callback: invalid/expired state token")
-        return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=error")
+        return RedirectResponse(_redirect_target(None, "error"))
 
     try:
         tokens = await outlook_graph.exchange_code_for_tokens(code)
         await outlook_graph.store_connection(db, user_id, tokens)
     except Exception:
         logger.exception("Outlook OAuth callback failed for user %s", user_id)
-        return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=error")
+        return RedirectResponse(_redirect_target(return_to, "error"))
 
-    return RedirectResponse(f"{_APP_CALLBACK_SCHEME}?status=success")
+    return RedirectResponse(_redirect_target(return_to, "success"))
 
 
 @router.get("/status", response_model=OutlookStatusResponse)

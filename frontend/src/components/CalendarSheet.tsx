@@ -161,7 +161,8 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
 
   function selectWriteApple() {
     if (!appleCalendarId) return;
-    const alreadySelected = writeTarget?.kind === "apple" && writeTarget.calendarId === appleCalendarId;
+    const alreadySelected =
+      writeTarget?.kind === "apple" && writeTarget.calendarId === appleCalendarId;
     setWriteTarget(alreadySelected ? null : { kind: "apple", calendarId: appleCalendarId });
   }
 
@@ -174,7 +175,6 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
   }
 
   const showWriteSection = appleCalendarId !== null || outlookConnected || googleConnected;
-  const anySupported = appleCalendarSupported || outlookSupported || googleCalendarSupported;
 
   return (
     <BottomSheet
@@ -198,178 +198,166 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-4 flex flex-col gap-4">
-        {!anySupported ? (
-          <p className="text-sm text-fg-faint">
-            Calendar connections are available in the Disciplined iOS and Android app.
-          </p>
-        ) : (
-          <>
-            {appleCalendarSupported && (
-              <div>
-                <div className="flex items-center gap-2.5 mb-1.5">
-                  <CalendarIcon size={14} className="text-fg-faint" />
-                  <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
-                    Apple Calendar
+        {appleCalendarSupported && (
+          <div>
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <CalendarIcon size={14} className="text-fg-faint" />
+              <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
+                Apple Calendar
+              </p>
+            </div>
+            <p className="text-xs text-fg-faint mb-2">
+              Reads and writes your iCloud calendar — Disciplined will show its events on your
+              timeline and AI weekly planner, and can add its own events there too.
+            </p>
+            {appleCalendarId ? (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+                <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
+                  {appleCalendar?.title ?? "iCloud calendar"}
+                </span>
+                <motion.button
+                  onClick={disconnectApple}
+                  whileTap={tap}
+                  className="text-xs font-semibold text-red-500 shrink-0"
+                >
+                  Disconnect
+                </motion.button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {deniedOnce && (
+                  <p className="text-xs text-red-500">
+                    Calendar access was denied — allow it for Disciplined in your device Settings,
+                    then try again.
                   </p>
-                </div>
-                <p className="text-xs text-fg-faint mb-2">
-                  Reads and writes your iCloud calendar — Disciplined will show its events on your
-                  timeline and AI weekly planner, and can add its own events there too.
-                </p>
-                {appleCalendarId ? (
-                  <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
-                    <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
-                      {appleCalendar?.title ?? "iCloud calendar"}
-                    </span>
-                    <motion.button
-                      onClick={disconnectApple}
-                      whileTap={tap}
-                      className="text-xs font-semibold text-red-500 shrink-0"
-                    >
-                      Disconnect
-                    </motion.button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {deniedOnce && (
-                      <p className="text-xs text-red-500">
-                        Calendar access was denied — allow it for Disciplined in your device
-                        Settings, then try again.
-                      </p>
-                    )}
-                    {noIcloudCalendar && (
-                      <p className="text-xs text-red-500">
-                        No iCloud calendar found on this device — add one in your device&rsquo;s
-                        Settings first.
-                      </p>
-                    )}
-                    <motion.button
-                      onClick={() => void connectApple()}
-                      disabled={connectingApple}
-                      whileTap={tap}
-                      className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
-                    >
-                      {connectingApple ? "Connecting…" : "Connect Apple Calendar"}
-                    </motion.button>
-                  </div>
                 )}
-              </div>
-            )}
-
-            <div>
-              <div className="flex items-center gap-2.5 mb-1.5">
-                <Mail size={14} className="text-fg-faint" />
-                <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
-                  Outlook (Microsoft account)
-                </p>
-              </div>
-              <p className="text-xs text-fg-faint mb-2">
-                Connects directly to your Microsoft account — sees your Outlook calendar regardless
-                of whether it&rsquo;s synced to this device.
-              </p>
-              {!outlookSupported ? (
-                <p className="text-sm text-fg-faint">Available in the iOS and Android app.</p>
-              ) : outlookConnected ? (
-                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
-                  <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
-                    {outlookEmail}
-                  </span>
-                  <motion.button
-                    onClick={() => void toggleOutlookConnection()}
-                    whileTap={tap}
-                    className="text-xs font-semibold text-red-500 shrink-0"
-                  >
-                    Disconnect
-                  </motion.button>
-                </div>
-              ) : (
+                {noIcloudCalendar && (
+                  <p className="text-xs text-red-500">
+                    No iCloud calendar found on this device — add one in your device&rsquo;s
+                    Settings first.
+                  </p>
+                )}
                 <motion.button
-                  onClick={() => void toggleOutlookConnection()}
-                  disabled={connectingOutlook}
+                  onClick={() => void connectApple()}
+                  disabled={connectingApple}
                   whileTap={tap}
                   className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
                 >
-                  {connectingOutlook ? "Opening…" : "Connect Outlook"}
+                  {connectingApple ? "Connecting…" : "Connect Apple Calendar"}
                 </motion.button>
-              )}
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2.5 mb-1.5">
-                <Mail size={14} className="text-fg-faint" />
-                <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
-                  Google Calendar
-                </p>
-              </div>
-              <p className="text-xs text-fg-faint mb-2">
-                Connects directly to your Google account — sees your Google Calendar regardless of
-                whether it&rsquo;s synced to this device.
-              </p>
-              {!googleCalendarSupported ? (
-                <p className="text-sm text-fg-faint">Available in the iOS and Android app.</p>
-              ) : googleConnected ? (
-                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
-                  <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
-                    {googleEmail}
-                  </span>
-                  <motion.button
-                    onClick={() => void toggleGoogleConnection()}
-                    whileTap={tap}
-                    className="text-xs font-semibold text-red-500 shrink-0"
-                  >
-                    Disconnect
-                  </motion.button>
-                </div>
-              ) : (
-                <motion.button
-                  onClick={() => void toggleGoogleConnection()}
-                  disabled={connectingGoogle}
-                  whileTap={tap}
-                  className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
-                >
-                  {connectingGoogle ? "Opening…" : "Connect Google Calendar"}
-                </motion.button>
-              )}
-            </div>
-
-            {showWriteSection && (
-              <div>
-                <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide mb-1.5">
-                  Add new events to
-                </p>
-                <p className="text-xs text-fg-faint mb-2">
-                  Events you create in Disciplined will also appear here. Pick none to keep them in
-                  Disciplined only.
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {appleCalendarId && (
-                    <WriteTargetRow
-                      label={`${appleCalendar?.title ?? "iCloud calendar"} (Apple Calendar)`}
-                      color={appleCalendar?.color ?? "#8e8e93"}
-                      selected={writeTarget?.kind === "apple"}
-                      onSelect={selectWriteApple}
-                    />
-                  )}
-                  {outlookConnected && (
-                    <WriteTargetRow
-                      label={`${outlookEmail} (Outlook)`}
-                      color="#0078d4"
-                      selected={writeTarget?.kind === "outlook"}
-                      onSelect={selectWriteOutlook}
-                    />
-                  )}
-                  {googleConnected && (
-                    <WriteTargetRow
-                      label={`${googleEmail} (Google)`}
-                      color="#4285f4"
-                      selected={writeTarget?.kind === "google"}
-                      onSelect={selectWriteGoogle}
-                    />
-                  )}
-                </div>
               </div>
             )}
-          </>
+          </div>
+        )}
+
+        <div>
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <Mail size={14} className="text-fg-faint" />
+            <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
+              Outlook (Microsoft account)
+            </p>
+          </div>
+          <p className="text-xs text-fg-faint mb-2">
+            Connects directly to your Microsoft account — sees your Outlook calendar regardless of
+            whether it&rsquo;s synced to this device.
+          </p>
+          {outlookConnected ? (
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+              <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
+                {outlookEmail}
+              </span>
+              <motion.button
+                onClick={() => void toggleOutlookConnection()}
+                whileTap={tap}
+                className="text-xs font-semibold text-red-500 shrink-0"
+              >
+                Disconnect
+              </motion.button>
+            </div>
+          ) : (
+            <motion.button
+              onClick={() => void toggleOutlookConnection()}
+              disabled={connectingOutlook}
+              whileTap={tap}
+              className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
+            >
+              {connectingOutlook ? "Opening…" : "Connect Outlook"}
+            </motion.button>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <Mail size={14} className="text-fg-faint" />
+            <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
+              Google Calendar
+            </p>
+          </div>
+          <p className="text-xs text-fg-faint mb-2">
+            Connects directly to your Google account — sees your Google Calendar regardless of
+            whether it&rsquo;s synced to this device.
+          </p>
+          {googleConnected ? (
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+              <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
+                {googleEmail}
+              </span>
+              <motion.button
+                onClick={() => void toggleGoogleConnection()}
+                whileTap={tap}
+                className="text-xs font-semibold text-red-500 shrink-0"
+              >
+                Disconnect
+              </motion.button>
+            </div>
+          ) : (
+            <motion.button
+              onClick={() => void toggleGoogleConnection()}
+              disabled={connectingGoogle}
+              whileTap={tap}
+              className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
+            >
+              {connectingGoogle ? "Opening…" : "Connect Google Calendar"}
+            </motion.button>
+          )}
+        </div>
+
+        {showWriteSection && (
+          <div>
+            <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide mb-1.5">
+              Add new events to
+            </p>
+            <p className="text-xs text-fg-faint mb-2">
+              Events you create in Disciplined will also appear here. Pick none to keep them in
+              Disciplined only.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {appleCalendarId && (
+                <WriteTargetRow
+                  label={`${appleCalendar?.title ?? "iCloud calendar"} (Apple Calendar)`}
+                  color={appleCalendar?.color ?? "#8e8e93"}
+                  selected={writeTarget?.kind === "apple"}
+                  onSelect={selectWriteApple}
+                />
+              )}
+              {outlookConnected && (
+                <WriteTargetRow
+                  label={`${outlookEmail} (Outlook)`}
+                  color="#0078d4"
+                  selected={writeTarget?.kind === "outlook"}
+                  onSelect={selectWriteOutlook}
+                />
+              )}
+              {googleConnected && (
+                <WriteTargetRow
+                  label={`${googleEmail} (Google)`}
+                  color="#4285f4"
+                  selected={writeTarget?.kind === "google"}
+                  onSelect={selectWriteGoogle}
+                />
+              )}
+            </div>
+          </div>
         )}
       </div>
     </BottomSheet>

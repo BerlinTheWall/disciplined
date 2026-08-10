@@ -458,9 +458,15 @@ export const api = {
   },
   health: () => request<{ status: string }>("/api/health"),
   outlook: {
-    // Returns the Microsoft login URL to open in an in-app browser
-    // (@capacitor/browser) — see lib/outlookAuth.ts.
-    connect: (): Promise<{ authorizeUrl: string }> => request("/api/outlook/connect"),
+    // Returns the Microsoft login URL — opened in an in-app browser natively
+    // (@capacitor/browser) or as a full-page redirect on web. returnTo (web
+    // only) is this tab's own origin, so the backend's callback can redirect
+    // back to it instead of the native app's custom URL scheme — see
+    // lib/outlookAuth.ts.
+    connect: (returnTo?: string): Promise<{ authorizeUrl: string }> =>
+      request(
+        `/api/outlook/connect${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`
+      ),
     status: (): Promise<OutlookStatus> => request("/api/outlook/status"),
     disconnect: (): Promise<void> => request("/api/outlook/connection", { method: "DELETE" }),
     // One two-way pass — see backend/app/services/outlook_graph.py's
@@ -470,9 +476,12 @@ export const api = {
       request(`/api/outlook/reconcile?is_write_target=${isWriteTarget}`, { method: "POST" }),
   },
   googleCalendar: {
-    // Returns the Google login URL to open in an in-app browser
-    // (@capacitor/browser) — see lib/googleCalendarAuth.ts.
-    connect: (): Promise<{ authorizeUrl: string }> => request("/api/google-calendar/connect"),
+    // Returns the Google login URL — see the outlook.connect comment above,
+    // identical rationale (lib/googleCalendarAuth.ts).
+    connect: (returnTo?: string): Promise<{ authorizeUrl: string }> =>
+      request(
+        `/api/google-calendar/connect${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`
+      ),
     status: (): Promise<GoogleCalendarStatus> => request("/api/google-calendar/status"),
     disconnect: (): Promise<void> =>
       request("/api/google-calendar/connection", { method: "DELETE" }),

@@ -64,7 +64,7 @@ def _require_configured() -> None:
         )
 
 
-def build_authorize_url(user_id: str) -> str:
+def build_authorize_url(user_id: str, return_to: str | None = None) -> str:
     _require_configured()
     params = {
         "client_id": settings.google_calendar_client_id,
@@ -77,12 +77,13 @@ def build_authorize_url(user_id: str) -> str:
         # reliably comes back with a usable refresh_token again.
         "access_type": "offline",
         "prompt": "consent",
-        "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id),
+        "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id, return_to=return_to),
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
 
-def verify_state_token(token: str) -> str:
+def verify_state_token(token: str) -> tuple[str, str | None]:
+    """Returns (user_id, return_to) — see outlook_graph.verify_state_token."""
     return oauth_state.verify_state_token(_STATE_PURPOSE, token)
 
 

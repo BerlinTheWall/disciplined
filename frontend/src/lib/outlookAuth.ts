@@ -11,22 +11,30 @@ import { useOutlookStore } from "@/store/outlookStore";
 // isn't, unless its own "sync to device calendar" setting is on).
 //
 // Flow: backend builds the Microsoft login URL (GET /api/outlook/connect),
-// opened here in an in-app browser — Microsoft's identity platform requires
-// a real browser context, not our WebView. Microsoft redirects to the
-// backend's own /api/outlook/callback (so the client secret never touches
-// the device), which does the token exchange and then redirects again, this
-// time to this app's custom URL scheme — caught below via appUrlOpen.
-//
-// Requires native (custom-scheme deep links can't be caught by a plain
-// browser tab), same posture as lib/deviceCalendar.ts.
-export const outlookSupported = Capacitor.isNativePlatform();
+// opened here in an in-app browser natively, or as a full-page redirect on
+// web — Microsoft's identity platform requires a real top-level browser
+// context either way, not an iframe/WebView-embedded one. Microsoft
+// redirects to the backend's own /api/outlook/callback (so the client
+// secret never touches the client), which does the token exchange and then
+// redirects again — to this app's custom URL scheme natively (caught below
+// via appUrlOpen), or back to this tab's own origin on web (caught below by
+// checking the query string on load, since a full-page redirect reloads the
+// SPA from scratch).
+export const outlookSupported = true;
 
 const CALLBACK_PREFIX = "com.hooman.disciplined://outlook-callback";
+const WEB_CALLBACK_PARAM = "outlookConnected";
 
 export async function connectOutlook(): Promise<void> {
-  if (!outlookSupported) return;
-  const { authorizeUrl } = await api.outlook.connect();
-  await Browser.open({ url: authorizeUrl });
+  const native = Capacitor.isNativePlatform();
+  const { authorizeUrl } = await api.outlook.connect(native ? undefined : window.location.origin);
+  if (native) {
+    await Browser.open({ url: authorizeUrl });
+  } else {
+    // A full top-level navigation, not a fetch — Microsoft's login page
+    // can't run inside this tab any other way.
+    window.location.href = authorizeUrl;
+  }
 }
 
 export async function disconnectOutlook(): Promise<void> {
@@ -37,16 +45,27 @@ export async function disconnectOutlook(): Promise<void> {
 let initialized = false;
 
 export function initOutlookAuth(): void {
-  if (initialized || !outlookSupported) return;
+  if (initialized) return;
   initialized = true;
 
   void useOutlookStore.getState().refresh();
 
-  void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
-    if (!url.startsWith(CALLBACK_PREFIX)) return;
-    void Browser.close();
-    // Success or failure, re-fetch status rather than trusting the URL's
-    // own status param — it's just a hint for a possible toast later.
+  if (Capacitor.isNativePlatform()) {
+    void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
+      if (!url.startsWith(CALLBACK_PREFIX)) return;
+      void Browser.close();
+      // Success or failure, re-fetch status rather than trusting the URL's
+      // own status param — it's just a hint for a possible toast later.
+      void useOutlookStore.getState().refresh();
+    });
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has(WEB_CALLBACK_PARAM)) {
+    params.delete(WEB_CALLBACK_PARAM);
+    const rest = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
     void useOutlookStore.getState().refresh();
-  });
+  }
 }

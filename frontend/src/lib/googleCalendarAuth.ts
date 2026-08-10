@@ -7,17 +7,24 @@ import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
 
 // Connects disciplined directly to a Google account via OAuth — mirrors
 // lib/outlookAuth.ts exactly; see that module's docstring for the full flow
-// rationale (backend-mediated exchange, custom-scheme deep link back into
-// the app). Only the callback path differs, so the two connections' status
-// stay independent.
-export const googleCalendarSupported = Capacitor.isNativePlatform();
+// rationale (backend-mediated exchange, then a deep link back into the
+// native app or a full-page redirect back to this tab on web). Only the
+// callback path differs, so the two connections' status stay independent.
+export const googleCalendarSupported = true;
 
 const CALLBACK_PREFIX = "com.hooman.disciplined://google-calendar-callback";
+const WEB_CALLBACK_PARAM = "googleCalendarConnected";
 
 export async function connectGoogleCalendar(): Promise<void> {
-  if (!googleCalendarSupported) return;
-  const { authorizeUrl } = await api.googleCalendar.connect();
-  await Browser.open({ url: authorizeUrl });
+  const native = Capacitor.isNativePlatform();
+  const { authorizeUrl } = await api.googleCalendar.connect(
+    native ? undefined : window.location.origin
+  );
+  if (native) {
+    await Browser.open({ url: authorizeUrl });
+  } else {
+    window.location.href = authorizeUrl;
+  }
 }
 
 export async function disconnectGoogleCalendar(): Promise<void> {
@@ -28,14 +35,25 @@ export async function disconnectGoogleCalendar(): Promise<void> {
 let initialized = false;
 
 export function initGoogleCalendarAuth(): void {
-  if (initialized || !googleCalendarSupported) return;
+  if (initialized) return;
   initialized = true;
 
   void useGoogleCalendarStore.getState().refresh();
 
-  void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
-    if (!url.startsWith(CALLBACK_PREFIX)) return;
-    void Browser.close();
+  if (Capacitor.isNativePlatform()) {
+    void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
+      if (!url.startsWith(CALLBACK_PREFIX)) return;
+      void Browser.close();
+      void useGoogleCalendarStore.getState().refresh();
+    });
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has(WEB_CALLBACK_PARAM)) {
+    params.delete(WEB_CALLBACK_PARAM);
+    const rest = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
     void useGoogleCalendarStore.getState().refresh();
-  });
+  }
 }
