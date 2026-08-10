@@ -2,102 +2,57 @@ import { App as CapacitorApp } from "@capacitor/app";
 
 import { api } from "./api";
 import {
+  appleCalendarSupported,
   createDeviceEvent,
   deleteDeviceEvent,
   deviceCalendarSupported,
   listDeviceCalendars,
   listEventsInRange,
-  sourceLabelFor,
   updateDeviceEvent,
+  type DeviceCalendarEvent,
 } from "./deviceCalendar";
 import { useAuthStore } from "@/store/authStore";
 import { useCalendarStore } from "@/store/calendarStore";
+import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
+import { useOutlookStore } from "@/store/outlookStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Task } from "@/types/task";
 
-// Two independent, one-way jobs — deliberately not a single bidirectional
-// sync engine, so each has one simple failure mode:
+// Two-way sync, per connected provider, reconciled at the same trigger
+// points as before (app open, resume, after a local task change) — no
+// webhooks/background polling. Apple runs entirely client-side (see
+// reconcileAppleCalendar below): only the device has EventKit access, and
+// there's no server-side Apple connection at all. Outlook/Google run
+// entirely server-side (see api.outlook.reconcile/api.googleCalendar.reconcile
+// -> backend/app/services/outlook_graph.py/google_calendar.py) — this module
+// just triggers them and doesn't see their internals.
 //
-//  - pull: device calendars the user picked as "read" -> the backend's
-//    read-only mirror (see api.calendarSync), so the AI weekly planner and
-//    timeline are aware of them. Never touches the device.
-//  - push: disciplined's own Tasks -> the one device calendar the user
-//    picked as "write". Never touches a device-native event disciplined
-//    didn't create itself.
-//
-// Both are best-effort: a failure here never blocks the app or its own
-// (backend) sync in lib/sync.ts.
+// Whichever side changed more recently wins a genuine conflict — see
+// mostRecentWins below, mirroring the backend's calendar_time.most_recent_wins.
 
-// ---- Pull: device calendars -> backend ----
+const SYNC_WINDOW_PAST_DAYS = 7;
+const SYNC_WINDOW_FUTURE_DAYS = 60;
 
-const PULL_WINDOW_PAST_DAYS = 7;
-const PULL_WINDOW_FUTURE_DAYS = 60;
-
-let pulling = false;
-let pullQueued = false;
-
-export async function pullDeviceCalendars(): Promise<void> {
-  if (!deviceCalendarSupported) return;
-  const { readCalendarIds } = useCalendarStore.getState();
-  if (readCalendarIds.length === 0) return;
-  if (pulling) {
-    pullQueued = true;
-    return;
-  }
-  pulling = true;
-  try {
-    const calendars = await listDeviceCalendars();
-    const now = Date.now();
-    const from = now - PULL_WINDOW_PAST_DAYS * 86_400_000;
-    const to = now + PULL_WINDOW_FUTURE_DAYS * 86_400_000;
-    const events = await listEventsInRange(from, to);
-    const byCalendar = new Map<string, typeof events>();
-    for (const e of events) {
-      if (!e.calendarId) continue;
-      byCalendar.set(e.calendarId, [...(byCalendar.get(e.calendarId) ?? []), e]);
-    }
-
-    for (const calendarId of readCalendarIds) {
-      const cal = calendars.find((c) => c.id === calendarId);
-      if (!cal) continue; // removed/renamed on-device since it was selected
-      try {
-        await api.calendarSync({
-          calendarId,
-          calendarName: cal.title,
-          sourceLabel: sourceLabelFor(cal),
-          rangeStart: new Date(from).toISOString(),
-          rangeEnd: new Date(to).toISOString(),
-          events: (byCalendar.get(calendarId) ?? []).map((e) => ({
-            externalEventId: e.id,
-            title: e.title,
-            location: e.location ?? undefined,
-            startAt: e.startAt,
-            endAt: e.endAt,
-            allDay: e.allDay,
-          })),
-        });
-      } catch (e) {
-        console.warn("[calendar] sync failed for", calendarId, e);
-      }
-    }
-  } finally {
-    pulling = false;
-    if (pullQueued) {
-      pullQueued = false;
-      void pullDeviceCalendars();
-    }
-  }
+function mostRecentWins(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a) return false;
+  if (!b) return true;
+  return a > b;
 }
 
-// ---- Push: disciplined Tasks -> the chosen write-calendar ----
-// The mapping from task id to native event id (and a signature so an
-// unrelated store change doesn't re-push every task) lives in localStorage
-// only, the same tradeoff lib/sync.ts's own snapshot makes — a reinstall or
-// second device can re-create rather than dedupe. Acceptable for v1.
+// ---- Apple: local <-> device calendar, entirely client-side ----
+// The mapping from task id to native event id (plus enough state to detect
+// which side changed) lives in localStorage only, the same tradeoff
+// lib/sync.ts's own snapshot makes — a reinstall or second device can
+// re-create rather than dedupe. Acceptable for v1.
 
 interface PushEntry {
   nativeId: string;
   signature: string;
+  // The native event's own lastModifiedDate as of the last successful sync
+  // of this entry — compared against its *current* value to detect a
+  // device-side edit, and against the Task's updatedAt to resolve a
+  // genuine conflict (both sides changed since last sync).
+  lastKnownNativeModified: string | null;
 }
 
 function pushMapKey(): string {
@@ -119,93 +74,274 @@ function savePushMap(map: Map<string, PushEntry>) {
 
 let pushMap = loadPushMap();
 
-function taskSignature(t: Task): string {
+function appleLastSyncedKey(): string {
+  return `disciplined-calendar-apple-last-synced:${useAuthStore.getState().user?.id ?? "anon"}`;
+}
+
+function loadAppleLastSynced(): string | null {
+  return localStorage.getItem(appleLastSyncedKey());
+}
+
+function saveAppleLastSynced(iso: string) {
+  localStorage.setItem(appleLastSyncedKey(), iso);
+}
+
+function taskSignature(t: Pick<Task, "title" | "date" | "startMinutes" | "durationMinutes">): string {
   return `${t.title}|${t.date}|${t.startMinutes}|${t.durationMinutes}`;
 }
 
-function taskStart(t: Task): Date {
+function taskStart(t: Pick<Task, "date" | "startMinutes">): Date {
   const d = new Date(`${t.date}T00:00:00`);
   d.setMinutes(d.getMinutes() + t.startMinutes);
   return d;
 }
 
-let pushing = false;
-let pushQueued = false;
-
-// The device-calendar half of a push — separate function so
-// pushTasksToDevice can cleanly branch on writeTarget.kind without this
-// logic running (or its localStorage map being touched) when the target is
-// "outlook" or unset.
-async function pushToDeviceCalendar(writeCalendarId: string): Promise<void> {
-  const tasks = useTaskStore.getState().tasks;
-  const taskIds = new Set(tasks.map((t) => t.id));
-
-  // Deleted locally since the last push -> remove the mirrored event from the device.
-  for (const [taskId, entry] of [...pushMap.entries()]) {
-    if (!taskIds.has(taskId)) {
-      await deleteDeviceEvent(entry.nativeId);
-      pushMap.delete(taskId);
-    }
+// A device event's UTC start/end -> the (date, startMinutes, durationMinutes)
+// shape Task stores, in the device's own local timezone (plain Date methods
+// already reflect it — no tz library needed client-side, unlike the backend
+// which has to convert for a stored user preference instead). Mirrors the
+// backend's calendar_time.utc_to_local_fields, including the same
+// past-midnight clamp for a genuinely multi-day event.
+function localFieldsFromDeviceEvent(
+  e: DeviceCalendarEvent
+): Pick<Task, "date" | "startMinutes" | "durationMinutes"> {
+  if (e.allDay) {
+    return { date: e.startAt.slice(0, 10), startMinutes: 0, durationMinutes: 24 * 60 };
   }
-
-  for (const task of tasks) {
-    const signature = taskSignature(task);
-    const existing = pushMap.get(task.id);
-    if (existing?.signature === signature) continue; // unchanged since last push
-    const start = taskStart(task);
-    const end = new Date(start.getTime() + task.durationMinutes * 60_000);
-    if (existing) {
-      const ok = await updateDeviceEvent(existing.nativeId, task.title, start, end);
-      if (ok) pushMap.set(task.id, { nativeId: existing.nativeId, signature });
-    } else {
-      const nativeId = await createDeviceEvent(writeCalendarId, task.title, start, end);
-      if (nativeId) pushMap.set(task.id, { nativeId, signature });
-    }
-  }
-  savePushMap(pushMap);
+  const start = new Date(e.startAt);
+  const end = new Date(e.endAt);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const startMinutes = start.getHours() * 60 + start.getMinutes();
+  const durationMinutes = Math.min(
+    Math.max(1, Math.round((end.getTime() - start.getTime()) / 60_000)),
+    24 * 60 - startMinutes
+  );
+  return { date, startMinutes, durationMinutes };
 }
 
-async function pushTasksToDevice(): Promise<void> {
-  if (!deviceCalendarSupported) return;
-  const { writeTarget } = useCalendarStore.getState();
-  if (pushing) {
-    pushQueued = true;
+function deviceEventSignature(e: DeviceCalendarEvent): string {
+  return taskSignature({ title: e.title, ...localFieldsFromDeviceEvent(e) });
+}
+
+let appleReconciling = false;
+let appleReconcileQueued = false;
+
+export async function reconcileAppleCalendar(): Promise<void> {
+  if (!deviceCalendarSupported || !appleCalendarSupported) return;
+  const { appleCalendarId, writeTarget } = useCalendarStore.getState();
+  if (!appleCalendarId) return;
+  if (appleReconciling) {
+    appleReconcileQueued = true;
     return;
   }
-  pushing = true;
+  appleReconciling = true;
   try {
-    if (writeTarget?.kind === "device") {
-      await pushToDeviceCalendar(writeTarget.calendarId);
-    } else if (writeTarget?.kind === "outlook") {
-      // Outlook/Google hold their own tokens server-side and already own
-      // the user's Event rows — no payload needed, just trigger the
-      // backend's own reconciliation (see backend/app/services/outlook_graph.py
-      // and google_calendar.py).
-      try {
-        await api.outlook.push();
-      } catch (e) {
-        console.warn("[calendar] outlook push failed", e);
+    const calendars = await listDeviceCalendars();
+    const cal = calendars.find((c) => c.id === appleCalendarId);
+    if (!cal) return; // removed/renamed on-device since it was connected
+
+    const now = Date.now();
+    const from = now - SYNC_WINDOW_PAST_DAYS * 86_400_000;
+    const to = now + SYNC_WINDOW_FUTURE_DAYS * 86_400_000;
+    const windowStartDate = new Date(from).toISOString().slice(0, 10);
+    const windowEndDate = new Date(to).toISOString().slice(0, 10);
+    const events = await listEventsInRange(from, to);
+    const calendarEvents = events.filter((e) => e.calendarId === appleCalendarId);
+    const eventsById = new Map(calendarEvents.map((e) => [e.id, e]));
+    const lastSyncedAt = loadAppleLastSynced();
+
+    // 1. Walk existing links: detect device-side deletes/edits, push local
+    //    edits, resolve genuine conflicts by whichever side changed more
+    //    recently.
+    for (const [taskId, entry] of [...pushMap.entries()]) {
+      const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+      const nativeEvent = eventsById.get(entry.nativeId);
+
+      if (!task) {
+        // Deleted locally since the last pass -> remove the mirrored device event.
+        if (nativeEvent) await deleteDeviceEvent(entry.nativeId);
+        pushMap.delete(taskId);
+        continue;
       }
-    } else if (writeTarget?.kind === "google") {
+
+      if (!nativeEvent) {
+        // Missing on-device — only within this pass's window is that
+        // evidence of a real deletion, not just outside this pass's reach.
+        if (task.date < windowStartDate || task.date > windowEndDate) continue;
+        if (mostRecentWins(task.updatedAt, lastSyncedAt)) {
+          // Edited locally since we last looked — recreate rather than
+          // silently discard the user's edit.
+          const start = taskStart(task);
+          const end = new Date(start.getTime() + task.durationMinutes * 60_000);
+          const nativeId = await createDeviceEvent(appleCalendarId, task.title, start, end);
+          if (nativeId) {
+            pushMap.set(taskId, {
+              nativeId,
+              signature: taskSignature(task),
+              lastKnownNativeModified: new Date().toISOString(),
+            });
+          } else {
+            pushMap.delete(taskId);
+          }
+        } else {
+          useTaskStore.getState().deleteTask(taskId);
+          pushMap.delete(taskId);
+        }
+        continue;
+      }
+
+      const localSig = taskSignature(task);
+      const remoteSig = deviceEventSignature(nativeEvent);
+      const localChanged = localSig !== entry.signature;
+      const remoteChanged = remoteSig !== entry.signature;
+      if (!localChanged && !remoteChanged) continue;
+
+      const pushWins =
+        (localChanged && !remoteChanged) ||
+        (localChanged &&
+          remoteChanged &&
+          mostRecentWins(task.updatedAt, nativeEvent.lastModifiedDate));
+
+      if (pushWins) {
+        const start = taskStart(task);
+        const end = new Date(start.getTime() + task.durationMinutes * 60_000);
+        const ok = await updateDeviceEvent(entry.nativeId, task.title, start, end);
+        if (ok) {
+          pushMap.set(taskId, {
+            nativeId: entry.nativeId,
+            signature: localSig,
+            lastKnownNativeModified: nativeEvent.lastModifiedDate,
+          });
+        }
+      } else {
+        useTaskStore.getState().updateTask(taskId, {
+          title: nativeEvent.title,
+          ...localFieldsFromDeviceEvent(nativeEvent),
+          updatedAt: nativeEvent.lastModifiedDate ?? new Date().toISOString(),
+        });
+        pushMap.set(taskId, {
+          nativeId: entry.nativeId,
+          signature: remoteSig,
+          lastKnownNativeModified: nativeEvent.lastModifiedDate,
+        });
+      }
+    }
+
+    // 2. Device events with no existing link -> new local Tasks.
+    const linkedNativeIds = new Set([...pushMap.values()].map((e) => e.nativeId));
+    for (const nativeEvent of calendarEvents) {
+      if (linkedNativeIds.has(nativeEvent.id)) continue;
+      const newId = useTaskStore.getState().addTask({
+        title: nativeEvent.title,
+        color: "#6366f1",
+        icon: "default",
+        ...localFieldsFromDeviceEvent(nativeEvent),
+        appleLinked: true,
+        updatedAt: nativeEvent.lastModifiedDate ?? new Date().toISOString(),
+      });
+      pushMap.set(newId, {
+        nativeId: nativeEvent.id,
+        signature: deviceEventSignature(nativeEvent),
+        lastKnownNativeModified: nativeEvent.lastModifiedDate,
+      });
+    }
+    savePushMap(pushMap);
+
+    // 3. Write-target only: push brand-new, fully-unlinked local Tasks —
+    //    excluding anything already linked to Outlook/Google, so a task
+    //    never ends up mirrored to more than one provider.
+    if (writeTarget?.kind === "apple") {
+      const linkedTaskIds = new Set(pushMap.keys());
+      const unlinked = useTaskStore
+        .getState()
+        .tasks.filter(
+          (t) => !linkedTaskIds.has(t.id) && !t.outlookEventId && !t.googleEventId && !t.appleLinked
+        );
+      for (const task of unlinked) {
+        const start = taskStart(task);
+        const end = new Date(start.getTime() + task.durationMinutes * 60_000);
+        const nativeId = await createDeviceEvent(appleCalendarId, task.title, start, end);
+        if (nativeId) {
+          pushMap.set(task.id, {
+            nativeId,
+            signature: taskSignature(task),
+            lastKnownNativeModified: new Date().toISOString(),
+          });
+          useTaskStore.getState().updateTask(task.id, { appleLinked: true });
+        }
+      }
+      savePushMap(pushMap);
+    }
+
+    saveAppleLastSynced(new Date().toISOString());
+  } finally {
+    appleReconciling = false;
+    if (appleReconcileQueued) {
+      appleReconcileQueued = false;
+      void reconcileAppleCalendar();
+    }
+  }
+}
+
+// Called when Apple Calendar is disconnected (CalendarSheet.tsx) — unlike a
+// write-target switch (which keeps every link alive, see the module-level
+// subscribe below), disconnecting genuinely ends the relationship: forget
+// every native id, and clear appleLinked on the now-unlinked Tasks so a
+// later Outlook/Google write-target push doesn't skip them by mistake.
+export async function clearAppleLinks(): Promise<void> {
+  for (const taskId of pushMap.keys()) {
+    useTaskStore.getState().updateTask(taskId, { appleLinked: false });
+  }
+  pushMap = new Map();
+  savePushMap(pushMap);
+  localStorage.removeItem(appleLastSyncedKey());
+}
+
+// ---- Orchestration: reconcile every connected provider ----
+
+let reconcilingAll = false;
+let reconcileAllQueued = false;
+
+async function reconcileConnectedCalendars(): Promise<void> {
+  if (!deviceCalendarSupported) return;
+  if (reconcilingAll) {
+    reconcileAllQueued = true;
+    return;
+  }
+  reconcilingAll = true;
+  try {
+    if (appleCalendarSupported && useCalendarStore.getState().appleCalendarId) {
+      await reconcileAppleCalendar();
+    }
+    const { writeTarget } = useCalendarStore.getState();
+    if (useOutlookStore.getState().connected) {
       try {
-        await api.googleCalendar.push();
+        await api.outlook.reconcile(writeTarget?.kind === "outlook");
       } catch (e) {
-        console.warn("[calendar] google calendar push failed", e);
+        console.warn("[calendar] outlook reconcile failed", e);
+      }
+    }
+    if (useGoogleCalendarStore.getState().connected) {
+      try {
+        await api.googleCalendar.reconcile(writeTarget?.kind === "google");
+      } catch (e) {
+        console.warn("[calendar] google calendar reconcile failed", e);
       }
     }
   } finally {
-    pushing = false;
-    if (pushQueued) {
-      pushQueued = false;
-      void pushTasksToDevice();
+    reconcilingAll = false;
+    if (reconcileAllQueued) {
+      reconcileAllQueued = false;
+      void reconcileConnectedCalendars();
     }
   }
 }
 
-let pushTimer: ReturnType<typeof setTimeout> | undefined;
-function schedulePush() {
-  window.clearTimeout(pushTimer);
-  pushTimer = window.setTimeout(() => void pushTasksToDevice(), 600);
+let reconcileTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleReconcile() {
+  window.clearTimeout(reconcileTimer);
+  reconcileTimer = window.setTimeout(() => void reconcileConnectedCalendars(), 600);
 }
 
 // ---- Wiring ----
@@ -220,28 +356,22 @@ export function initDeviceCalendarSync(): void {
   // account, same reasoning as lib/sync.ts's snapshot).
   pushMap = loadPushMap();
 
-  void pullDeviceCalendars();
-  void pushTasksToDevice();
+  void reconcileConnectedCalendars();
 
   useTaskStore.subscribe((state, prev) => {
-    if (state.tasks !== prev.tasks) schedulePush();
+    if (state.tasks !== prev.tasks) scheduleReconcile();
   });
   useCalendarStore.subscribe((state, prev) => {
-    if (state.readCalendarIds !== prev.readCalendarIds) void pullDeviceCalendars();
-    if (state.writeTarget !== prev.writeTarget) {
-      // Switching write targets (device calendar, Outlook, or none): don't
-      // try to move already-mirrored device events to the new target, just
-      // abandon them and start fresh (see module doc above). Outlook's own
-      // mapping lives server-side on the Event row, not here, so it's
-      // unaffected by this local reset.
-      pushMap = new Map();
-      savePushMap(pushMap);
-      schedulePush();
-    }
+    if (state.appleCalendarId !== prev.appleCalendarId) void reconcileAppleCalendar();
+    // Switching the write target doesn't touch any already-linked task's
+    // provider — only which provider brand-new, unlinked Tasks go to next.
+    // Existing links (Apple's pushMap, Outlook/Google's Event columns) stay
+    // exactly as they are; just trigger a pass so newly-unlinked Tasks get
+    // pushed to whatever the write target now is.
+    if (state.writeTarget !== prev.writeTarget) scheduleReconcile();
   });
 
   void CapacitorApp.addListener("resume", () => {
-    void pullDeviceCalendars();
-    schedulePush();
+    void reconcileConnectedCalendars();
   });
 }

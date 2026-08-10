@@ -16,4 +16,17 @@ export interface Task {
   shoppingListId?: string; // set when this task is a grocery run
   workoutSessionId?: string | null; // set when this task is linked to a workout plan; explicit null clears it on the server
   recipeId?: string | null; // set when this task is linked to a recipe (cooking / meal prep); explicit null clears it on the server
+  // ISO UTC datetime, stamped on every local edit — drives the most-recent-
+  // edit-wins calendar reconciliation (backend outlook_graph.py/google_calendar.py,
+  // frontend lib/deviceCalendarSync.ts).
+  updatedAt?: string;
+  // Read-only, set server-side once mirrored to that provider — never
+  // written by any UI mutator. Lets deviceCalendarSync.ts skip pushing a
+  // task already linked to a *different* provider.
+  outlookEventId?: string | null;
+  googleEventId?: string | null;
+  // Read-only-in-practice: set by lib/deviceCalendarSync.ts once linked to
+  // the connected Apple calendar (Apple has no server-side connection row,
+  // so this bool is the only place that link is recorded).
+  appleLinked?: boolean;
 }

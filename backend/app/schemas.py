@@ -134,6 +134,10 @@ class EventBase(CamelModel):
     shopping_list_id: str | None = None
     workout_session_id: str | None = None
     recipe_id: str | None = None
+    # ISO UTC datetime, stamped by the client on every local edit — drives
+    # the most-recent-edit-wins calendar reconciliation (see
+    # app.services.calendar_time / outlook_graph.py / google_calendar.py).
+    updated_at: str | None = None
 
 
 class EventCreate(EventBase):
@@ -155,10 +159,17 @@ class EventUpdate(CamelModel):
     shopping_list_id: str | None = None
     workout_session_id: str | None = None
     recipe_id: str | None = None
+    updated_at: str | None = None
 
 
 class EventOut(EventBase):
     id: str
+    # Read-only — never on EventCreate/EventUpdate, so a client can't spoof a
+    # provider link. Lets the frontend skip pushing a Task already linked to
+    # a *different* provider (see frontend/src/lib/deviceCalendarSync.ts).
+    outlook_event_id: str | None = None
+    google_event_id: str | None = None
+    apple_linked: bool = False
 
 
 # ---- Habits ----
@@ -571,56 +582,26 @@ class ChatResponse(CamelModel):
     actions: list[ChatAction] = []
 
 
-# ---- Calendar sync (device calendars -> read-only mirror) ----
-# One-way: the frontend reads Apple/Google/Outlook events via the native
-# EventKit/CalendarContract plugin and pushes them here so the AI weekly
-# planner and timeline can see them. Never editable from disciplined —
-# writing disciplined's own events back to a device calendar happens
-# entirely client-side (see frontend/src/lib/deviceCalendarSync.ts) and
-# never touches this table.
+# ---- Reconcile response (shared shape for Outlook + Google two-way sync) ----
+# See app.services.calendar_time.ReconcileCounts — the service layer returns
+# that dataclass and the router unpacks it directly into one of these.
 
 
-class CalendarEventIn(CamelModel):
-    external_event_id: str
-    title: str
-    location: str | None = None
-    start_at: str  # ISO datetime, UTC
-    end_at: str
-    all_day: bool = False
-
-
-class CalendarSyncRequest(CamelModel):
-    calendar_id: str
-    calendar_name: str
-    source_label: str = "other"
-    range_start: str  # ISO datetime, UTC — window this payload is authoritative for
-    range_end: str
-    events: list[CalendarEventIn] = Field(max_length=1000)
-
-
-class CalendarEventOut(CamelModel):
-    id: str
-    device_calendar_id: str
-    device_calendar_name: str
-    source_label: str
-    external_event_id: str
-    title: str
-    location: str | None = None
-    start_at: str
-    end_at: str
-    all_day: bool
-
-
-class CalendarSyncResponse(CamelModel):
-    synced: int
-    pruned: int
+class ReconcileResponse(CamelModel):
+    created_local: int  # remote items with no linked Event -> new Task created
+    created_remote: int  # unlinked local Tasks pushed out (write-target only)
+    updated_local: int  # remote was newer -> local Event updated
+    updated_remote: int  # local was newer -> remote event patched
+    deleted_local: int  # cleanly deleted remotely -> local Task removed
+    recreated_remote: int  # local edited since last sync, remote gone -> recreated remotely
+    unchanged: int
+    failed: int
 
 
 # ---- Outlook connection (Microsoft Graph OAuth) ----
-# Separate from the device-calendar sync above: this reads/writes the user's
-# Outlook calendar directly via Microsoft Graph, regardless of whether the
-# account is synced into the phone's own calendar app. See
-# app.services.outlook_graph.
+# Reads/writes the user's Outlook calendar directly via Microsoft Graph,
+# regardless of whether the account is synced into the phone's own calendar
+# app. See app.services.outlook_graph.
 
 
 class OutlookConnectResponse(CamelModel):
@@ -632,16 +613,8 @@ class OutlookStatusResponse(CamelModel):
     ms_account_email: str | None = None
 
 
-class OutlookSyncResponse(CamelModel):
-    synced: int
-    pruned: int
-
-
-class OutlookPushResponse(CamelModel):
-    created: int
-    updated: int
-    unchanged: int
-    failed: int
+class OutlookReconcileResponse(ReconcileResponse):
+    pass
 
 
 # ---- Google Calendar connection (Google OAuth) ----
@@ -658,14 +631,5 @@ class GoogleCalendarStatusResponse(CamelModel):
     google_account_email: str | None = None
 
 
-class GoogleCalendarSyncResponse(CamelModel):
-    synced: int
-    pruned: int
-
-
-class GoogleCalendarPushResponse(CamelModel):
-    created: int
-    updated: int
-    unchanged: int
-    failed: int
-    pending_actions: list[PendingAction] = []
+class GoogleCalendarReconcileResponse(ReconcileResponse):
+    pass

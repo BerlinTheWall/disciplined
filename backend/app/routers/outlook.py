@@ -8,12 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.schemas import (
-    OutlookConnectResponse,
-    OutlookPushResponse,
-    OutlookStatusResponse,
-    OutlookSyncResponse,
-)
+from app.schemas import OutlookConnectResponse, OutlookReconcileResponse, OutlookStatusResponse
 from app.services import outlook_graph
 
 router = APIRouter(prefix="/api/outlook", tags=["outlook"])
@@ -70,19 +65,13 @@ async def disconnect(db: AsyncSession = Depends(get_db), user: User = Depends(ge
     await outlook_graph.disconnect(db, user.id)
 
 
-@router.post("/sync", response_model=OutlookSyncResponse)
-async def sync(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await outlook_graph.sync_outlook_events(db, user.id)
-    if result is None:
+@router.post("/reconcile", response_model=OutlookReconcileResponse)
+async def reconcile(
+    is_write_target: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    counts = await outlook_graph.reconcile_outlook_events(db, user.id, is_write_target=is_write_target)
+    if counts is None:
         raise HTTPException(status_code=400, detail="Outlook isn't connected")
-    synced, pruned = result
-    return OutlookSyncResponse(synced=synced, pruned=pruned)
-
-
-@router.post("/push", response_model=OutlookPushResponse)
-async def push(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await outlook_graph.push_outlook_events(db, user.id)
-    if result is None:
-        raise HTTPException(status_code=400, detail="Outlook isn't connected")
-    created, updated, unchanged, failed = result
-    return OutlookPushResponse(created=created, updated=updated, unchanged=unchanged, failed=failed)
+    return OutlookReconcileResponse(**counts.__dict__)

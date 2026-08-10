@@ -5,7 +5,7 @@ Task model. Dates are ISO strings ("2026-07-05").
 """
 
 import calendar
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -13,7 +13,7 @@ from google.genai import types
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ExternalCalendarEvent, Goal, Habit, User
+from app.models import Event, Goal, Habit, User
 
 
 def fmt_minutes(m: int) -> str:
@@ -27,6 +27,15 @@ def fmt_minutes(m: int) -> str:
 # path that writes straight from the model's own arithmetic.
 def _clamp_minutes(value: int, floor: int, ceiling: int) -> int:
     return max(floor, min(value, ceiling))
+
+
+def _now_iso() -> str:
+    """Stamped onto Event.updated_at by every tool executor that mutates an
+    Event directly — these bypass the client (and its own updated_at stamp
+    in taskStore.ts), so without this an AI-made edit looks "untouched" to
+    the calendar reconciliation in outlook_graph.py/google_calendar.py and a
+    stale remote copy could silently overwrite it on the next pass."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 def event_to_dict(e: Event) -> dict[str, Any]:
@@ -64,52 +73,6 @@ async def user_timezone(db: AsyncSession, user_id: str) -> ZoneInfo:
         return ZoneInfo(tz_name)
     except ZoneInfoNotFoundError:
         return ZoneInfo("UTC")
-
-
-def external_event_to_dict(ev: ExternalCalendarEvent, tz: ZoneInfo) -> dict[str, Any]:
-    """An external calendar event's UTC start/end, resolved into the same
-    date/start_minutes/duration_minutes shape as event_to_dict, in the
-    user's own timezone — so it can be merged into the schedule and conflict
-    checks exactly like a real Event, without either caring which kind it is."""
-    start_local = datetime.fromisoformat(ev.start_at).astimezone(tz)
-    end_local = datetime.fromisoformat(ev.end_at).astimezone(tz)
-    duration = max(1, round((end_local - start_local).total_seconds() / 60))
-    return {
-        "id": ev.id,
-        "kind": "external_calendar",
-        "title": ev.title,
-        "date": start_local.date().isoformat(),
-        "start": fmt_minutes(start_local.hour * 60 + start_local.minute),
-        "start_minutes": start_local.hour * 60 + start_local.minute,
-        "duration_minutes": duration,
-        "completed": False,
-        "source": ev.source_label,
-        "calendar": ev.device_calendar_name,
-    }
-
-
-async def external_events_on_date(
-    db: AsyncSession, user_id: str, date_str: str, tz: ZoneInfo
-) -> list[dict[str, Any]]:
-    """External calendar events whose (timezone-converted) local date is
-    date_str — a day-at-a-time helper so conflict checks (which are always
-    scoped to one date) don't need their own UTC-window math."""
-    day = date.fromisoformat(date_str)
-    day_start_utc = datetime.combine(day, time.min, tzinfo=tz).astimezone(timezone.utc).isoformat()
-    day_end_utc = (
-        datetime.combine(day + timedelta(days=1), time.min, tzinfo=tz).astimezone(timezone.utc).isoformat()
-    )
-    rows = (
-        await db.scalars(
-            select(ExternalCalendarEvent).where(
-                ExternalCalendarEvent.user_id == user_id,
-                ExternalCalendarEvent.start_at < day_end_utc,
-                ExternalCalendarEvent.end_at > day_start_utc,
-            )
-        )
-    ).all()
-    items = [external_event_to_dict(ev, tz) for ev in rows]
-    return [item for item in items if item["date"] == date_str]
 
 
 def _monday_of(d: date) -> date:
@@ -402,23 +365,6 @@ FUNCTION_DECLARATIONS = [
                 "start_date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
                 "end_date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
             },
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="list_calendar_events",
-        description=(
-            "List events from the user's connected device calendars (Apple/Google/Outlook — "
-            "whichever they've linked in Settings), read-only. These are separate from the "
-            "user's own disciplined events/habits: they can't be created, moved, or deleted "
-            "here — tell the user to manage them in their calendar app directly."
-        ),
-        parameters=types.Schema(
-            type=types.Type.OBJECT,
-            properties={
-                "start_date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
-                "end_date": types.Schema(type=types.Type.STRING, description=_DATE_DESC),
-            },
-            required=["start_date", "end_date"],
         ),
     ),
     types.FunctionDeclaration(
@@ -773,9 +719,10 @@ async def _overlapping(
     duration: int,
     exclude_id: str | None = None,
 ) -> list[dict]:
-    """Events, habit occurrences, and external (device) calendar events that
-    clash with the slot, as dicts — so the model won't schedule over something
-    on the user's real Apple/Google/Outlook calendar either."""
+    """Events and habit occurrences that clash with the slot, as dicts —
+    events pulled in from a connected Apple/Outlook/Google calendar are
+    plain Event rows by this point (see outlook_graph.py/google_calendar.py
+    reconcile_*), so this one query already covers them too."""
     query = select(Event).where(
         Event.user_id == user_id,
         Event.date == date_str,
@@ -790,12 +737,6 @@ async def _overlapping(
             occ["start_minutes"] + occ["duration_minutes"] > start
         ):
             clashes.append(occ)
-    tz = await user_timezone(db, user_id)
-    for ext in await external_events_on_date(db, user_id, date_str, tz):
-        if ext["start_minutes"] < start + duration and (
-            ext["start_minutes"] + ext["duration_minutes"] > start
-        ):
-            clashes.append(ext)
     return clashes
 
 
@@ -842,6 +783,7 @@ async def _create_event(db: AsyncSession, user_id: str, args: dict) -> dict:
         priority=args.get("priority"),
         icon=args.get("icon", "default"),
         user_id=user_id,
+        updated_at=_now_iso(),
     )
     db.add(event)
     await db.commit()
@@ -860,6 +802,7 @@ async def _update_event(db: AsyncSession, user_id: str, args: dict) -> dict:
         event.duration_minutes = max(1, min(int(args["duration_minutes"]), 24 * 60 - event.start_minutes))
     if "reminder_minutes_before" in args and args["reminder_minutes_before"] is not None:
         event.reminder_minutes_before = int(args["reminder_minutes_before"])
+    event.updated_at = _now_iso()
     await db.commit()
     return {"updated": event_to_dict(event)}
 
@@ -878,19 +821,6 @@ async def _list_events(db: AsyncSession, user_id: str, args: dict) -> dict:
     start = args.get("start_date") or date.today().isoformat()
     end = args.get("end_date") or (date.fromisoformat(start) + timedelta(days=6)).isoformat()
     items += await habit_occurrences(db, user_id, start, end)
-    items.sort(key=lambda i: (i["date"], i["start_minutes"]))
-    return {"events": items}
-
-
-async def _list_calendar_events(db: AsyncSession, user_id: str, args: dict) -> dict:
-    tz = await user_timezone(db, user_id)
-    start = date.fromisoformat(args["start_date"])
-    end = date.fromisoformat(args["end_date"])
-    items: list[dict] = []
-    day = start
-    while day <= end:
-        items += await external_events_on_date(db, user_id, day.isoformat(), tz)
-        day += timedelta(days=1)
     items.sort(key=lambda i: (i["date"], i["start_minutes"]))
     return {"events": items}
 
@@ -917,6 +847,7 @@ async def _move_event(db: AsyncSession, user_id: str, args: dict) -> dict:
             }
     event.date = new_date
     event.start_minutes = new_start
+    event.updated_at = _now_iso()
     await db.commit()
     return {"moved": event_to_dict(event)}
 
@@ -960,6 +891,7 @@ async def _swap_events(db: AsyncSession, user_id: str, args: dict) -> dict:
         return await _missing_event_error(db, user_id, missing)
     a.date, b.date = b.date, a.date
     a.start_minutes, b.start_minutes = b.start_minutes, a.start_minutes
+    a.updated_at = b.updated_at = _now_iso()
     await db.commit()
     return {"swapped": [event_to_dict(a), event_to_dict(b)]}
 
@@ -969,6 +901,7 @@ async def _set_event_completion(db: AsyncSession, user_id: str, args: dict) -> d
     if event is None:
         return await _missing_event_error(db, user_id, args["event_id"])
     event.completed = bool(args["done"])
+    event.updated_at = _now_iso()
     await db.commit()
     return {"event": event_to_dict(event)}
 
@@ -1147,7 +1080,6 @@ _EXECUTORS = {
     "create_event": _create_event,
     "update_event": _update_event,
     "list_events": _list_events,
-    "list_calendar_events": _list_calendar_events,
     "move_event": _move_event,
     "delete_event": _delete_event,
     "check_conflicts": _check_conflicts,

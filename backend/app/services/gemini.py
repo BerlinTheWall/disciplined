@@ -19,12 +19,10 @@ from app.services.tools import (
     current_period_keys,
     event_to_dict,
     execute_tool,
-    external_events_on_date,
     fmt_minutes,
     goal_to_dict,
     habit_occurrences,
     habit_recurrence_label,
-    user_timezone,
 )
 
 MAX_TOOL_ROUNDS = 8
@@ -113,17 +111,12 @@ async def build_chat_context(
         )
     ).all()
 
-    # The day's schedule is events plus recurring-habit occurrences, merged.
+    # The day's schedule is events (including any pulled in from a connected
+    # Apple/Outlook/Google calendar — those are plain Event rows by this
+    # point, see outlook_graph.py/google_calendar.py reconcile_*) plus
+    # recurring-habit occurrences, merged.
     items = [event_to_dict(e) for e in events]
     items += await habit_occurrences(db, user_id, today.isoformat(), week_end.isoformat())
-
-    # Plus anything on the user's connected device calendars (Apple/Google/
-    # Outlook) — read-only, so the model is aware of it but never proposes
-    # changing it (only real Event/Habit ids are ever valid tool args).
-    tz = await user_timezone(db, user_id)
-    for offset in range(7):
-        d = today + timedelta(days=offset)
-        items += await external_events_on_date(db, user_id, d.isoformat(), tz)
 
     items.sort(key=lambda i: (i["date"], i["start_minutes"]))
 
@@ -132,12 +125,7 @@ async def build_chat_context(
         for item in items:
             day = _WEEKDAYS[date.fromisoformat(item["date"]).weekday()]
             end = item["start_minutes"] + item["duration_minutes"]
-            if item["kind"] == "habit":
-                kind = " | habit (repeats)"
-            elif item["kind"] == "external_calendar":
-                kind = f" | on your {item['calendar']} calendar, read-only"
-            else:
-                kind = ""
+            kind = " | habit (repeats)" if item["kind"] == "habit" else ""
             status = " (completed)" if item["completed"] else ""
             lines.append(
                 f"- id={item['id']} | {day} {item['date']}"

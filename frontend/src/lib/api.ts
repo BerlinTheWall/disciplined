@@ -203,62 +203,26 @@ export interface WeekPlanResponse {
   pendingActions: PendingAction[];
 }
 
-// ---- Device calendar sync (Apple/Google/Outlook, read-only mirror) ----
-
-export interface CalendarEventIn {
-  externalEventId: string;
-  title: string;
-  location?: string;
-  startAt: string; // ISO datetime, UTC
-  endAt: string;
-  allDay: boolean;
-}
-
-export interface CalendarSyncRequest {
-  calendarId: string;
-  calendarName: string;
-  sourceLabel: string;
-  rangeStart: string;
-  rangeEnd: string;
-  events: CalendarEventIn[];
-}
-
-export interface CalendarSyncResult {
-  synced: number;
-  pruned: number;
-}
-
-export interface CalendarEventOut {
-  id: string;
-  deviceCalendarId: string;
-  deviceCalendarName: string;
-  sourceLabel: string;
-  externalEventId: string;
-  title: string;
-  location?: string;
-  startAt: string;
-  endAt: string;
-  allDay: boolean;
-}
-
 // ---- Outlook connection (Microsoft Graph OAuth) ----
-// Separate from device calendar sync above — reads/writes the user's
-// Outlook calendar directly via Microsoft Graph, regardless of whether the
-// account is synced into the phone's own calendar app.
+// Reads/writes the user's Outlook calendar directly via Microsoft Graph,
+// regardless of whether the account is synced into the phone's own calendar
+// app. Two-way: see backend/app/services/outlook_graph.py's
+// reconcile_outlook_events.
 
 export interface OutlookStatus {
   connected: boolean;
   msAccountEmail?: string;
 }
 
-export interface OutlookSyncResult {
-  synced: number;
-  pruned: number;
-}
-
-export interface OutlookPushResult {
-  created: number;
-  updated: number;
+// Shared shape for both Outlook and Google's reconcile result — matches
+// backend/app/schemas.py's ReconcileResponse.
+export interface ReconcileResult {
+  createdLocal: number;
+  createdRemote: number;
+  updatedLocal: number;
+  updatedRemote: number;
+  deletedLocal: number;
+  recreatedRemote: number;
   unchanged: number;
   failed: number;
 }
@@ -270,18 +234,6 @@ export interface OutlookPushResult {
 export interface GoogleCalendarStatus {
   connected: boolean;
   googleAccountEmail?: string;
-}
-
-export interface GoogleCalendarSyncResult {
-  synced: number;
-  pruned: number;
-}
-
-export interface GoogleCalendarPushResult {
-  created: number;
-  updated: number;
-  unchanged: number;
-  failed: number;
 }
 
 export interface BriefingItemPayload {
@@ -505,26 +457,17 @@ export const api = {
     }
   },
   health: () => request<{ status: string }>("/api/health"),
-  // One-way: the frontend reads device calendars via the native plugin (see
-  // lib/deviceCalendarSync.ts) and pushes them here for the AI weekly
-  // planner + timeline to see. Nothing here is ever written back to the
-  // device — read-only mirror.
-  calendarSync: (body: CalendarSyncRequest): Promise<CalendarSyncResult> =>
-    request("/api/calendar/sync", { method: "POST", body: JSON.stringify(body) }),
-  calendarEvents: {
-    list: (start: string, end: string): Promise<CalendarEventOut[]> =>
-      request(
-        `/api/calendar/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
-      ),
-  },
   outlook: {
     // Returns the Microsoft login URL to open in an in-app browser
     // (@capacitor/browser) — see lib/outlookAuth.ts.
     connect: (): Promise<{ authorizeUrl: string }> => request("/api/outlook/connect"),
     status: (): Promise<OutlookStatus> => request("/api/outlook/status"),
     disconnect: (): Promise<void> => request("/api/outlook/connection", { method: "DELETE" }),
-    sync: (): Promise<OutlookSyncResult> => request("/api/outlook/sync", { method: "POST" }),
-    push: (): Promise<OutlookPushResult> => request("/api/outlook/push", { method: "POST" }),
+    // One two-way pass — see backend/app/services/outlook_graph.py's
+    // reconcile_outlook_events. isWriteTarget only affects whether
+    // brand-new, not-yet-linked local tasks get pushed out this pass.
+    reconcile: (isWriteTarget: boolean): Promise<ReconcileResult> =>
+      request(`/api/outlook/reconcile?is_write_target=${isWriteTarget}`, { method: "POST" }),
   },
   googleCalendar: {
     // Returns the Google login URL to open in an in-app browser
@@ -533,9 +476,9 @@ export const api = {
     status: (): Promise<GoogleCalendarStatus> => request("/api/google-calendar/status"),
     disconnect: (): Promise<void> =>
       request("/api/google-calendar/connection", { method: "DELETE" }),
-    sync: (): Promise<GoogleCalendarSyncResult> =>
-      request("/api/google-calendar/sync", { method: "POST" }),
-    push: (): Promise<GoogleCalendarPushResult> =>
-      request("/api/google-calendar/push", { method: "POST" }),
+    reconcile: (isWriteTarget: boolean): Promise<ReconcileResult> =>
+      request(`/api/google-calendar/reconcile?is_write_target=${isWriteTarget}`, {
+        method: "POST",
+      }),
   },
 };

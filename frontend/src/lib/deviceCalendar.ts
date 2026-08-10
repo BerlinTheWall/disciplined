@@ -14,6 +14,11 @@ import {
 
 export const deviceCalendarSupported = Capacitor.isNativePlatform();
 
+// Apple Calendar is offered as its own connection (distinct from Outlook/
+// Google, which are OAuth-based) only on iOS — there's no Apple Calendar on
+// Android, so that platform sticks to Outlook/Google only.
+export const appleCalendarSupported = Capacitor.getPlatform() === "ios";
+
 export type CalendarSourceLabel = "icloud" | "google" | "outlook" | "other";
 
 // iOS reports a real source type (MOBILE_ME/EXCHANGE/CAL_DAV/...); Android
@@ -69,6 +74,19 @@ export async function listDeviceCalendars(): Promise<Calendar[]> {
   return result;
 }
 
+// The single iCloud calendar Apple Calendar connects to: the device's
+// default calendar for new events if that happens to be iCloud-sourced,
+// otherwise the first iCloud-sourced calendar found. Null if the user has no
+// iCloud calendar at all (e.g. only an Exchange/Google account added on
+// iOS).
+export async function findAppleCalendar(): Promise<Calendar | null> {
+  if (!appleCalendarSupported) return null;
+  const { result: defaultCalendar } = await CapacitorCalendar.getDefaultCalendar();
+  if (defaultCalendar && sourceLabelFor(defaultCalendar) === "icloud") return defaultCalendar;
+  const calendars = await listDeviceCalendars();
+  return calendars.find((c) => sourceLabelFor(c) === "icloud") ?? null;
+}
+
 export interface DeviceCalendarEvent {
   id: string;
   calendarId: string | null;
@@ -77,6 +95,11 @@ export interface DeviceCalendarEvent {
   startAt: string; // ISO datetime, UTC
   endAt: string;
   allDay: boolean;
+  // ISO datetime, UTC — iOS-only (the plugin has no Android equivalent),
+  // which is fine since Apple Calendar is already iOS-gated. Drives
+  // reconcileAppleCalendar's most-recent-edit-wins comparison
+  // (lib/deviceCalendarSync.ts).
+  lastModifiedDate: string | null;
 }
 
 // Every event across every calendar on the device in range — the plugin has
@@ -97,6 +120,7 @@ export async function listEventsInRange(
     startAt: new Date(e.startDate).toISOString(),
     endAt: new Date(e.endDate).toISOString(),
     allDay: e.isAllDay,
+    lastModifiedDate: e.lastModifiedDate ? new Date(e.lastModifiedDate).toISOString() : null,
   }));
 }
 

@@ -34,7 +34,6 @@ _ALLOWED_TOOLS = {
     "create_event",
     "check_conflicts",
     "list_events",
-    "list_calendar_events",
     "list_goals",
     "list_habits",
 }

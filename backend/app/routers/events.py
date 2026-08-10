@@ -73,11 +73,11 @@ async def delete_event(
     user: User = Depends(get_current_user),
 ):
     event = await get_event_or_404(event_id, db, user)
-    # Best-effort — if this Task was mirrored to Outlook and/or Google
-    # Calendar (see outlook_graph.push_outlook_events /
-    # google_calendar.push_google_events), remove it there too rather than
-    # leaving it orphaned once event.outlook_event_id/google_event_id are
-    # gone with the row.
+    # Best-effort — if this Task is linked to Outlook and/or Google Calendar
+    # (see outlook_graph.reconcile_outlook_events /
+    # google_calendar.reconcile_google_calendar), remove it there too rather
+    # than leaving it orphaned once event.outlook_event_id/google_event_id
+    # are gone with the row.
     await outlook_graph.maybe_delete_outlook_event(db, user.id, event)
     await google_calendar.maybe_delete_google_event(db, user.id, event)
     await db.delete(event)

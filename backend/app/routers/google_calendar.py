@@ -10,9 +10,8 @@ from app.database import get_db
 from app.models import User
 from app.schemas import (
     GoogleCalendarConnectResponse,
-    GoogleCalendarPushResponse,
+    GoogleCalendarReconcileResponse,
     GoogleCalendarStatusResponse,
-    GoogleCalendarSyncResponse,
 )
 from app.services import google_calendar
 
@@ -68,19 +67,13 @@ async def disconnect(db: AsyncSession = Depends(get_db), user: User = Depends(ge
     await google_calendar.disconnect(db, user.id)
 
 
-@router.post("/sync", response_model=GoogleCalendarSyncResponse)
-async def sync(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await google_calendar.sync_google_events(db, user.id)
-    if result is None:
+@router.post("/reconcile", response_model=GoogleCalendarReconcileResponse)
+async def reconcile(
+    is_write_target: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    counts = await google_calendar.reconcile_google_calendar(db, user.id, is_write_target=is_write_target)
+    if counts is None:
         raise HTTPException(status_code=400, detail="Google Calendar isn't connected")
-    synced, pruned = result
-    return GoogleCalendarSyncResponse(synced=synced, pruned=pruned)
-
-
-@router.post("/push", response_model=GoogleCalendarPushResponse)
-async def push(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await google_calendar.push_google_events(db, user.id)
-    if result is None:
-        raise HTTPException(status_code=400, detail="Google Calendar isn't connected")
-    created, updated, unchanged, failed = result
-    return GoogleCalendarPushResponse(created=created, updated=updated, unchanged=unchanged, failed=failed)
+    return GoogleCalendarReconcileResponse(**counts.__dict__)

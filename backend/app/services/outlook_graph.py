@@ -1,18 +1,17 @@
-"""Microsoft Graph OAuth + calendar read/write for the "Connect Outlook"
-feature (Settings > Connected Calendars). Separate from the device-calendar
-path (app.services.calendar_sync) — this talks to Microsoft's servers
+"""Microsoft Graph OAuth + two-way calendar sync for the "Connect Outlook"
+feature (Settings > Connected Calendars). Talks to Microsoft's servers
 directly via a stored access/refresh token, regardless of whether the
 account is synced into the phone's own calendar app.
 
-Read side feeds the SAME external_calendar_events table the device-calendar
-sync uses (via sync_calendar_events), so the AI tools / timeline strip need
-no changes to see Outlook events. Write side is new: Event rows get an
-outlook_event_id once mirrored (see models.Event), diffed against a stored
-signature so an unchanged Task doesn't cost a Graph call on every push.
+reconcile_outlook_events() is a single two-way pass: every Outlook event in
+the sync window becomes (or updates) a real, editable Event row, local edits
+push back out, and whichever side changed more recently wins a genuine
+conflict — see app.services.calendar_time for the shared comparison logic
+also used by google_calendar.py.
 """
 
 import logging
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
 
@@ -22,9 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Event, OutlookConnection
-from app.schemas import CalendarEventIn, CalendarSyncRequest
-from app.services import crypto, oauth_state
-from app.services.calendar_sync import sync_calendar_events
+from app.services import calendar_time, crypto, oauth_state
 from app.services.tools import user_timezone
 
 logger = logging.getLogger("uvicorn.error")
@@ -197,79 +194,20 @@ async def disconnect(db: AsyncSession, user_id: str) -> None:
         await db.commit()
 
 
-def _parse_graph_datetime(value: str) -> str:
+def _parse_graph_datetime(value: str) -> datetime:
     """Graph's calendarView returns dateTime as a naive string ("...0000000")
-    when queried with `Prefer: outlook.timezone="UTC"` (see sync_outlook_events)
-    — treat it as UTC and normalize to the same Z-suffixed ISO format the
-    device-calendar path already produces, so string comparisons in
-    calendar_sync.py stay valid across both sources."""
-    naive = value.split(".")[0]  # drop sub-second digits Python's fromisoformat can't take
-    return datetime.fromisoformat(naive).replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+    when queried with `Prefer: outlook.timezone="UTC"` — treat it as UTC.
+    lastModifiedDateTime is a real DateTimeOffset (already UTC, possibly
+    "Z"-suffixed) — dropping sub-second digits before parsing handles both
+    shapes the same way, since we always attach UTC tzinfo ourselves."""
+    naive = value.split(".")[0].rstrip("Z")
+    return datetime.fromisoformat(naive).replace(tzinfo=timezone.utc)
 
 
-async def sync_outlook_events(db: AsyncSession, user_id: str) -> tuple[int, int] | None:
-    """Returns (synced, pruned), or None if Outlook isn't connected."""
-    access_token = await get_valid_access_token(db, user_id)
-    if access_token is None:
-        return None
-
-    conn = await db.scalar(select(OutlookConnection).where(OutlookConnection.user_id == user_id))
-    assert conn is not None  # get_valid_access_token returned non-None, so this exists
-
-    start = datetime.now(timezone.utc) - timedelta(days=SYNC_WINDOW_PAST_DAYS)
-    end = datetime.now(timezone.utc) + timedelta(days=SYNC_WINDOW_FUTURE_DAYS)
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{GRAPH_BASE}/me/calendarView",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                'Prefer': 'outlook.timezone="UTC"',
-            },
-            params={
-                "startDateTime": start.isoformat(),
-                "endDateTime": end.isoformat(),
-                "$top": 250,
-                "$select": "id,subject,location,start,end,isAllDay",
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("value", [])
-
-    events = [
-        CalendarEventIn(
-            external_event_id=item["id"],
-            title=item.get("subject") or "(no title)",
-            location=(item.get("location") or {}).get("displayName") or None,
-            start_at=_parse_graph_datetime(item["start"]["dateTime"]),
-            end_at=_parse_graph_datetime(item["end"]["dateTime"]),
-            all_day=bool(item.get("isAllDay")),
-        )
-        for item in items
-    ]
-
-    req = CalendarSyncRequest(
-        calendar_id="outlook:primary",
-        calendar_name=f"{conn.ms_account_email} (Outlook)",
-        source_label="outlook",
-        range_start=start.isoformat().replace("+00:00", "Z"),
-        range_end=end.isoformat().replace("+00:00", "Z"),
-        events=events,
-    )
-    return await sync_calendar_events(db, user_id, req)
-
-
-def _event_signature(e: Event) -> str:
-    return f"{e.title}|{e.date}|{e.start_minutes}|{e.duration_minutes}"
-
-
-def _event_times_utc(e: Event, tz) -> tuple[datetime, datetime]:
-    local_start = datetime.combine(date.fromisoformat(e.date), time.min, tzinfo=tz) + timedelta(
-        minutes=e.start_minutes
-    )
-    local_end = local_start + timedelta(minutes=e.duration_minutes)
-    return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
+def _graph_datetime_str(value: str) -> str:
+    """Same parse as _parse_graph_datetime, normalized to the Z-suffixed ISO
+    string format used for signature/timestamp comparisons."""
+    return _parse_graph_datetime(value).isoformat().replace("+00:00", "Z")
 
 
 def _graph_event_body(title: str, start_utc: datetime, end_utc: datetime) -> dict:
@@ -280,62 +218,203 @@ def _graph_event_body(title: str, start_utc: datetime, end_utc: datetime) -> dic
     }
 
 
-async def push_outlook_events(db: AsyncSession, user_id: str) -> tuple[int, int, int, int] | None:
-    """Returns (created, updated, unchanged, failed), or None if Outlook
-    isn't connected. Reads the user's own Event rows — no payload needed,
-    the DB is already the source of truth."""
+def _local_fields_from_item(item: dict, tz) -> tuple[str, str, int, int]:
+    """A Graph event item -> (title, date, start_minutes, duration_minutes)."""
+    all_day = bool(item.get("isAllDay"))
+    start_utc = _parse_graph_datetime(item["start"]["dateTime"])
+    end_utc = _parse_graph_datetime(item["end"]["dateTime"])
+    date_str, start_minutes, duration = calendar_time.utc_to_local_fields(
+        start_utc, end_utc, tz, all_day=all_day
+    )
+    return item.get("subject") or "(no title)", date_str, start_minutes, duration
+
+
+async def reconcile_outlook_events(
+    db: AsyncSession, user_id: str, *, is_write_target: bool
+) -> calendar_time.ReconcileCounts | None:
+    """One two-way reconciliation pass: every Outlook event in the sync
+    window becomes (or updates) a real, editable Event row; local changes
+    push back out; whichever side changed more recently wins a genuine
+    conflict (calendar_time.resolve_direction). Returns None if Outlook
+    isn't connected."""
     access_token = await get_valid_access_token(db, user_id)
     if access_token is None:
         return None
+    conn = await db.scalar(select(OutlookConnection).where(OutlookConnection.user_id == user_id))
+    assert conn is not None  # get_valid_access_token returned non-None, so this exists
 
     tz = await user_timezone(db, user_id)
-    tasks = (await db.scalars(select(Event).where(Event.user_id == user_id))).all()
+    start = datetime.now(timezone.utc) - timedelta(days=SYNC_WINDOW_PAST_DAYS)
+    end = datetime.now(timezone.utc) + timedelta(days=SYNC_WINDOW_FUTURE_DAYS)
+    window_start_date = start.astimezone(tz).date().isoformat()
+    window_end_date = end.astimezone(tz).date().isoformat()
 
-    created = updated = unchanged = failed = 0
+    counts = calendar_time.ReconcileCounts()
+    headers = {"Authorization": f"Bearer {access_token}"}
     async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        for task in tasks:
-            signature = _event_signature(task)
-            if task.outlook_event_id and task.outlook_sync_signature == signature:
-                unchanged += 1
+        try:
+            resp = await client.get(
+                f"{GRAPH_BASE}/me/calendarView",
+                headers={**headers, "Prefer": 'outlook.timezone="UTC"'},
+                params={
+                    "startDateTime": start.isoformat(),
+                    "endDateTime": end.isoformat(),
+                    "$top": 250,
+                    "$select": "id,subject,location,start,end,isAllDay,lastModifiedDateTime",
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            remote_items = resp.json().get("value", [])
+        except httpx.HTTPError as exc:
+            logger.warning("Outlook reconcile fetch failed for user %s: %s", user_id, exc)
+            return counts
+
+        remote_by_id = {item["id"]: item for item in remote_items}
+        linked = (
+            await db.scalars(
+                select(Event).where(Event.user_id == user_id, Event.outlook_event_id.is_not(None))
+            )
+        ).all()
+
+        for task in linked:
+            item = remote_by_id.get(task.outlook_event_id)
+            if item is None:
+                # Missing from this pass's fetch — only conclude "deleted" if
+                # we'd actually expect to see it (its own date is inside the
+                # window); otherwise it's simply outside this pass's reach,
+                # not evidence of a remote deletion.
+                if not (window_start_date <= task.date <= window_end_date):
+                    continue
+                if calendar_time.most_recent_wins(task.updated_at, conn.last_synced_at):
+                    start_utc, end_utc = calendar_time.local_to_utc(
+                        task.date, task.start_minutes, task.duration_minutes, tz
+                    )
+                    try:
+                        resp = await client.post(
+                            f"{GRAPH_BASE}/me/events",
+                            headers=headers,
+                            json=_graph_event_body(task.title, start_utc, end_utc),
+                            timeout=10,
+                        )
+                        resp.raise_for_status()
+                        task.outlook_event_id = resp.json()["id"]
+                        task.outlook_sync_signature = calendar_time.event_signature(
+                            task.title, task.date, task.start_minutes, task.duration_minutes
+                        )
+                        await db.commit()
+                        counts.recreated_remote += 1
+                    except httpx.HTTPError as exc:
+                        logger.warning("Outlook recreate failed for task %s: %s", task.id, exc)
+                        counts.failed += 1
+                else:
+                    await db.delete(task)
+                    await db.commit()
+                    counts.deleted_local += 1
                 continue
 
-            start_utc, end_utc = _event_times_utc(task, tz)
-            body = _graph_event_body(task.title, start_utc, end_utc)
-            try:
-                if task.outlook_event_id:
+            remote_title, remote_date, remote_start, remote_duration = _local_fields_from_item(item, tz)
+            remote_modified = item.get("lastModifiedDateTime")
+            remote_modified_norm = _graph_datetime_str(remote_modified) if remote_modified else None
+            local_sig = calendar_time.event_signature(
+                task.title, task.date, task.start_minutes, task.duration_minutes
+            )
+            remote_sig = calendar_time.event_signature(
+                remote_title, remote_date, remote_start, remote_duration
+            )
+            direction = calendar_time.resolve_direction(
+                local_sig, remote_sig, task.outlook_sync_signature, task.updated_at, remote_modified_norm
+            )
+            if direction == "none":
+                counts.unchanged += 1
+                continue
+            if direction == "push":
+                start_utc, end_utc = calendar_time.local_to_utc(
+                    task.date, task.start_minutes, task.duration_minutes, tz
+                )
+                try:
                     resp = await client.patch(
                         f"{GRAPH_BASE}/me/events/{task.outlook_event_id}",
                         headers=headers,
-                        json=body,
+                        json=_graph_event_body(task.title, start_utc, end_utc),
                         timeout=10,
                     )
-                    if resp.status_code == 404:
-                        # Deleted directly in Outlook since we last pushed — recreate.
-                        task.outlook_event_id = None
-                        resp = await client.post(
-                            f"{GRAPH_BASE}/me/events", headers=headers, json=body, timeout=10
-                        )
                     resp.raise_for_status()
-                    if task.outlook_event_id is None:
-                        task.outlook_event_id = resp.json()["id"]
-                        created += 1
-                    else:
-                        updated += 1
-                else:
+                    task.outlook_sync_signature = local_sig
+                    await db.commit()
+                    counts.updated_remote += 1
+                except httpx.HTTPError as exc:
+                    logger.warning("Outlook push failed for task %s: %s", task.id, exc)
+                    counts.failed += 1
+            else:  # pull
+                task.title = remote_title
+                task.date = remote_date
+                task.start_minutes = remote_start
+                task.duration_minutes = remote_duration
+                task.updated_at = remote_modified_norm
+                task.outlook_sync_signature = remote_sig
+                await db.commit()
+                counts.updated_local += 1
+
+        linked_ids = {task.outlook_event_id for task in linked}
+        for item in remote_items:
+            if item["id"] in linked_ids:
+                continue
+            title, date_str, start_minutes, duration = _local_fields_from_item(item, tz)
+            modified = item.get("lastModifiedDateTime")
+            db.add(
+                Event(
+                    user_id=user_id,
+                    title=title,
+                    date=date_str,
+                    start_minutes=start_minutes,
+                    duration_minutes=duration,
+                    outlook_event_id=item["id"],
+                    outlook_sync_signature=calendar_time.event_signature(
+                        title, date_str, start_minutes, duration
+                    ),
+                    updated_at=_graph_datetime_str(modified) if modified else None,
+                )
+            )
+            await db.commit()
+            counts.created_local += 1
+
+        if is_write_target:
+            unlinked = (
+                await db.scalars(
+                    select(Event).where(
+                        Event.user_id == user_id,
+                        Event.outlook_event_id.is_(None),
+                        Event.google_event_id.is_(None),
+                        Event.apple_linked.isnot(True),
+                    )
+                )
+            ).all()
+            for task in unlinked:
+                start_utc, end_utc = calendar_time.local_to_utc(
+                    task.date, task.start_minutes, task.duration_minutes, tz
+                )
+                try:
                     resp = await client.post(
-                        f"{GRAPH_BASE}/me/events", headers=headers, json=body, timeout=10
+                        f"{GRAPH_BASE}/me/events",
+                        headers=headers,
+                        json=_graph_event_body(task.title, start_utc, end_utc),
+                        timeout=10,
                     )
                     resp.raise_for_status()
                     task.outlook_event_id = resp.json()["id"]
-                    created += 1
-                task.outlook_sync_signature = signature
-            except httpx.HTTPError as exc:
-                logger.warning("Outlook push failed for task %s: %s", task.id, exc)
-                failed += 1
+                    task.outlook_sync_signature = calendar_time.event_signature(
+                        task.title, task.date, task.start_minutes, task.duration_minutes
+                    )
+                    await db.commit()
+                    counts.created_remote += 1
+                except httpx.HTTPError as exc:
+                    logger.warning("Outlook push failed for task %s: %s", task.id, exc)
+                    counts.failed += 1
 
+    conn.last_synced_at = datetime.now(timezone.utc).isoformat()
     await db.commit()
-    return created, updated, unchanged, failed
+    return counts
 
 
 async def maybe_delete_outlook_event(db: AsyncSession, user_id: str, event: Event) -> None:

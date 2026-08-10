@@ -58,19 +58,25 @@ export const useTaskStore = create<State & Actions>()(
       updateTaskTime: (id, startMinutes) =>
         set((state) => {
           const task = state.tasks.find((t) => t.id === id);
-          if (task) task.startMinutes = Math.max(0, startMinutes);
+          if (task) {
+            task.startMinutes = Math.max(0, startMinutes);
+            task.updatedAt = new Date().toISOString();
+          }
         }),
 
       updateTaskDuration: (id, durationMinutes) =>
         set((state) => {
           const task = state.tasks.find((t) => t.id === id);
-          if (task) task.durationMinutes = Math.max(15, durationMinutes);
+          if (task) {
+            task.durationMinutes = Math.max(15, durationMinutes);
+            task.updatedAt = new Date().toISOString();
+          }
         }),
 
       addTask: (task) => {
         const id = crypto.randomUUID();
         set((state) => {
-          state.tasks.push({ ...task, id, completed: false });
+          state.tasks.push({ ...task, id, completed: false, updatedAt: new Date().toISOString() });
         });
         return id;
       },
@@ -78,7 +84,10 @@ export const useTaskStore = create<State & Actions>()(
       toggleTaskCompleted: (id) =>
         set((state) => {
           const task = state.tasks.find((t) => t.id === id);
-          if (task) task.completed = !task.completed;
+          if (task) {
+            task.completed = !task.completed;
+            task.updatedAt = new Date().toISOString();
+          }
         }),
 
       deleteTask: (id) =>
@@ -89,7 +98,11 @@ export const useTaskStore = create<State & Actions>()(
       updateTask: (id, changes) =>
         set((state) => {
           const task = state.tasks.find((t) => t.id === id);
-          if (task) Object.assign(task, changes);
+          // Defaults updatedAt to now, but lets an explicit updatedAt in
+          // `changes` win — reconcileAppleCalendar (lib/deviceCalendarSync.ts)
+          // pulls in a device edit and needs the *device's* modified time
+          // recorded, not the moment this reconciliation pass happened to run.
+          if (task) Object.assign(task, { updatedAt: new Date().toISOString() }, changes);
         }),
 
       copyTasksToDate: (fromDate, toDate) => {
@@ -104,6 +117,7 @@ export const useTaskStore = create<State & Actions>()(
           icon: t.icon,
           completed: false,
           date: toDate,
+          updatedAt: new Date().toISOString(),
         }));
         set((state) => {
           state.tasks = state.tasks.filter((t) => t.date !== toDate);

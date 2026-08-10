@@ -6,13 +6,12 @@ import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
 import {
-  deviceCalendarSupported,
-  hasCalendarAccess,
+  appleCalendarSupported,
+  findAppleCalendar,
   listDeviceCalendars,
   requestFullCalendarAccess,
-  sourceLabelFor,
 } from "@/lib/deviceCalendar";
-import { pullDeviceCalendars } from "@/lib/deviceCalendarSync";
+import { clearAppleLinks, reconcileAppleCalendar } from "@/lib/deviceCalendarSync";
 import {
   connectGoogleCalendar,
   disconnectGoogleCalendar,
@@ -29,16 +28,8 @@ interface CalendarSheetProps {
   onClose: () => void;
 }
 
-const SOURCE_LABEL_TEXT: Record<string, string> = {
-  icloud: "iCloud",
-  google: "Google",
-  outlook: "Outlook",
-  other: "Other",
-};
-
-// The selectable row shared by "Add new events to" — either a device
-// calendar or the connected Outlook account, so both can live in one list
-// with a single active selection.
+// The selectable row shared by "Add new events to" — Apple/Outlook/Google,
+// so all three can live in one list with a single active selection.
 function WriteTargetRow({
   label,
   sublabel,
@@ -73,8 +64,8 @@ function WriteTargetRow({
 }
 
 export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
-  const [readCalendarIds, toggleReadCalendar, writeTarget, setWriteTarget] = useCalendarStore(
-    useShallow((s) => [s.readCalendarIds, s.toggleReadCalendar, s.writeTarget, s.setWriteTarget])
+  const [appleCalendarId, setAppleCalendarId, writeTarget, setWriteTarget] = useCalendarStore(
+    useShallow((s) => [s.appleCalendarId, s.setAppleCalendarId, s.writeTarget, s.setWriteTarget])
   );
   const [outlookConnected, outlookEmail, outlookLoaded] = useOutlookStore(
     useShallow((s) => [s.connected, s.msAccountEmail, s.loaded])
@@ -82,18 +73,20 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
   const [googleConnected, googleEmail, googleLoaded] = useGoogleCalendarStore(
     useShallow((s) => [s.connected, s.googleAccountEmail, s.loaded])
   );
-  const [calendars, setCalendars] = useState<Calendar[] | null>(null);
-  const [connecting, setConnecting] = useState(false);
+  const [appleCalendar, setAppleCalendar] = useState<Calendar | null>(null);
+  const [connectingApple, setConnectingApple] = useState(false);
   const [deniedOnce, setDeniedOnce] = useState(false);
+  const [noIcloudCalendar, setNoIcloudCalendar] = useState(false);
   const [connectingOutlook, setConnectingOutlook] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !deviceCalendarSupported || calendars !== null) return;
+    if (!isOpen || !appleCalendarSupported || !appleCalendarId || appleCalendar) return;
     void (async () => {
-      if (await hasCalendarAccess()) setCalendars(await listDeviceCalendars());
+      const calendars = await listDeviceCalendars();
+      setAppleCalendar(calendars.find((c) => c.id === appleCalendarId) ?? null);
     })();
-  }, [isOpen, calendars]);
+  }, [isOpen, appleCalendarId, appleCalendar]);
 
   useEffect(() => {
     if (isOpen && outlookSupported && !outlookLoaded) void useOutlookStore.getState().refresh();
@@ -105,18 +98,34 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
     }
   }, [isOpen, googleLoaded]);
 
-  async function connect() {
-    setConnecting(true);
+  async function connectApple() {
+    setConnectingApple(true);
+    setDeniedOnce(false);
+    setNoIcloudCalendar(false);
     try {
       const granted = await requestFullCalendarAccess();
       if (!granted) {
         setDeniedOnce(true);
         return;
       }
-      setCalendars(await listDeviceCalendars());
+      const cal = await findAppleCalendar();
+      if (!cal) {
+        setNoIcloudCalendar(true);
+        return;
+      }
+      setAppleCalendar(cal);
+      setAppleCalendarId(cal.id);
+      void reconcileAppleCalendar();
     } finally {
-      setConnecting(false);
+      setConnectingApple(false);
     }
+  }
+
+  function disconnectApple() {
+    if (writeTarget?.kind === "apple") setWriteTarget(null);
+    void clearAppleLinks();
+    setAppleCalendarId(null);
+    setAppleCalendar(null);
   }
 
   async function toggleOutlookConnection() {
@@ -150,16 +159,10 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
     }
   }
 
-  function selectRead(id: string) {
-    if (writeTarget?.kind === "device" && writeTarget.calendarId === id) setWriteTarget(null);
-    toggleReadCalendar(id);
-    void pullDeviceCalendars();
-  }
-
-  function selectWriteDevice(id: string) {
-    if (readCalendarIds.includes(id)) toggleReadCalendar(id);
-    const alreadySelected = writeTarget?.kind === "device" && writeTarget.calendarId === id;
-    setWriteTarget(alreadySelected ? null : { kind: "device", calendarId: id });
+  function selectWriteApple() {
+    if (!appleCalendarId) return;
+    const alreadySelected = writeTarget?.kind === "apple" && writeTarget.calendarId === appleCalendarId;
+    setWriteTarget(alreadySelected ? null : { kind: "apple", calendarId: appleCalendarId });
   }
 
   function selectWriteOutlook() {
@@ -170,8 +173,8 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
     setWriteTarget(writeTarget?.kind === "google" ? null : { kind: "google" });
   }
 
-  const showWriteSection =
-    (calendars && calendars.length > 0) || outlookConnected || googleConnected;
+  const showWriteSection = appleCalendarId !== null || outlookConnected || googleConnected;
+  const anySupported = appleCalendarSupported || outlookSupported || googleCalendarSupported;
 
   return (
     <BottomSheet
@@ -195,61 +198,59 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-4 flex flex-col gap-4">
-        {!deviceCalendarSupported ? (
+        {!anySupported ? (
           <p className="text-sm text-fg-faint">
             Calendar connections are available in the Disciplined iOS and Android app.
           </p>
         ) : (
           <>
-            {calendars === null ? (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-fg-faint">
-                  Connect calendars already added in your phone&rsquo;s Settings — Disciplined will
-                  read their events for your timeline and AI weekly planner, and can add its own
-                  events to one calendar of your choice.
-                </p>
-                {deniedOnce && (
-                  <p className="text-xs text-red-500">
-                    Calendar access was denied — allow it for Disciplined in your device Settings,
-                    then try again.
-                  </p>
-                )}
-                <motion.button
-                  onClick={() => void connect()}
-                  disabled={connecting}
-                  whileTap={tap}
-                  className="h-11 rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
-                >
-                  {connecting ? "Connecting…" : "Connect device calendars"}
-                </motion.button>
-                <p className="text-xs text-fg-faint">
-                  Don&rsquo;t see an expected calendar (e.g. Outlook or Google) after connecting?
-                  Many calendar apps only sync to your phone&rsquo;s calendar if you turn that on
-                  inside the app itself — or connect your Microsoft or Google account directly below
-                  instead.
-                </p>
-              </div>
-            ) : (
+            {appleCalendarSupported && (
               <div>
-                <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide mb-1.5">
-                  Show on my timeline
-                </p>
-                {calendars.length === 0 ? (
-                  <p className="text-sm text-fg-faint">
-                    No calendars found — add an account in your device&rsquo;s Settings first.
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <CalendarIcon size={14} className="text-fg-faint" />
+                  <p className="text-[11px] font-semibold text-fg-faint uppercase tracking-wide">
+                    Apple Calendar
                   </p>
+                </div>
+                <p className="text-xs text-fg-faint mb-2">
+                  Reads and writes your iCloud calendar — Disciplined will show its events on your
+                  timeline and AI weekly planner, and can add its own events there too.
+                </p>
+                {appleCalendarId ? (
+                  <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-surface-raised">
+                    <span className="flex-1 min-w-0 text-sm font-medium text-fg truncate">
+                      {appleCalendar?.title ?? "iCloud calendar"}
+                    </span>
+                    <motion.button
+                      onClick={disconnectApple}
+                      whileTap={tap}
+                      className="text-xs font-semibold text-red-500 shrink-0"
+                    >
+                      Disconnect
+                    </motion.button>
+                  </div>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {calendars.map((cal) => (
-                      <WriteTargetRow
-                        key={cal.id}
-                        label={cal.title}
-                        sublabel={SOURCE_LABEL_TEXT[sourceLabelFor(cal)]}
-                        color={cal.color}
-                        selected={readCalendarIds.includes(cal.id)}
-                        onSelect={() => selectRead(cal.id)}
-                      />
-                    ))}
+                  <div className="flex flex-col gap-2">
+                    {deniedOnce && (
+                      <p className="text-xs text-red-500">
+                        Calendar access was denied — allow it for Disciplined in your device
+                        Settings, then try again.
+                      </p>
+                    )}
+                    {noIcloudCalendar && (
+                      <p className="text-xs text-red-500">
+                        No iCloud calendar found on this device — add one in your device&rsquo;s
+                        Settings first.
+                      </p>
+                    )}
+                    <motion.button
+                      onClick={() => void connectApple()}
+                      disabled={connectingApple}
+                      whileTap={tap}
+                      className="h-11 w-full rounded-xl bg-fg text-fg-inverse text-sm font-semibold disabled:opacity-60"
+                    >
+                      {connectingApple ? "Connecting…" : "Connect Apple Calendar"}
+                    </motion.button>
                   </div>
                 )}
               </div>
@@ -341,15 +342,14 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
                   Disciplined only.
                 </p>
                 <div className="flex flex-col gap-1.5">
-                  {calendars?.map((cal) => (
+                  {appleCalendarId && (
                     <WriteTargetRow
-                      key={cal.id}
-                      label={cal.title}
-                      color={cal.color}
-                      selected={writeTarget?.kind === "device" && writeTarget.calendarId === cal.id}
-                      onSelect={() => selectWriteDevice(cal.id)}
+                      label={`${appleCalendar?.title ?? "iCloud calendar"} (Apple Calendar)`}
+                      color={appleCalendar?.color ?? "#8e8e93"}
+                      selected={writeTarget?.kind === "apple"}
+                      onSelect={selectWriteApple}
                     />
-                  ))}
+                  )}
                   {outlookConnected && (
                     <WriteTargetRow
                       label={`${outlookEmail} (Outlook)`}

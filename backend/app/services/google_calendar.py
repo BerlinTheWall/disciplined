@@ -1,12 +1,11 @@
-"""Google Calendar OAuth + read/write for the "Connect Google Calendar"
-feature (Settings > Connected Calendars). Mirrors app.services.outlook_graph
-file-for-file — see that module's docstring for the shared rationale (talks
-to Google's servers directly via a stored token, regardless of whether the
-account is synced into the phone's own calendar app; read side feeds the
-same external_calendar_events table). Kept as a separate, parallel
-implementation rather than a shared "provider" abstraction — the two APIs'
-endpoints, response shapes, and refresh-token semantics differ enough that
-isolating them keeps each one's failure modes simple.
+"""Google Calendar OAuth + two-way calendar sync for the "Connect Google
+Calendar" feature (Settings > Connected Calendars). Mirrors
+app.services.outlook_graph file-for-file — see that module's docstring for
+the shared reconciliation rationale (calendar_time.py has the comparison
+logic both share). Kept as a separate, parallel implementation rather than a
+shared "provider" abstraction — the two APIs' endpoints, response shapes,
+and refresh-token semantics differ enough that isolating them keeps each
+one's failure modes simple.
 
 Deltas from Outlook worth knowing:
 - Google only guarantees a refresh_token on the *first* consent unless
@@ -15,7 +14,8 @@ Deltas from Outlook worth knowing:
 - Google has a real revoke endpoint, used on disconnect (Microsoft doesn't).
 - Deleted-elsewhere events come back as 410 Gone (Outlook: 404).
 - Event fields: `summary`/`start.dateTime`/`end.dateTime`, a plain string
-  `location` (Outlook: `subject`/nested `location.displayName`).
+  `location` (Outlook: `subject`/nested `location.displayName`), and a
+  real `updated` last-modified timestamp on every item.
 """
 
 import logging
@@ -29,9 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Event, GoogleCalendarConnection
-from app.schemas import CalendarEventIn, CalendarSyncRequest
-from app.services import crypto, oauth_state
-from app.services.calendar_sync import sync_calendar_events
+from app.services import calendar_time, crypto, oauth_state
 from app.services.tools import user_timezone
 
 logger = logging.getLogger("uvicorn.error")
@@ -216,100 +214,22 @@ async def disconnect(db: AsyncSession, user_id: str) -> None:
     await db.commit()
 
 
-def _parse_google_datetime(value: str) -> str:
-    """Normalizes a Google `dateTime` (already offset-aware, e.g.
-    "2026-08-10T10:00:00-04:00") to the same Z-suffixed UTC ISO format the
-    device-calendar path produces, so string comparisons in calendar_sync.py
-    stay valid across every source."""
-    return datetime.fromisoformat(value).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+def _parse_google_datetime(value: str) -> datetime:
+    """A Google `dateTime` (already offset-aware, e.g.
+    "2026-08-10T10:00:00-04:00") -> a UTC datetime."""
+    return datetime.fromisoformat(value).astimezone(timezone.utc)
 
 
-def _parse_google_all_day(value: str) -> str:
+def _google_datetime_str(value: str) -> str:
+    """Same parse as _parse_google_datetime, normalized to the Z-suffixed
+    ISO string format used for signature/timestamp comparisons."""
+    return _parse_google_datetime(value).isoformat().replace("+00:00", "Z")
+
+
+def _parse_google_all_day(value: str) -> datetime:
     """An all-day event's `date` field ("2026-08-10", no time) — treated as
-    midnight UTC, same convention the device-calendar path uses for all-day
-    events from EventKit/CalendarContract."""
-    return datetime.combine(date.fromisoformat(value), time.min, tzinfo=timezone.utc).isoformat().replace(
-        "+00:00", "Z"
-    )
-
-
-async def sync_google_events(db: AsyncSession, user_id: str) -> tuple[int, int] | None:
-    """Returns (synced, pruned), or None if Google Calendar isn't connected."""
-    access_token = await get_valid_access_token(db, user_id)
-    if access_token is None:
-        return None
-
-    conn = await db.scalar(
-        select(GoogleCalendarConnection).where(GoogleCalendarConnection.user_id == user_id)
-    )
-    assert conn is not None
-
-    start = datetime.now(timezone.utc) - timedelta(days=SYNC_WINDOW_PAST_DAYS)
-    end = datetime.now(timezone.utc) + timedelta(days=SYNC_WINDOW_FUTURE_DAYS)
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{CALENDAR_BASE}/calendars/primary/events",
-            headers={"Authorization": f"Bearer {access_token}"},
-            params={
-                "timeMin": start.isoformat(),
-                "timeMax": end.isoformat(),
-                "singleEvents": "true",
-                "orderBy": "startTime",
-                "maxResults": 250,
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("items", [])
-
-    events = []
-    for item in items:
-        if item.get("status") == "cancelled":
-            continue
-        start_field = item.get("start", {})
-        end_field = item.get("end", {})
-        all_day = "date" in start_field
-        events.append(
-            CalendarEventIn(
-                external_event_id=item["id"],
-                title=item.get("summary") or "(no title)",
-                location=item.get("location") or None,
-                start_at=(
-                    _parse_google_all_day(start_field["date"])
-                    if all_day
-                    else _parse_google_datetime(start_field["dateTime"])
-                ),
-                end_at=(
-                    _parse_google_all_day(end_field["date"])
-                    if all_day
-                    else _parse_google_datetime(end_field["dateTime"])
-                ),
-                all_day=all_day,
-            )
-        )
-
-    req = CalendarSyncRequest(
-        calendar_id="google:primary",
-        calendar_name=f"{conn.google_account_email} (Google)",
-        source_label="google",
-        range_start=start.isoformat().replace("+00:00", "Z"),
-        range_end=end.isoformat().replace("+00:00", "Z"),
-        events=events,
-    )
-    return await sync_calendar_events(db, user_id, req)
-
-
-def _event_signature(e: Event) -> str:
-    return f"{e.title}|{e.date}|{e.start_minutes}|{e.duration_minutes}"
-
-
-def _event_times_utc(e: Event, tz) -> tuple[datetime, datetime]:
-    local_start = datetime.combine(date.fromisoformat(e.date), time.min, tzinfo=tz) + timedelta(
-        minutes=e.start_minutes
-    )
-    local_end = local_start + timedelta(minutes=e.duration_minutes)
-    return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
+    midnight UTC."""
+    return datetime.combine(date.fromisoformat(value), time.min, tzinfo=timezone.utc)
 
 
 def _google_event_body(title: str, start_utc: datetime, end_utc: datetime) -> dict:
@@ -320,67 +240,206 @@ def _google_event_body(title: str, start_utc: datetime, end_utc: datetime) -> di
     }
 
 
-async def push_google_events(db: AsyncSession, user_id: str) -> tuple[int, int, int, int] | None:
-    """Returns (created, updated, unchanged, failed), or None if Google
-    Calendar isn't connected. Reads the user's own Event rows — no payload
-    needed, the DB is already the source of truth."""
+def _local_fields_from_item(item: dict, tz) -> tuple[str, str, int, int]:
+    """A Google event item -> (title, date, start_minutes, duration_minutes)."""
+    start_field = item.get("start", {})
+    end_field = item.get("end", {})
+    all_day = "date" in start_field
+    start_utc = (
+        _parse_google_all_day(start_field["date"]) if all_day else _parse_google_datetime(start_field["dateTime"])
+    )
+    end_utc = (
+        _parse_google_all_day(end_field["date"]) if all_day else _parse_google_datetime(end_field["dateTime"])
+    )
+    date_str, start_minutes, duration = calendar_time.utc_to_local_fields(
+        start_utc, end_utc, tz, all_day=all_day
+    )
+    return item.get("summary") or "(no title)", date_str, start_minutes, duration
+
+
+async def reconcile_google_calendar(
+    db: AsyncSession, user_id: str, *, is_write_target: bool
+) -> calendar_time.ReconcileCounts | None:
+    """One two-way reconciliation pass — see reconcile_outlook_events for the
+    full rationale, identical here. Returns None if Google Calendar isn't
+    connected."""
     access_token = await get_valid_access_token(db, user_id)
     if access_token is None:
         return None
+    conn = await db.scalar(
+        select(GoogleCalendarConnection).where(GoogleCalendarConnection.user_id == user_id)
+    )
+    assert conn is not None
 
     tz = await user_timezone(db, user_id)
-    tasks = (await db.scalars(select(Event).where(Event.user_id == user_id))).all()
+    start = datetime.now(timezone.utc) - timedelta(days=SYNC_WINDOW_PAST_DAYS)
+    end = datetime.now(timezone.utc) + timedelta(days=SYNC_WINDOW_FUTURE_DAYS)
+    window_start_date = start.astimezone(tz).date().isoformat()
+    window_end_date = end.astimezone(tz).date().isoformat()
 
-    created = updated = unchanged = failed = 0
+    counts = calendar_time.ReconcileCounts()
+    headers = {"Authorization": f"Bearer {access_token}"}
     async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        for task in tasks:
-            signature = _event_signature(task)
-            if task.google_event_id and task.google_sync_signature == signature:
-                unchanged += 1
-                continue
+        try:
+            resp = await client.get(
+                f"{CALENDAR_BASE}/calendars/primary/events",
+                headers=headers,
+                params={
+                    "timeMin": start.isoformat(),
+                    "timeMax": end.isoformat(),
+                    "singleEvents": "true",
+                    "orderBy": "startTime",
+                    "maxResults": 250,
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            remote_items = [i for i in resp.json().get("items", []) if i.get("status") != "cancelled"]
+        except httpx.HTTPError as exc:
+            logger.warning("Google Calendar reconcile fetch failed for user %s: %s", user_id, exc)
+            return counts
 
-            start_utc, end_utc = _event_times_utc(task, tz)
-            body = _google_event_body(task.title, start_utc, end_utc)
-            try:
-                if task.google_event_id:
-                    resp = await client.patch(
-                        f"{CALENDAR_BASE}/calendars/primary/events/{task.google_event_id}",
-                        headers=headers,
-                        json=body,
-                        timeout=10,
+        remote_by_id = {item["id"]: item for item in remote_items}
+        linked = (
+            await db.scalars(
+                select(Event).where(Event.user_id == user_id, Event.google_event_id.is_not(None))
+            )
+        ).all()
+
+        for task in linked:
+            item = remote_by_id.get(task.google_event_id)
+            if item is None:
+                if not (window_start_date <= task.date <= window_end_date):
+                    continue
+                if calendar_time.most_recent_wins(task.updated_at, conn.last_synced_at):
+                    start_utc, end_utc = calendar_time.local_to_utc(
+                        task.date, task.start_minutes, task.duration_minutes, tz
                     )
-                    if resp.status_code in (404, 410):
-                        # Deleted directly in Google Calendar since we last
-                        # pushed (410 Gone is Google's flavor of this,
-                        # unlike Graph's plain 404) — recreate.
-                        task.google_event_id = None
+                    try:
                         resp = await client.post(
                             f"{CALENDAR_BASE}/calendars/primary/events",
                             headers=headers,
-                            json=body,
+                            json=_google_event_body(task.title, start_utc, end_utc),
                             timeout=10,
                         )
-                    resp.raise_for_status()
-                    if task.google_event_id is None:
+                        resp.raise_for_status()
                         task.google_event_id = resp.json()["id"]
-                        created += 1
-                    else:
-                        updated += 1
+                        task.google_sync_signature = calendar_time.event_signature(
+                            task.title, task.date, task.start_minutes, task.duration_minutes
+                        )
+                        await db.commit()
+                        counts.recreated_remote += 1
+                    except httpx.HTTPError as exc:
+                        logger.warning("Google Calendar recreate failed for task %s: %s", task.id, exc)
+                        counts.failed += 1
                 else:
+                    await db.delete(task)
+                    await db.commit()
+                    counts.deleted_local += 1
+                continue
+
+            remote_title, remote_date, remote_start, remote_duration = _local_fields_from_item(item, tz)
+            remote_modified = item.get("updated")
+            remote_modified_norm = _google_datetime_str(remote_modified) if remote_modified else None
+            local_sig = calendar_time.event_signature(
+                task.title, task.date, task.start_minutes, task.duration_minutes
+            )
+            remote_sig = calendar_time.event_signature(
+                remote_title, remote_date, remote_start, remote_duration
+            )
+            direction = calendar_time.resolve_direction(
+                local_sig, remote_sig, task.google_sync_signature, task.updated_at, remote_modified_norm
+            )
+            if direction == "none":
+                counts.unchanged += 1
+                continue
+            if direction == "push":
+                start_utc, end_utc = calendar_time.local_to_utc(
+                    task.date, task.start_minutes, task.duration_minutes, tz
+                )
+                try:
+                    resp = await client.patch(
+                        f"{CALENDAR_BASE}/calendars/primary/events/{task.google_event_id}",
+                        headers=headers,
+                        json=_google_event_body(task.title, start_utc, end_utc),
+                        timeout=10,
+                    )
+                    resp.raise_for_status()
+                    task.google_sync_signature = local_sig
+                    await db.commit()
+                    counts.updated_remote += 1
+                except httpx.HTTPError as exc:
+                    logger.warning("Google Calendar push failed for task %s: %s", task.id, exc)
+                    counts.failed += 1
+            else:  # pull
+                task.title = remote_title
+                task.date = remote_date
+                task.start_minutes = remote_start
+                task.duration_minutes = remote_duration
+                task.updated_at = remote_modified_norm
+                task.google_sync_signature = remote_sig
+                await db.commit()
+                counts.updated_local += 1
+
+        linked_ids = {task.google_event_id for task in linked}
+        for item in remote_items:
+            if item["id"] in linked_ids:
+                continue
+            title, date_str, start_minutes, duration = _local_fields_from_item(item, tz)
+            modified = item.get("updated")
+            db.add(
+                Event(
+                    user_id=user_id,
+                    title=title,
+                    date=date_str,
+                    start_minutes=start_minutes,
+                    duration_minutes=duration,
+                    google_event_id=item["id"],
+                    google_sync_signature=calendar_time.event_signature(
+                        title, date_str, start_minutes, duration
+                    ),
+                    updated_at=_google_datetime_str(modified) if modified else None,
+                )
+            )
+            await db.commit()
+            counts.created_local += 1
+
+        if is_write_target:
+            unlinked = (
+                await db.scalars(
+                    select(Event).where(
+                        Event.user_id == user_id,
+                        Event.google_event_id.is_(None),
+                        Event.outlook_event_id.is_(None),
+                        Event.apple_linked.isnot(True),
+                    )
+                )
+            ).all()
+            for task in unlinked:
+                start_utc, end_utc = calendar_time.local_to_utc(
+                    task.date, task.start_minutes, task.duration_minutes, tz
+                )
+                try:
                     resp = await client.post(
-                        f"{CALENDAR_BASE}/calendars/primary/events", headers=headers, json=body, timeout=10
+                        f"{CALENDAR_BASE}/calendars/primary/events",
+                        headers=headers,
+                        json=_google_event_body(task.title, start_utc, end_utc),
+                        timeout=10,
                     )
                     resp.raise_for_status()
                     task.google_event_id = resp.json()["id"]
-                    created += 1
-                task.google_sync_signature = signature
-            except httpx.HTTPError as exc:
-                logger.warning("Google Calendar push failed for task %s: %s", task.id, exc)
-                failed += 1
+                    task.google_sync_signature = calendar_time.event_signature(
+                        task.title, task.date, task.start_minutes, task.duration_minutes
+                    )
+                    await db.commit()
+                    counts.created_remote += 1
+                except httpx.HTTPError as exc:
+                    logger.warning("Google Calendar push failed for task %s: %s", task.id, exc)
+                    counts.failed += 1
 
+    conn.last_synced_at = datetime.now(timezone.utc).isoformat()
     await db.commit()
-    return created, updated, unchanged, failed
+    return counts
 
 
 async def maybe_delete_google_event(db: AsyncSession, user_id: str, event: Event) -> None:

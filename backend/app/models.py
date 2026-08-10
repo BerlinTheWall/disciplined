@@ -1,6 +1,6 @@
 ﻿from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, Float, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Float, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -95,23 +95,36 @@ class Event(Base):
     shopping_list_id: Mapped[str | None] = mapped_column(String, nullable=True)
     workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Set when this Task has been mirrored to the user's connected Outlook
-    # calendar (see app.services.outlook_graph.push_outlook_events) — the
-    # Microsoft Graph event id, so a later push updates in place instead of
-    # duplicating. Unrelated to the device-calendar write path (Settings >
-    # Connected Calendars > "Add new events to" a device calendar instead),
-    # which tracks its own id client-side rather than on this row.
+    # Set when this Task is linked (either direction) to the user's connected
+    # Outlook calendar (see app.services.outlook_graph.reconcile_outlook_events)
+    # — the Microsoft Graph event id. Unrelated to the Apple write path
+    # (tracked client-side, see Event.apple_linked below), which never
+    # touches this row's id.
     outlook_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
     # title|date|start_minutes|duration_minutes as of the last successful
-    # push — lets push_outlook_events skip a Graph call for a Task that
-    # hasn't actually changed since, instead of re-pushing everything on
-    # every sync.
+    # sync — lets reconcile_outlook_events skip a no-op Graph call for a Task
+    # whose content hasn't actually changed on either side since.
     outlook_sync_signature: Mapped[str | None] = mapped_column(String, nullable=True)
     # Same idea as the outlook_* pair above, for a connected Google Calendar
-    # (see app.services.google_calendar.push_google_events) — independent of
-    # it, since a Task is mirrored to at most one of the two.
+    # (see app.services.google_calendar.reconcile_google_calendar) —
+    # independent of it, since a Task is ever linked to at most one provider.
     google_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
     google_sync_signature: Mapped[str | None] = mapped_column(String, nullable=True)
+    # ISO datetime, UTC — stamped by the client on every local edit (see
+    # frontend/src/store/taskStore.ts) and by every AI tool executor that
+    # mutates an Event directly (services/tools.py), since those bypass the
+    # client entirely. NULL means "never touched since this column existed"
+    # — treated as infinitely old, so a provider's remote content always
+    # wins for a legacy row until it's first touched. Drives the
+    # most-recent-edit-wins reconciliation in outlook_graph.py/google_calendar.py.
+    updated_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    # True once this Task has been linked to an Apple/EventKit calendar event
+    # by the client (frontend/src/lib/deviceCalendarSync.ts). Apple has no
+    # server-side connection row at all (EventKit access is on-device only),
+    # so this is the only backend-visible signal that a Task already belongs
+    # to Apple — needed so the Outlook/Google reconcile's "push brand-new
+    # unlinked Tasks out" step doesn't also push an Apple-linked Task.
+    apple_linked: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Habit(Base):
@@ -227,6 +240,12 @@ class OutlookConnection(Base):
     access_token_expires_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
     scope: Mapped[str] = mapped_column(String)
     connected_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    # ISO datetime, UTC — stamped at the end of every successful
+    # reconcile_outlook_events pass. The only way to tell "cleanly deleted on
+    # Outlook" apart from "we just haven't looked recently" when a
+    # previously-linked Event vanishes from a fresh fetch (a deletion carries
+    # no timestamp of its own to compare against).
+    last_synced_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class GoogleCalendarConnection(Base):
@@ -247,40 +266,8 @@ class GoogleCalendarConnection(Base):
     access_token_expires_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
     scope: Mapped[str] = mapped_column(String)
     connected_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
-
-
-class ExternalCalendarEvent(Base):
-    """A read-only mirror of an event from a device calendar (Apple/Google/
-    Outlook, whichever accounts the user has added on their phone) — synced
-    in one-way by the frontend via the native EventKit/CalendarContract
-    plugin, purely so the AI weekly planner and timeline can see it. Never
-    editable from disciplined; see app.services.calendar_sync.
-    """
-
-    __tablename__ = "external_calendar_events"
-    __table_args__ = (
-        UniqueConstraint("user_id", "external_event_id", name="uq_external_calendar_event"),
-    )
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
-    user_id: Mapped[str] = mapped_column(String, index=True)
-    device_calendar_id: Mapped[str] = mapped_column(String, index=True)
-    device_calendar_name: Mapped[str] = mapped_column(String)
-    # Best-effort provider label computed client-side from the plugin's
-    # source-type metadata (EventKit sourceType / Android account type) —
-    # "icloud" | "google" | "outlook" | "other". Display/grouping only, never
-    # relied on for correctness.
-    source_label: Mapped[str] = mapped_column(String, default="other")
-    external_event_id: Mapped[str] = mapped_column(String, index=True)
-    title: Mapped[str] = mapped_column(String)
-    location: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Tz-aware UTC datetimes, ISO 8601 — unlike Event's date+start_minutes,
-    # a device calendar event isn't guaranteed single-day or in the app's
-    # displayed timezone.
-    start_at: Mapped[str] = mapped_column(String, index=True)
-    end_at: Mapped[str] = mapped_column(String)
-    all_day: Mapped[bool] = mapped_column(Boolean, default=False)
-    last_synced_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
+    # See OutlookConnection.last_synced_at — same purpose, for Google.
+    last_synced_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class Meal(Base):
