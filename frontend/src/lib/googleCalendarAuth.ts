@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 
 import { api } from "./api";
 import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
+import { useToastStore } from "@/store/toastStore";
 
 // Connects disciplined directly to a Google account via OAuth — mirrors
 // lib/outlookAuth.ts exactly; see that module's docstring for the full flow
@@ -44,6 +45,10 @@ export function initGoogleCalendarAuth(): void {
     void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
       if (!url.startsWith(CALLBACK_PREFIX)) return;
       void Browser.close();
+      // Trust the URL's own status param for the toast — see
+      // lib/outlookAuth.ts's identical block for the full rationale.
+      const status = new URL(url).searchParams.get("status");
+      showConnectToast(status);
       void useGoogleCalendarStore.getState().refresh();
     });
     return;
@@ -51,9 +56,21 @@ export function initGoogleCalendarAuth(): void {
 
   const params = new URLSearchParams(window.location.search);
   if (params.has(WEB_CALLBACK_PARAM)) {
+    // The backend puts "success"/"error" directly as this param's own value
+    // for a web-initiated connect (routers/google_calendar.py::_redirect_target).
+    const status = params.get(WEB_CALLBACK_PARAM);
     params.delete(WEB_CALLBACK_PARAM);
     const rest = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    showConnectToast(status);
     void useGoogleCalendarStore.getState().refresh();
+  }
+}
+
+function showConnectToast(status: string | null): void {
+  if (status === "success") {
+    useToastStore.getState().show("Google Calendar connected");
+  } else if (status === "error") {
+    useToastStore.getState().show("Couldn't connect Google Calendar — try again", "error");
   }
 }

@@ -16,6 +16,7 @@ import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
 import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
+import ToastHost from "./components/ToastHost";
 import TutorialHost from "./components/TutorialHost";
 import VoiceAssistant from "./components/VoiceAssistant";
 import WeekPlanSheet from "./components/weekplan/WeekPlanSheet";
@@ -433,6 +434,9 @@ function App() {
       {/* Proactive assistant nudges — checks in on app open/foreground, at
           most one banner a day */}
       <NudgeHost onOpenGoals={() => go("goals")} />
+
+      {/* Generic one-off confirmation toast (e.g. "Google Calendar connected") */}
+      <ToastHost />
 
       <BottomNav active={activePage} onChange={go} onAdd={openFab} fabOpen={fabOpen} />
 

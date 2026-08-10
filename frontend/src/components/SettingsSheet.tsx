@@ -13,8 +13,11 @@ import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
+import { useCalendarStore } from "@/store/calendarStore";
+import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
 import { GOOGLE_VOICES, useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
+import { useOutlookStore } from "@/store/outlookStore";
 import { useSettingsStore, type VoiceTone } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTutorialStore } from "@/store/tutorialStore";
@@ -134,6 +137,14 @@ function ChipRow<T>({
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const [showInterests, setShowInterests] = useState(false);
   const [showCalendars, setShowCalendars] = useState(false);
+  const appleCalendarId = useCalendarStore((s) => s.appleCalendarId);
+  const outlookConnected = useOutlookStore((s) => s.connected);
+  const googleConnected = useGoogleCalendarStore((s) => s.connected);
+  const connectedCalendarNames = [
+    appleCalendarId && "Apple",
+    outlookConnected && "Outlook",
+    googleConnected && "Google",
+  ].filter((name): name is string => Boolean(name));
   const [altStyle, setAltStyle, background, setBackground] = useSettingsStore(
     useShallow((state) => [
       state.altStyle,
@@ -369,7 +380,19 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
               whileTap={tap}
               className="flex items-center gap-3 w-full px-4 py-3 text-left"
             >
-              <span className="text-[15px] font-medium text-fg flex-1">Connected calendars</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-medium text-fg">Connected calendars</p>
+                <p className="text-xs text-fg-faint mt-0.5">
+                  {connectedCalendarNames.length > 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      {connectedCalendarNames.join(", ")}
+                    </span>
+                  ) : (
+                    "None connected"
+                  )}
+                </p>
+              </div>
               <CalendarIcon size={18} className="text-fg-muted" />
             </motion.button>
           </Section>

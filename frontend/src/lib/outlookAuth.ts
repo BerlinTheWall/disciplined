@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 
 import { api } from "./api";
 import { useOutlookStore } from "@/store/outlookStore";
+import { useToastStore } from "@/store/toastStore";
 
 // Connects disciplined directly to a Microsoft account via Graph OAuth —
 // independent of the device-calendar feature (lib/deviceCalendar.ts), which
@@ -54,8 +55,13 @@ export function initOutlookAuth(): void {
     void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
       if (!url.startsWith(CALLBACK_PREFIX)) return;
       void Browser.close();
-      // Success or failure, re-fetch status rather than trusting the URL's
-      // own status param — it's just a hint for a possible toast later.
+      // Always re-fetch status so the store's connected/email fields are
+      // fresh, but the toast itself trusts the URL's own status param — it's
+      // set by the backend only once the connection actually succeeded (or
+      // definitively failed), which is a more reliable signal in the moment
+      // than whatever /status happens to return right now.
+      const status = new URL(url).searchParams.get("status");
+      showConnectToast(status);
       void useOutlookStore.getState().refresh();
     });
     return;
@@ -63,9 +69,22 @@ export function initOutlookAuth(): void {
 
   const params = new URLSearchParams(window.location.search);
   if (params.has(WEB_CALLBACK_PARAM)) {
+    // The backend puts "success"/"error" directly as this param's own value
+    // for a web-initiated connect (routers/outlook.py::_redirect_target) —
+    // unlike the native deep link, which uses a separate ?status= key.
+    const status = params.get(WEB_CALLBACK_PARAM);
     params.delete(WEB_CALLBACK_PARAM);
     const rest = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    showConnectToast(status);
     void useOutlookStore.getState().refresh();
+  }
+}
+
+function showConnectToast(status: string | null): void {
+  if (status === "success") {
+    useToastStore.getState().show("Outlook connected");
+  } else if (status === "error") {
+    useToastStore.getState().show("Couldn't connect Outlook — try again", "error");
   }
 }
