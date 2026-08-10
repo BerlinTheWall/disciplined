@@ -60,8 +60,8 @@ export function initOutlookAuth(): void {
       // set by the backend only once the connection actually succeeded (or
       // definitively failed), which is a more reliable signal in the moment
       // than whatever /status happens to return right now.
-      const status = new URL(url).searchParams.get("status");
-      showConnectToast(status);
+      const search = new URL(url).searchParams;
+      showConnectToast(search.get("status"), search.get("reason"));
       void useOutlookStore.getState().refresh();
     });
     return;
@@ -72,19 +72,23 @@ export function initOutlookAuth(): void {
     // The backend puts "success"/"error" directly as this param's own value
     // for a web-initiated connect (routers/outlook.py::_redirect_target) —
     // unlike the native deep link, which uses a separate ?status= key.
+    // reason is a short, non-sensitive failure code, set only on error.
     const status = params.get(WEB_CALLBACK_PARAM);
+    const reason = params.get("reason");
     params.delete(WEB_CALLBACK_PARAM);
+    params.delete("reason");
     const rest = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
-    showConnectToast(status);
+    showConnectToast(status, reason);
     void useOutlookStore.getState().refresh();
   }
 }
 
-function showConnectToast(status: string | null): void {
+function showConnectToast(status: string | null, reason: string | null): void {
   if (status === "success") {
     useToastStore.getState().show("Outlook connected");
   } else if (status === "error") {
-    useToastStore.getState().show("Couldn't connect Outlook — try again", "error");
+    const suffix = reason ? ` (${reason})` : "";
+    useToastStore.getState().show(`Couldn't connect Outlook${suffix} — try again`, "error");
   }
 }

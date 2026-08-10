@@ -1,5 +1,6 @@
 import logging
 
+import httpx
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -23,10 +24,20 @@ logger = logging.getLogger("uvicorn.error")
 _APP_CALLBACK_SCHEME = "com.hooman.disciplined://outlook-callback"
 
 
-def _redirect_target(return_to: str | None, status: str) -> str:
+def _redirect_target(return_to: str | None, status: str, reason: str | None = None) -> str:
+    suffix = f"&reason={reason}" if reason else ""
     if return_to:
-        return f"{return_to}/?outlookConnected={status}"
-    return f"{_APP_CALLBACK_SCHEME}?status={status}"
+        return f"{return_to}/?outlookConnected={status}{suffix}"
+    return f"{_APP_CALLBACK_SCHEME}?status={status}{suffix}"
+
+
+def _error_reason(exc: Exception) -> str:
+    """See routers/google_calendar.py::_error_reason — identical rationale."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        url = str(exc.request.url)
+        endpoint = "token" if "/token" in url else "userinfo" if "/me" in url else "api"
+        return f"{endpoint}_{exc.response.status_code}"
+    return type(exc).__name__.lower()
 
 
 @router.get("/connect", response_model=OutlookConnectResponse)
@@ -57,9 +68,9 @@ async def callback(code: str | None = None, state: str | None = None, db: AsyncS
     try:
         tokens = await outlook_graph.exchange_code_for_tokens(code)
         await outlook_graph.store_connection(db, user_id, tokens)
-    except Exception:
+    except Exception as exc:
         logger.exception("Outlook OAuth callback failed for user %s", user_id)
-        return RedirectResponse(_redirect_target(return_to, "error"))
+        return RedirectResponse(_redirect_target(return_to, "error", reason=_error_reason(exc)))
 
     return RedirectResponse(_redirect_target(return_to, "success"))
 

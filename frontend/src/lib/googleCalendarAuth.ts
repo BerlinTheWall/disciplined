@@ -47,8 +47,8 @@ export function initGoogleCalendarAuth(): void {
       void Browser.close();
       // Trust the URL's own status param for the toast — see
       // lib/outlookAuth.ts's identical block for the full rationale.
-      const status = new URL(url).searchParams.get("status");
-      showConnectToast(status);
+      const search = new URL(url).searchParams;
+      showConnectToast(search.get("status"), search.get("reason"));
       void useGoogleCalendarStore.getState().refresh();
     });
     return;
@@ -58,19 +58,24 @@ export function initGoogleCalendarAuth(): void {
   if (params.has(WEB_CALLBACK_PARAM)) {
     // The backend puts "success"/"error" directly as this param's own value
     // for a web-initiated connect (routers/google_calendar.py::_redirect_target).
+    // reason is a short, non-sensitive failure code (e.g. "userinfo_403"),
+    // set only on error — see that same function's _error_reason.
     const status = params.get(WEB_CALLBACK_PARAM);
+    const reason = params.get("reason");
     params.delete(WEB_CALLBACK_PARAM);
+    params.delete("reason");
     const rest = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
-    showConnectToast(status);
+    showConnectToast(status, reason);
     void useGoogleCalendarStore.getState().refresh();
   }
 }
 
-function showConnectToast(status: string | null): void {
+function showConnectToast(status: string | null, reason: string | null): void {
   if (status === "success") {
     useToastStore.getState().show("Google Calendar connected");
   } else if (status === "error") {
-    useToastStore.getState().show("Couldn't connect Google Calendar — try again", "error");
+    const suffix = reason ? ` (${reason})` : "";
+    useToastStore.getState().show(`Couldn't connect Google Calendar${suffix} — try again`, "error");
   }
 }

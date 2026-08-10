@@ -1,5 +1,6 @@
 import logging
 
+import httpx
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -26,10 +27,22 @@ logger = logging.getLogger("uvicorn.error")
 _APP_CALLBACK_SCHEME = "com.hooman.disciplined://google-calendar-callback"
 
 
-def _redirect_target(return_to: str | None, status: str) -> str:
+def _redirect_target(return_to: str | None, status: str, reason: str | None = None) -> str:
+    suffix = f"&reason={reason}" if reason else ""
     if return_to:
-        return f"{return_to}/?googleCalendarConnected={status}"
-    return f"{_APP_CALLBACK_SCHEME}?status={status}"
+        return f"{return_to}/?googleCalendarConnected={status}{suffix}"
+    return f"{_APP_CALLBACK_SCHEME}?status={status}{suffix}"
+
+
+def _error_reason(exc: Exception) -> str:
+    """A short, non-sensitive code identifying what failed — surfaced in the
+    error toast (see lib/googleCalendarAuth.ts) so a failure is diagnosable
+    without needing server log access."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        url = str(exc.request.url)
+        endpoint = "token" if "/token" in url else "userinfo" if "userinfo" in url else "api"
+        return f"{endpoint}_{exc.response.status_code}"
+    return type(exc).__name__.lower()
 
 
 @router.get("/connect", response_model=GoogleCalendarConnectResponse)
@@ -58,9 +71,9 @@ async def callback(code: str | None = None, state: str | None = None, db: AsyncS
     try:
         tokens = await google_calendar.exchange_code_for_tokens(code)
         await google_calendar.store_connection(db, user_id, tokens)
-    except Exception:
+    except Exception as exc:
         logger.exception("Google Calendar OAuth callback failed for user %s", user_id)
-        return RedirectResponse(_redirect_target(return_to, "error"))
+        return RedirectResponse(_redirect_target(return_to, "error", reason=_error_reason(exc)))
 
     return RedirectResponse(_redirect_target(return_to, "success"))
 
