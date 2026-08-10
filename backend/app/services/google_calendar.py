@@ -79,9 +79,12 @@ def build_authorize_url(user_id: str, return_to: str | None = None) -> str:
         # offline -> Google returns a refresh_token; consent -> forces it on
         # *every* connect, not just the very first one ever for this user
         # (Google's default), so reconnecting after a lost/revoked token
-        # reliably comes back with a usable refresh_token again.
+        # reliably comes back with a usable refresh_token again. select_account
+        # -> without it, an active Google SSO session gets silently reused,
+        # so disconnecting and trying a different Google account would just
+        # re-sign into the same one (same fix as Outlook's build_authorize_url).
         "access_type": "offline",
-        "prompt": "consent",
+        "prompt": "consent select_account",
         "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id, return_to=return_to),
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"

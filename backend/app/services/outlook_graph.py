@@ -66,6 +66,13 @@ def build_authorize_url(user_id: str, return_to: str | None = None) -> str:
         "redirect_uri": settings.ms_graph_redirect_uri,
         "response_mode": "query",
         "scope": SCOPES,
+        # Without this, Microsoft silently reuses whatever account still has
+        # an active SSO session in the browser (login.live.com/login.
+        # microsoftonline.com cookies) instead of asking — meaning
+        # disconnecting in-app and trying to connect a different Microsoft
+        # account just re-signs into the same one. Forces the account picker
+        # every time instead.
+        "prompt": "select_account",
         "state": oauth_state.create_state_token(_STATE_PURPOSE, user_id, return_to=return_to),
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
