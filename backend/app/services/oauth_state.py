@@ -23,13 +23,16 @@ from app.config import settings
 ALGORITHM = "HS256"
 TTL_MINUTES = 10
 
-# Same trusted-origin shape as main.py's CORS allow_origin_regex — a web
-# client (the Vite dev server; there's no deployed production web origin)
-# passes its own origin as return_to so the OAuth callback can redirect back
-# to it instead of the native app's custom URL scheme. Validated against
-# this pattern so a crafted return_to can't turn the callback into an open
-# redirect to an arbitrary site.
-_RETURN_TO_PATTERN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+# Same trusted-origin set as main.py's CORS config — a web client (the Vite
+# dev server, or the deployed web frontend on Railway) passes its own origin
+# as return_to so the OAuth callback can redirect back to it instead of the
+# native app's custom URL scheme. Validated against this pattern so a
+# crafted return_to can't turn the callback into an open redirect to an
+# arbitrary site.
+_RETURN_TO_PATTERN = re.compile(
+    r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?"
+    r"|https://disciplined-production\.up\.railway\.app)$"
+)
 
 
 def _signing_key(purpose: str) -> str:

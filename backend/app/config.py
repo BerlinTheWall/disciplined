@@ -89,12 +89,14 @@ class Settings(BaseSettings):
     # (services/crypto.py), shared across both providers.
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str = ""
-    # Vite dev server origins
+    # Vite dev server origins, plus the deployed web frontend (Railway) for
+    # testing the OAuth calendar connections end-to-end without a native build.
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost",
         "capacitor://localhost",  # packaged iOS app WebView origin
+        "https://disciplined-production.up.railway.app",
     ]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
