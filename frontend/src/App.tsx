@@ -14,13 +14,13 @@ import SideMenu from "./components/SideMenu";
 import AddItemSheet from "./components/timeline/AddItemSheet";
 import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
-import Timeline, { TimelineQuickAdd } from "./components/timeline/Timeline";
-import { TimelineEditProvider } from "./components/timeline/timelineEditContext";
+import Timeline from "./components/timeline/Timeline";
 import WeekHeader from "./components/timeline/WeekHeader";
 import ToastHost from "./components/ToastHost";
 import TutorialHost from "./components/TutorialHost";
 import VoiceAssistant from "./components/VoiceAssistant";
 import WeekPlanSheet from "./components/weekplan/WeekPlanSheet";
+import { useDelayedFlag } from "./hooks/useDelayedFlag";
 import { useLeftEdgeSwipe } from "./hooks/useEdgeSwipe";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
@@ -87,8 +87,11 @@ function App() {
   const onboardingDone = useOnboardingStore((s) => s.done);
   // A small dot on the menu button when there's something to say about sync
   // (pending changes, or actively pushing) — full detail lives in SideMenu,
-  // reached the same way this dot is seen.
-  const syncPending = useSyncStatusStore((s) => s.pendingCount > 0 || s.syncing);
+  // reached the same way this dot is seen. Debounced so a normal, quick sync
+  // or a momentary connectivity blip never flashes it — only a genuinely
+  // stuck/offline state (5s+) does.
+  const syncPendingRaw = useSyncStatusStore((s) => s.pendingCount > 0 || s.syncing);
+  const syncPending = useDelayedFlag(syncPendingRaw, 5000);
 
   // Swiping in from the very left edge opens the side menu (standard drawer
   // gesture). Off while the menu or any sheet is already up, or during setup.
@@ -214,7 +217,14 @@ function App() {
       case "goals":
         return <GoalsPage onOpenSchedule={() => go("schedule")} />;
       case "schedule":
-        return <Timeline viewMode={viewMode} />;
+        return (
+          // Only weekly view shares the controller (strip + grid both move by
+          // week); daily keeps them independent (strip = weeks, content = days).
+          <WeekSwipeContext.Provider value={viewMode === "weekly" ? weekController : null}>
+            <WeekHeader leftGutter={viewMode === "weekly" ? 32 : 0} />
+            <Timeline viewMode={viewMode} />
+          </WeekSwipeContext.Provider>
+        );
       case "kitchen":
         return <KitchenPage />;
       case "workout":
@@ -388,9 +398,7 @@ function App() {
         </div>
       </div>
 
-      {/* Page body — slides between pages. On the schedule page, the week strip
-          stays put (data-scroll-lock only wraps the scrolling section below it)
-          so only the day's tasks scroll underneath it. */}
+      {/* Page body — slides between pages */}
       <div className="relative flex-1 overflow-hidden">
         <AnimatePresence mode="popLayout" custom={dir} initial={false}>
           <motion.div
@@ -401,42 +409,14 @@ function App() {
             animate="center"
             exit="exit"
             transition={spring.gentle}
-            className="absolute inset-0 flex flex-col"
+            data-scroll-lock
+            className="absolute inset-0 overflow-y-auto px-4"
+            // Clear the floating nav (its height + offset) plus a gap, so the
+            // last card never hides behind it. Uses --nav-bottom so the gap is
+            // consistent across notch / non-notch devices.
+            style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
           >
-            {activePage === "schedule" && (
-              // Only weekly view shares the controller (strip + grid both move
-              // by week); daily keeps them independent (strip = weeks, content
-              // = days). The edit provider is shared between the fixed quick-add
-              // bar below and the scrollable schedule so both can open the same
-              // edit/detail sheets.
-              <WeekSwipeContext.Provider value={viewMode === "weekly" ? weekController : null}>
-                <TimelineEditProvider>
-                  <div className="px-4 shrink-0">
-                    <WeekHeader leftGutter={viewMode === "weekly" ? 32 : 0} />
-                    {viewMode === "daily" && <TimelineQuickAdd />}
-                  </div>
-                  <div
-                    data-scroll-lock
-                    className="flex-1 overflow-y-auto px-4"
-                    style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
-                  >
-                    {renderPage()}
-                  </div>
-                </TimelineEditProvider>
-              </WeekSwipeContext.Provider>
-            )}
-            {activePage !== "schedule" && (
-              <div
-                data-scroll-lock
-                className="flex-1 overflow-y-auto px-4"
-                // Clear the floating nav (its height + offset) plus a gap, so
-                // the last card never hides behind it. Uses --nav-bottom so the
-                // gap is consistent across notch / non-notch devices.
-                style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
-              >
-                {renderPage()}
-              </div>
-            )}
+            {renderPage()}
           </motion.div>
         </AnimatePresence>
       </div>

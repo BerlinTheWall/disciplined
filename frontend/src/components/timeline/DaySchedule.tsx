@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { AnimatePresence } from "framer-motion";
+import { animate, AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
@@ -209,9 +209,10 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
   // On open (or after swiping to this day), scroll the schedule to the
   // relevant spot. Only the active (center) panel. Today lands on whatever's
   // happening right now (per the real clock), offset down a bit so there's
-  // context above it; any other day lands on its first task, flush with the
-  // top — the scroll position otherwise carries over from whichever day was
-  // showing before the swipe, which usually isn't where this day's tasks are.
+  // context above it; any other day lands at the very top of the page —
+  // header included, not just its first task — since the scroll position
+  // otherwise carries over from whichever day was showing before the swipe,
+  // which usually isn't where this day's tasks are.
   const containerRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!active) return;
@@ -221,37 +222,52 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
     const scroller = root.closest("[data-scroll-lock]") as HTMLElement | null;
     if (!scroller) return;
 
-    // A tap on the Home page can ask to reveal a specific item here; that wins
-    // over the default "scroll to what's happening now"/"first task", and is
-    // consumed once.
-    const pending = useScheduleFocusStore.getState().pendingItemId;
-    let focusId: string | null;
-    let viewportRatio: number;
-    if (pending && activeItems.some((i) => i.id === pending)) {
-      focusId = pending;
-      viewportRatio = FOCUS_VIEWPORT_RATIO;
-      useScheduleFocusStore.getState().clear();
-    } else if (date === toISODate(new Date())) {
-      const now = new Date();
-      focusId = findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes());
-      viewportRatio = FOCUS_VIEWPORT_RATIO;
-    } else {
-      focusId = activeItems[0]?.id ?? null;
-      viewportRatio = 0;
+    // Position a given item at FOCUS_VIEWPORT_RATIO down the viewport. Reads
+    // straight from the layout math (topYById) rather than the item's DOM
+    // rect — rows animate into place on mount (see ScheduleRow's top/height
+    // transition), so the rect isn't settled yet when this effect runs.
+    function scrollTopFor(focusId: string) {
+      const targetTopY = layout.topYById[focusId] ?? 0;
+      const rootRect = root!.getBoundingClientRect();
+      const scrollerRect = scroller!.getBoundingClientRect();
+      const targetViewportY = rootRect.top + targetTopY;
+      const delta =
+        targetViewportY - scrollerRect.top - scroller!.clientHeight * FOCUS_VIEWPORT_RATIO;
+      return scroller!.scrollTop + delta;
     }
 
-    // Read the target's position straight from the layout math (topYById)
-    // rather than its DOM rect — rows animate into place on mount (see
-    // ScheduleRow's top/height transition), so the rect isn't settled yet
-    // when this effect runs. The layout numbers are exact from frame one.
-    // No target (e.g. an empty day) still resets to the top of this panel.
-    const targetTopY = focusId ? (layout.topYById[focusId] ?? 0) : 0;
+    // A tap on the Home page can ask to reveal a specific item here; that wins
+    // over the default "scroll to what's happening now"/top-of-page, and is
+    // consumed once.
+    const pending = useScheduleFocusStore.getState().pendingItemId;
+    let targetScrollTop: number;
+    if (pending && activeItems.some((i) => i.id === pending)) {
+      useScheduleFocusStore.getState().clear();
+      targetScrollTop = scrollTopFor(pending);
+    } else if (date === toISODate(new Date())) {
+      const now = new Date();
+      const focusId = findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes());
+      targetScrollTop = focusId ? scrollTopFor(focusId) : 0;
+    } else {
+      // A different day (typically just swiped to) — land on the page's own
+      // top, so the header comes back into view along with the first task.
+      targetScrollTop = 0;
+    }
 
-    const rootRect = root.getBoundingClientRect();
-    const scrollerRect = scroller.getBoundingClientRect();
-    const targetViewportY = rootRect.top + targetTopY;
-    const delta = targetViewportY - scrollerRect.top - scroller.clientHeight * viewportRatio;
-    scroller.scrollTop += delta; // self-clamps to the valid range
+    // Always eases there — including the very first time this loads, e.g.
+    // opening the app straight onto "now" — rather than snapping. A JS-driven
+    // tween (not native `scrollTo(smooth)`) keeps this consistent across
+    // WebViews, where native smooth-scroll can be heavy and stall unrelated
+    // animations running at the same time.
+    const from = scroller.scrollTop;
+    const controls = animate(from, targetScrollTop, {
+      duration: 0.3,
+      ease: [0.22, 1, 0.36, 1], // ease-out-expo — quick start, long gentle settle
+      onUpdate: (v) => {
+        scroller.scrollTop = v;
+      },
+    });
+    return () => controls.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, active]);
 
