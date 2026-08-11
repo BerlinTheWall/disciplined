@@ -44,31 +44,9 @@ const BOTTOM_SCROLL_SPACE = 90;
 // way down from the top (slightly above center so upcoming items stay visible).
 const FOCUS_VIEWPORT_RATIO = 0.3;
 
-// Picks the item the user should be on "right now": the one whose time span
-// contains nowMinutes (most recently started wins when several overlap, so a
-// short task nested in a long one takes precedence); otherwise the next upcoming
-// item; otherwise the last item of the day.
-function findCurrentItemId(items: ScheduleRowData[], nowMinutes: number): string | null {
-  if (!items.length) return null;
-
-  let current: ScheduleRowData | null = null;
-  let upcoming: ScheduleRowData | null = null;
-  for (const item of items) {
-    const end = item.startMinutes + item.durationMinutes;
-    if (nowMinutes >= item.startMinutes && nowMinutes < end) {
-      // items are start-sorted, so the last match has the latest start.
-      current = item;
-    } else if (item.startMinutes > nowMinutes && !upcoming) {
-      upcoming = item;
-    }
-  }
-
-  return (current ?? upcoming ?? items[items.length - 1]).id;
-}
-
 // The item whose span strictly contains nowMinutes (latest start wins when
 // several overlap), or null if now falls in a gap. Used for the "happening now"
-// row highlight — unlike findCurrentItemId, it has no upcoming/last fallback.
+// row highlight.
 function findActiveItemId(items: ScheduleRowData[], nowMinutes: number): string | null {
   let active: ScheduleRowData | null = null;
   for (const item of items) {
@@ -207,12 +185,10 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
     : 0;
 
   // On open (or after swiping to this day), scroll the schedule to the
-  // relevant spot. Only the active (center) panel. Today lands on whatever's
-  // happening right now (per the real clock), offset down a bit so there's
-  // context above it; any other day lands at the very top of the page —
-  // header included, not just its first task — since the scroll position
-  // otherwise carries over from whichever day was showing before the swipe,
-  // which usually isn't where this day's tasks are.
+  // relevant spot. Only the active (center) panel. Every day lands at the
+  // very top of the page — header included, not just its first task — since
+  // the scroll position otherwise carries over from whichever day was
+  // showing before the swipe, which usually isn't where this day's tasks are.
   const containerRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!active) return;
@@ -237,20 +213,15 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
     }
 
     // A tap on the Home page can ask to reveal a specific item here; that wins
-    // over the default "scroll to what's happening now"/top-of-page, and is
-    // consumed once.
+    // over the default scroll-to-top, and is consumed once.
     const pending = useScheduleFocusStore.getState().pendingItemId;
     let targetScrollTop: number;
     if (pending && activeItems.some((i) => i.id === pending)) {
       useScheduleFocusStore.getState().clear();
       targetScrollTop = scrollTopFor(pending);
-    } else if (date === toISODate(new Date())) {
-      const now = new Date();
-      const focusId = findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes());
-      targetScrollTop = focusId ? scrollTopFor(focusId) : 0;
     } else {
-      // A different day (typically just swiped to) — land on the page's own
-      // top, so the header comes back into view along with the first task.
+      // Land on the page's own top, so the header comes back into view along
+      // with the first task.
       targetScrollTop = 0;
     }
 
