@@ -12,7 +12,7 @@ export default function ToastHost() {
   const dismiss = useToastStore((s) => s.dismiss);
 
   return (
-    <div className="fixed inset-x-3 z-[80] flex justify-center bottom-24 pointer-events-none">
+    <div className="fixed inset-x-3 z-[80] flex justify-center bottom-32 pointer-events-none">
       <AnimatePresence>
         {message && (
           <motion.div
