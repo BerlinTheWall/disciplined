@@ -14,7 +14,8 @@ import SideMenu from "./components/SideMenu";
 import AddItemSheet from "./components/timeline/AddItemSheet";
 import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
-import Timeline from "./components/timeline/Timeline";
+import Timeline, { TimelineQuickAdd } from "./components/timeline/Timeline";
+import { TimelineEditProvider } from "./components/timeline/timelineEditContext";
 import WeekHeader from "./components/timeline/WeekHeader";
 import ToastHost from "./components/ToastHost";
 import TutorialHost from "./components/TutorialHost";
@@ -405,18 +406,23 @@ function App() {
             {activePage === "schedule" && (
               // Only weekly view shares the controller (strip + grid both move
               // by week); daily keeps them independent (strip = weeks, content
-              // = days).
+              // = days). The edit provider is shared between the fixed quick-add
+              // bar below and the scrollable schedule so both can open the same
+              // edit/detail sheets.
               <WeekSwipeContext.Provider value={viewMode === "weekly" ? weekController : null}>
-                <div className="px-4 shrink-0">
-                  <WeekHeader leftGutter={viewMode === "weekly" ? 32 : 0} />
-                </div>
-                <div
-                  data-scroll-lock
-                  className="flex-1 overflow-y-auto px-4"
-                  style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
-                >
-                  {renderPage()}
-                </div>
+                <TimelineEditProvider>
+                  <div className="px-4 shrink-0">
+                    <WeekHeader leftGutter={viewMode === "weekly" ? 32 : 0} />
+                    {viewMode === "daily" && <TimelineQuickAdd />}
+                  </div>
+                  <div
+                    data-scroll-lock
+                    className="flex-1 overflow-y-auto px-4"
+                    style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
+                  >
+                    {renderPage()}
+                  </div>
+                </TimelineEditProvider>
               </WeekSwipeContext.Provider>
             )}
             {activePage !== "schedule" && (

@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext } from "react";
 import { useShallow } from "zustand/shallow";
 
 import AddItemSheet from "./AddItemSheet";
@@ -8,6 +8,7 @@ import QuickAddBar from "./QuickAddBar";
 import { WeekSwipeContext } from "./swipeController";
 import SwipePager from "./SwipePager";
 import TaskDetailSheet from "./TaskDetailSheet";
+import { useTimelineEdit } from "./timelineEditContext";
 import WeeklyTimeline from "./WeeklyTimeline";
 import type { ViewMode } from "@/App";
 import { addDays, getWeekDates, toISODate } from "@/lib/date";
@@ -17,6 +18,14 @@ import type { Habit } from "@/types/habits";
 import type { Task } from "@/types/task";
 
 export type EditItem = { type: "task"; data: Task } | { type: "habit"; data: Habit };
+
+// The quick-add bar, rendered separately (in App's fixed header area, above
+// the scrollable schedule) so it stays put while the day's tasks scroll. Only
+// meaningful in daily view — weekly view never rendered it.
+export function TimelineQuickAdd() {
+  const { setEditItem } = useTimelineEdit();
+  return <QuickAddBar onEditDetails={setEditItem} />;
+}
 
 interface TimelineProps {
   viewMode: ViewMode;
@@ -31,9 +40,9 @@ export default function Timeline({ viewMode }: TimelineProps) {
   // In weekly view, share the drag with the week strip above so they move together.
   const sharedController = useContext(WeekSwipeContext);
 
-  const [editItem, setEditItem] = useState<EditItem | null>(null);
-  // Read-only detail popup, opened by tapping a row; its Edit button opens the editor.
-  const [detailItem, setDetailItem] = useState<EditItem | null>(null);
+  // Shared with TimelineQuickAdd (rendered outside this component, in the
+  // fixed header) so either one can open the same edit/detail sheets.
+  const { editItem, setEditItem, detailItem, setDetailItem } = useTimelineEdit();
 
   const selectedDateObj = new Date(selectedDate + "T00:00:00");
 
@@ -64,8 +73,6 @@ export default function Timeline({ viewMode }: TimelineProps) {
 
   return (
     <>
-      <QuickAddBar onEditDetails={setEditItem} />
-
       {/* Swipe the day's schedule to move one day at a time. */}
       <SwipePager
         onPrev={() => shiftSelectedDate(-1)}

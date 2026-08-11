@@ -227,17 +227,24 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
           ? findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes())
           : null;
     }
+    if (!focusId) return;
 
     const root = containerRef.current;
-    if (!focusId || !root) return;
-
+    if (!root) return;
     const scroller = root.closest("[data-scroll-lock]") as HTMLElement | null;
-    const target = root.querySelector(`[data-item-id="${focusId}"]`) as HTMLElement | null;
-    if (!scroller || !target) return;
+    if (!scroller) return;
 
-    const targetRect = target.getBoundingClientRect();
+    // Read the target's position straight from the layout math (topYById)
+    // rather than its DOM rect — rows animate into place on mount (see
+    // ScheduleRow's top/height transition), so the rect isn't settled yet
+    // when this effect runs. The layout numbers are exact from frame one.
+    const targetTopY = layout.topYById[focusId];
+    if (targetTopY == null) return;
+
+    const rootRect = root.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
-    const delta = targetRect.top - scrollerRect.top - scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
+    const targetViewportY = rootRect.top + targetTopY;
+    const delta = targetViewportY - scrollerRect.top - scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
     scroller.scrollTop += delta; // scrollTop self-clamps to the valid range
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, active]);
