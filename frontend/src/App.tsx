@@ -213,14 +213,7 @@ function App() {
       case "goals":
         return <GoalsPage onOpenSchedule={() => go("schedule")} />;
       case "schedule":
-        return (
-          // Only weekly view shares the controller (strip + grid both move by
-          // week); daily keeps them independent (strip = weeks, content = days).
-          <WeekSwipeContext.Provider value={viewMode === "weekly" ? weekController : null}>
-            <WeekHeader leftGutter={viewMode === "weekly" ? 32 : 0} />
-            <Timeline viewMode={viewMode} />
-          </WeekSwipeContext.Provider>
-        );
+        return <Timeline viewMode={viewMode} />;
       case "kitchen":
         return <KitchenPage />;
       case "workout":
@@ -394,7 +387,9 @@ function App() {
         </div>
       </div>
 
-      {/* Page body — slides between pages */}
+      {/* Page body — slides between pages. On the schedule page, the week strip
+          stays put (data-scroll-lock only wraps the scrolling section below it)
+          so only the day's tasks scroll underneath it. */}
       <div className="relative flex-1 overflow-hidden">
         <AnimatePresence mode="popLayout" custom={dir} initial={false}>
           <motion.div
@@ -405,14 +400,37 @@ function App() {
             animate="center"
             exit="exit"
             transition={spring.gentle}
-            data-scroll-lock
-            className="absolute inset-0 overflow-y-auto px-4"
-            // Clear the floating nav (its height + offset) plus a gap, so the
-            // last card never hides behind it. Uses --nav-bottom so the gap is
-            // consistent across notch / non-notch devices.
-            style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
+            className="absolute inset-0 flex flex-col"
           >
-            {renderPage()}
+            {activePage === "schedule" && (
+              // Only weekly view shares the controller (strip + grid both move
+              // by week); daily keeps them independent (strip = weeks, content
+              // = days).
+              <WeekSwipeContext.Provider value={viewMode === "weekly" ? weekController : null}>
+                <div className="px-4 shrink-0">
+                  <WeekHeader leftGutter={viewMode === "weekly" ? 32 : 0} />
+                </div>
+                <div
+                  data-scroll-lock
+                  className="flex-1 overflow-y-auto px-4"
+                  style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
+                >
+                  {renderPage()}
+                </div>
+              </WeekSwipeContext.Provider>
+            )}
+            {activePage !== "schedule" && (
+              <div
+                data-scroll-lock
+                className="flex-1 overflow-y-auto px-4"
+                // Clear the floating nav (its height + offset) plus a gap, so
+                // the last card never hides behind it. Uses --nav-bottom so the
+                // gap is consistent across notch / non-notch devices.
+                style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
+              >
+                {renderPage()}
+              </div>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
