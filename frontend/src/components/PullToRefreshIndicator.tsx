@@ -1,4 +1,7 @@
+import { motion } from "framer-motion";
 import { RefreshCw } from "lucide-react";
+
+import { spring } from "@/lib/motion";
 
 interface Props {
   distance: number;
@@ -8,25 +11,23 @@ interface Props {
 }
 
 // Sits as the first child of a usePullToRefresh-wired scroll container.
-// While a finger is actually dragging, height tracks it 1:1 (no easing, so
-// it feels physically attached); the moment it's released, dragging goes
-// false and this CSS transition takes over to smoothly settle it to the
-// refresh height or back to 0 — the same spring-back feel as native
-// pull-to-refresh. The icon spins continuously the whole time it's visible,
-// not just once refreshing starts.
+// While a finger is actually dragging, height tracks it 1:1 (transition
+// duration 0, so it feels physically attached); the moment it's released,
+// dragging goes false and a spring takes over — settling to the refresh
+// height, or bouncing back to 0 — the same feel as a native pull-to-refresh.
+// Stays mounted at height 0 rather than unmounting, so that spring-back
+// actually gets to play instead of being cut off mid-animation.
 export default function PullToRefreshIndicator({
   distance,
   progress,
   dragging,
   refreshing,
 }: Props) {
-  if (distance <= 0) return null;
   return (
-    <div
-      className={`flex items-center justify-center shrink-0 ${
-        dragging ? "" : "transition-[height] duration-300 ease-out"
-      }`}
-      style={{ height: distance }}
+    <motion.div
+      animate={{ height: distance }}
+      transition={dragging ? { duration: 0 } : spring.gentle}
+      className="flex items-center justify-center overflow-hidden shrink-0"
     >
       <RefreshCw
         size={20}
@@ -34,6 +35,6 @@ export default function PullToRefreshIndicator({
         className="text-fg-faint animate-spin"
         style={{ opacity: refreshing ? 1 : progress }}
       />
-    </div>
+    </motion.div>
   );
 }

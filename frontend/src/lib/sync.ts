@@ -336,8 +336,12 @@ function flushAll() {
 // that the same pending item needs creating, and both POSTing it.
 let hydrating = false;
 
-async function attemptHydration(): Promise<void> {
-  if (hydrating) return;
+// Resolves true once the backend was actually reached and every domain
+// hydrated, false if it's unreachable (or a hydration was already in
+// flight) — reloadAll() uses this to decide whether the pull-to-refresh
+// toast should claim things are up to date.
+async function attemptHydration(): Promise<boolean> {
+  if (hydrating) return false;
   hydrating = true;
   try {
     await api.health();
@@ -346,8 +350,10 @@ async function attemptHydration(): Promise<void> {
         s.hydrate().catch((e) => console.warn("[sync] hydrate failed", e))
       )
     );
+    return true;
   } catch {
     console.warn("[sync] backend unreachable — still running local-only");
+    return false;
   } finally {
     hydrating = false;
   }
@@ -416,8 +422,8 @@ export async function refreshGoals(): Promise<void> {
 // Pull-to-refresh entry point: re-syncs every backend-backed domain right
 // now instead of waiting for the periodic retry timer. Same reconciliation
 // as attemptHydration() at startup, so a pending offline edit is pushed
-// rather than clobbered — never rejects, just resolves once it's given up or
-// finished (e.g. offline).
-export async function reloadAll(): Promise<void> {
-  await attemptHydration();
+// rather than clobbered — never rejects, just resolves true/false for
+// whether it actually reached the backend (e.g. false while offline).
+export async function reloadAll(): Promise<boolean> {
+  return attemptHydration();
 }

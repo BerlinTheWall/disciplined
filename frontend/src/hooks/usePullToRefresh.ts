@@ -3,6 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const THRESHOLD = 56; // px pulled before release triggers a refresh
 const MAX_PULL = 80; // indicator caps out here even if pulled further
 const RESISTANCE = 0.5; // finger has to travel further than the indicator moves
+const MIN_REFRESH_MS = 1000; // hold the spinner at least this long, so a fast local sync doesn't just flicker
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 interface PullToRefresh {
   // Named `attach` rather than `ref` so it doesn't read like a ref value
@@ -73,16 +78,18 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown>): PullToRefre
     if (!active.current) return;
     active.current = false;
     // Dropping out of "dragging" here (rather than after the refresh settles)
-    // is what lets the indicator's CSS transition take over for the
-    // snap-to-threshold / spring-back-to-0 that follows — it tracks the
-    // finger 1:1 while dragging is true and eases everything else.
+    // is what lets the indicator spring-animate the snap-to-threshold /
+    // spring-back-to-0 that follows — it tracks the finger 1:1 while
+    // dragging is true and eases everything else.
     setDragging(false);
     setDistance((d) => {
       if (d < THRESHOLD) return 0;
       busy.current = true;
       setRefreshing(true);
-      void onRefreshRef
-        .current()
+      // Wait for both the real sync and a minimum hold time, so the spinner
+      // stays put for a beat even when the sync itself finishes instantly —
+      // otherwise it would flash and vanish before it reads as "it worked".
+      void Promise.all([onRefreshRef.current(), wait(MIN_REFRESH_MS)])
         .catch(() => {})
         .finally(() => {
           busy.current = false;

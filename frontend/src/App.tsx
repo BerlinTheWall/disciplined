@@ -45,6 +45,7 @@ import { useSettingsStore } from "./store/settingsStore";
 import { useSyncStatusStore } from "./store/syncStatusStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
+import { useToastStore } from "./store/toastStore";
 import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 
 const PAGE_TITLES: Record<Page, string> = {
@@ -97,14 +98,20 @@ function App() {
   const syncPending = useDelayedFlag(syncPendingRaw, 5000);
 
   // Pull-to-refresh on the page body — re-syncs data from the backend rather
-  // than reloading the webview.
+  // than reloading the webview, confirming with a toast once it actually
+  // reached the server (silent while offline — the sync-pending dot already
+  // covers that case).
+  async function handlePullToRefresh() {
+    const reachedServer = await reloadAll();
+    if (reachedServer) useToastStore.getState().show("Everything is updated");
+  }
   const {
     attach: attachPullToRefresh,
     distance: pullDistance,
     progress: pullProgress,
     dragging: pullDragging,
     refreshing: pullRefreshing,
-  } = usePullToRefresh(reloadAll);
+  } = usePullToRefresh(handlePullToRefresh);
 
   // Swiping in from the very left edge opens the side menu (standard drawer
   // gesture). Off while the menu or any sheet is already up, or during setup.
