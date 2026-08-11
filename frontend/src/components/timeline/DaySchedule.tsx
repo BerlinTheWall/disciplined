@@ -213,6 +213,18 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
   // top — the scroll position otherwise carries over from whichever day was
   // showing before the swipe, which usually isn't where this day's tasks are.
   const containerRef = useRef<HTMLDivElement>(null);
+  // Whether this exact panel instance was already sitting mounted (as an
+  // off-screen swipe neighbour, active=false) before this activation. Read at
+  // the top of the effect below, then flipped true by the mount-tracking
+  // effect declared after it — effects run in declaration order within a
+  // commit, so the read always sees last commit's value, never this one's.
+  const wasMountedRef = useRef(false);
+  // A panel mounting already active (opening the page, or a discrete jump
+  // that remounts it fresh) snaps straight there — nothing was visible yet,
+  // so there's nothing to jar. A panel that was already mounted as an
+  // inactive neighbour and gets swiped into activation, though, has been
+  // sitting there at the wrong scroll position — snapping it right as the
+  // swipe settles would read as a sudden jump, so that one glides smoothly.
   useLayoutEffect(() => {
     if (!active) return;
 
@@ -251,9 +263,21 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
     const scrollerRect = scroller.getBoundingClientRect();
     const targetViewportY = rootRect.top + targetTopY;
     const delta = targetViewportY - scrollerRect.top - scroller.clientHeight * viewportRatio;
-    scroller.scrollTop += delta; // scrollTop self-clamps to the valid range
+    const targetScrollTop = scroller.scrollTop + delta;
+
+    if (wasMountedRef.current) {
+      scroller.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+    } else {
+      scroller.scrollTop = targetScrollTop; // self-clamps to the valid range
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, active]);
+  // Declared after the effect above so it always flips one commit late —
+  // independent of `active`, so an off-screen neighbour is already marked
+  // "was mounted" by the time a swipe activates it.
+  useLayoutEffect(() => {
+    wasMountedRef.current = true;
+  }, []);
 
   function handleEdit(id: string) {
     // A tap opens the read-only detail popup; editing goes through its Edit button.
