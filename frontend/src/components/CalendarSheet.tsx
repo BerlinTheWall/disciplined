@@ -181,7 +181,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
     <BottomSheet
       isOpen={isOpen}
       onClose={onClose}
-      className="bg-surface-alt flex flex-col max-h-[75vh]"
+      className="bg-surface-alt flex flex-col max-h-[88vh]"
     >
       <div className="flex items-center gap-2.5 px-5 pt-4 pb-3">
         <span className="w-8 h-8 rounded-full flex items-center justify-center bg-[#818cf8] text-[#111827]">
@@ -198,7 +198,7 @@ export default function CalendarSheet({ isOpen, onClose }: CalendarSheetProps) {
         </motion.button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 pb-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] flex flex-col gap-4">
         {appleCalendarSupported && (
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
