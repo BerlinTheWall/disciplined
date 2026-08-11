@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Calendar as CalendarIcon, GraduationCap, Heart, Sparkles, X } from "lucide-react";
+import { GraduationCap, Heart, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
-import CalendarSheet from "./CalendarSheet";
 import Collapse from "./Collapse";
-import { AppleLogo, GoogleLogo, MicrosoftLogo } from "./icons/ProviderLogos";
 import InterestsSheet from "./InterestsSheet";
 import Switch from "./Switch";
 import { primeAudioChannel, speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
@@ -14,11 +12,8 @@ import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
-import { useCalendarStore } from "@/store/calendarStore";
-import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
 import { GOOGLE_VOICES, useGoogleVoiceStore } from "@/store/googleVoiceStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
-import { useOutlookStore } from "@/store/outlookStore";
 import { useSettingsStore, type VoiceTone } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useTutorialStore } from "@/store/tutorialStore";
@@ -137,24 +132,6 @@ function ChipRow<T>({
 
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
   const [showInterests, setShowInterests] = useState(false);
-  const [showCalendars, setShowCalendars] = useState(false);
-  const appleCalendarId = useCalendarStore((s) => s.appleCalendarId);
-  const outlookConnected = useOutlookStore((s) => s.connected);
-  const googleConnected = useGoogleCalendarStore((s) => s.connected);
-  const connectedCalendarNames = [
-    appleCalendarId && "Apple Calendar",
-    outlookConnected && "Outlook",
-    googleConnected && "Google Calendar",
-  ].filter((name): name is string => Boolean(name));
-  const connectedCalendarSubtitle =
-    connectedCalendarNames.length === 0
-      ? "No calendars connected"
-      : `Connected to ${connectedCalendarNames.join(", ")}`;
-  const connectedCalendarLogos = [
-    appleCalendarId && <AppleLogo key="apple" size={18} className="text-fg-muted" />,
-    outlookConnected && <MicrosoftLogo key="outlook" size={18} />,
-    googleConnected && <GoogleLogo key="google" size={18} />,
-  ].filter(Boolean);
   const [altStyle, setAltStyle, background, setBackground] = useSettingsStore(
     useShallow((state) => [
       state.altStyle,
@@ -384,29 +361,6 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
             </motion.button>
           </Section>
 
-          <Section title="Calendar">
-            <motion.button
-              onClick={() => setShowCalendars(true)}
-              whileTap={tap}
-              className="flex items-center gap-3 w-full px-4 py-3 text-left"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-medium text-fg">Connected calendars</p>
-                <p className="text-xs text-fg-faint mt-0.5 flex items-center gap-1.5">
-                  {connectedCalendarNames.length > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  )}
-                  {connectedCalendarSubtitle}
-                </p>
-              </div>
-              {connectedCalendarLogos.length > 0 ? (
-                <div className="flex items-center gap-1.5 shrink-0">{connectedCalendarLogos}</div>
-              ) : (
-                <CalendarIcon size={18} className="text-fg-muted" />
-              )}
-            </motion.button>
-          </Section>
-
           <Section title="Help">
             <motion.button
               onClick={() => {
@@ -439,7 +393,6 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
         </div>
       </BottomSheet>
       <InterestsSheet isOpen={showInterests} onClose={() => setShowInterests(false)} />
-      <CalendarSheet isOpen={showCalendars} onClose={() => setShowCalendars(false)} />
     </>
   );
 }

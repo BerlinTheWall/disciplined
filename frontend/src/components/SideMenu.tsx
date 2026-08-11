@@ -1,12 +1,28 @@
+import { Fragment, useState } from "react";
 import { animate, AnimatePresence, motion, useMotionValue, type PanInfo } from "framer-motion";
-import { CloudOff, Lock, LogOut, Palette, RefreshCw, Settings, Sparkles, X } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  CloudOff,
+  Lock,
+  LogOut,
+  Palette,
+  RefreshCw,
+  Settings,
+  Sparkles,
+  X,
+} from "lucide-react";
 
+import CalendarSheet from "./CalendarSheet";
+import { AppleLogo, GoogleLogo, MicrosoftLogo } from "./icons/ProviderLogos";
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { spring, tap } from "@/lib/motion";
 import { ALL_TABS, type Page } from "@/lib/pages";
 import { useAuthStore } from "@/store/authStore";
+import { useCalendarStore } from "@/store/calendarStore";
+import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
+import { useOutlookStore } from "@/store/outlookStore";
 import { useSyncStatusStore } from "@/store/syncStatusStore";
 import { useThemeStore } from "@/store/themeStore";
 import { useWeekPlanStore } from "@/store/weekPlanStore";
@@ -44,6 +60,25 @@ export default function SideMenu({
   const { pendingCount, syncing } = useSyncStatusStore();
   useScrollLock(isOpen);
 
+  const [showCalendars, setShowCalendars] = useState(false);
+  const appleCalendarId = useCalendarStore((s) => s.appleCalendarId);
+  const outlookConnected = useOutlookStore((s) => s.connected);
+  const googleConnected = useGoogleCalendarStore((s) => s.connected);
+  const connectedCalendarNames = [
+    appleCalendarId && "Apple Calendar",
+    outlookConnected && "Outlook",
+    googleConnected && "Google Calendar",
+  ].filter((name): name is string => Boolean(name));
+  const connectedCalendarSubtitle =
+    connectedCalendarNames.length === 0
+      ? "No calendars connected"
+      : `Connected to ${connectedCalendarNames.join(", ")}`;
+  const connectedCalendarLogos = [
+    appleCalendarId && <AppleLogo key="apple" size={16} className="text-fg-muted" />,
+    outlookConnected && <MicrosoftLogo key="outlook" size={16} />,
+    googleConnected && <GoogleLogo key="google" size={16} />,
+  ].filter(Boolean);
+
   const x = useMotionValue(0);
   function onDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.x < -CLOSE_DISTANCE || info.velocity.x < -CLOSE_VELOCITY) {
@@ -54,71 +89,71 @@ export default function SideMenu({
   }
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            />
 
-          {/* Drawer */}
-          <motion.div
-            className="fixed top-0 left-0 bottom-0 w-72 bg-surface z-50 flex flex-col shadow-2xl"
-            style={{ x }}
-            initial={{ x: -DRAWER_WIDTH }}
-            animate={{ x: 0 }}
-            exit={{ x: -DRAWER_WIDTH }}
-            transition={{
-              type: "spring",
-              damping: 28,
-              stiffness: 300,
-            }}
-            drag="x"
-            dragDirectionLock
-            dragConstraints={{ left: -DRAWER_WIDTH, right: 0 }}
-            dragElastic={0}
-            onDragEnd={onDragEnd}
-          >
-            {/* Header — top padding adds the iOS safe-area inset (0 on devices
+            {/* Drawer */}
+            <motion.div
+              className="fixed top-0 left-0 bottom-0 w-72 bg-surface z-50 flex flex-col shadow-2xl"
+              style={{ x }}
+              initial={{ x: -DRAWER_WIDTH }}
+              animate={{ x: 0 }}
+              exit={{ x: -DRAWER_WIDTH }}
+              transition={{
+                type: "spring",
+                damping: 28,
+                stiffness: 300,
+              }}
+              drag="x"
+              dragDirectionLock
+              dragConstraints={{ left: -DRAWER_WIDTH, right: 0 }}
+              dragElastic={0}
+              onDragEnd={onDragEnd}
+            >
+              {/* Header — top padding adds the iOS safe-area inset (0 on devices
                 without a notch) so the logo clears the status bar, same as the
                 app header. */}
-            <div
-              className="flex items-center justify-between px-5 pb-8"
-              style={{ paddingTop: "calc(32px + env(safe-area-inset-top))" }}
-            >
-              <div className="flex items-center gap-3">
-                <img
-                  src={logo}
-                  alt="logo"
-                  className={`w-12 h-12 object-contain ${theme === "light" ? "brightness-0" : ""}`}
-                />
-                <span className="text-2xl font-extrabold text-fg">Disciplined</span>
+              <div
+                className="flex items-center justify-between px-5 pb-8"
+                style={{ paddingTop: "calc(32px + env(safe-area-inset-top))" }}
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={logo}
+                    alt="logo"
+                    className={`w-12 h-12 object-contain ${theme === "light" ? "brightness-0" : ""}`}
+                  />
+                  <span className="text-2xl font-extrabold text-fg">Disciplined</span>
+                </div>
               </div>
-            </div>
-            <motion.button
-              onClick={onClose}
-              whileTap={tap}
-              className="absolute right-4 p-1 text-fg-faint"
-              style={{ top: "calc(16px + env(safe-area-inset-top))" }}
-            >
-              <X size={18} />
-            </motion.button>
+              <motion.button
+                onClick={onClose}
+                whileTap={tap}
+                className="absolute right-4 p-1 text-fg-faint"
+                style={{ top: "calc(16px + env(safe-area-inset-top))" }}
+              >
+                <X size={18} />
+              </motion.button>
 
-            {/* Nav items */}
-            <div className="px-3 flex-1">
-              {ALL_TABS.filter(({ id }) => !HIDDEN_FROM_MENU.includes(id)).map(
-                ({ id, icon: Icon, label, locked }) => {
-                  const isActive = id === activePage;
-                  // Locked entries show a padlock and can't be opened yet.
-                  if (locked) {
-                    return (
+              {/* Nav items — "Plan my week" isn't a page, but slots in right
+                  after Goals & Plans since that's the section it plans. */}
+              <div className="px-3 flex-1">
+                {ALL_TABS.filter(({ id }) => !HIDDEN_FROM_MENU.includes(id)).map(
+                  ({ id, icon: Icon, label, locked }) => {
+                    const isActive = id === activePage;
+                    // Locked entries show a padlock and can't be opened yet.
+                    const row = locked ? (
                       <div
-                        key={id}
                         aria-disabled
                         className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 opacity-45"
                       >
@@ -126,103 +161,134 @@ export default function SideMenu({
                         <span className="font-medium text-fg-muted flex-1">{label}</span>
                         <Lock size={15} className="text-fg-faint" />
                       </div>
+                    ) : (
+                      <motion.button
+                        whileTap={tap}
+                        onClick={() => {
+                          onNavigate(id);
+                          onClose();
+                        }}
+                        className={`flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 transition-colors ${
+                          isActive ? "bg-fg/10" : "hover:bg-fg/5"
+                        }`}
+                      >
+                        <Icon
+                          size={20}
+                          strokeWidth={isActive ? 2.2 : 1.8}
+                          className={isActive ? "text-fg" : "text-fg-muted"}
+                        />
+                        <span className={`font-medium ${isActive ? "text-fg" : "text-fg-muted"}`}>
+                          {label}
+                        </span>
+                      </motion.button>
+                    );
+                    return (
+                      <Fragment key={id}>
+                        {row}
+                        {id === "goals" && (
+                          <motion.button
+                            onClick={() => {
+                              onClose();
+                              useWeekPlanStore.getState().start();
+                            }}
+                            whileTap={tap}
+                            className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
+                          >
+                            <Sparkles size={20} className="text-fg-muted" strokeWidth={1.8} />
+                            <span className="font-medium text-fg-muted">Plan my week</span>
+                          </motion.button>
+                        )}
+                      </Fragment>
                     );
                   }
-                  return (
-                    <motion.button
-                      key={id}
-                      whileTap={tap}
-                      onClick={() => {
-                        onNavigate(id);
-                        onClose();
-                      }}
-                      className={`flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 transition-colors ${
-                        isActive ? "bg-fg/10" : "hover:bg-fg/5"
-                      }`}
-                    >
-                      <Icon
-                        size={20}
-                        strokeWidth={isActive ? 2.2 : 1.8}
-                        className={isActive ? "text-fg" : "text-fg-muted"}
-                      />
-                      <span className={`font-medium ${isActive ? "text-fg" : "text-fg-muted"}`}>
-                        {label}
-                      </span>
-                    </motion.button>
-                  );
-                }
-              )}
-            </div>
-
-            {/* Divider */}
-            <div className="mx-5 border-t border-border my-1" />
-
-            {/* Settings + Theme */}
-            <div className="px-3 py-2">
-              <motion.button
-                onClick={() => {
-                  onClose();
-                  useWeekPlanStore.getState().start();
-                }}
-                whileTap={tap}
-                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
-              >
-                <Sparkles size={20} className="text-fg-muted" strokeWidth={1.8} />
-                <span className="font-medium text-fg-muted">Plan my week</span>
-              </motion.button>
-              <motion.button
-                onClick={() => {
-                  onClose();
-                  onOpenSettings();
-                }}
-                whileTap={tap}
-                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
-              >
-                <Settings size={20} className="text-fg-muted" strokeWidth={1.8} />
-                <span className="font-medium text-fg-muted">Settings</span>
-              </motion.button>
-              <div className="flex items-center justify-between w-full px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <Palette size={20} className="text-fg-muted" strokeWidth={1.8} />
-                  <span className="font-medium text-fg-muted">Theme</span>
-                </div>
-                <Switch on={theme === "dark"} onToggle={toggleTheme} label="Dark mode" />
+                )}
               </div>
-            </div>
 
-            {/* Sync status — only shown when there's something to say; hidden
+              {/* Divider */}
+              <div className="mx-5 border-t border-border my-1" />
+
+              {/* Settings + Theme */}
+              <div className="px-3 py-2">
+                <motion.button
+                  onClick={() => {
+                    onClose();
+                    onOpenSettings();
+                  }}
+                  whileTap={tap}
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
+                >
+                  <Settings size={20} className="text-fg-muted" strokeWidth={1.8} />
+                  <span className="font-medium text-fg-muted">Settings</span>
+                </motion.button>
+                <div className="flex items-center justify-between w-full px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Palette size={20} className="text-fg-muted" strokeWidth={1.8} />
+                    <span className="font-medium text-fg-muted">Theme</span>
+                  </div>
+                  <Switch on={theme === "dark"} onToggle={toggleTheme} label="Dark mode" />
+                </div>
+                <motion.button
+                  onClick={() => {
+                    onClose();
+                    setShowCalendars(true);
+                  }}
+                  whileTap={tap}
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
+                >
+                  {connectedCalendarLogos.length > 0 ? (
+                    <div className="flex items-center gap-1 shrink-0" style={{ width: 20 }}>
+                      {connectedCalendarLogos}
+                    </div>
+                  ) : (
+                    <CalendarIcon size={20} className="text-fg-muted" strokeWidth={1.8} />
+                  )}
+                  <div className="flex-1 min-w-0 text-left">
+                    <span className="font-medium text-fg-muted block">Connected calendars</span>
+                    <span className="text-xs text-fg-faint mt-0.5 flex items-center gap-1.5">
+                      {connectedCalendarNames.length > 0 && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      )}
+                      {connectedCalendarSubtitle}
+                    </span>
+                  </div>
+                </motion.button>
+              </div>
+
+              {/* Sync status — only shown when there's something to say; hidden
                 once everything's confirmed synced, matching how nudges and
                 reminders only surface when relevant rather than sitting here
                 permanently. */}
-            {(syncing || pendingCount > 0) && (
-              <div className="flex items-center gap-3 mx-3 px-4 py-3 rounded-2xl bg-surface-alt mb-1 text-fg-muted">
-                {syncing ? (
-                  <RefreshCw size={18} strokeWidth={1.8} className="animate-spin shrink-0" />
-                ) : (
-                  <CloudOff size={18} strokeWidth={1.8} className="shrink-0" />
-                )}
-                <span className="text-sm font-medium">
-                  {syncing
-                    ? "Syncing…"
-                    : `${pendingCount} change${pendingCount === 1 ? "" : "s"} pending — will sync automatically`}
-                </span>
-              </div>
-            )}
+              {(syncing || pendingCount > 0) && (
+                <div className="flex items-center gap-3 mx-3 px-4 py-3 rounded-2xl bg-surface-alt mb-1 text-fg-muted">
+                  {syncing ? (
+                    <RefreshCw size={18} strokeWidth={1.8} className="animate-spin shrink-0" />
+                  ) : (
+                    <CloudOff size={18} strokeWidth={1.8} className="shrink-0" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {syncing
+                      ? "Syncing…"
+                      : `${pendingCount} change${pendingCount === 1 ? "" : "s"} pending — will sync automatically`}
+                  </span>
+                </div>
+              )}
 
-            {/* Log out */}
-            <div className="px-3 pb-10">
-              <motion.button
-                whileTap={tap}
-                onClick={logout}
-                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-500/10 transition-colors"
-              >
-                <LogOut size={20} strokeWidth={1.8} />
-                <span className="font-medium">Log out</span>
-              </motion.button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+              {/* Log out */}
+              <div className="px-3 pb-10">
+                <motion.button
+                  whileTap={tap}
+                  onClick={logout}
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-red-500 hover:bg-red-500/10 transition-colors"
+                >
+                  <LogOut size={20} strokeWidth={1.8} />
+                  <span className="font-medium">Log out</span>
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      <CalendarSheet isOpen={showCalendars} onClose={() => setShowCalendars(false)} />
+    </>
   );
 }
