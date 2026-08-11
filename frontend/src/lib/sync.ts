@@ -412,3 +412,12 @@ export async function refreshHabits(): Promise<void> {
 export async function refreshGoals(): Promise<void> {
   await syncers.goals.refresh();
 }
+
+// Pull-to-refresh entry point: re-syncs every backend-backed domain right
+// now instead of waiting for the periodic retry timer. Same reconciliation
+// as attemptHydration() at startup, so a pending offline edit is pushed
+// rather than clobbered — never rejects, just resolves once it's given up or
+// finished (e.g. offline).
+export async function reloadAll(): Promise<void> {
+  await attemptHydration();
+}

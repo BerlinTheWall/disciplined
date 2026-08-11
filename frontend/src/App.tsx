@@ -8,6 +8,7 @@ import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
 import NotificationBell from "./components/NotificationBell";
 import NudgeHost from "./components/NudgeHost";
 import OnboardingWizard from "./components/onboarding/OnboardingWizard";
+import PullToRefreshIndicator from "./components/PullToRefreshIndicator";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
@@ -22,10 +23,12 @@ import VoiceAssistant from "./components/VoiceAssistant";
 import WeekPlanSheet from "./components/weekplan/WeekPlanSheet";
 import { useDelayedFlag } from "./hooks/useDelayedFlag";
 import { useLeftEdgeSwipe } from "./hooks/useEdgeSwipe";
+import { usePullToRefresh } from "./hooks/usePullToRefresh";
 import { BACKGROUNDS } from "./lib/backgrounds";
 import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
 import { PAGE_ORDER, type Page } from "./lib/pages";
+import { reloadAll } from "./lib/sync";
 import ExpensesPage from "./pages/ExpensesPage";
 import GoalsPage from "./pages/GoalsPage";
 import HabitsPage from "./pages/HabitsPage";
@@ -92,6 +95,16 @@ function App() {
   // stuck/offline state (5s+) does.
   const syncPendingRaw = useSyncStatusStore((s) => s.pendingCount > 0 || s.syncing);
   const syncPending = useDelayedFlag(syncPendingRaw, 5000);
+
+  // Pull-to-refresh on the page body — re-syncs data from the backend rather
+  // than reloading the webview.
+  const {
+    attach: attachPullToRefresh,
+    distance: pullDistance,
+    progress: pullProgress,
+    dragging: pullDragging,
+    refreshing: pullRefreshing,
+  } = usePullToRefresh(reloadAll);
 
   // Swiping in from the very left edge opens the side menu (standard drawer
   // gesture). Off while the menu or any sheet is already up, or during setup.
@@ -410,12 +423,19 @@ function App() {
             exit="exit"
             transition={spring.gentle}
             data-scroll-lock
+            ref={attachPullToRefresh}
             className="absolute inset-0 overflow-y-auto px-4"
             // Clear the floating nav (its height + offset) plus a gap, so the
             // last card never hides behind it. Uses --nav-bottom so the gap is
             // consistent across notch / non-notch devices.
             style={{ paddingBottom: "calc(88px + var(--nav-bottom))" }}
           >
+            <PullToRefreshIndicator
+              distance={pullDistance}
+              progress={pullProgress}
+              dragging={pullDragging}
+              refreshing={pullRefreshing}
+            />
             {renderPage()}
           </motion.div>
         </AnimatePresence>
