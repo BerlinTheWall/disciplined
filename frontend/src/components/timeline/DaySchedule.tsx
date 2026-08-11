@@ -206,45 +206,51 @@ export default function DaySchedule({ date, active, onDetail }: DayScheduleProps
       )
     : 0;
 
-  // On open, scroll the schedule so the task happening right now (per the real
-  // clock) is in view. Only the active (center) panel, and only when today is
-  // its day; other days stay at the top.
+  // On open (or after swiping to this day), scroll the schedule to the
+  // relevant spot. Only the active (center) panel. Today lands on whatever's
+  // happening right now (per the real clock), offset down a bit so there's
+  // context above it; any other day lands on its first task, flush with the
+  // top — the scroll position otherwise carries over from whichever day was
+  // showing before the swipe, which usually isn't where this day's tasks are.
   const containerRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!active) return;
-
-    // A tap on the Home page can ask to reveal a specific item here; that wins
-    // over the default "scroll to what's happening now", and is consumed once.
-    const pending = useScheduleFocusStore.getState().pendingItemId;
-    let focusId: string | null;
-    if (pending && activeItems.some((i) => i.id === pending)) {
-      focusId = pending;
-      useScheduleFocusStore.getState().clear();
-    } else {
-      const now = new Date();
-      focusId =
-        date === toISODate(now)
-          ? findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes())
-          : null;
-    }
-    if (!focusId) return;
 
     const root = containerRef.current;
     if (!root) return;
     const scroller = root.closest("[data-scroll-lock]") as HTMLElement | null;
     if (!scroller) return;
 
+    // A tap on the Home page can ask to reveal a specific item here; that wins
+    // over the default "scroll to what's happening now"/"first task", and is
+    // consumed once.
+    const pending = useScheduleFocusStore.getState().pendingItemId;
+    let focusId: string | null;
+    let viewportRatio: number;
+    if (pending && activeItems.some((i) => i.id === pending)) {
+      focusId = pending;
+      viewportRatio = FOCUS_VIEWPORT_RATIO;
+      useScheduleFocusStore.getState().clear();
+    } else if (date === toISODate(new Date())) {
+      const now = new Date();
+      focusId = findCurrentItemId(activeItems, now.getHours() * 60 + now.getMinutes());
+      viewportRatio = FOCUS_VIEWPORT_RATIO;
+    } else {
+      focusId = activeItems[0]?.id ?? null;
+      viewportRatio = 0;
+    }
+
     // Read the target's position straight from the layout math (topYById)
     // rather than its DOM rect — rows animate into place on mount (see
     // ScheduleRow's top/height transition), so the rect isn't settled yet
     // when this effect runs. The layout numbers are exact from frame one.
-    const targetTopY = layout.topYById[focusId];
-    if (targetTopY == null) return;
+    // No target (e.g. an empty day) still resets to the top of this panel.
+    const targetTopY = focusId ? (layout.topYById[focusId] ?? 0) : 0;
 
     const rootRect = root.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
     const targetViewportY = rootRect.top + targetTopY;
-    const delta = targetViewportY - scrollerRect.top - scroller.clientHeight * FOCUS_VIEWPORT_RATIO;
+    const delta = targetViewportY - scrollerRect.top - scroller.clientHeight * viewportRatio;
     scroller.scrollTop += delta; // scrollTop self-clamps to the valid range
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, active]);

@@ -54,9 +54,16 @@ export default function SwipePager({
   }
 
   return (
-    <div ref={viewportRef} className="relative overflow-x-clip">
+    // min-h-full: when the host scroll area has a definite height (the daily
+    // schedule inside its flex-1 scroller) but a day's content is shorter
+    // than the viewport, this stretches the drag surface down to fill it —
+    // otherwise the swipe gesture only registers over the content itself,
+    // leaving the empty space below unswipeable. In contexts with no definite
+    // parent height (e.g. the week strip), the percentage has no effect, so
+    // this is a no-op there.
+    <div ref={viewportRef} className="relative overflow-x-clip min-h-full flex flex-col">
       <motion.div
-        className="relative touch-pan-y"
+        className="relative touch-pan-y flex-1 flex flex-col"
         style={{ x: ctrl.x }}
         drag="x"
         dragDirectionLock
@@ -69,15 +76,21 @@ export default function SwipePager({
             pages — parked flush against each other — leave an 8px gap at the seam
             (4px each side), so content doesn't touch as it slides past. */}
         {/* Current page — normal flow, defines the height. */}
-        <div key={pageKey?.(0)} className="overflow-x-clip px-1">
+        <div key={pageKey?.(0)} className="overflow-x-clip px-1 flex-1 flex flex-col">
           {renderPage(0)}
         </div>
         {/* Previous page — parked just off the left edge. */}
-        <div key={pageKey?.(-1)} className="absolute top-0 right-full w-full overflow-x-clip px-1">
+        <div
+          key={pageKey?.(-1)}
+          className="absolute top-0 right-full w-full h-full overflow-x-clip px-1"
+        >
           {renderPage(-1)}
         </div>
         {/* Next page — parked just off the right edge. */}
-        <div key={pageKey?.(1)} className="absolute top-0 left-full w-full overflow-x-clip px-1">
+        <div
+          key={pageKey?.(1)}
+          className="absolute top-0 left-full w-full h-full overflow-x-clip px-1"
+        >
           {renderPage(1)}
         </div>
       </motion.div>
