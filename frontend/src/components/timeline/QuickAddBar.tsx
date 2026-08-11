@@ -5,6 +5,7 @@ import { useShallow } from "zustand/shallow";
 
 import type { EditItem } from "./Timeline";
 import { ApiError } from "@/lib/api";
+import { deleteSyncWarning } from "@/lib/calendarSync";
 import {
   parseCommand,
   parseDateInput,
@@ -231,7 +232,9 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
             message:
               item.kind === "habit"
                 ? `"${item.title}" and all its occurrences will be removed.`
-                : `"${item.title}" will be permanently removed.`,
+                : `"${item.title}" will be permanently removed.${deleteSyncWarning(
+                    tasks.find((t) => t.id === item.id) ?? {}
+                  )}`,
             confirmLabel: "Delete",
             destructive: true,
           },
@@ -392,7 +395,9 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         return ok(
           {
             title: "Make it a habit?",
-            message: `"${item.title}" will repeat ${daysLabel}. Its date and any links are cleared.`,
+            message: `"${item.title}" will repeat ${daysLabel}. Its date and any links are cleared.${deleteSyncWarning(
+              tasks.find((t) => t.id === item.id) ?? {}
+            )}`,
             confirmLabel: "Make habit",
           },
           () => {

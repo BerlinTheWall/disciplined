@@ -42,6 +42,7 @@ import type { EditItem } from "./Timeline";
 import TimeWheel from "./TimeWheel";
 import NumberWheel from "@/components/NumberWheel";
 import { useAutoFocus } from "@/hooks/useAutoFocus";
+import { deleteSyncWarning } from "@/lib/calendarSync";
 import { isLightColor } from "@/lib/color";
 import { addDaysISO, formatFullDate, formatShortDate, relativeDayLabel } from "@/lib/date";
 import { anchorDay } from "@/lib/habits";
@@ -400,6 +401,14 @@ export default function AddItemSheet({
     if (isEditing && mode !== editItem!.type) {
       if (mode === "habit") {
         if (freq === "weekly" && daysOfWeek.length === 0) return;
+        const ok = await confirm({
+          title: "Convert to recurring habit?",
+          message: `"${title.trim()}" will become a repeating habit.${
+            editItem!.type === "task" ? deleteSyncWarning(editItem!.data) : ""
+          }`,
+          confirmLabel: "Convert",
+        });
+        if (!ok) return;
         addHabit({
           title: title.trim(),
           startMinutes,
@@ -572,7 +581,7 @@ export default function AddItemSheet({
 
     const ok = await confirm({
       title: "Delete task?",
-      message: `"${editItem.data.title}" will be permanently removed.`,
+      message: `"${editItem.data.title}" will be permanently removed.${deleteSyncWarning(editItem.data)}`,
       confirmLabel: "Delete",
       destructive: true,
     });

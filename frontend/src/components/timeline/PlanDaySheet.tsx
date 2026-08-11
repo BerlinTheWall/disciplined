@@ -20,6 +20,7 @@ import { useReadAloud } from "@/hooks/useReadAloud";
 import { prefetchAssistantVoice } from "@/hooks/useSpeech";
 import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
+import { deleteSyncWarning } from "@/lib/calendarSync";
 import { isLightColor } from "@/lib/color";
 import { parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
@@ -439,7 +440,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                             }
                             const ok = await confirm({
                               title: "Delete task?",
-                              message: `"${t.title}" will be permanently removed.`,
+                              message: `"${t.title}" will be permanently removed.${kind === "task" ? deleteSyncWarning(t) : ""}`,
                               confirmLabel: "Delete",
                               destructive: true,
                             });
