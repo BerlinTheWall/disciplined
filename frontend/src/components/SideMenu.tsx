@@ -235,15 +235,8 @@ export default function SideMenu({
                   whileTap={tap}
                   className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-fg/5 transition-colors"
                 >
-                  {connectedCalendarLogos.length > 0 ? (
-                    <div className="flex items-center gap-1 shrink-0" style={{ width: 20 }}>
-                      {connectedCalendarLogos}
-                    </div>
-                  ) : (
-                    <CalendarIcon size={20} className="text-fg-muted" strokeWidth={1.8} />
-                  )}
                   <div className="flex-1 min-w-0 text-left">
-                    <span className="font-medium text-fg-muted block">Connected calendars</span>
+                    <span className="font-medium text-fg-muted block">Connected Calendars</span>
                     <span className="text-xs text-fg-faint mt-0.5 flex items-center gap-1.5">
                       {connectedCalendarNames.length > 0 && (
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
@@ -251,6 +244,13 @@ export default function SideMenu({
                       {connectedCalendarSubtitle}
                     </span>
                   </div>
+                  {connectedCalendarLogos.length > 0 ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {connectedCalendarLogos}
+                    </div>
+                  ) : (
+                    <CalendarIcon size={20} className="text-fg-muted shrink-0" strokeWidth={1.8} />
+                  )}
                 </motion.button>
               </div>
 
