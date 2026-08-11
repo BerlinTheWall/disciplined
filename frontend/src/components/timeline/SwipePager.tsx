@@ -41,7 +41,28 @@ export default function SwipePager({
   const ctrl = controller ?? internal;
   const viewportRef = useRef<HTMLDivElement>(null);
 
+  // The drag surface allows native vertical panning to pass through (see
+  // touch-pan-y below) so the page can still be scrolled by touching it —
+  // but that means a horizontal swipe, which never has a perfectly straight
+  // finger path, also nudges the page up/down as it goes, reading as wiggle.
+  // While a horizontal drag is live, pin the ancestor scroller's scrollTop
+  // back to where it was when the drag started, cancelling that creep out
+  // every frame without blocking real vertical scrolls the rest of the time.
+  const lockedScrollTopRef = useRef<number | null>(null);
+
+  function onDragStart() {
+    const scroller = viewportRef.current?.closest("[data-scroll-lock]") as HTMLElement | null;
+    lockedScrollTopRef.current = scroller?.scrollTop ?? null;
+  }
+
+  function onDrag() {
+    if (lockedScrollTopRef.current === null) return;
+    const scroller = viewportRef.current?.closest("[data-scroll-lock]") as HTMLElement | null;
+    if (scroller) scroller.scrollTop = lockedScrollTopRef.current;
+  }
+
   function onDragEnd(_: unknown, info: PanInfo) {
+    lockedScrollTopRef.current = null;
     const w = viewportRef.current?.offsetWidth ?? 0;
     const threshold = Math.min(w * COMMIT_RATIO, COMMIT_MAX);
     if (info.offset.x <= -threshold || info.velocity.x <= -SWIPE_VELOCITY) {
@@ -68,6 +89,8 @@ export default function SwipePager({
         drag="x"
         dragDirectionLock
         dragMomentum={false}
+        onDragStart={onDragStart}
+        onDrag={onDrag}
         onDragEnd={onDragEnd}
       >
         {/* Each page clips to its own width so edge effects (e.g. the "happening
