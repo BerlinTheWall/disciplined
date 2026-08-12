@@ -3,6 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { AnimatePresence, motion } from "framer-motion";
 import { Flame } from "lucide-react";
 
+import MarqueeText from "@/components/MarqueeText";
 import { hexToRgba } from "@/lib/color";
 import { ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -188,14 +189,14 @@ export default function ScheduleRow({
         {/* Tap zone: the text content area opens edit/delete */}
         <div onClick={() => onEdit(id)} className="flex-1 pt-1 min-w-0 select-none cursor-pointer">
           <div className="flex items-center gap-2">
-            <span className="relative block min-w-0 overflow-hidden leading-tight max-w-44">
+            <span className="relative block min-w-0 leading-tight max-w-44">
               <motion.span
-                className="font-semibold text-lg block truncate"
+                className="block"
                 initial={false}
                 animate={{ color: completed ? colors.fgFaint : colors.fg }}
                 transition={{ duration: 0.25 }}
               >
-                {title}
+                <MarqueeText text={title} className="font-semibold text-lg" />
               </motion.span>
               <motion.span
                 className="pointer-events-none absolute left-0 h-0.5 w-full rounded-full bg-fg-faint"
