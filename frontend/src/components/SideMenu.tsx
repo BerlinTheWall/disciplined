@@ -3,6 +3,7 @@ import { animate, AnimatePresence, motion, useMotionValue, type PanInfo } from "
 import {
   Calendar as CalendarIcon,
   CloudOff,
+  Heart,
   Lock,
   LogOut,
   Palette,
@@ -14,6 +15,7 @@ import {
 
 import CalendarSheet from "./CalendarSheet";
 import { AppleLogo, GoogleLogo, MicrosoftLogo } from "./icons/ProviderLogos";
+import InterestsSheet from "./InterestsSheet";
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -61,6 +63,7 @@ export default function SideMenu({
   useScrollLock(isOpen);
 
   const [showCalendars, setShowCalendars] = useState(false);
+  const [showInterests, setShowInterests] = useState(false);
   const appleCalendarId = useCalendarStore((s) => s.appleCalendarId);
   const outlookConnected = useOutlookStore((s) => s.connected);
   const googleConnected = useGoogleCalendarStore((s) => s.connected);
@@ -186,17 +189,32 @@ export default function SideMenu({
                       <Fragment key={id}>
                         {row}
                         {id === "goals" && (
-                          <motion.button
-                            onClick={() => {
-                              onClose();
-                              useWeekPlanStore.getState().start();
-                            }}
-                            whileTap={tap}
-                            className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
-                          >
-                            <Sparkles size={20} className="text-fg-muted" strokeWidth={1.8} />
-                            <span className="font-medium text-fg-muted">Plan my week</span>
-                          </motion.button>
+                          <>
+                            <motion.button
+                              onClick={() => {
+                                onClose();
+                                useWeekPlanStore.getState().start();
+                              }}
+                              whileTap={tap}
+                              className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
+                            >
+                              <Sparkles size={20} className="text-fg-muted" strokeWidth={1.8} />
+                              <span className="font-medium text-fg-muted">Plan my week</span>
+                            </motion.button>
+                            <motion.button
+                              onClick={() => {
+                                onClose();
+                                setShowInterests(true);
+                              }}
+                              whileTap={tap}
+                              className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
+                            >
+                              <Heart size={20} className="text-fg-muted" strokeWidth={1.8} />
+                              <span className="font-medium text-fg-muted">
+                                Things you want to make time for
+                              </span>
+                            </motion.button>
+                          </>
                         )}
                       </Fragment>
                     );
@@ -289,6 +307,7 @@ export default function SideMenu({
         )}
       </AnimatePresence>
       <CalendarSheet isOpen={showCalendars} onClose={() => setShowCalendars(false)} />
+      <InterestsSheet isOpen={showInterests} onClose={() => setShowInterests(false)} />
     </>
   );
 }
