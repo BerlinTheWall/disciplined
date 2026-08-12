@@ -580,6 +580,7 @@ class CoachPlanResponse(CamelModel):
 class ChatResponse(CamelModel):
     reply: str
     actions: list[ChatAction] = []
+    pending_actions: list[PendingAction] = []
 
 
 # ---- Reconcile response (shared shape for Outlook + Google two-way sync) ----

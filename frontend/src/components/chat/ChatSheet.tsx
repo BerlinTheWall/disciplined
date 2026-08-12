@@ -154,6 +154,18 @@ export default function ChatSheet() {
 
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Grow the input with its content (wrapping instead of scrolling sideways)
+  // up to a cap, past which it scrolls internally. Re-measures on every
+  // keystroke and on live voice transcript updates, since both flow through
+  // `text`.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
   // Keep the typing dots up while the spoken reply is still being prepared,
   // so there's a visible loader until the assistant is heard.
   const voicePending = useSpeechState((s) => s.pending);
@@ -213,8 +225,7 @@ export default function ChatSheet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitMessage() {
     const raw = text.trim();
     if (!raw || busy) return;
     setText("");
@@ -223,6 +234,11 @@ export default function ChatSheet() {
     primeAudioChannel();
     // Errors already surface as a bubble in the thread.
     await send(raw).catch(() => {});
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await submitMessage();
   }
 
   return (
@@ -282,14 +298,23 @@ export default function ChatSheet() {
       {/* Input */}
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-2 bg-surface rounded-full pl-4 pr-1.5 py-1.5 mx-4 mb-4 mt-1"
+        className="flex items-end gap-2 bg-surface rounded-3xl pl-4 pr-1.5 py-1.5 mx-4 mb-4 mt-1"
       >
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter (or any IME composition) inserts a
+            // newline instead, same as every other chat input.
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void submitMessage();
+            }
+          }}
           placeholder={listening ? "Listening…" : "Message the assistant…"}
-          className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none resize-none leading-6 py-1 max-h-36 overflow-y-auto"
         />
         {voiceSupported && (
           <motion.button

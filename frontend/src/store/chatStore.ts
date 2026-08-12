@@ -132,7 +132,7 @@ export const useChatStore = create<State & Actions>()((set, get) => {
             {
               role: "model",
               content: res.reply,
-              pendingActions: res.pendingActions.length ? res.pendingActions : undefined,
+              pendingActions: res.pendingActions?.length ? res.pendingActions : undefined,
             },
           ],
         }));

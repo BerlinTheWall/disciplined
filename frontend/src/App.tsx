@@ -357,9 +357,12 @@ function App() {
                   // Opacity-only entrance/exit: a scale transform here made
                   // WKWebView re-round the toggle icons' subpixel positions when
                   // it finished (~1px hop on page open) — same fix as BottomNav.
+                  // Instant exit (like the profile button below) so it vanishes
+                  // as soon as the page changes instead of crossfading with the
+                  // incoming page's controls, which briefly showed both at once.
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={spring.snappy}
                   className="flex items-center gap-2"
                 >
@@ -405,9 +408,10 @@ function App() {
               {activePage === "profile" && (
                 <motion.div
                   key="profile-controls"
+                  // Instant exit — see schedule-controls above.
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={spring.snappy}
                 >
                   <NotificationBell onOpenSchedule={goToSchedule} onOpenGoals={() => go("goals")} />
