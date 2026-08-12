@@ -1,6 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
+// Re-measuring once on mount isn't enough: Inter loads as a variable webfont
+// (see main.tsx) and swaps in after first paint, which can widen the text
+// just enough that a distance computed against the fallback font stops a
+// few characters short of the real end. A ResizeObserver catches that swap
+// (and any other future resize) instead of relying on load-order timing.
+
 interface MarqueeTextProps {
   text: string;
   className?: string;
@@ -25,8 +31,17 @@ export default function MarqueeText({ text, className = "" }: MarqueeTextProps) 
     const container = containerRef.current;
     const el = textRef.current;
     if (!container || !el) return;
-    const diff = el.scrollWidth - container.clientWidth;
-    setOverflow(diff > 2 ? diff : 0); // small slop so sub-pixel rounding doesn't trigger it
+
+    function measure() {
+      const diff = el!.scrollWidth - container!.clientWidth;
+      setOverflow(diff > 2 ? diff : 0); // small slop so sub-pixel rounding doesn't trigger it
+    }
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [text]);
 
   const travel = overflow / SPEED;
