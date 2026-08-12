@@ -51,6 +51,10 @@ export default function SwipePager({
   const lockedScrollTopRef = useRef<number | null>(null);
 
   function onDragStart() {
+    // A prior settle may still be animating (fast repeated swipes) — resolve
+    // it immediately rather than letting it keep running alongside this new
+    // drag, which is what caused the strip to visibly get stuck.
+    ctrl.flushPending();
     const scroller = viewportRef.current?.closest("[data-scroll-lock]") as HTMLElement | null;
     lockedScrollTopRef.current = scroller?.scrollTop ?? null;
   }
