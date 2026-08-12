@@ -7,7 +7,9 @@ import { create } from "zustand";
 // domain-specific alerts with their own actions (Done/Snooze); this is a
 // generic, fire-and-forget toast for one-off confirmations.
 
-const AUTO_DISMISS_MS = 4000;
+// Success toasts are just a quick confirmation, so they clear fast; errors
+// stay up longer since they're worth actually reading (often "try again").
+const AUTO_DISMISS_MS = { success: 2000, error: 4000 };
 
 interface ToastState {
   message: string | null;
@@ -24,7 +26,7 @@ export const useToastStore = create<ToastState>((set) => ({
   show: (message, kind = "success") => {
     window.clearTimeout(dismissTimer);
     set({ message, kind });
-    dismissTimer = window.setTimeout(() => set({ message: null }), AUTO_DISMISS_MS);
+    dismissTimer = window.setTimeout(() => set({ message: null }), AUTO_DISMISS_MS[kind]);
   },
   dismiss: () => {
     window.clearTimeout(dismissTimer);
