@@ -43,6 +43,10 @@ export interface Goal {
   progress: number;
   priority: Priority | null;
   category: GoalCategory | null;
+  // A short, public blurb of what the goal is — shown in the add sheet and
+  // wherever the goal is displayed, optionally AI-drafted. Distinct from
+  // `note`, which is the private, collapsed "why" set only after the fact.
+  description: string | null;
   // The date this goal actually starts, and how many `period` units it
   // spans from there (e.g. period="month" + durationCount=3 = a 3-month
   // goal). Independent of periodKey, which still files the goal under the

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  CalendarClock,
   Check,
   ListChecks,
   MessageSquareText,
@@ -16,15 +15,14 @@ import {
 import Collapse from "@/components/Collapse";
 import { useConfirm } from "@/components/ConfirmDialog";
 import GoalCelebration from "@/components/goals/GoalCelebration";
-import GoalScheduleSheet from "@/components/goals/GoalScheduleSheet";
 import LinkedGoalPicker from "@/components/goals/LinkedGoalPicker";
-import MilestoneSuggestSheet from "@/components/goals/MilestoneSuggestSheet";
+import WeightInput from "@/components/goals/WeightInput";
 import { canLinkGoalPeriod } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
 import { GOAL_PACE_COLOR, GOAL_PACE_LABEL, goalPace, goalProgress } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
-import { useGoalScheduleStore } from "@/store/goalScheduleStore";
+import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Goal } from "@/types/goals";
@@ -54,7 +52,6 @@ export default function GoalDetailScreen({
   const [milestoneText, setMilestoneText] = useState("");
   const [noteEditing, setNoteEditing] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
-  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const p = goalProgress(goal, tasks, goals);
   const pace = goalPace(goal, tasks, goals);
@@ -257,18 +254,10 @@ export default function GoalDetailScreen({
             />
             <ActionChip
               icon={Sparkles}
-              label="Suggest"
+              label="Plan with AI"
               accent={accent}
-              onClick={() => setSuggestOpen(true)}
+              onClick={() => useGoalPlanWizardStore.getState().start(goal.id)}
             />
-            {goal.milestones.length > 0 && (
-              <ActionChip
-                icon={CalendarClock}
-                label="Schedule"
-                accent={accent}
-                onClick={() => void useGoalScheduleStore.getState().start(goal)}
-              />
-            )}
           </div>
 
           <Collapse open={goalPickerOpen}>
@@ -426,13 +415,6 @@ export default function GoalDetailScreen({
           </p>
         </Collapse>
       </div>
-
-      <MilestoneSuggestSheet
-        goal={goal}
-        isOpen={suggestOpen}
-        onClose={() => setSuggestOpen(false)}
-      />
-      <GoalScheduleSheet goal={goal} />
     </motion.div>
   );
 }
@@ -457,36 +439,5 @@ function ActionChip({
       <Icon size={13} />
       {label}
     </button>
-  );
-}
-
-// A percent-of-parent input: shows what was explicitly set, or the
-// auto-split share as a placeholder when it wasn't. Shared by linked
-// tasks/goals (against goal.weights) and milestones (against m.weight) —
-// same rule, different owner of the value.
-function WeightInput({
-  value,
-  placeholder,
-  onChange,
-}: {
-  value: number | undefined;
-  placeholder: number;
-  onChange: (weight: number | null) => void;
-}) {
-  return (
-    <div className="flex items-center shrink-0">
-      <input
-        value={value != null ? String(value) : ""}
-        onChange={(e) => {
-          const raw = e.target.value.replace(/\D/g, "");
-          onChange(raw === "" ? null : parseInt(raw, 10));
-        }}
-        placeholder={String(Math.round(placeholder))}
-        inputMode="numeric"
-        aria-label="Weight"
-        className="w-8 bg-transparent text-right text-xs font-medium tabular-nums text-fg placeholder-fg-faint focus:outline-none"
-      />
-      <span className="text-xs text-fg-faint">%</span>
-    </div>
   );
 }

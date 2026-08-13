@@ -241,7 +241,9 @@ async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string
     });
   }
 
-  scheduledSignatures = new Map([...desired.entries()].map(([id, { signature }]) => [id, signature]));
+  scheduledSignatures = new Map(
+    [...desired.entries()].map(([id, { signature }]) => [id, signature])
+  );
 }
 
 // Synthesizing sounds makes a sync take a while; if another sync is requested

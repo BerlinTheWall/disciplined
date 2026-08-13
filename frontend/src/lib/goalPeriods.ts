@@ -91,6 +91,50 @@ export function goalEndDate(
   return toISODate(end);
 }
 
+// goalEndDate's inverse: given a start and a target end date the user
+// actually picked (add-goal sheet's "End date" field), the whole-`period`
+// durationCount that reproduces it — so the stored field stays a count of
+// period units even though the UI lets someone pick a calendar date
+// directly. Whole-months/-years counting (not calendar-day division)
+// mirrors how goalEndDate itself advances by whole months/years, so picking
+// the sheet's own default end date round-trips to the same durationCount
+// it started from. Always at least 1 — a goal can't end before it starts.
+export function durationCountFromEndDate(
+  period: GoalPeriod,
+  startDate: string,
+  endDate: string
+): number {
+  const start = parseISODate(startDate);
+  const end = parseISODate(endDate);
+  if (end <= start) return 1;
+
+  if (period === "week") {
+    const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    return Math.max(1, Math.round(days / 7));
+  }
+
+  // goalEndDate computes end = (start + n period-units) - 1 day, so its
+  // inverse target is end + 1 day — the whole-unit count from start to
+  // there.
+  const target = new Date(end);
+  target.setDate(target.getDate() + 1);
+
+  if (period === "month") {
+    let months = (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
+    if (target.getDate() < start.getDate()) months -= 1;
+    return Math.max(1, months);
+  }
+
+  let years = target.getFullYear() - start.getFullYear();
+  if (
+    target.getMonth() < start.getMonth() ||
+    (target.getMonth() === start.getMonth() && target.getDate() < start.getDate())
+  ) {
+    years -= 1;
+  }
+  return Math.max(1, years);
+}
+
 const PERIOD_GRANULARITY: Record<GoalPeriod, number> = { year: 0, month: 1, week: 2 };
 
 // A goal may only link another goal as a contributor if that goal's period

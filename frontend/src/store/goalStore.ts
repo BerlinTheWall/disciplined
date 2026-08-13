@@ -36,6 +36,7 @@ interface GoalState {
     target: number | null;
     priority?: Priority | null;
     category?: GoalCategory | null;
+    description?: string | null;
     startDate?: string | null;
     durationCount?: number | null;
   }) => string;
@@ -72,7 +73,6 @@ interface GoalState {
   // GoalScheduleSheet) — a task ends up owned by exactly one milestone, so
   // it's dropped from any other milestone in this goal that already had it.
   linkTasksToMilestones: (goalId: string, links: { milestoneId: string; taskId: string }[]) => void;
-  rollover: (period: GoalPeriod, fromKey: string, toKey: string) => void;
 }
 
 export const useGoalStore = create<GoalState>()(
@@ -87,6 +87,7 @@ export const useGoalStore = create<GoalState>()(
         target,
         priority = null,
         category = null,
+        description = null,
         startDate = null,
         durationCount = null,
       }) => {
@@ -106,6 +107,7 @@ export const useGoalStore = create<GoalState>()(
                 progress: 0,
                 priority,
                 category,
+                description,
                 startDate,
                 durationCount: durationCount && durationCount > 0 ? durationCount : null,
                 order: Number.MAX_SAFE_INTEGER,
@@ -324,54 +326,17 @@ export const useGoalStore = create<GoalState>()(
           }),
         })),
 
-      rollover: (period, fromKey, toKey) =>
-        set((state) => {
-          const existingTitles = new Set(
-            state.goals
-              .filter((g) => g.period === period && g.periodKey === toKey)
-              .map((g) => g.title)
-          );
-          const maxOrder = state.goals
-            .filter((g) => g.period === period && g.periodKey === toKey)
-            .reduce((m, g) => Math.max(m, g.order), -1);
-          let next = maxOrder;
-          const carried = state.goals
-            .filter(
-              (g) =>
-                g.period === period &&
-                g.periodKey === fromKey &&
-                !g.done &&
-                !existingTitles.has(g.title)
-            )
-            .map((g) => ({
-              ...g,
-              id: crypto.randomUUID(),
-              periodKey: toKey,
-              progress: 0,
-              done: false,
-              linkedTaskIds: [],
-              linkedGoalIds: [],
-              weights: {},
-              milestones: [],
-              // The old start date belonged to the period being rolled off;
-              // duration (a count of periods) still applies, but the date
-              // itself would be stale.
-              startDate: null,
-              order: ++next,
-              createdAt: Date.now(),
-            }));
-          return { goals: [...state.goals, ...carried] };
-        }),
     }),
     {
       name: "disciplined-goals",
-      version: 4,
+      version: 5,
       // Backfill fields added over time: priority/order/taskIds (v1),
       // taskWeights (v2), the v3 rebuild — taskIds/taskWeights renamed to
-      // linkedTaskIds/weights, plus new linkedGoalIds/milestones — and v4's
-      // category/startDate/durationCount. Reads straight off whatever old
-      // field names are present regardless of the stored version, so it's
-      // safe no matter which version a device is migrating up from.
+      // linkedTaskIds/weights, plus new linkedGoalIds/milestones — v4's
+      // category/startDate/durationCount, and v5's description. Reads
+      // straight off whatever old field names are present regardless of the
+      // stored version, so it's safe no matter which version a device is
+      // migrating up from.
       migrate: (persisted) => {
         const state = persisted as {
           goals?: (Goal & { taskIds?: string[]; taskWeights?: Record<string, number> })[];
@@ -388,6 +353,7 @@ export const useGoalStore = create<GoalState>()(
             category: g.category ?? null,
             startDate: g.startDate ?? null,
             durationCount: g.durationCount ?? null,
+            description: g.description ?? null,
           }));
         }
         return state as GoalState;

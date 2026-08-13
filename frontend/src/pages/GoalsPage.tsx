@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowDownToLine,
   Briefcase,
   Calendar,
   CheckSquare,
@@ -10,6 +9,7 @@ import {
   CirclePlus,
   Heart,
   Plus,
+  Sparkles,
   Target,
   User,
 } from "lucide-react";
@@ -17,15 +17,18 @@ import {
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
 import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
-import GoalRow from "@/components/goals/GoalRow";
-import PeriodPath from "@/components/goals/PeriodPath";
+import GoalPlanWizard from "@/components/goals/GoalPlanWizard";
+import PeriodOverview from "@/components/goals/PeriodOverview";
 import { chipCls } from "@/components/timeline/addItemOptions";
 import CalendarMonth from "@/components/timeline/CalendarMonth";
 import { FieldPanel } from "@/components/timeline/FieldPanel";
+import { api, ApiError } from "@/lib/api";
 import { isLightColor } from "@/lib/color";
 import { formatFullDate, parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import {
   currentPeriodKey,
+  durationCountFromEndDate,
+  goalEndDate,
   goalOverlapsPeriod,
   periodKeyFor,
   periodLabel,
@@ -33,8 +36,9 @@ import {
   relativePeriodName,
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
-import { goalColor, priorityRank } from "@/lib/goalPriority";
+import { goalColor } from "@/lib/goalPriority";
 import { spring, tap } from "@/lib/motion";
+import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -74,7 +78,6 @@ const GOAL_ACCENT_ON = isLightColor(GOAL_ACCENT) ? "#111827" : "#ffffff";
 export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => void }) {
   const goals = useGoalStore((s) => s.goals);
   const addGoal = useGoalStore((s) => s.addGoal);
-  const rollover = useGoalStore((s) => s.rollover);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const tasks = useTaskStore((s) => s.tasks);
 
@@ -126,19 +129,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     [nativeListed, cascadedListed]
   );
 
-  // Unfinished goals from the previous period, offered as one-tap carry-over
-  // (current period only).
-  const prevKey = shiftPeriodKey(period, activeKey, -1);
-  const carryCount = isCurrent
-    ? goals.filter(
-        (g) =>
-          g.period === period &&
-          g.periodKey === prevKey &&
-          !g.done &&
-          !listed.some((cur) => cur.title === g.title)
-      ).length
-    : 0;
-
   function shift(delta: number) {
     setKeys((k) => ({ ...k, [period]: shiftPeriodKey(period, k[period], delta) }));
   }
@@ -155,47 +145,47 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setKeys((k) => ({ ...k, [p]: key }));
   }
 
-  // Reset "show all" during render when the tab/period changes (React's
-  // documented "adjusting state" pattern) rather than in an effect — an
-  // effect calling setState synchronously would trigger a second render for
-  // no reason.
-  const [listKey, setListKey] = useState(`${period}:${activeKey}`);
-  const [showAllGoals, setShowAllGoals] = useState(false);
-  if (listKey !== `${period}:${activeKey}`) {
-    setListKey(`${period}:${activeKey}`);
-    setShowAllGoals(false);
-  }
-
-  // Week is usually a short, immediate list — only Month/Year (which can
-  // accumulate a lot between native goals and everything cascading in) get
-  // capped to the highest-priority ones by default, with a way to see the
-  // rest. Order among the shown ones stays the list's normal order — only
-  // which ones are included is priority-driven, not the sequence.
-  const HIGH_PRIORITY_CAP = 4;
-  const visibleListed = useMemo(() => {
-    if (period === "week" || showAllGoals || listed.length <= HIGH_PRIORITY_CAP) return listed;
-    const topIds = new Set(
-      [...listed]
-        .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
-        .slice(0, HIGH_PRIORITY_CAP)
-        .map((g) => g.id)
-    );
-    return listed.filter((g) => topIds.has(g.id));
-  }, [listed, period, showAllGoals]);
-  const hiddenGoalCount = listed.length - visibleListed.length;
+  // Total unique tasks linked across every goal shown in this view — the
+  // header's "{N} Tasks" count. Unions goal-level and milestone-level
+  // linkedTaskIds: a goal planned through the AI wizard has its tasks on
+  // its milestones, not on the goal itself, so counting only the former
+  // would silently undercount.
+  const headerTaskCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const g of listed) {
+      for (const id of g.linkedTaskIds ?? []) ids.add(id);
+      for (const m of g.milestones) for (const id of m.linkedTaskIds ?? []) ids.add(id);
+    }
+    return ids.size;
+  }, [listed]);
 
   const [detailGoalId, setDetailGoalId] = useState<string | null>(null);
   const detailGoal = goals.find((g) => g.id === detailGoalId) ?? null;
 
   const [addOpen, setAddOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [descGenerating, setDescGenerating] = useState(false);
+  const [descError, setDescError] = useState("");
   const [newPriority, setNewPriority] = useState<Priority | null>(null);
   const [newCategory, setNewCategory] = useState<GoalCategory | null>(null);
   const [newScale, setNewScale] = useState<GoalPeriod>("week");
   const [newStartDate, setNewStartDate] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
+  const [newEndDate, setNewEndDate] = useState("");
+  const [endDateOpen, setEndDateOpen] = useState(false);
+  // Whether the user has picked an end date by hand — until they do, it
+  // tracks the scale/start date so it always shows the same "one period"
+  // default the goal would get if left untouched.
+  const [endDateTouched, setEndDateTouched] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+
+  useEffect(() => {
+    if (endDateTouched) return;
+    const start = newStartDate || todayISODate();
+    setNewEndDate(goalEndDate(newScale, periodKeyFor(newScale, parseISODate(start)), start, null));
+  }, [newScale, newStartDate, endDateTouched]);
 
   // Custom tags typed in from a past goal (plus whatever's mid-entry right
   // now), offered as chips alongside the built-in categories — a user's own
@@ -223,28 +213,60 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setNewScale(period);
     setNewStartDate(isCurrent ? todayISODate() : periodStartDate(period, activeKey));
     setDateOpen(false);
+    setEndDateOpen(false);
+    setEndDateTouched(false);
     setAddingTag(false);
     setTagDraft("");
+    setNewDescription("");
+    setDescError("");
     setAddOpen(true);
+  }
+
+  async function generateDescription() {
+    const trimmed = title.trim();
+    if (!trimmed || descGenerating) return;
+    setDescGenerating(true);
+    setDescError("");
+    try {
+      const res = await api.goalDescription.generate({
+        title: trimmed,
+        category: newCategory,
+        period: newScale,
+      });
+      setNewDescription(res.description);
+    } catch (e) {
+      setDescError(
+        e instanceof ApiError ? e.message : "Couldn't draft a description — please try again."
+      );
+    } finally {
+      setDescGenerating(false);
+    }
   }
 
   function handleAdd() {
     const trimmed = title.trim();
     if (!trimmed) return;
     const startDate = newStartDate || todayISODate();
-    addGoal({
+    const durationCount = durationCountFromEndDate(newScale, startDate, newEndDate || startDate);
+    const id = addGoal({
       period: newScale,
       periodKey: periodKeyFor(newScale, parseISODate(startDate)),
       title: trimmed,
       target: null,
       priority: newPriority,
       category: newCategory,
+      description: newDescription.trim() || null,
       startDate,
+      durationCount,
     });
     setTitle("");
+    setNewDescription("");
+    setDescError("");
     setNewPriority(null);
     setNewCategory(null);
+    setEndDateTouched(false);
     setAddOpen(false);
+    useGoalPlanWizardStore.getState().start(id);
   }
 
   return (
@@ -289,73 +311,38 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         </motion.button>
       </div>
 
-      {/* Path (today, upcoming days/weeks/months) beside the goal list —
-          the two columns aren't row-for-row aligned, they're just laid out
-          together; the path is its own independent timeline. */}
-      <div className="flex gap-3 items-start">
-        <PeriodPath
+      {/* Overview header: the browsed period's own label plus a running
+          count of every task linked (directly or via a milestone) to a
+          goal shown below. */}
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-base font-extrabold text-fg capitalize">
+          {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)} Overview
+        </h2>
+        <span className="text-sm text-fg-faint">{headerTaskCount} Tasks</span>
+      </div>
+
+      {listed.length === 0 ? (
+        <div className="py-10 flex flex-col items-center text-center bg-surface rounded-2xl shadow-soft">
+          <div className="w-14 h-14 rounded-2xl bg-surface-raised flex items-center justify-center mb-3">
+            <Target size={24} className="text-fg-faint" />
+          </div>
+          <p className="text-sm text-fg-faint max-w-52">
+            No goals for this {period} yet. Tap + to add one.
+          </p>
+        </div>
+      ) : (
+        <PeriodOverview
           period={period}
           activeKey={activeKey}
           goals={goals}
           tasks={tasks}
+          weekGoals={nativeListed}
+          onOpenGoal={(id) => setDetailGoalId(id)}
+          onOpenTask={openTask}
           onOpenDay={openDay}
           onJumpPeriod={jumpPeriod}
         />
-
-        <div className="flex-1 min-w-0 flex flex-col gap-2">
-          {listed.length === 0 ? (
-            <div className="py-10 flex flex-col items-center text-center bg-surface rounded-2xl shadow-soft">
-              <div className="w-14 h-14 rounded-2xl bg-surface-raised flex items-center justify-center mb-3">
-                <Target size={24} className="text-fg-faint" />
-              </div>
-              <p className="text-sm text-fg-faint max-w-52">
-                No goals for this {period} yet. Tap + to add one.
-              </p>
-            </div>
-          ) : (
-            <>
-              {visibleListed.map((g) => (
-                <GoalRow
-                  key={g.id}
-                  goal={g}
-                  goals={goals}
-                  tasks={tasks}
-                  onOpen={() => setDetailGoalId(g.id)}
-                  cascaded={!(g.period === period && g.periodKey === activeKey)}
-                />
-              ))}
-              {hiddenGoalCount > 0 && (
-                <motion.button
-                  onClick={() => setShowAllGoals(true)}
-                  whileTap={tap}
-                  className="w-full flex items-center justify-center gap-2 bg-surface-raised rounded-2xl px-4 py-3 text-sm font-medium text-fg-muted"
-                >
-                  Showing high priority only — +{hiddenGoalCount} more this {period}
-                </motion.button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Carry-over */}
-      <AnimatePresence>
-        {carryCount > 0 && (
-          <motion.button
-            onClick={() => rollover(period, prevKey, activeKey)}
-            whileTap={tap}
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, height: 0 }}
-            className="w-full flex items-center gap-2.5 bg-surface-raised rounded-2xl px-4 py-3 text-left"
-          >
-            <ArrowDownToLine size={16} className="text-fg-muted shrink-0" />
-            <span className="text-sm font-medium text-fg">
-              Bring over {carryCount} unfinished from last {period}
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      )}
 
       {/* Floating add button — there's no natural "bottom of the list" once
           goals are a carousel, so quick-add moves off the always-visible bar
@@ -386,6 +373,30 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           className="w-full bg-surface-raised rounded-2xl px-4 py-3.5 text-[17px] font-semibold text-fg placeholder-fg-faint focus:outline-none"
         />
 
+        <div className="flex items-center justify-between mt-5 mb-2">
+          <label className="text-xs font-bold tracking-wide text-fg-muted">Description</label>
+          <motion.button
+            onClick={generateDescription}
+            whileTap={tap}
+            disabled={!title.trim() || descGenerating}
+            className={`flex items-center gap-1 text-xs font-semibold ${
+              !title.trim() ? "text-fg-faint" : ""
+            }`}
+            style={title.trim() ? { color: "var(--path-accent)" } : undefined}
+          >
+            <Sparkles size={12} className={descGenerating ? "animate-spin" : ""} />
+            Generate
+          </motion.button>
+        </div>
+        <textarea
+          value={newDescription}
+          onChange={(e) => setNewDescription(e.target.value)}
+          placeholder="What does done look like?"
+          rows={2}
+          className="w-full bg-surface-raised rounded-2xl px-4 py-3 text-sm text-fg placeholder-fg-faint focus:outline-none resize-none"
+        />
+        {descError && <p className="text-xs text-red-400 mt-1.5">{descError}</p>}
+
         <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
           Timeframe scale
         </label>
@@ -411,7 +422,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         </div>
 
         <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
-          Date
+          Start date
         </label>
         <motion.button
           onClick={() => setDateOpen(true)}
@@ -424,6 +435,24 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           </span>
           <span className="flex items-center gap-1 text-fg-faint text-sm">
             {relativeDayLabel(newStartDate)}
+            <ChevronRight size={16} />
+          </span>
+        </motion.button>
+
+        <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+          End date
+        </label>
+        <motion.button
+          onClick={() => setEndDateOpen(true)}
+          whileTap={tap}
+          className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5"
+        >
+          <span className="flex items-center gap-2 text-fg font-medium">
+            <Calendar size={18} className="text-fg-faint" />
+            {formatFullDate(newEndDate)}
+          </span>
+          <span className="flex items-center gap-1 text-fg-faint text-sm">
+            {relativeDayLabel(newEndDate)}
             <ChevronRight size={16} />
           </span>
         </motion.button>
@@ -541,7 +570,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           sheet's own slide-up transform. */}
       <FieldPanel
         open={addOpen && dateOpen}
-        title="Date"
+        title="Start date"
         color={GOAL_ACCENT}
         onColor={GOAL_ACCENT_ON}
         onClose={() => setDateOpen(false)}
@@ -552,6 +581,24 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           onChange={(iso) => {
             setNewStartDate(iso);
             setDateOpen(false);
+          }}
+        />
+      </FieldPanel>
+
+      <FieldPanel
+        open={addOpen && endDateOpen}
+        title="End date"
+        color={GOAL_ACCENT}
+        onColor={GOAL_ACCENT_ON}
+        onClose={() => setEndDateOpen(false)}
+      >
+        <CalendarMonth
+          value={newEndDate}
+          color={GOAL_ACCENT}
+          onChange={(iso) => {
+            setNewEndDate(iso);
+            setEndDateTouched(true);
+            setEndDateOpen(false);
           }}
         />
       </FieldPanel>
@@ -568,6 +615,8 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           />
         )}
       </AnimatePresence>
+
+      <GoalPlanWizard />
     </div>
   );
 }

@@ -4,9 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 
 import logo from "@/assets/logo.svg";
-import Collapse from "@/components/Collapse";
 import ForgotPasswordSheet from "@/components/auth/ForgotPasswordSheet";
 import VerifyEmailSheet from "@/components/auth/VerifyEmailSheet";
+import Collapse from "@/components/Collapse";
 import { ApiError } from "@/lib/api";
 import { spring, tap } from "@/lib/motion";
 import { useAuthStore } from "@/store/authStore";
@@ -251,9 +251,7 @@ export default function AuthPage() {
 
           <Collapse open={isSignup} outerClassName="-mb-4" className="pb-4">
             <div>
-              <label className="block text-sm font-semibold text-fg mb-1.5">
-                Confirm password
-              </label>
+              <label className="block text-sm font-semibold text-fg mb-1.5">Confirm password</label>
               <div className="relative">
                 <input
                   value={confirmPassword}
@@ -350,7 +348,9 @@ export default function AuthPage() {
         isOpen={!!verifyFor}
         onClose={() => setVerifyFor(null)}
         email={verifyFor?.email ?? ""}
-        message={verifyFor?.reason === "login" ? "This account hasn't been verified yet." : undefined}
+        message={
+          verifyFor?.reason === "login" ? "This account hasn't been verified yet." : undefined
+        }
         // Signup already triggered a send from register() itself; a blocked
         // login hasn't sent anything yet, so this is what actually gets a
         // code moving instead of the sheet just sitting there empty.

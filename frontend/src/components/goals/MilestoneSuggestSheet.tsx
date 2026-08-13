@@ -3,24 +3,32 @@ import { motion } from "framer-motion";
 import { Check, RefreshCw, Sparkles, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import WeightInput from "@/components/goals/WeightInput";
 import { api, ApiError, type MilestoneSuggestion } from "@/lib/api";
+import { autoSplitWeights } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import type { Goal } from "@/types/goals";
 
 // AI-proposed milestones for a goal — fetches on open, lets the user
-// uncheck any it doesn't want, then adds the rest via the same store action
-// a hand-typed milestone would use. A separate sheet rather than folded into
-// the existing "Milestone" text input, so declining or retrying never
-// disturbs anything the user already added by hand.
+// uncheck any it doesn't want and adjust weights, then adds the rest via
+// the same store action a hand-typed milestone would use. A separate sheet
+// rather than folded into the existing "Milestone" text input, so
+// declining or retrying never disturbs anything the user already added by
+// hand.
 export default function MilestoneSuggestSheet({
   goal,
   isOpen,
   onClose,
+  onCommitted,
 }: {
   goal: Goal;
   isOpen: boolean;
   onClose: () => void;
+  // Called right after the accepted milestones are added — lets a caller
+  // (the AI planning wizard) chain straight into scheduling them, in
+  // addition to the normal onClose.
+  onCommitted?: () => void;
 }) {
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [error, setError] = useState("");
@@ -72,7 +80,18 @@ export default function MilestoneSuggestSheet({
     });
   }
 
-  const accepted = suggestions.filter((_, i) => !excluded.has(i));
+  function updateWeight(i: number, weight: number | null) {
+    setSuggestions((cur) =>
+      cur.map((s, idx) => (idx === i ? { ...s, weight: weight ?? undefined } : s))
+    );
+  }
+
+  const acceptedIndexes = suggestions.map((_, i) => i).filter((i) => !excluded.has(i));
+  const accepted = acceptedIndexes.map((i) => suggestions[i]);
+  // Placeholder shares only across what's actually accepted — matching the
+  // same auto-split rule the detail screen's own milestone list uses, just
+  // scoped to the checked subset instead of the whole suggestion list.
+  const acceptedShares = autoSplitWeights(accepted.map((s) => s.weight));
 
   function handleAdd() {
     if (accepted.length === 0) return;
@@ -81,6 +100,7 @@ export default function MilestoneSuggestSheet({
       accepted.map((s) => ({ label: s.label, weight: s.weight }))
     );
     onClose();
+    onCommitted?.();
   }
 
   return (
@@ -135,37 +155,45 @@ export default function MilestoneSuggestSheet({
           <div className="flex flex-col gap-2 mb-4">
             {suggestions.map((s, i) => {
               const checked = !excluded.has(i);
+              const acceptedIdx = acceptedIndexes.indexOf(i);
               return (
-                <motion.button
+                <motion.div
                   key={i}
-                  onClick={() => toggle(i)}
                   whileTap={tap}
-                  className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left bg-surface-alt ${
+                  className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 bg-surface-alt ${
                     checked ? "" : "opacity-40"
                   }`}
                 >
-                  <span
-                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                    style={
-                      checked
-                        ? {
-                            backgroundColor: "var(--path-accent)",
-                            borderColor: "var(--path-accent)",
-                          }
-                        : { borderColor: "var(--border-strong)" }
-                    }
+                  <button
+                    onClick={() => toggle(i)}
+                    aria-label={checked ? "Exclude this milestone" : "Include this milestone"}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
                   >
-                    {checked && <Check size={12} strokeWidth={3} className="text-white" />}
-                  </span>
-                  <span className="flex-1 min-w-0 text-[14.5px] font-medium text-fg truncate">
-                    {s.label}
-                  </span>
-                  {s.weight != null && (
-                    <span className="text-xs font-semibold text-fg-faint shrink-0">
-                      {s.weight}%
+                    <span
+                      className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                      style={
+                        checked
+                          ? {
+                              backgroundColor: "var(--path-accent)",
+                              borderColor: "var(--path-accent)",
+                            }
+                          : { borderColor: "var(--border-strong)" }
+                      }
+                    >
+                      {checked && <Check size={12} strokeWidth={3} className="text-white" />}
                     </span>
+                    <span className="flex-1 min-w-0 text-[14.5px] font-medium text-fg truncate">
+                      {s.label}
+                    </span>
+                  </button>
+                  {checked && accepted.length > 1 && (
+                    <WeightInput
+                      value={s.weight}
+                      placeholder={acceptedShares[acceptedIdx] ?? 0}
+                      onChange={(w) => updateWeight(i, w)}
+                    />
                   )}
-                </motion.button>
+                </motion.div>
               );
             })}
           </div>

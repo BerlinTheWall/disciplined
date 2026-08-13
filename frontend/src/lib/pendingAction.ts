@@ -1,9 +1,9 @@
 import type { PendingAction } from "./api";
 import { formatFullDate, relativeDayLabel } from "./date";
 import { formatTimeLabel, formatTimeRange } from "./time";
-import type { Task } from "@/types/task";
-import type { Habit } from "@/types/habits";
 import type { Goal } from "@/types/goals";
+import type { Habit } from "@/types/habits";
+import type { Task } from "@/types/task";
 
 // Turns a pending tool call's *actual args* into a plain-language summary —
 // deliberately independent of whatever the model said in its chat bubble.
@@ -49,7 +49,10 @@ function dateAndMaybeTime(date: string | undefined, startMinutes: number | undef
   return startMinutes != null ? `${day} at ${formatTimeLabel(startMinutes)}` : day;
 }
 
-export function describePendingAction(action: PendingAction, { tasks, habits, goals }: Lookups): string {
+export function describePendingAction(
+  action: PendingAction,
+  { tasks, habits, goals }: Lookups
+): string {
   const a = action.args;
 
   switch (action.tool) {

@@ -307,6 +307,9 @@ class GoalBase(CamelModel):
     progress: int = Field(default=0, ge=0)
     priority: Priority | None = None
     category: str | None = None
+    # A short, public blurb of what the goal is — distinct from `note`, the
+    # private "why". Set at creation time, optionally AI-drafted.
+    description: str | None = None
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
     order: int = 0
@@ -331,6 +334,7 @@ class GoalUpdate(CamelModel):
     progress: int | None = Field(default=None, ge=0)
     priority: Priority | None = None
     category: str | None = None
+    description: str | None = None
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
     order: int | None = None
@@ -370,6 +374,24 @@ class MilestoneSuggestion(CamelModel):
 
 class MilestoneSuggestResponse(CamelModel):
     milestones: list[MilestoneSuggestion]
+
+
+# ---- Goal description suggestion ----
+# AI-drafted description for a goal (see app/services/goal_description.py).
+# Stateless and read-only, same relationship to the database as the
+# milestone suggestions above — the client applies the text like any other
+# field, exactly as if the user had typed it in by hand.
+
+
+class GoalDescriptionRequest(CamelModel):
+    title: str
+    category: str | None = None
+    period: GoalPeriod
+    duration_count: int | None = Field(default=None, ge=1)
+
+
+class GoalDescriptionResponse(CamelModel):
+    description: str
 
 
 # ---- Goal milestone scheduling ----

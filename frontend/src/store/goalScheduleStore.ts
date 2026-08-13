@@ -10,6 +10,9 @@ import type { Goal } from "@/types/goals";
 // isolation weekPlanStore already established, so a bug here can't affect
 // the chat assistant. The only thing borrowed from chatStore is
 // refreshForActions, exported there specifically for this kind of reuse.
+// `start` is called both from GoalPlanWizard (chained after milestones are
+// committed, or immediately for an already-milestoned goal) and, indirectly,
+// nowhere else — GoalScheduleSheet itself is the sole reader of this store.
 
 interface State {
   isOpen: boolean;

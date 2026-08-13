@@ -215,6 +215,13 @@ export interface MilestoneSuggestResponse {
   milestones: MilestoneSuggestion[];
 }
 
+// AI-drafted description for a goal (see
+// backend/app/services/goal_description.py). Read-only — the caller keeps
+// whatever it accepts through the normal goal create/update calls.
+export interface GoalDescriptionResponse {
+  description: string;
+}
+
 // AI-proposed calendar sessions for a goal's milestones (see
 // backend/app/services/goal_schedule.py) — a separate, narrower feature
 // from chat. Returns proposals only; nothing is created until they're sent
@@ -469,6 +476,22 @@ export const api = {
       durationCount?: number | null;
     }): Promise<MilestoneSuggestResponse> =>
       request("/api/goal-milestones/suggest", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+  },
+  // Drafts a description for a goal — a separate, narrower feature from chat
+  // (see backend/app/services/goal_description.py). Nothing is written
+  // server-side; the caller keeps whatever it accepts, same as one typed by
+  // hand.
+  goalDescription: {
+    generate: (input: {
+      title: string;
+      category?: string | null;
+      period: string;
+      durationCount?: number | null;
+    }): Promise<GoalDescriptionResponse> =>
+      request("/api/goal-description/generate", {
         method: "POST",
         body: JSON.stringify(input),
       }),

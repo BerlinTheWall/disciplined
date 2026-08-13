@@ -22,7 +22,9 @@ function str(v: unknown): string | undefined {
 // task to its milestone (see goalScheduleStore's confirm). Reads `isOpen`
 // from its own store rather than a prop, same convention WeekPlanSheet
 // uses — the store, not this component's mount state, is the source of
-// truth for whether the wizard is open.
+// truth for whether the wizard is open. Mounted once, from GoalPlanWizard
+// (itself mounted once in GoalsPage) — independent of whether any
+// GoalDetailScreen happens to be open.
 export default function GoalScheduleSheet({ goal }: { goal: Goal }) {
   const { isOpen, busy, message, proposals, resolved, error, close, removeProposal, confirm } =
     useGoalScheduleStore();

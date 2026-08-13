@@ -1,5 +1,6 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
 import { currentPeriodKey, goalOverlapsPeriod } from "./goalPeriods";
+import { priorityRank } from "./goalPriority";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
@@ -10,6 +11,19 @@ import type { Task } from "@/types/task";
 export type PeriodStopAction =
   { kind: "day"; date: string } | { kind: "period"; period: GoalPeriod; periodKey: string };
 
+// One item shown inside a stop's card (PeriodOverview) — a goal for
+// Month/Year stops, a task for Week's day-stops (days don't host Goal
+// entities, so a day's own items are whatever's scheduled on it).
+export interface PeriodStopItem {
+  kind: "goal" | "task";
+  id: string;
+  title: string;
+  done: boolean;
+  fraction: number; // 0..1
+  percent: number; // round(fraction * 100)
+  sortKey: number; // priorityRank for goals; startMinutes for tasks — ascending
+}
+
 export interface PeriodStop {
   id: string;
   label: string;
@@ -18,6 +32,8 @@ export interface PeriodStop {
   isToday: boolean;
   isFuture: boolean;
   action: PeriodStopAction;
+  // Full sorted list of this stop's items — the UI caps to ~3 + "+N more".
+  items: PeriodStopItem[];
 }
 
 const WEEKDAY_LABEL = new Intl.DateTimeFormat(undefined, { weekday: "short" });
@@ -28,12 +44,13 @@ function fractionOfTasks(tasks: Task[]): { fraction: number; hasData: boolean } 
   return { fraction: tasks.filter((t) => t.completed).length / tasks.length, hasData: true };
 }
 
-// Average of goalProgress().fraction across a set of goals — used for
-// Month/Year stops, which read the *sibling* period's own goals (Week goals
-// for a week-stop, Month goals for a month-stop) rather than trying to
-// bucket a single goal's linked tasks by date. No new schema needed: it's
-// just reading what's already in the store, keyed by the existing
-// periodKey convention.
+// Average of goalProgress().fraction across a set of goals — used for a
+// stop's ring fill, which reads the *sibling* period's own goals (Week
+// goals for a week-stop, Month goals for a month-stop) rather than trying
+// to bucket a single goal's linked tasks by date. Deliberately broader than
+// the card `items` set below (includes cascaded/coarser goals too) — the
+// ring is a rough "how's this stop doing" signal, the card is specifically
+// that stop's own goals.
 function fractionOfGoals(
   matched: Goal[],
   allGoals: Goal[],
@@ -44,15 +61,54 @@ function fractionOfGoals(
   return { fraction: sum / matched.length, hasData: true };
 }
 
+// Maps goals to sorted PeriodStopItems (priority order, high first).
+function goalItems(goals: Goal[], allGoals: Goal[], tasks: Task[]): PeriodStopItem[] {
+  return goals
+    .map((g) => {
+      const p = goalProgress(g, tasks, allGoals);
+      return {
+        kind: "goal" as const,
+        id: g.id,
+        title: g.title,
+        done: p.done,
+        fraction: p.fraction,
+        percent: p.percent,
+        sortKey: priorityRank(g.priority),
+      };
+    })
+    .sort((a, b) => a.sortKey - b.sortKey);
+}
+
 function buildWeekStops(activeKey: string, goals: Goal[], tasks: Task[]): PeriodStop[] {
   const today = todayISODate();
   const weekGoals = goals.filter((g) => g.period === "week" && g.periodKey === activeKey);
-  const linkedTaskIds = new Set(weekGoals.flatMap((g) => g.linkedTaskIds ?? []));
+  // Union both goal-level and milestone-level linked tasks — a goal planned
+  // through the AI wizard has its tasks attached to milestones
+  // (linkTasksToMilestones), never to the goal's own linkedTaskIds, so
+  // reading only the latter would make every AI-scheduled session invisible
+  // here.
+  const linkedTaskIds = new Set(
+    weekGoals.flatMap((g) => [
+      ...(g.linkedTaskIds ?? []),
+      ...g.milestones.flatMap((m) => m.linkedTaskIds ?? []),
+    ])
+  );
 
   return Array.from({ length: 7 }, (_, i) => {
     const date = addDaysISO(activeKey, i);
-    const dayTasks = tasks.filter((t) => t.date === date && linkedTaskIds.has(t.id));
+    const dayTasks = tasks
+      .filter((t) => t.date === date && linkedTaskIds.has(t.id))
+      .sort((a, b) => a.startMinutes - b.startMinutes);
     const { fraction, hasData } = fractionOfTasks(dayTasks);
+    const items: PeriodStopItem[] = dayTasks.map((t) => ({
+      kind: "task",
+      id: t.id,
+      title: t.title,
+      done: t.completed,
+      fraction: t.completed ? 1 : 0,
+      percent: t.completed ? 100 : 0,
+      sortKey: t.startMinutes,
+    }));
     return {
       id: date,
       label: WEEKDAY_LABEL.format(parseISODate(date)),
@@ -61,6 +117,7 @@ function buildWeekStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
       isToday: date === today,
       isFuture: date > today,
       action: { kind: "day", date },
+      items,
     };
   });
 }
@@ -82,9 +139,29 @@ function weeksInMonth(monthKey: string): string[] {
 
 function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): PeriodStop[] {
   const today = todayISODate();
-  return weeksInMonth(activeKey).map((weekKey, i) => {
-    const weekGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
-    const { fraction, hasData } = fractionOfGoals(weekGoals, goals, tasks);
+  const weekKeys = weeksInMonth(activeKey);
+  const todayIndex = weekKeys.findIndex((wk) => wk <= today && today <= addDaysISO(wk, 6));
+  const foldIndex = todayIndex >= 0 ? todayIndex : 0;
+  // Goals filed directly under this month itself (not any specific week) —
+  // folded into whichever stop is "current" (or the first, if browsing a
+  // past/future month) rather than getting their own section.
+  const ownGoals = goals.filter((g) => g.period === "month" && g.periodKey === activeKey);
+
+  return weekKeys.map((weekKey, i) => {
+    const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
+    const { fraction, hasData } = fractionOfGoals(cascadeGoals, goals, tasks);
+
+    // Card items: narrower than the ring's cascade set — this week's own
+    // native (or same-scale spanning) goals only, plus the fold above.
+    const nativeGoals = goals.filter(
+      (g) => g.period === "week" && goalOverlapsPeriod(g, "week", weekKey)
+    );
+    const items = goalItems(
+      i === foldIndex ? [...nativeGoals, ...ownGoals] : nativeGoals,
+      goals,
+      tasks
+    );
+
     const sunday = addDaysISO(weekKey, 6);
     return {
       id: weekKey,
@@ -94,6 +171,7 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
       isToday: weekKey <= today && today <= sunday,
       isFuture: weekKey > today,
       action: { kind: "period", period: "week", periodKey: weekKey },
+      items,
     };
   });
 }
@@ -101,11 +179,28 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
 function buildYearStops(activeKey: string, goals: Goal[], tasks: Task[]): PeriodStop[] {
   const todayMonthKey = currentPeriodKey("month");
   const todayYearKey = currentPeriodKey("year");
+  const monthKeys = Array.from(
+    { length: 12 },
+    (_, i) => `${activeKey}-${String(i + 1).padStart(2, "0")}`
+  );
+  const todayIndex = activeKey === todayYearKey ? monthKeys.indexOf(todayMonthKey) : -1;
+  const foldIndex = todayIndex >= 0 ? todayIndex : 0;
+  // Goals filed directly under this year itself — same fold rule one level up.
+  const ownGoals = goals.filter((g) => g.period === "year" && g.periodKey === activeKey);
 
-  return Array.from({ length: 12 }, (_, i) => {
-    const monthKey = `${activeKey}-${String(i + 1).padStart(2, "0")}`;
-    const monthGoals = goals.filter((g) => goalOverlapsPeriod(g, "month", monthKey));
-    const { fraction, hasData } = fractionOfGoals(monthGoals, goals, tasks);
+  return monthKeys.map((monthKey, i) => {
+    const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "month", monthKey));
+    const { fraction, hasData } = fractionOfGoals(cascadeGoals, goals, tasks);
+
+    const nativeGoals = goals.filter(
+      (g) => g.period === "month" && goalOverlapsPeriod(g, "month", monthKey)
+    );
+    const items = goalItems(
+      i === foldIndex ? [...nativeGoals, ...ownGoals] : nativeGoals,
+      goals,
+      tasks
+    );
+
     return {
       id: monthKey,
       label: MONTH_LABEL.format(new Date(Number(activeKey), i, 1)),
@@ -114,6 +209,7 @@ function buildYearStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
       isToday: activeKey === todayYearKey && monthKey === todayMonthKey,
       isFuture: monthKey > todayMonthKey,
       action: { kind: "period", period: "month", periodKey: monthKey },
+      items,
     };
   });
 }

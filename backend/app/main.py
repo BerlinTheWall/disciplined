@@ -12,6 +12,7 @@ from app.routers import (
     chat,
     coach,
     events,
+    goal_description,
     goal_milestones,
     goal_schedule,
     goals,
@@ -54,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(goals.router)
+app.include_router(goal_description.router)
 app.include_router(goal_milestones.router)
 app.include_router(goal_schedule.router)
 app.include_router(habits.router)

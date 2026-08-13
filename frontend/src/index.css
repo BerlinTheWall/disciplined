@@ -46,6 +46,11 @@
   --path-road: #dfe3d6;
   --path-accent: #7ea852;
   --path-ink: #3f5c28;
+  /* The overview's "today" stop specifically (PeriodOverview) — a
+     deliberate red, distinct from the sage used for progress/travelled
+     trail elsewhere on the path, so the current stop reads as a different
+     kind of signal (where you are) rather than more progress. */
+  --path-today: #ef4444;
 }
 
 [data-theme="dark"] {
@@ -77,6 +82,7 @@
   --path-road: #303629;
   --path-accent: #9ec06a;
   --path-ink: #c3dc9e;
+  --path-today: #f87171;
 }
 
 /* ── SIGMA MODE ────────────────────────────────────────────────────────

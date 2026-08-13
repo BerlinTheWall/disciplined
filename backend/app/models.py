@@ -208,6 +208,10 @@ class Goal(Base):
     progress: Mapped[int] = mapped_column(Integer, default=0)
     priority: Mapped[str | None] = mapped_column(String, nullable=True)  # low|medium|high
     category: Mapped[str | None] = mapped_column(String, nullable=True)  # personal|work|chore
+    # A short, public blurb of what the goal is — shown in the add sheet and
+    # wherever the goal is displayed, optionally AI-drafted at creation time.
+    # Distinct from `note`, which is the private, collapsed "why".
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     # The date this goal actually starts, and how many `period` units it
     # spans from there — independent of period_key, which still files the
     # goal under the period it starts in.
