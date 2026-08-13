@@ -5,7 +5,7 @@ import type { Task } from "@/types/task";
 
 // A goal's progress, derived from exactly one source, chosen implicitly by
 // what's actually set on it: linked tasks/goals (weighted) > milestones
-// (plain count) > a manual numeric target > a bare check-off.
+// (weighted) > a manual numeric target > a bare check-off.
 export interface GoalProgress {
   mode: "linked" | "milestones" | "manual" | "check";
   done: boolean;
@@ -18,6 +18,26 @@ export interface GoalProgress {
   // Effective weight (percent of the goal) per linked task/goal id —
   // explicit ones as set, the rest sharing the remainder evenly.
   shares: Record<string, number>;
+  // Same idea, one level down: effective weight per milestone id, only
+  // populated in "milestones" mode.
+  milestoneShares: Record<string, number>;
+}
+
+// Resolves a set of optional weights (percent of 100, in list order) into
+// concrete shares: explicit ones as given, the rest splitting whatever's
+// left of 100 evenly. The one rule "some items can be weighted, the rest
+// just share what's left" needs wherever partial weighting is allowed —
+// goal-level linked items, and milestones.
+function autoSplitWeights(weights: (number | undefined)[]): number[] {
+  let pinnedSum = 0;
+  let autoCount = 0;
+  for (const w of weights) {
+    if (typeof w === "number") pinnedSum += w;
+    else autoCount++;
+  }
+  const remaining = Math.max(0, 100 - Math.min(100, pinnedSum));
+  const autoWeight = autoCount ? remaining / autoCount : 0;
+  return weights.map((w) => (typeof w === "number" ? w : autoWeight));
 }
 
 // `_depth` guards against a malformed link cycle recursing unbounded — real
@@ -47,22 +67,11 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
       })),
     ];
 
-    // Sum the explicit weights; the rest split what's left of 100 evenly.
-    let pinnedSum = 0;
-    const autoIds: string[] = [];
-    for (const it of items) {
-      const w = pinned[it.id];
-      if (typeof w === "number") pinnedSum += w;
-      else autoIds.push(it.id);
-    }
-    const remaining = Math.max(0, 100 - Math.min(100, pinnedSum));
-    const autoWeight = autoIds.length ? remaining / autoIds.length : 0;
-
+    const resolved = autoSplitWeights(items.map((it) => pinned[it.id]));
     const shares: Record<string, number> = {};
-    for (const it of items) {
-      const w = pinned[it.id];
-      shares[it.id] = typeof w === "number" ? w : autoWeight;
-    }
+    items.forEach((it, i) => {
+      shares[it.id] = resolved[i];
+    });
 
     const completed = items.filter((it) => it.done);
     const completedPct = completed.reduce((s, it) => s + shares[it.id], 0);
@@ -80,23 +89,35 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
       linkedTasks,
       linkedGoals,
       shares,
+      milestoneShares: {},
     };
   }
 
   if (goal.milestones && goal.milestones.length > 0) {
-    const total = goal.milestones.length;
-    const current = goal.milestones.filter((m) => m.done).length;
-    const fraction = total > 0 ? current / total : 0;
+    const ms = goal.milestones;
+    const resolved = autoSplitWeights(ms.map((m) => m.weight));
+    const milestoneShares: Record<string, number> = {};
+    ms.forEach((m, i) => {
+      milestoneShares[m.id] = resolved[i];
+    });
+
+    const done = ms.filter((m) => m.done);
+    const completedPct = done.reduce((s, m) => s + milestoneShares[m.id], 0);
+    // Finishing every milestone always counts as done, even if the assigned
+    // weights sum to less than 100.
+    const allDone = done.length === ms.length;
+    const fraction = allDone ? 1 : Math.min(1, completedPct / 100);
     return {
       mode: "milestones",
-      done: goal.done || current === total,
+      done: goal.done || allDone,
       fraction,
       percent: Math.round(fraction * 100),
-      current,
-      total,
+      current: done.length,
+      total: ms.length,
       linkedTasks,
       linkedGoals,
       shares: {},
+      milestoneShares,
     };
   }
 
@@ -112,6 +133,7 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
       linkedTasks,
       linkedGoals,
       shares: {},
+      milestoneShares: {},
     };
   }
 
@@ -125,6 +147,7 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
     linkedTasks,
     linkedGoals,
     shares: {},
+    milestoneShares: {},
   };
 }
 

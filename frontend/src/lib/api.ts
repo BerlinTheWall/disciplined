@@ -203,6 +203,18 @@ export interface WeekPlanResponse {
   pendingActions: PendingAction[];
 }
 
+// AI-suggested milestones for a goal (see backend/app/services/goal_milestones.py).
+// Read-only — nothing is written server-side; the caller applies whatever's
+// accepted through the normal goalStore actions.
+export interface MilestoneSuggestion {
+  label: string;
+  weight?: number;
+}
+
+export interface MilestoneSuggestResponse {
+  milestones: MilestoneSuggestion[];
+}
+
 // ---- Outlook connection (Microsoft Graph OAuth) ----
 // Reads/writes the user's Outlook calendar directly via Microsoft Graph,
 // regardless of whether the account is synced into the phone's own calendar
@@ -420,6 +432,22 @@ export const api = {
       request("/api/week-plan", {
         method: "POST",
         body: JSON.stringify({ clientDate: todayISODate(), preferences }),
+      }),
+  },
+  // Proposes milestones for a goal — a separate, narrower feature from chat
+  // (see backend/app/services/goal_milestones.py). Nothing is written
+  // server-side; the caller adds whatever's accepted via goalStore directly.
+  goalMilestones: {
+    suggest: (input: {
+      title: string;
+      category?: string | null;
+      note?: string | null;
+      period: string;
+      durationCount?: number | null;
+    }): Promise<MilestoneSuggestResponse> =>
+      request("/api/goal-milestones/suggest", {
+        method: "POST",
+        body: JSON.stringify(input),
       }),
   },
   coach: {

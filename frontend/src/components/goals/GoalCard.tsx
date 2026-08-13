@@ -16,11 +16,18 @@ export default function GoalCard({
   goals,
   tasks,
   onOpen,
+  cascaded = false,
 }: {
   goal: Goal;
   goals: Goal[];
   tasks: Task[];
   onOpen: () => void;
+  // True when this card is a coarser goal (month/year) surfaced into a
+  // finer view it isn't natively filed under (e.g. a month goal shown while
+  // browsing one of its weeks) — see lib/goalPeriods.ts's goalCascadesInto.
+  // Styled a touch quieter so it doesn't read as identical to a goal that
+  // actually belongs to this period.
+  cascaded?: boolean;
 }) {
   const p = goalProgress(goal, tasks, goals);
   const pace = goalPace(goal, tasks, goals);
@@ -43,7 +50,11 @@ export default function GoalCard({
     <motion.button
       onClick={onOpen}
       whileTap={tap}
-      className="shrink-0 snap-center w-[78%] bg-surface rounded-[22px] shadow-card border border-border p-[18px] flex flex-col gap-3 text-left"
+      className={`shrink-0 snap-center w-[78%] bg-surface rounded-[22px] p-[18px] flex flex-col gap-3 text-left ${
+        cascaded
+          ? "shadow-soft border border-dashed border-border-strong"
+          : "shadow-card border border-border"
+      }`}
     >
       <div className="flex items-center gap-3.5">
         <div className="relative w-[58px] h-[58px] shrink-0">
@@ -105,7 +116,9 @@ export default function GoalCard({
       <p className="text-[12.5px] text-fg-faint">{subtitle}</p>
 
       <div className="flex items-center justify-between pt-2 mt-auto border-t border-dashed border-border text-[11.5px] font-semibold text-fg-faint">
-        <span className="capitalize">{goal.priority ?? "No"} priority</span>
+        <span className="capitalize">
+          {cascaded ? `${goal.period} goal` : `${goal.priority ?? "No"} priority`}
+        </span>
         <span>Tap for details →</span>
       </div>
     </motion.button>

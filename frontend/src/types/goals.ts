@@ -11,6 +11,10 @@ export interface GoalMilestone {
   id: string;
   label: string;
   done: boolean;
+  // Percent of the goal this milestone is worth. Optional — a milestone
+  // without one splits whatever's left of 100 evenly with the other
+  // unweighted milestones, same rule linked tasks/goals already use.
+  weight?: number;
 }
 
 // A goal/plan for a specific week, month or year. Not a task: no time of day.

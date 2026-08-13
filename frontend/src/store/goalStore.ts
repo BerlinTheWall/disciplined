@@ -58,8 +58,16 @@ interface GoalState {
   // in the first place.
   linkGoal: (goalId: string | null, childGoalId: string) => void;
   addMilestone: (goalId: string, label: string) => void;
+  // Appends a whole batch in one update (e.g. accepted AI suggestions) —
+  // same shape addMilestone would produce one at a time, just atomic so
+  // there's no need to read the state back to find the new ids.
+  addMilestones: (goalId: string, items: { label: string; weight?: number }[]) => void;
   toggleMilestone: (goalId: string, milestoneId: string) => void;
   deleteMilestone: (goalId: string, milestoneId: string) => void;
+  // Weight a milestone as a percent of its goal; null reverts it to the even
+  // auto-split of the remaining percentage — same rule as setWeight above,
+  // one level down.
+  setMilestoneWeight: (goalId: string, milestoneId: string, weight: number | null) => void;
   rollover: (period: GoalPeriod, fromKey: string, toKey: string) => void;
 }
 
@@ -222,6 +230,26 @@ export const useGoalStore = create<GoalState>()(
           ),
         })),
 
+      addMilestones: (goalId, items) =>
+        set((state) => ({
+          goals: state.goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  milestones: [
+                    ...g.milestones,
+                    ...items.map((it) => ({
+                      id: crypto.randomUUID(),
+                      label: it.label,
+                      done: false,
+                      weight: it.weight,
+                    })),
+                  ],
+                }
+              : g
+          ),
+        })),
+
       toggleMilestone: (goalId, milestoneId) =>
         set((state) => ({
           goals: state.goals.map((g) =>
@@ -241,6 +269,28 @@ export const useGoalStore = create<GoalState>()(
           goals: state.goals.map((g) =>
             g.id === goalId
               ? { ...g, milestones: g.milestones.filter((m) => m.id !== milestoneId) }
+              : g
+          ),
+        })),
+
+      setMilestoneWeight: (goalId, milestoneId, weight) =>
+        set((state) => ({
+          goals: state.goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  milestones: g.milestones.map((m) =>
+                    m.id === milestoneId
+                      ? {
+                          ...m,
+                          weight:
+                            weight === null
+                              ? undefined
+                              : Math.max(0, Math.min(100, Math.round(weight))),
+                        }
+                      : m
+                  ),
+                }
               : g
           ),
         })),

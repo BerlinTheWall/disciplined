@@ -288,6 +288,9 @@ class GoalMilestone(CamelModel):
     id: str
     label: str
     done: bool = False
+    # Percent of the goal this milestone is worth. Optional — omitted
+    # milestones split whatever's left of 100 evenly (see goalProgress.ts).
+    weight: int | None = Field(default=None, ge=0, le=100)
 
 
 class GoalBase(CamelModel):
@@ -336,6 +339,33 @@ class GoalUpdate(CamelModel):
 
 class GoalOut(GoalBase):
     id: str
+
+
+# ---- Goal milestone suggestions ----
+# AI-proposed milestones for a goal (see app/services/goal_milestones.py).
+# Stateless and read-only: nothing here touches the database, the client
+# applies whatever it accepts through the normal goal endpoints, exactly as
+# if the user had typed the milestones in by hand.
+
+
+class MilestoneSuggestRequest(CamelModel):
+    title: str
+    category: str | None = None
+    note: str | None = None
+    period: GoalPeriod
+    duration_count: int | None = Field(default=None, ge=1)
+
+
+class MilestoneSuggestion(CamelModel):
+    label: str
+    # Percent of the goal, 0-100 — omitted when the model isn't confident
+    # this step dominates the others; the client splits the rest evenly,
+    # same rule as a milestone added by hand.
+    weight: int | None = Field(default=None, ge=0, le=100)
+
+
+class MilestoneSuggestResponse(CamelModel):
+    milestones: list[MilestoneSuggestion]
 
 
 # ---- Workouts ----

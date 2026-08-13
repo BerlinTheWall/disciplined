@@ -26,6 +26,7 @@ import { isLightColor } from "@/lib/color";
 import { formatFullDate, parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import {
   currentPeriodKey,
+  goalCascadesInto,
   periodKeyFor,
   periodLabel,
   periodStartDate,
@@ -95,12 +96,27 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const activeKey = keys[period];
   const isCurrent = activeKey === currentPeriodKey(period);
 
-  const listed = useMemo(
+  const nativeListed = useMemo(
     () =>
       goals
         .filter((g) => g.period === period && g.periodKey === activeKey)
         .sort((a, b) => a.order - b.order),
     [goals, period, activeKey]
+  );
+
+  // Coarser goals (a month goal, say) that are still "live" during this
+  // narrower view (one of that month's weeks) — see goalCascadesInto.
+  // Appended after this period's own goals and rendered a touch quieter
+  // (GoalCard's `cascaded` prop) so they read as "also going on", not as
+  // belonging natively to this period.
+  const cascadedListed = useMemo(
+    () => goals.filter((g) => goalCascadesInto(g.period, g.periodKey, period, activeKey)),
+    [goals, period, activeKey]
+  );
+
+  const listed = useMemo(
+    () => [...nativeListed, ...cascadedListed],
+    [nativeListed, cascadedListed]
   );
 
   // Unfinished goals from the previous period, offered as one-tap carry-over
@@ -309,6 +325,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                 goals={goals}
                 tasks={tasks}
                 onOpen={() => setDetailGoalId(g.id)}
+                cascaded={g.period !== period}
               />
             ))}
           </div>

@@ -73,3 +73,42 @@ const PERIOD_GRANULARITY: Record<GoalPeriod, number> = { year: 0, month: 1, week
 export function canLinkGoalPeriod(parent: GoalPeriod, child: GoalPeriod): boolean {
   return PERIOD_GRANULARITY[child] > PERIOD_GRANULARITY[parent];
 }
+
+// The calendar span a period instance covers — a week's own Mon–Sun, a
+// month's 1st to last day, a year's Jan 1–Dec 31.
+export function periodRange(period: GoalPeriod, key: string): { start: Date; end: Date } {
+  if (period === "week") {
+    const start = parseISODate(key);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start, end };
+  }
+  if (period === "month") {
+    const [y, m] = key.split("-").map(Number);
+    return { start: new Date(y, m - 1, 1), end: new Date(y, m, 0) };
+  }
+  const y = Number(key);
+  return { start: new Date(y, 0, 1), end: new Date(y, 11, 31) };
+}
+
+// A goal set at a coarser scale (a month goal, say) is still "live" during
+// every finer period inside it (each of that month's weeks) — a monthly
+// goal is really just a four-week goal wearing a month label. This decides
+// whether `goal`'s own period/key should surface while browsing some other,
+// finer `view` period/key, so it can cascade into that view instead of
+// being invisible outside the one bucket it was filed under. One-directional
+// on purpose: a single week's goal shouldn't clutter its whole month's
+// view, only the reverse. ISO weeks don't align exactly to month
+// boundaries, so a month's edge week can technically straddle into the
+// next month — an accepted rounding case, not a bug.
+export function goalCascadesInto(
+  goalPeriod: GoalPeriod,
+  goalKey: string,
+  viewPeriod: GoalPeriod,
+  viewKey: string
+): boolean {
+  if (PERIOD_GRANULARITY[goalPeriod] >= PERIOD_GRANULARITY[viewPeriod]) return false;
+  const a = periodRange(goalPeriod, goalKey);
+  const b = periodRange(viewPeriod, viewKey);
+  return a.start <= b.end && b.start <= a.end;
+}

@@ -6,6 +6,7 @@ import {
   ListChecks,
   MessageSquareText,
   Plus,
+  Sparkles,
   Trash2,
   Waypoints,
   X,
@@ -15,6 +16,7 @@ import Collapse from "@/components/Collapse";
 import { useConfirm } from "@/components/ConfirmDialog";
 import GoalCelebration from "@/components/goals/GoalCelebration";
 import LinkedGoalPicker from "@/components/goals/LinkedGoalPicker";
+import MilestoneSuggestSheet from "@/components/goals/MilestoneSuggestSheet";
 import { canLinkGoalPeriod } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
 import { GOAL_PACE_COLOR, GOAL_PACE_LABEL, goalPace, goalProgress } from "@/lib/goalProgress";
@@ -49,6 +51,7 @@ export default function GoalDetailScreen({
   const [milestoneText, setMilestoneText] = useState("");
   const [noteEditing, setNoteEditing] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const p = goalProgress(goal, tasks, goals);
   const pace = goalPace(goal, tasks, goals);
@@ -249,6 +252,12 @@ export default function GoalDetailScreen({
               accent={accent}
               onClick={() => setAddingMilestone((v) => !v)}
             />
+            <ActionChip
+              icon={Sparkles}
+              label="Suggest"
+              accent={accent}
+              onClick={() => setSuggestOpen(true)}
+            />
           </div>
 
           <Collapse open={goalPickerOpen}>
@@ -298,6 +307,15 @@ export default function GoalDetailScreen({
                 >
                   {m.label}
                 </span>
+                {/* Weighting only means something with 2+ steps — a single
+                    one is trivially 100% of the goal. */}
+                {goal.milestones.length > 1 && (
+                  <WeightInput
+                    value={m.weight}
+                    placeholder={p.milestoneShares[m.id] ?? 0}
+                    onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)}
+                  />
+                )}
                 <button
                   onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
                   aria-label="Delete step"
@@ -308,6 +326,11 @@ export default function GoalDetailScreen({
               </div>
             ))}
           </div>
+          {goal.milestones.length > 1 && (
+            <p className="text-[11px] text-fg-faint mt-2">
+              Type a step's % of this goal, or leave it blank to share the rest evenly.
+            </p>
+          )}
         </Collapse>
 
         <Collapse open={p.linkedTasks.length > 0 || p.linkedGoals.length > 0}>
@@ -339,7 +362,11 @@ export default function GoalDetailScreen({
                 >
                   {t.title}
                 </button>
-                <WeightInput goalId={goal.id} itemId={t.id} goal={goal} share={p.shares[t.id]} />
+                <WeightInput
+                  value={goal.weights?.[t.id]}
+                  placeholder={p.shares[t.id]}
+                  onChange={(w) => useGoalStore.getState().setWeight(goal.id, t.id, w)}
+                />
                 <button
                   onClick={() => useGoalStore.getState().linkTask(null, t.id)}
                   aria-label="Unlink task"
@@ -368,10 +395,9 @@ export default function GoalDetailScreen({
                     {lg.title}
                   </span>
                   <WeightInput
-                    goalId={goal.id}
-                    itemId={lg.id}
-                    goal={goal}
-                    share={p.shares[lg.id]}
+                    value={goal.weights?.[lg.id]}
+                    placeholder={p.shares[lg.id]}
+                    onChange={(w) => useGoalStore.getState().setWeight(goal.id, lg.id, w)}
                   />
                   <button
                     onClick={() => useGoalStore.getState().linkGoal(null, lg.id)}
@@ -389,6 +415,12 @@ export default function GoalDetailScreen({
           </p>
         </Collapse>
       </div>
+
+      <MilestoneSuggestSheet
+        goal={goal}
+        isOpen={suggestOpen}
+        onClose={() => setSuggestOpen(false)}
+      />
     </motion.div>
   );
 }
@@ -416,26 +448,28 @@ function ActionChip({
   );
 }
 
+// A percent-of-parent input: shows what was explicitly set, or the
+// auto-split share as a placeholder when it wasn't. Shared by linked
+// tasks/goals (against goal.weights) and milestones (against m.weight) —
+// same rule, different owner of the value.
 function WeightInput({
-  goalId,
-  itemId,
-  goal,
-  share,
+  value,
+  placeholder,
+  onChange,
 }: {
-  goalId: string;
-  itemId: string;
-  goal: Goal;
-  share: number;
+  value: number | undefined;
+  placeholder: number;
+  onChange: (weight: number | null) => void;
 }) {
   return (
     <div className="flex items-center shrink-0">
       <input
-        value={goal.weights?.[itemId] != null ? String(goal.weights[itemId]) : ""}
+        value={value != null ? String(value) : ""}
         onChange={(e) => {
           const raw = e.target.value.replace(/\D/g, "");
-          useGoalStore.getState().setWeight(goalId, itemId, raw === "" ? null : parseInt(raw, 10));
+          onChange(raw === "" ? null : parseInt(raw, 10));
         }}
-        placeholder={String(Math.round(share))}
+        placeholder={String(Math.round(placeholder))}
         inputMode="numeric"
         aria-label="Weight"
         className="w-8 bg-transparent text-right text-xs font-medium tabular-nums text-fg placeholder-fg-faint focus:outline-none"
