@@ -207,6 +207,12 @@ class Goal(Base):
     target: Mapped[int | None] = mapped_column(Integer, nullable=True)
     progress: Mapped[int] = mapped_column(Integer, default=0)
     priority: Mapped[str | None] = mapped_column(String, nullable=True)  # low|medium|high
+    category: Mapped[str | None] = mapped_column(String, nullable=True)  # personal|work|chore
+    # The date this goal actually starts, and how many `period` units it
+    # spans from there — independent of period_key, which still files the
+    # goal under the period it starts in.
+    start_date: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # "order" is a reserved word in SQL — store it under a safe column name.
     order: Mapped[int] = mapped_column("sort_order", Integer, default=0)
     linked_task_ids: Mapped[list] = mapped_column(JSONB, default=list)

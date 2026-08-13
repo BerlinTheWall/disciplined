@@ -6,9 +6,13 @@ import BottomSheet from "@/components/BottomSheet";
 import GoalCard from "@/components/goals/GoalCard";
 import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
 import PeriodPath from "@/components/goals/PeriodPath";
+import { chipCls } from "@/components/timeline/addItemOptions";
+import { parseISODate, toISODate } from "@/lib/date";
 import {
   currentPeriodKey,
+  periodKeyFor,
   periodLabel,
+  periodStartDate,
   relativePeriodName,
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
@@ -17,7 +21,7 @@ import { spring, tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
-import type { GoalPeriod } from "@/types/goals";
+import type { GoalCategory, GoalPeriod } from "@/types/goals";
 import type { Priority, Task } from "@/types/task";
 
 const PERIODS: { key: GoalPeriod; label: string }[] = [
@@ -26,8 +30,26 @@ const PERIODS: { key: GoalPeriod; label: string }[] = [
   { key: "year", label: "Year" },
 ];
 
-// Cycle order for the priority circle: none → high → medium → low → none.
-const PRIORITY_CYCLE: (Priority | null)[] = [null, "high", "medium", "low"];
+const SCALES: { key: GoalPeriod; label: string }[] = [
+  { key: "week", label: "Weekly" },
+  { key: "month", label: "Monthly" },
+  { key: "year", label: "Yearly" },
+];
+
+const CATEGORIES: { key: GoalCategory; label: string }[] = [
+  { key: "personal", label: "Personal" },
+  { key: "work", label: "Work" },
+  { key: "chore", label: "Chore" },
+];
+
+// "week" -> "weeks", "month" -> "months" — the duration input's trailing unit.
+const SCALE_UNIT: Record<GoalPeriod, string> = { week: "weeks", month: "months", year: "years" };
+
+const IMPORTANCE_LEVELS: { key: Priority; label: string }[] = [
+  { key: "low", label: "Low" },
+  { key: "medium", label: "Medium" },
+  { key: "high", label: "High" },
+];
 
 export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => void }) {
   const goals = useGoalStore((s) => s.goals);
@@ -127,23 +149,40 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
 
   const [addOpen, setAddOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [target, setTarget] = useState("");
   const [newPriority, setNewPriority] = useState<Priority | null>(null);
+  const [newCategory, setNewCategory] = useState<GoalCategory | null>(null);
+  const [newScale, setNewScale] = useState<GoalPeriod>("week");
+  const [newStartDate, setNewStartDate] = useState("");
+  const [newDuration, setNewDuration] = useState("1");
+
+  // Seed the new-goal fields from whatever period/instance is currently
+  // being browsed, so leaving everything untouched behaves the same way
+  // adding a goal always has: it lands in the period you're looking at.
+  function openAdd() {
+    setNewScale(period);
+    setNewStartDate(isCurrent ? toISODate(new Date()) : periodStartDate(period, activeKey));
+    setNewDuration("1");
+    setAddOpen(true);
+  }
 
   function handleAdd() {
     const trimmed = title.trim();
     if (!trimmed) return;
-    const parsed = parseInt(target, 10);
+    const duration = parseInt(newDuration, 10);
+    const startDate = newStartDate || toISODate(new Date());
     addGoal({
-      period,
-      periodKey: activeKey,
+      period: newScale,
+      periodKey: periodKeyFor(newScale, parseISODate(startDate)),
       title: trimmed,
-      target: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
+      target: null,
       priority: newPriority,
+      category: newCategory,
+      startDate,
+      durationCount: Number.isFinite(duration) && duration > 0 ? duration : null,
     });
     setTitle("");
-    setTarget("");
     setNewPriority(null);
+    setNewCategory(null);
     setAddOpen(false);
   }
 
@@ -280,7 +319,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           goals are a carousel, so quick-add moves off the always-visible bar
           and into a deliberate sheet instead. */}
       <motion.button
-        onClick={() => setAddOpen(true)}
+        onClick={openAdd}
         whileTap={tap}
         aria-label="Add a goal"
         className="fixed right-5 bottom-[calc(84px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-lg z-30"
@@ -293,51 +332,107 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         onClose={() => setAddOpen(false)}
         className="bg-surface rounded-t-3xl p-5 pb-[calc(20px+env(safe-area-inset-bottom))]"
       >
-        <p className="text-sm font-semibold text-fg mb-3 capitalize">
-          Add a goal for this {period}
-        </p>
-        <div className="flex items-center gap-2">
-          <motion.button
-            onClick={() =>
-              setNewPriority(
-                PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(newPriority) + 1) % PRIORITY_CYCLE.length]
-              )
-            }
-            whileTap={tap}
-            aria-label="Cycle new goal priority"
-            className="w-11 h-11 rounded-xl bg-surface-raised flex items-center justify-center shrink-0"
-          >
-            <span
-              className="w-5 h-5 rounded-full"
-              style={{ backgroundColor: goalColor(newPriority) }}
-            />
-          </motion.button>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder="Goal title…"
-            autoFocus
-            className="flex-1 min-w-0 bg-surface-raised rounded-xl px-3.5 py-3 text-[15px] text-fg placeholder-fg-faint focus:outline-none"
-          />
-          <input
-            value={target}
-            onChange={(e) => setTarget(e.target.value.replace(/\D/g, ""))}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder="of #"
-            inputMode="numeric"
-            className="w-14 bg-surface-raised rounded-xl px-2 py-3 text-[15px] text-center text-fg placeholder-fg-faint focus:outline-none"
-          />
-        </div>
+        <p className="text-sm font-semibold text-fg mb-3">New goal</p>
+
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          placeholder="Goal title…"
+          autoFocus
+          className="w-full bg-surface-raised rounded-xl px-3.5 py-3 text-[15px] text-fg placeholder-fg-faint focus:outline-none"
+        />
         <p className="mt-2 text-[11px] text-fg-faint">
-          Add a number for a progress goal (e.g. "Read" of 12) — linking tasks/goals, milestones and
-          a note all happen after, from the goal's own screen.
+          Linking tasks/goals, milestones and a note all happen after, from the goal's own screen.
         </p>
+
+        <div className="mt-4 rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
+          <div className="px-4 py-3.5">
+            <p className="text-xs font-medium text-fg-faint mb-2.5">Importance</p>
+            <div className="flex items-center gap-2">
+              {IMPORTANCE_LEVELS.map((level) => {
+                const selected = newPriority === level.key;
+                const color = goalColor(level.key);
+                return (
+                  <motion.button
+                    key={level.key}
+                    onClick={() => setNewPriority(selected ? null : level.key)}
+                    whileTap={tap}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-medium"
+                    style={
+                      selected
+                        ? { borderColor: color, backgroundColor: `${color}1a`, color }
+                        : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
+                    }
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                    {level.label}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <p className="text-xs font-medium text-fg-faint mb-2.5">Category</p>
+            <div className="flex items-center gap-2">
+              {CATEGORIES.map((c) => (
+                <motion.button
+                  key={c.key}
+                  onClick={() => setNewCategory((cur) => (cur === c.key ? null : c.key))}
+                  whileTap={tap}
+                  className={chipCls(newCategory === c.key)}
+                >
+                  {c.label}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <p className="text-xs font-medium text-fg-faint mb-2.5">Scale</p>
+            <div className="flex items-center gap-2">
+              {SCALES.map((s) => (
+                <motion.button
+                  key={s.key}
+                  onClick={() => setNewScale(s.key)}
+                  whileTap={tap}
+                  className={chipCls(newScale === s.key)}
+                >
+                  {s.label}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-4 py-3.5">
+            <p className="text-xs font-medium text-fg-faint mb-2.5">Starts &amp; lasts</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={newStartDate}
+                onChange={(e) => e.target.value && setNewStartDate(e.target.value)}
+                className="flex-1 min-w-0 bg-surface rounded-xl px-3.5 py-2.5 text-[14.5px] text-fg focus:outline-none"
+              />
+              <input
+                value={newDuration}
+                onChange={(e) => setNewDuration(e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric"
+                className="w-12 bg-surface rounded-xl px-1 py-2.5 text-[14.5px] text-center text-fg focus:outline-none"
+              />
+              <span className="text-[13px] text-fg-faint shrink-0">{SCALE_UNIT[newScale]}</span>
+            </div>
+          </div>
+        </div>
+
         <motion.button
           onClick={handleAdd}
           whileTap={tap}
           disabled={!title.trim()}
-          className={`mt-3 w-full py-3 rounded-xl text-[15px] font-semibold ${
+          className={`mt-4 w-full py-3 rounded-xl text-[15px] font-semibold ${
             title.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
           }`}
         >

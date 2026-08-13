@@ -15,6 +15,18 @@ export function currentPeriodKey(period: GoalPeriod): string {
   return periodKeyFor(period, new Date());
 }
 
+// Inverse of periodKeyFor: the ISO date a period instance itself begins on
+// (week's own Monday, month/year's first day). Used to default a new goal's
+// start date to whatever period the user is browsing when they add it.
+export function periodStartDate(period: GoalPeriod, key: string): string {
+  if (period === "week") return key;
+  if (period === "month") {
+    const [y, m] = key.split("-").map(Number);
+    return toISODate(new Date(y, m - 1, 1));
+  }
+  return toISODate(new Date(Number(key), 0, 1));
+}
+
 export function shiftPeriodKey(period: GoalPeriod, key: string, delta: number): string {
   if (period === "week") {
     const monday = parseISODate(key);

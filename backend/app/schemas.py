@@ -279,6 +279,7 @@ class HabitOut(HabitBase):
 # ---- Goals & Plans ----
 
 GoalPeriod = Literal["week", "month", "year"]
+GoalCategory = Literal["personal", "work", "chore"]
 
 
 class GoalMilestone(CamelModel):
@@ -296,6 +297,9 @@ class GoalBase(CamelModel):
     target: int | None = Field(default=None, ge=1)
     progress: int = Field(default=0, ge=0)
     priority: Priority | None = None
+    category: GoalCategory | None = None
+    start_date: str | None = None
+    duration_count: int | None = Field(default=None, ge=1)
     order: int = 0
     linked_task_ids: list[str] = []
     linked_goal_ids: list[str] = []
@@ -317,6 +321,9 @@ class GoalUpdate(CamelModel):
     target: int | None = Field(default=None, ge=1)
     progress: int | None = Field(default=None, ge=0)
     priority: Priority | None = None
+    category: GoalCategory | None = None
+    start_date: str | None = None
+    duration_count: int | None = Field(default=None, ge=1)
     order: int | None = None
     linked_task_ids: list[str] | None = None
     linked_goal_ids: list[str] | None = None

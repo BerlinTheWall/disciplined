@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 
 import { canLinkGoalPeriod } from "@/lib/goalPeriods";
 import { priorityRank } from "@/lib/goalPriority";
-import type { Goal, GoalPeriod } from "@/types/goals";
+import type { Goal, GoalCategory, GoalPeriod } from "@/types/goals";
 import type { Priority } from "@/types/task";
 
 // Re-slot one goal within its period by priority (high first), preserving the
@@ -35,6 +35,9 @@ interface GoalState {
     title: string;
     target: number | null;
     priority?: Priority | null;
+    category?: GoalCategory | null;
+    startDate?: string | null;
+    durationCount?: number | null;
   }) => string;
   toggleDone: (id: string) => void;
   addProgress: (id: string, delta: number) => void;
@@ -65,7 +68,16 @@ export const useGoalStore = create<GoalState>()(
     (set) => ({
       goals: [],
 
-      addGoal: ({ period, periodKey, title, target, priority = null }) => {
+      addGoal: ({
+        period,
+        periodKey,
+        title,
+        target,
+        priority = null,
+        category = null,
+        startDate = null,
+        durationCount = null,
+      }) => {
         const id = crypto.randomUUID();
         set((state) => ({
           // Append, then slot into place by priority.
@@ -81,6 +93,9 @@ export const useGoalStore = create<GoalState>()(
                 target: target && target > 0 ? target : null,
                 progress: 0,
                 priority,
+                category,
+                startDate,
+                durationCount: durationCount && durationCount > 0 ? durationCount : null,
                 order: Number.MAX_SAFE_INTEGER,
                 linkedTaskIds: [],
                 linkedGoalIds: [],
@@ -259,6 +274,10 @@ export const useGoalStore = create<GoalState>()(
               linkedGoalIds: [],
               weights: {},
               milestones: [],
+              // The old start date belonged to the period being rolled off;
+              // duration (a count of periods) still applies, but the date
+              // itself would be stale.
+              startDate: null,
               order: ++next,
               createdAt: Date.now(),
             }));
@@ -267,13 +286,13 @@ export const useGoalStore = create<GoalState>()(
     }),
     {
       name: "disciplined-goals",
-      version: 3,
+      version: 4,
       // Backfill fields added over time: priority/order/taskIds (v1),
-      // taskWeights (v2), and the v3 rebuild — taskIds/taskWeights renamed
-      // to linkedTaskIds/weights, plus new linkedGoalIds/milestones. Reads
-      // straight off whatever old field names are present regardless of the
-      // stored version, so it's safe no matter which version a device is
-      // migrating up from.
+      // taskWeights (v2), the v3 rebuild — taskIds/taskWeights renamed to
+      // linkedTaskIds/weights, plus new linkedGoalIds/milestones — and v4's
+      // category/startDate/durationCount. Reads straight off whatever old
+      // field names are present regardless of the stored version, so it's
+      // safe no matter which version a device is migrating up from.
       migrate: (persisted) => {
         const state = persisted as {
           goals?: (Goal & { taskIds?: string[]; taskWeights?: Record<string, number> })[];
@@ -287,6 +306,9 @@ export const useGoalStore = create<GoalState>()(
             linkedGoalIds: g.linkedGoalIds ?? [],
             weights: g.weights ?? g.taskWeights ?? {},
             milestones: g.milestones ?? [],
+            category: g.category ?? null,
+            startDate: g.startDate ?? null,
+            durationCount: g.durationCount ?? null,
           }));
         }
         return state as GoalState;

@@ -2,6 +2,8 @@ import type { Priority } from "./task";
 
 export type GoalPeriod = "week" | "month" | "year";
 
+export type GoalCategory = "personal" | "work" | "chore";
+
 export interface GoalMilestone {
   id: string;
   label: string;
@@ -29,6 +31,13 @@ export interface Goal {
   target: number | null;
   progress: number;
   priority: Priority | null;
+  category: GoalCategory | null;
+  // The date this goal actually starts, and how many `period` units it
+  // spans from there (e.g. period="month" + durationCount=3 = a 3-month
+  // goal). Independent of periodKey, which still files the goal under the
+  // period it starts in for tab/browsing purposes.
+  startDate: string | null;
+  durationCount: number | null;
   // Manual sort position within its period (lower = higher in the list).
   order: number;
   // Ids of tasks whose completion drives this goal's progress.
