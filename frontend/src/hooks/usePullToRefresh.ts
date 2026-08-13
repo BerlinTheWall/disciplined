@@ -35,6 +35,7 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown>): PullToRefre
     onRefreshRef.current = onRefresh;
   }, [onRefresh]);
 
+  const startX = useRef(0);
   const startY = useRef(0);
   const tracking = useRef(false); // touch started at scrollTop 0
   const active = useRef(false); // gesture has moved into a real pull
@@ -46,6 +47,7 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown>): PullToRefre
       return;
     }
     tracking.current = (e.currentTarget as HTMLElement).scrollTop <= 0;
+    startX.current = e.touches[0].clientX;
     startY.current = e.touches[0].clientY;
     active.current = false;
   }, []);
@@ -53,7 +55,17 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown>): PullToRefre
   const handleMove = useCallback((e: TouchEvent) => {
     if (!tracking.current) return;
     const el = e.currentTarget as HTMLElement;
+    const dx = e.touches[0].clientX - startX.current;
     const dy = e.touches[0].clientY - startY.current;
+    // A horizontal-dominant gesture is a page/week swipe, not a pull — bail
+    // out for the rest of this touch sequence, however slight its vertical
+    // component. Without this, swiping the week strip (which sits right at
+    // scrollTop 0) reads as a downward pull and drags the indicator/page
+    // along with it.
+    if (!active.current && Math.abs(dx) > Math.abs(dy)) {
+      tracking.current = false;
+      return;
+    }
     if (dy <= 0 || el.scrollTop > 0) {
       if (active.current) {
         active.current = false;
