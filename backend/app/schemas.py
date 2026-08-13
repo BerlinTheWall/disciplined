@@ -279,7 +279,9 @@ class HabitOut(HabitBase):
 # ---- Goals & Plans ----
 
 GoalPeriod = Literal["week", "month", "year"]
-GoalCategory = Literal["personal", "work", "chore"]
+# A handful of built-in suggestions on the frontend, but not a closed set —
+# the add-goal sheet lets the user type their own tag too, so this stays a
+# plain string rather than a Literal.
 
 
 class GoalMilestone(CamelModel):
@@ -297,7 +299,7 @@ class GoalBase(CamelModel):
     target: int | None = Field(default=None, ge=1)
     progress: int = Field(default=0, ge=0)
     priority: Priority | None = None
-    category: GoalCategory | None = None
+    category: str | None = None
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
     order: int = 0
@@ -321,7 +323,7 @@ class GoalUpdate(CamelModel):
     target: int | None = Field(default=None, ge=1)
     progress: int | None = Field(default=None, ge=0)
     priority: Priority | None = None
-    category: GoalCategory | None = None
+    category: str | None = None
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
     order: int | None = None

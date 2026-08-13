@@ -8,15 +8,6 @@ import { spring, tap } from "@/lib/motion";
 // Rows of the edit sheet; tapping one slides its editor up from the bottom.
 export type EditRowKey = "date" | "time" | "repeat" | "alert" | "priority" | "links";
 
-const FIELD_PANEL_TITLES: Record<EditRowKey, string> = {
-  date: "Date",
-  time: "Time",
-  repeat: "Repeat",
-  alert: "Alert",
-  priority: "Priority",
-  links: "Links",
-};
-
 // One tappable value row of the edit sheet: icon, current value, optional
 // hint on the right, and a chevron; tapping slides that field's editor panel
 // up from the bottom.
@@ -47,18 +38,22 @@ export function FieldRow({
   );
 }
 
-// The field editor overlay — tapping a value row slides this up over the edit
-// sheet (own backdrop, higher z than the sheet); edits apply live, Done just
-// dismisses it. Rendered as a sibling of the sheet, never inside it, so its
-// fixed positioning isn't captured by the sheet's transform.
+// The field editor overlay — tapping a value row slides this up over its
+// owning sheet (own backdrop, higher z than the sheet); edits apply live,
+// Done just dismisses it. Rendered as a sibling of the sheet, never inside
+// it, so its fixed positioning isn't captured by the sheet's transform.
+// Generic over `title`/`open` rather than tied to EditRowKey, so any sheet
+// (not just the task/habit one) can reuse the same popup-editor pattern.
 export function FieldPanel({
-  openKey,
+  open,
+  title,
   color,
   onColor,
   onClose,
   children,
 }: {
-  openKey: EditRowKey | null;
+  open: boolean;
+  title: string;
   color: string;
   onColor: string;
   onClose: () => void;
@@ -66,7 +61,7 @@ export function FieldPanel({
 }) {
   return (
     <AnimatePresence>
-      {openKey && (
+      {open && (
         <>
           <motion.div
             className="fixed inset-0 bg-black/30 z-60"
@@ -77,7 +72,7 @@ export function FieldPanel({
             onClick={onClose}
           />
           <motion.div
-            key={openKey}
+            key={title}
             className="fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl z-70 shadow-xl max-h-[80vh] overflow-y-auto"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
@@ -85,7 +80,7 @@ export function FieldPanel({
             transition={spring.gentle}
           >
             <div className="sticky top-0 bg-surface rounded-t-2xl flex items-center justify-between px-4 pt-3 pb-2">
-              <h3 className="text-base font-semibold text-fg">{FIELD_PANEL_TITLES[openKey]}</h3>
+              <h3 className="text-base font-semibold text-fg">{title}</h3>
               <motion.button
                 onClick={onClose}
                 whileTap={tap}

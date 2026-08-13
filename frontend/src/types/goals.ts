@@ -2,7 +2,10 @@ import type { Priority } from "./task";
 
 export type GoalPeriod = "week" | "month" | "year";
 
-export type GoalCategory = "personal" | "work" | "chore";
+// A handful of built-in suggestions (see GoalsPage's CATEGORIES), but not a
+// closed set — the add-goal sheet lets the user type their own tag too, so
+// this stays a plain string rather than a literal union.
+export type GoalCategory = string;
 
 export interface GoalMilestone {
   id: string;

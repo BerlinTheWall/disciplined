@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDownToLine, ChevronLeft, ChevronRight, Plus, Target } from "lucide-react";
+import {
+  ArrowDownToLine,
+  Briefcase,
+  Calendar,
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
+  CirclePlus,
+  Heart,
+  Plus,
+  Target,
+  User,
+} from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import Collapse from "@/components/Collapse";
 import GoalCard from "@/components/goals/GoalCard";
 import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
 import PeriodPath from "@/components/goals/PeriodPath";
 import { chipCls } from "@/components/timeline/addItemOptions";
-import { parseISODate, toISODate } from "@/lib/date";
+import CalendarMonth from "@/components/timeline/CalendarMonth";
+import { FieldPanel } from "@/components/timeline/FieldPanel";
+import { isLightColor } from "@/lib/color";
+import { formatFullDate, parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import {
   currentPeriodKey,
   periodKeyFor,
@@ -36,20 +52,23 @@ const SCALES: { key: GoalPeriod; label: string }[] = [
   { key: "year", label: "Yearly" },
 ];
 
-const CATEGORIES: { key: GoalCategory; label: string }[] = [
-  { key: "personal", label: "Personal" },
-  { key: "work", label: "Work" },
-  { key: "chore", label: "Chore" },
+const CATEGORIES: { key: GoalCategory; label: string; icon: typeof User }[] = [
+  { key: "personal", label: "Personal", icon: User },
+  { key: "work", label: "Work", icon: Briefcase },
+  { key: "chore", label: "Chore", icon: CheckSquare },
+  { key: "health", label: "Health", icon: Heart },
 ];
 
-// "week" -> "weeks", "month" -> "months" — the duration input's trailing unit.
-const SCALE_UNIT: Record<GoalPeriod, string> = { week: "weeks", month: "months", year: "years" };
-
-const IMPORTANCE_LEVELS: { key: Priority; label: string }[] = [
+const PRIORITY_LEVELS: { key: Priority; label: string }[] = [
   { key: "low", label: "Low" },
   { key: "medium", label: "Medium" },
   { key: "high", label: "High" },
 ];
+
+// Same sage accent as --path-accent (index.css) — the Goals feature's own
+// color, reused here for the date popup's "Done" button.
+const GOAL_ACCENT = "#7ea852";
+const GOAL_ACCENT_ON = isLightColor(GOAL_ACCENT) ? "#111827" : "#ffffff";
 
 export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => void }) {
   const goals = useGoalStore((s) => s.goals);
@@ -153,23 +172,45 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const [newCategory, setNewCategory] = useState<GoalCategory | null>(null);
   const [newScale, setNewScale] = useState<GoalPeriod>("week");
   const [newStartDate, setNewStartDate] = useState("");
-  const [newDuration, setNewDuration] = useState("1");
+  const [dateOpen, setDateOpen] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+
+  // Custom tags typed in from a past goal (plus whatever's mid-entry right
+  // now), offered as chips alongside the built-in categories — a user's own
+  // tags stick around without needing a separate place to manage them.
+  const builtInCategoryKeys = useMemo(() => new Set(CATEGORIES.map((c) => c.key)), []);
+  const customTags = useMemo(() => {
+    const tags = new Set(
+      goals.map((g) => g.category).filter((c): c is string => !!c && !builtInCategoryKeys.has(c))
+    );
+    if (newCategory && !builtInCategoryKeys.has(newCategory)) tags.add(newCategory);
+    return Array.from(tags);
+  }, [goals, newCategory, builtInCategoryKeys]);
+
+  function commitTag() {
+    const trimmed = tagDraft.trim();
+    if (trimmed) setNewCategory(trimmed);
+    setTagDraft("");
+    setAddingTag(false);
+  }
 
   // Seed the new-goal fields from whatever period/instance is currently
   // being browsed, so leaving everything untouched behaves the same way
   // adding a goal always has: it lands in the period you're looking at.
   function openAdd() {
     setNewScale(period);
-    setNewStartDate(isCurrent ? toISODate(new Date()) : periodStartDate(period, activeKey));
-    setNewDuration("1");
+    setNewStartDate(isCurrent ? todayISODate() : periodStartDate(period, activeKey));
+    setDateOpen(false);
+    setAddingTag(false);
+    setTagDraft("");
     setAddOpen(true);
   }
 
   function handleAdd() {
     const trimmed = title.trim();
     if (!trimmed) return;
-    const duration = parseInt(newDuration, 10);
-    const startDate = newStartDate || toISODate(new Date());
+    const startDate = newStartDate || todayISODate();
     addGoal({
       period: newScale,
       periodKey: periodKeyFor(newScale, parseISODate(startDate)),
@@ -178,7 +219,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
       priority: newPriority,
       category: newCategory,
       startDate,
-      durationCount: Number.isFinite(duration) && duration > 0 ? duration : null,
     });
     setTitle("");
     setNewPriority(null);
@@ -332,113 +372,187 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         onClose={() => setAddOpen(false)}
         className="bg-surface rounded-t-3xl p-5 pb-[calc(20px+env(safe-area-inset-bottom))]"
       >
-        <p className="text-sm font-semibold text-fg mb-3">New goal</p>
-
+        <label className="text-xs font-bold tracking-wide text-fg-muted mb-2 block">
+          Goal title
+        </label>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          placeholder="Goal title…"
+          placeholder="What do you want to accomplish?"
           autoFocus
-          className="w-full bg-surface-raised rounded-xl px-3.5 py-3 text-[15px] text-fg placeholder-fg-faint focus:outline-none"
+          className="w-full bg-surface-raised rounded-2xl px-4 py-3.5 text-[17px] font-semibold text-fg placeholder-fg-faint focus:outline-none"
         />
-        <p className="mt-2 text-[11px] text-fg-faint">
-          Linking tasks/goals, milestones and a note all happen after, from the goal's own screen.
-        </p>
 
-        <div className="mt-4 rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
-          <div className="px-4 py-3.5">
-            <p className="text-xs font-medium text-fg-faint mb-2.5">Importance</p>
-            <div className="flex items-center gap-2">
-              {IMPORTANCE_LEVELS.map((level) => {
-                const selected = newPriority === level.key;
-                const color = goalColor(level.key);
-                return (
-                  <motion.button
-                    key={level.key}
-                    onClick={() => setNewPriority(selected ? null : level.key)}
-                    whileTap={tap}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-medium"
-                    style={
-                      selected
-                        ? { borderColor: color, backgroundColor: `${color}1a`, color }
-                        : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
-                    }
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: color }}
-                    />
-                    {level.label}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
+        <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+          Timeframe scale
+        </label>
+        <div className="flex items-center bg-surface-raised rounded-xl p-1">
+          {SCALES.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setNewScale(s.key)}
+              className="relative flex-1 h-9 rounded-lg text-sm font-medium"
+            >
+              {newScale === s.key && (
+                <motion.span
+                  layoutId="goalScaleSeg"
+                  transition={spring.snappy}
+                  className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+                />
+              )}
+              <span className={`relative z-10 ${newScale === s.key ? "text-fg" : "text-fg-muted"}`}>
+                {s.label}
+              </span>
+            </button>
+          ))}
+        </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-xs font-medium text-fg-faint mb-2.5">Category</p>
-            <div className="flex items-center gap-2">
-              {CATEGORIES.map((c) => (
-                <motion.button
-                  key={c.key}
-                  onClick={() => setNewCategory((cur) => (cur === c.key ? null : c.key))}
-                  whileTap={tap}
-                  className={chipCls(newCategory === c.key)}
-                >
-                  {c.label}
-                </motion.button>
-              ))}
-            </div>
-          </div>
+        <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+          Date
+        </label>
+        <motion.button
+          onClick={() => setDateOpen(true)}
+          whileTap={tap}
+          className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5"
+        >
+          <span className="flex items-center gap-2 text-fg font-medium">
+            <Calendar size={18} className="text-fg-faint" />
+            {formatFullDate(newStartDate)}
+          </span>
+          <span className="flex items-center gap-1 text-fg-faint text-sm">
+            {relativeDayLabel(newStartDate)}
+            <ChevronRight size={16} />
+          </span>
+        </motion.button>
 
-          <div className="px-4 py-3.5">
-            <p className="text-xs font-medium text-fg-faint mb-2.5">Scale</p>
-            <div className="flex items-center gap-2">
-              {SCALES.map((s) => (
-                <motion.button
-                  key={s.key}
-                  onClick={() => setNewScale(s.key)}
-                  whileTap={tap}
-                  className={chipCls(newScale === s.key)}
-                >
-                  {s.label}
-                </motion.button>
-              ))}
-            </div>
-          </div>
+        <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+          Priority
+        </label>
+        <div className="flex items-center gap-2">
+          {PRIORITY_LEVELS.map((level) => {
+            const selected = newPriority === level.key;
+            const color = goalColor(level.key);
+            return (
+              <motion.button
+                key={level.key}
+                onClick={() => setNewPriority(selected ? null : level.key)}
+                whileTap={tap}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
+                style={
+                  selected
+                    ? { borderColor: color, backgroundColor: `${color}1a`, color }
+                    : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
+                }
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                {level.label}
+              </motion.button>
+            );
+          })}
+        </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-xs font-medium text-fg-faint mb-2.5">Starts &amp; lasts</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={newStartDate}
-                onChange={(e) => e.target.value && setNewStartDate(e.target.value)}
-                className="flex-1 min-w-0 bg-surface rounded-xl px-3.5 py-2.5 text-[14.5px] text-fg focus:outline-none"
-              />
-              <input
-                value={newDuration}
-                onChange={(e) => setNewDuration(e.target.value.replace(/\D/g, ""))}
-                inputMode="numeric"
-                className="w-12 bg-surface rounded-xl px-1 py-2.5 text-[14.5px] text-center text-fg focus:outline-none"
-              />
-              <span className="text-[13px] text-fg-faint shrink-0">{SCALE_UNIT[newScale]}</span>
-            </div>
+        <div className="flex items-center justify-between mt-5 mb-2">
+          <label className="text-xs font-bold tracking-wide text-fg-muted">Category</label>
+          <motion.button
+            onClick={() => setAddingTag(true)}
+            whileTap={tap}
+            className="flex items-center gap-1 text-xs font-semibold"
+            style={{ color: "var(--path-accent)" }}
+          >
+            <Plus size={12} />
+            Add tag
+          </motion.button>
+        </div>
+
+        <Collapse open={addingTag}>
+          <div className="flex items-center gap-2 pb-2">
+            <input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitTag();
+                if (e.key === "Escape") {
+                  setTagDraft("");
+                  setAddingTag(false);
+                }
+              }}
+              placeholder="Tag name…"
+              autoFocus
+              className="flex-1 min-w-0 bg-surface-raised rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none"
+            />
+            <motion.button
+              onClick={commitTag}
+              whileTap={tap}
+              disabled={!tagDraft.trim()}
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold ${
+                tagDraft.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
+              }`}
+            >
+              Add
+            </motion.button>
           </div>
+        </Collapse>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {CATEGORIES.map((c) => (
+            <motion.button
+              key={c.key}
+              onClick={() => setNewCategory((cur) => (cur === c.key ? null : c.key))}
+              whileTap={tap}
+              className={`flex items-center gap-1.5 ${chipCls(newCategory === c.key)}`}
+            >
+              <c.icon size={13} />
+              {c.label}
+            </motion.button>
+          ))}
+          {customTags.map((tag) => (
+            <motion.button
+              key={tag}
+              onClick={() => setNewCategory((cur) => (cur === tag ? null : tag))}
+              whileTap={tap}
+              className={chipCls(newCategory === tag)}
+            >
+              {tag}
+            </motion.button>
+          ))}
         </div>
 
         <motion.button
           onClick={handleAdd}
           whileTap={tap}
           disabled={!title.trim()}
-          className={`mt-4 w-full py-3 rounded-xl text-[15px] font-semibold ${
+          className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
             title.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
           }`}
         >
-          Add goal
+          <CirclePlus size={18} />
+          Create goal
         </motion.button>
       </BottomSheet>
+
+      {/* Rendered as a sibling of the sheet (not inside it), same as the task
+          sheet's own field editor, so its fixed positioning survives the
+          sheet's own slide-up transform. */}
+      <FieldPanel
+        open={addOpen && dateOpen}
+        title="Date"
+        color={GOAL_ACCENT}
+        onColor={GOAL_ACCENT_ON}
+        onClose={() => setDateOpen(false)}
+      >
+        <CalendarMonth
+          value={newStartDate}
+          color={GOAL_ACCENT}
+          onChange={(iso) => {
+            setNewStartDate(iso);
+            setDateOpen(false);
+          }}
+        />
+      </FieldPanel>
 
       <AnimatePresence>
         {detailGoal && (

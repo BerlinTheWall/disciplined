@@ -1,7 +1,17 @@
+import type { EditRowKey } from "./FieldPanel";
 import { DAY_NAMES } from "@/lib/date";
 
 // Shared vocabulary of the add/edit item form: the pickable palettes and the
 // small pure formatters that describe a selection.
+
+export const FIELD_PANEL_TITLES: Record<EditRowKey, string> = {
+  date: "Date",
+  time: "Time",
+  repeat: "Repeat",
+  alert: "Alert",
+  priority: "Priority",
+  links: "Links",
+};
 
 export const COLOR_OPTIONS = [
   "#34d399",

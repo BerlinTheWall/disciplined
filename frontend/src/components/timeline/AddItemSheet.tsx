@@ -30,6 +30,7 @@ import {
   DAY_OPTIONS,
   DURATION_OPTIONS,
   durationTrackLabel,
+  FIELD_PANEL_TITLES,
   MINUTES_PER_DAY,
   ordinalLabel,
   repeatSummary,
@@ -677,9 +678,19 @@ export default function AddItemSheet({
     </div>
   );
 
-  const datePickerField = (
-    <div className="relative">
-      <div className="flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5">
+  // Opens the same CalendarMonth popup (via the shared FieldPanel below) that
+  // the edit sheet's "date" row already uses — a native <input type="date">
+  // overlay used to sit here instead, but that control is unreliable on
+  // mobile WebViews (tapping it can silently do nothing).
+  const dateBody = (
+    <div>
+      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Date</label>
+      <motion.button
+        type="button"
+        onClick={() => setOpenRow("date")}
+        whileTap={tap}
+        className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5 mb-4"
+      >
         <span className="flex items-center gap-2 text-fg font-medium">
           <Calendar size={18} className="text-fg-faint" />
           {formatFullDate(date)}
@@ -688,20 +699,7 @@ export default function AddItemSheet({
           {relativeDayLabel(date)}
           <ChevronRight size={16} />
         </span>
-      </div>
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => e.target.value && setDate(e.target.value)}
-        className="absolute inset-0 opacity-0 w-full h-full"
-      />
-    </div>
-  );
-
-  const dateBody = (
-    <div>
-      <label className="text-xs font-medium text-fg-muted mb-1.5 block">Date</label>
-      <div className="mb-4">{datePickerField}</div>
+      </motion.button>
     </div>
   );
 
@@ -1506,10 +1504,12 @@ export default function AddItemSheet({
         </div>
       </BottomSheet>
 
-      {/* Field editor panel - tapping a value row slides this up over the
-          sheet; edits apply live, Done just dismisses it. */}
+      {/* Field editor panel - tapping a value row (edit mode's rows, or the
+          create wizard's own date row) slides this up over the sheet; edits
+          apply live, Done just dismisses it. */}
       <FieldPanel
-        openKey={isOpen && isEditing ? openRow : null}
+        open={isOpen && !!openRow}
+        title={openRow ? FIELD_PANEL_TITLES[openRow] : ""}
         color={color}
         onColor={onColor}
         onClose={() => setOpenRow(null)}
