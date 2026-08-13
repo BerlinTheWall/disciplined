@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 
 import { buildPeriodStops, type PeriodStop } from "@/lib/goalPath";
 import { tap } from "@/lib/motion";
-import { smoothPathD, waveLayout, type WavePoint } from "@/lib/pathGeometry";
+import { smoothPathDVertical, waveLayoutVertical, type WavePoint } from "@/lib/pathGeometry";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
-const SPACING = 60;
-const BASE_Y = 62;
-const AMPLITUDE = 18;
-const MARGIN_X = 34;
-const HEIGHT = 130;
+const SPACING = 58;
+const BASE_X = 58;
+const AMPLITUDE = 14;
+const MARGIN_Y = 26;
+const WIDTH = 100;
+const LABEL_X = 6;
 
 type NodeState = "today" | "future" | "empty" | "done" | "partial";
 
@@ -23,6 +24,11 @@ function nodeState(stop: PeriodStop): NodeState {
   return "partial";
 }
 
+// A vertical rail of stops (today, upcoming days/weeks/months) running
+// top-to-bottom beside the goal list — same data/drill-down behavior as
+// before, just no longer trying to line up 1:1 against the goal rows next
+// to it (goals aren't bound to a specific stop; the rail is its own
+// independent timeline).
 export default function PeriodPath({
   period,
   activeKey,
@@ -42,40 +48,19 @@ export default function PeriodPath({
     () => buildPeriodStops(period, activeKey, goals, tasks),
     [period, activeKey, goals, tasks]
   );
-  // Every stop is an exact anchor of the bezier curve built through it (see
-  // pathGeometry.ts), so — unlike the old grid-with-rounded-corners layout —
-  // nodes need no separate alignment pass to sit exactly on the line.
   const points: WavePoint[] = useMemo(
-    () => waveLayout(stops.length, SPACING, BASE_Y, AMPLITUDE, MARGIN_X),
+    () => waveLayoutVertical(stops.length, SPACING, BASE_X, AMPLITUDE, MARGIN_Y),
     [stops.length]
   );
-  const pathD = useMemo(() => smoothPathD(points), [points]);
+  const pathD = useMemo(() => smoothPathDVertical(points), [points]);
 
   let travelEnd = -1;
   stops.forEach((s, i) => {
     if (!s.isFuture) travelEnd = i;
   });
-  // A prefix of the same points, run through the same curve-building
-  // function, reproduces exactly the travelled portion of the full curve —
-  // each segment only ever depends on its own two endpoints.
-  const travelledD = travelEnd > 0 ? smoothPathD(points.slice(0, travelEnd + 1)) : "";
+  const travelledD = travelEnd > 0 ? smoothPathDVertical(points.slice(0, travelEnd + 1)) : "";
 
-  const width = MARGIN_X * 2 + (stops.length - 1) * SPACING;
-
-  // Longer periods (Month/Year) don't fit one screen width — land on
-  // "today" rather than the start of the line.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scrollRef.current;
-    const todayIndex = stops.findIndex((s) => s.isToday);
-    if (!el || todayIndex < 0) return;
-    const targetX = points[todayIndex].x;
-    el.scrollTo({ left: Math.max(0, targetX - el.clientWidth / 2), behavior: "auto" });
-    // Only re-center on a genuine period/tab change, not on every progress
-    // update — re-reading `points`/`stops` here would fight a user who's
-    // deliberately scrolled elsewhere in the same period.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, activeKey]);
+  const height = MARGIN_Y * 2 + Math.max(0, stops.length - 1) * SPACING;
 
   function handleActivate(stop: PeriodStop) {
     if (stop.action.kind === "day") onOpenDay(stop.action.date);
@@ -83,11 +68,11 @@ export default function PeriodPath({
   }
 
   return (
-    <div ref={scrollRef} className="bg-surface rounded-2xl shadow-soft py-6 px-4 overflow-x-auto">
+    <div className="bg-surface rounded-2xl shadow-soft py-4 px-2 shrink-0">
       <svg
-        viewBox={`0 0 ${width} ${HEIGHT}`}
-        width={width}
-        height={HEIGHT}
+        viewBox={`0 0 ${WIDTH} ${height}`}
+        width={WIDTH}
+        height={height}
         role="group"
         aria-label={`${period} progress path`}
       >
@@ -114,7 +99,6 @@ export default function PeriodPath({
             stop={stop}
             x={points[i].x}
             y={points[i].y}
-            baseY={BASE_Y}
             onActivate={() => handleActivate(stop)}
           />
         ))}
@@ -127,21 +111,15 @@ function PathNode({
   stop,
   x,
   y,
-  baseY,
   onActivate,
 }: {
   stop: PeriodStop;
   x: number;
   y: number;
-  baseY: number;
   onActivate: () => void;
 }) {
   const state = nodeState(stop);
   const circumference = 2 * Math.PI * 10;
-  // A stop above the wave's centre reads as a "peak" — its label sits below
-  // to stay clear of the curve arcing away above it, and vice versa.
-  const labelBelow = y < baseY;
-  const labelY = labelBelow ? y + 26 : y - 20;
 
   return (
     <motion.g
@@ -158,6 +136,24 @@ function PathNode({
         }
       }}
     >
+      <text
+        x={LABEL_X}
+        y={y}
+        dominantBaseline="middle"
+        textAnchor="start"
+        fontSize={state === "today" ? 10.5 : 10}
+        fontWeight={state === "today" ? 800 : state === "done" || state === "partial" ? 700 : 500}
+        fill={
+          state === "today"
+            ? "var(--path-ink)"
+            : state === "future" || state === "empty"
+              ? "var(--fg-faint)"
+              : "var(--fg)"
+        }
+      >
+        {state === "today" ? "TODAY" : stop.label}
+      </text>
+
       {state === "today" && (
         <>
           <circle
@@ -224,23 +220,6 @@ function PathNode({
           />
         </>
       )}
-
-      <text
-        x={x}
-        y={labelY}
-        textAnchor="middle"
-        fontSize={state === "today" ? 11 : 11.5}
-        fontWeight={state === "today" ? 800 : state === "done" || state === "partial" ? 700 : 500}
-        fill={
-          state === "today"
-            ? "var(--path-ink)"
-            : state === "future" || state === "empty"
-              ? "var(--fg-faint)"
-              : "var(--fg)"
-        }
-      >
-        {state === "today" ? "TODAY" : stop.label}
-      </text>
     </motion.g>
   );
 }

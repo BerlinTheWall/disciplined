@@ -44,3 +44,37 @@ export function smoothPathD(points: WavePoint[]): string {
   }
   return d;
 }
+
+// Same wave, running top-to-bottom instead of left-to-right — stops drift
+// gently side to side as they descend. Not a transposed reuse of
+// waveLayout: the linear/wiggle axes are swapped at the point-generation
+// level so the caller never has to remember which field means what.
+export function waveLayoutVertical(
+  count: number,
+  spacing = 60,
+  baseX = 62,
+  amplitude = 18,
+  margin = 34
+): WavePoint[] {
+  return Array.from({ length: count }, (_, i) => ({
+    x: baseX + amplitude * Math.sin(i * 1.05),
+    y: margin + i * spacing,
+  }));
+}
+
+// smoothPathD's counterpart for a vertical wave: control points offset
+// *vertically* toward the other end instead of horizontally, since the
+// large delta between consecutive stops is now in y, not x.
+export function smoothPathDVertical(points: WavePoint[]): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M${points[0].x},${points[0].y}`;
+
+  let d = `M${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const curr = points[i];
+    const next = points[i + 1];
+    const dy = (next.y - curr.y) / 2;
+    d += ` C${curr.x},${curr.y + dy} ${next.x},${next.y - dy} ${next.x},${next.y}`;
+  }
+  return d;
+}

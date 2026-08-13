@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownToLine,
@@ -16,8 +16,8 @@ import {
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
-import GoalCard from "@/components/goals/GoalCard";
 import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
+import GoalRow from "@/components/goals/GoalRow";
 import PeriodPath from "@/components/goals/PeriodPath";
 import { chipCls } from "@/components/timeline/addItemOptions";
 import CalendarMonth from "@/components/timeline/CalendarMonth";
@@ -155,21 +155,14 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setKeys((k) => ({ ...k, [p]: key }));
   }
 
-  // Carousel scroll → dot pagination. No drag-reorder here on purpose: a
-  // horizontal swipeable carousel and a horizontal drag-to-reorder gesture
-  // would fight each other; priority already keeps the order meaningful.
-  const carouselRef = useRef<HTMLDivElement>(null);
-  const [carouselIndex, setCarouselIndex] = useState(0);
-  // Reset the dot index during render when the tab/period changes (React's
-  // documented "adjusting state" pattern), rather than in an effect — an
+  // Reset "show all" during render when the tab/period changes (React's
+  // documented "adjusting state" pattern) rather than in an effect — an
   // effect calling setState synchronously would trigger a second render for
-  // no reason. The scrollTo below is a genuine external-system side effect
-  // (the DOM node itself), so that part does belong in an effect.
-  const [carouselKey, setCarouselKey] = useState(`${period}:${activeKey}`);
+  // no reason.
+  const [listKey, setListKey] = useState(`${period}:${activeKey}`);
   const [showAllGoals, setShowAllGoals] = useState(false);
-  if (carouselKey !== `${period}:${activeKey}`) {
-    setCarouselKey(`${period}:${activeKey}`);
-    setCarouselIndex(0);
+  if (listKey !== `${period}:${activeKey}`) {
+    setListKey(`${period}:${activeKey}`);
     setShowAllGoals(false);
   }
 
@@ -190,21 +183,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     return listed.filter((g) => topIds.has(g.id));
   }, [listed, period, showAllGoals]);
   const hiddenGoalCount = listed.length - visibleListed.length;
-  useEffect(() => {
-    carouselRef.current?.scrollTo({ left: 0 });
-  }, [period, activeKey]);
-  function handleCarouselScroll() {
-    const el = carouselRef.current;
-    const first = el?.children[0] as HTMLElement | undefined;
-    if (!el || !first) return;
-    const cardWidth = first.offsetWidth + 12; // gap-3
-    const idx = Math.round(el.scrollLeft / cardWidth);
-    setCarouselIndex(Math.max(0, Math.min(visibleListed.length - 1, idx)));
-  }
-  function goToCard(i: number) {
-    const card = carouselRef.current?.children[i] as HTMLElement | undefined;
-    card?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }
 
   const [detailGoalId, setDetailGoalId] = useState<string | null>(null);
   const detailGoal = goals.find((g) => g.id === detailGoalId) ?? null;
@@ -293,101 +271,72 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         ))}
       </div>
 
-      {/* Period navigation + Path */}
-      <div>
-        <div className="flex items-center justify-between px-1">
-          <motion.button
-            onClick={() => shift(-1)}
-            whileTap={tap}
-            className="p-2 -m-2 text-fg-faint"
-          >
-            <ChevronLeft size={18} />
-          </motion.button>
-          <div className="text-center">
-            <p className="text-sm font-semibold text-fg capitalize">
-              {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)}
-            </p>
-            {relativePeriodName(period, activeKey) && (
-              <p className="text-[11px] text-fg-faint">{periodLabel(period, activeKey)}</p>
-            )}
-          </div>
-          <motion.button onClick={() => shift(1)} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-            <ChevronRight size={18} />
-          </motion.button>
+      {/* Period navigation */}
+      <div className="flex items-center justify-between px-1">
+        <motion.button onClick={() => shift(-1)} whileTap={tap} className="p-2 -m-2 text-fg-faint">
+          <ChevronLeft size={18} />
+        </motion.button>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-fg capitalize">
+            {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)}
+          </p>
+          {relativePeriodName(period, activeKey) && (
+            <p className="text-[11px] text-fg-faint">{periodLabel(period, activeKey)}</p>
+          )}
         </div>
-        <div className="mt-3">
-          <PeriodPath
-            period={period}
-            activeKey={activeKey}
-            goals={goals}
-            tasks={tasks}
-            onOpenDay={openDay}
-            onJumpPeriod={jumpPeriod}
-          />
-        </div>
+        <motion.button onClick={() => shift(1)} whileTap={tap} className="p-2 -m-2 text-fg-faint">
+          <ChevronRight size={18} />
+        </motion.button>
       </div>
 
-      {/* Goal carousel */}
-      {listed.length === 0 ? (
-        <div className="py-12 flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-surface-raised flex items-center justify-center mb-3">
-            <Target size={24} className="text-fg-faint" />
-          </div>
-          <p className="text-sm text-fg-faint max-w-52">
-            No goals for this {period} yet. Tap + to add one.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div
-            ref={carouselRef}
-            onScroll={handleCarouselScroll}
-            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 -mx-4 px-4"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {visibleListed.map((g) => (
-              <GoalCard
-                key={g.id}
-                goal={g}
-                goals={goals}
-                tasks={tasks}
-                onOpen={() => setDetailGoalId(g.id)}
-                cascaded={!(g.period === period && g.periodKey === activeKey)}
-              />
-            ))}
-          </div>
-          {visibleListed.length > 1 && (
-            <div className="flex justify-center gap-1.5">
-              {visibleListed.map((g, i) => (
-                <button
-                  key={g.id}
-                  onClick={() => goToCard(i)}
-                  aria-label={`Go to ${g.title}`}
-                  className="p-1.5 -m-1.5"
-                >
-                  <span
-                    className="block h-1.5 rounded-full transition-all"
-                    style={{
-                      width: i === carouselIndex ? 16 : 6,
-                      backgroundColor:
-                        i === carouselIndex ? "var(--path-accent)" : "var(--surface-subtle)",
-                    }}
-                  />
-                </button>
-              ))}
+      {/* Path (today, upcoming days/weeks/months) beside the goal list —
+          the two columns aren't row-for-row aligned, they're just laid out
+          together; the path is its own independent timeline. */}
+      <div className="flex gap-3 items-start">
+        <PeriodPath
+          period={period}
+          activeKey={activeKey}
+          goals={goals}
+          tasks={tasks}
+          onOpenDay={openDay}
+          onJumpPeriod={jumpPeriod}
+        />
+
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          {listed.length === 0 ? (
+            <div className="py-10 flex flex-col items-center text-center bg-surface rounded-2xl shadow-soft">
+              <div className="w-14 h-14 rounded-2xl bg-surface-raised flex items-center justify-center mb-3">
+                <Target size={24} className="text-fg-faint" />
+              </div>
+              <p className="text-sm text-fg-faint max-w-52">
+                No goals for this {period} yet. Tap + to add one.
+              </p>
             </div>
+          ) : (
+            <>
+              {visibleListed.map((g) => (
+                <GoalRow
+                  key={g.id}
+                  goal={g}
+                  goals={goals}
+                  tasks={tasks}
+                  onOpen={() => setDetailGoalId(g.id)}
+                  cascaded={!(g.period === period && g.periodKey === activeKey)}
+                />
+              ))}
+              {hiddenGoalCount > 0 && (
+                <motion.button
+                  onClick={() => setShowAllGoals(true)}
+                  whileTap={tap}
+                  className="w-full flex items-center justify-center gap-2 bg-surface-raised rounded-2xl px-4 py-3 text-sm font-medium text-fg-muted"
+                >
+                  Showing high priority only — +{hiddenGoalCount} more this {period}
+                </motion.button>
+              )}
+            </>
           )}
-          {hiddenGoalCount > 0 && (
-            <motion.button
-              onClick={() => setShowAllGoals(true)}
-              whileTap={tap}
-              className="w-full flex items-center justify-center gap-2 bg-surface-raised rounded-2xl px-4 py-3 text-sm font-medium text-fg-muted"
-            >
-              Showing high priority only — +{hiddenGoalCount} more this {period}
-            </motion.button>
-          )}
-        </>
-      )}
+        </div>
+      </div>
 
       {/* Carry-over */}
       <AnimatePresence>
