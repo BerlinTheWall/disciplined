@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  CalendarClock,
   Check,
   ListChecks,
   MessageSquareText,
@@ -15,6 +16,7 @@ import {
 import Collapse from "@/components/Collapse";
 import { useConfirm } from "@/components/ConfirmDialog";
 import GoalCelebration from "@/components/goals/GoalCelebration";
+import GoalScheduleSheet from "@/components/goals/GoalScheduleSheet";
 import LinkedGoalPicker from "@/components/goals/LinkedGoalPicker";
 import MilestoneSuggestSheet from "@/components/goals/MilestoneSuggestSheet";
 import { canLinkGoalPeriod } from "@/lib/goalPeriods";
@@ -22,6 +24,7 @@ import { goalColor } from "@/lib/goalPriority";
 import { GOAL_PACE_COLOR, GOAL_PACE_LABEL, goalPace, goalProgress } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
+import { useGoalScheduleStore } from "@/store/goalScheduleStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Goal } from "@/types/goals";
@@ -258,6 +261,14 @@ export default function GoalDetailScreen({
               accent={accent}
               onClick={() => setSuggestOpen(true)}
             />
+            {goal.milestones.length > 0 && (
+              <ActionChip
+                icon={CalendarClock}
+                label="Schedule"
+                accent={accent}
+                onClick={() => void useGoalScheduleStore.getState().start(goal)}
+              />
+            )}
           </div>
 
           <Collapse open={goalPickerOpen}>
@@ -421,6 +432,7 @@ export default function GoalDetailScreen({
         isOpen={suggestOpen}
         onClose={() => setSuggestOpen(false)}
       />
+      <GoalScheduleSheet goal={goal} />
     </motion.div>
   );
 }

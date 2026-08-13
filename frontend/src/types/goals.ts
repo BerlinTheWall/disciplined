@@ -15,6 +15,10 @@ export interface GoalMilestone {
   // without one splits whatever's left of 100 evenly with the other
   // unweighted milestones, same rule linked tasks/goals already use.
   weight?: number;
+  // Tasks scheduled to actually do this milestone (see goal_schedule.py) —
+  // when present, the milestone's own completion is derived from these
+  // (all done = milestone done) instead of the plain `done` flag above.
+  linkedTaskIds?: string[];
 }
 
 // A goal/plan for a specific week, month or year. Not a task: no time of day.

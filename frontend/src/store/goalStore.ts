@@ -68,6 +68,10 @@ interface GoalState {
   // auto-split of the remaining percentage — same rule as setWeight above,
   // one level down.
   setMilestoneWeight: (goalId: string, milestoneId: string, weight: number | null) => void;
+  // Attaches freshly-scheduled tasks to their milestones in one update (see
+  // GoalScheduleSheet) — a task ends up owned by exactly one milestone, so
+  // it's dropped from any other milestone in this goal that already had it.
+  linkTasksToMilestones: (goalId: string, links: { milestoneId: string; taskId: string }[]) => void;
   rollover: (period: GoalPeriod, fromKey: string, toKey: string) => void;
 }
 
@@ -293,6 +297,31 @@ export const useGoalStore = create<GoalState>()(
                 }
               : g
           ),
+        })),
+
+      linkTasksToMilestones: (goalId, links) =>
+        set((state) => ({
+          goals: state.goals.map((g) => {
+            if (g.id !== goalId) return g;
+            const byMilestone = new Map<string, string[]>();
+            for (const { milestoneId, taskId } of links) {
+              byMilestone.set(milestoneId, [...(byMilestone.get(milestoneId) ?? []), taskId]);
+            }
+            const movingTaskIds = new Set(links.map((l) => l.taskId));
+            return {
+              ...g,
+              milestones: g.milestones.map((m) => {
+                const incoming = byMilestone.get(m.id);
+                const kept = (m.linkedTaskIds ?? []).filter((id) => !movingTaskIds.has(id));
+                if (!incoming) {
+                  return kept.length === (m.linkedTaskIds ?? []).length
+                    ? m
+                    : { ...m, linkedTaskIds: kept };
+                }
+                return { ...m, linkedTaskIds: [...kept, ...incoming] };
+              }),
+            };
+          }),
         })),
 
       rollover: (period, fromKey, toKey) =>

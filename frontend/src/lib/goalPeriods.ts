@@ -64,6 +64,33 @@ export function relativePeriodName(period: GoalPeriod, key: string): string | nu
   return key === currentPeriodKey(period) ? `This ${period}` : null;
 }
 
+// The date a goal's own run ends on — startDate plus durationCount (or 1,
+// its implicit default when the user never set one explicitly) whole
+// `period` units. Gives an AI scheduling pass a concrete window to work
+// within even for the common case of no explicit duration.
+export function goalEndDate(
+  period: GoalPeriod,
+  periodKey: string,
+  startDate: string | null,
+  durationCount: number | null
+): string {
+  const start = startDate
+    ? parseISODate(startDate)
+    : parseISODate(periodStartDate(period, periodKey));
+  const n = durationCount ?? 1;
+  const end = new Date(start);
+  if (period === "week") {
+    end.setDate(start.getDate() + n * 7 - 1);
+  } else if (period === "month") {
+    end.setMonth(start.getMonth() + n);
+    end.setDate(end.getDate() - 1);
+  } else {
+    end.setFullYear(start.getFullYear() + n);
+    end.setDate(end.getDate() - 1);
+  }
+  return toISODate(end);
+}
+
 const PERIOD_GRANULARITY: Record<GoalPeriod, number> = { year: 0, month: 1, week: 2 };
 
 // A goal may only link another goal as a contributor if that goal's period
@@ -91,24 +118,36 @@ export function periodRange(period: GoalPeriod, key: string): { start: Date; end
   return { start: new Date(y, 0, 1), end: new Date(y, 11, 31) };
 }
 
-// A goal set at a coarser scale (a month goal, say) is still "live" during
-// every finer period inside it (each of that month's weeks) — a monthly
-// goal is really just a four-week goal wearing a month label. This decides
-// whether `goal`'s own period/key should surface while browsing some other,
-// finer `view` period/key, so it can cascade into that view instead of
-// being invisible outside the one bucket it was filed under. One-directional
-// on purpose: a single week's goal shouldn't clutter its whole month's
-// view, only the reverse. ISO weeks don't align exactly to month
-// boundaries, so a month's edge week can technically straddle into the
-// next month — an accepted rounding case, not a bug.
-export function goalCascadesInto(
-  goalPeriod: GoalPeriod,
-  goalKey: string,
+// Whether `goal` is "live" during some other period instance being viewed —
+// true for the goal's own native period/key (trivially — its range always
+// overlaps itself), for a coarser goal reaching into a finer view (a month
+// goal is really just a four-week goal wearing a month label, so it's live
+// in every one of that month's weeks), AND for a goal whose own real date
+// range (startDate + goalEndDate, not just its nominal periodKey bucket)
+// spills into another instance of the *same* scale — a 2-month goal
+// starting in August is just as much a September goal for however many of
+// its days land there. One-directional on the granularity axis only: a
+// single week's goal never bleeds up into its whole month's view. ISO
+// weeks don't align exactly to month boundaries, so a month's edge week
+// can technically straddle into the next month — an accepted rounding
+// case, not a bug.
+export function goalOverlapsPeriod(
+  goal: {
+    period: GoalPeriod;
+    periodKey: string;
+    startDate: string | null;
+    durationCount: number | null;
+  },
   viewPeriod: GoalPeriod,
   viewKey: string
 ): boolean {
-  if (PERIOD_GRANULARITY[goalPeriod] >= PERIOD_GRANULARITY[viewPeriod]) return false;
-  const a = periodRange(goalPeriod, goalKey);
-  const b = periodRange(viewPeriod, viewKey);
-  return a.start <= b.end && b.start <= a.end;
+  if (PERIOD_GRANULARITY[goal.period] > PERIOD_GRANULARITY[viewPeriod]) return false;
+  const start = goal.startDate
+    ? parseISODate(goal.startDate)
+    : parseISODate(periodStartDate(goal.period, goal.periodKey));
+  const end = parseISODate(
+    goalEndDate(goal.period, goal.periodKey, goal.startDate, goal.durationCount)
+  );
+  const view = periodRange(viewPeriod, viewKey);
+  return start <= view.end && view.start <= end;
 }

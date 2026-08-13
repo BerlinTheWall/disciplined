@@ -291,6 +291,10 @@ class GoalMilestone(CamelModel):
     # Percent of the goal this milestone is worth. Optional — omitted
     # milestones split whatever's left of 100 evenly (see goalProgress.ts).
     weight: int | None = Field(default=None, ge=0, le=100)
+    # Tasks scheduled to actually do this milestone (see goal_schedule.py) —
+    # when present, the milestone's own completion derives from these
+    # instead of the plain `done` flag above.
+    linked_task_ids: list[str] = []
 
 
 class GoalBase(CamelModel):
@@ -366,6 +370,43 @@ class MilestoneSuggestion(CamelModel):
 
 class MilestoneSuggestResponse(CamelModel):
     milestones: list[MilestoneSuggestion]
+
+
+# ---- Goal milestone scheduling ----
+# AI-proposed calendar sessions for a goal's milestones (see
+# app/services/goal_schedule.py) — a separate, narrower feature from chat,
+# same relationship week_plan.py has to it. Nothing is written here; the
+# client sends the returned proposals' actions to POST /api/chat/confirm to
+# actually create them, exactly like any other chat-proposed action, then
+# links whatever was created to its milestone locally.
+
+
+class MilestoneWindow(CamelModel):
+    id: str
+    label: str
+    # The slice of the goal's own timeline this milestone gets — computed
+    # client-side from its weight (goalProgress.ts's autoSplitWeights), so
+    # the model only ever proposes sessions inside where they actually
+    # belong instead of scattering "final edits" across the whole goal.
+    start_date: str
+    end_date: str
+
+
+class GoalScheduleRequest(CamelModel):
+    goal_title: str
+    milestones: list[MilestoneWindow]
+    client_date: str | None = None
+
+
+class ScheduledTaskProposal(CamelModel):
+    milestone_id: str
+    tool: str
+    args: dict[str, Any]
+
+
+class GoalScheduleResponse(CamelModel):
+    message: str
+    proposals: list[ScheduledTaskProposal] = []
 
 
 # ---- Workouts ----

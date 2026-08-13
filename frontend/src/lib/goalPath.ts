@@ -1,5 +1,5 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
-import { currentPeriodKey } from "./goalPeriods";
+import { currentPeriodKey, goalOverlapsPeriod } from "./goalPeriods";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
@@ -83,7 +83,7 @@ function weeksInMonth(monthKey: string): string[] {
 function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): PeriodStop[] {
   const today = todayISODate();
   return weeksInMonth(activeKey).map((weekKey, i) => {
-    const weekGoals = goals.filter((g) => g.period === "week" && g.periodKey === weekKey);
+    const weekGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
     const { fraction, hasData } = fractionOfGoals(weekGoals, goals, tasks);
     const sunday = addDaysISO(weekKey, 6);
     return {
@@ -104,7 +104,7 @@ function buildYearStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
 
   return Array.from({ length: 12 }, (_, i) => {
     const monthKey = `${activeKey}-${String(i + 1).padStart(2, "0")}`;
-    const monthGoals = goals.filter((g) => g.period === "month" && g.periodKey === monthKey);
+    const monthGoals = goals.filter((g) => goalOverlapsPeriod(g, "month", monthKey));
     const { fraction, hasData } = fractionOfGoals(monthGoals, goals, tasks);
     return {
       id: monthKey,

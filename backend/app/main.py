@@ -13,6 +13,7 @@ from app.routers import (
     coach,
     events,
     goal_milestones,
+    goal_schedule,
     goals,
     google_calendar,
     habits,
@@ -54,6 +55,7 @@ app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(goals.router)
 app.include_router(goal_milestones.router)
+app.include_router(goal_schedule.router)
 app.include_router(habits.router)
 app.include_router(interests.router)
 app.include_router(workouts.router)

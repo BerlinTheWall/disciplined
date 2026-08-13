@@ -215,6 +215,29 @@ export interface MilestoneSuggestResponse {
   milestones: MilestoneSuggestion[];
 }
 
+// AI-proposed calendar sessions for a goal's milestones (see
+// backend/app/services/goal_schedule.py) — a separate, narrower feature
+// from chat. Returns proposals only; nothing is created until they're sent
+// to confirmChatActions, exactly like a chat-proposed action, then linked
+// to their milestone locally (see goalStore's linkTasksToMilestones).
+export interface MilestoneWindow {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface ScheduledTaskProposal {
+  milestoneId: string;
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+export interface GoalScheduleResponse {
+  message: string;
+  proposals: ScheduledTaskProposal[];
+}
+
 // ---- Outlook connection (Microsoft Graph OAuth) ----
 // Reads/writes the user's Outlook calendar directly via Microsoft Graph,
 // regardless of whether the account is synced into the phone's own calendar
@@ -448,6 +471,20 @@ export const api = {
       request("/api/goal-milestones/suggest", {
         method: "POST",
         body: JSON.stringify(input),
+      }),
+  },
+  // Drafts calendar sessions for a goal's milestones — a separate, narrower
+  // feature from chat (see backend/app/services/goal_schedule.py). Returns
+  // proposals only; nothing is created until they're sent to
+  // confirmChatActions above, exactly like a chat-proposed action.
+  goalSchedule: {
+    generate: (input: {
+      goalTitle: string;
+      milestones: MilestoneWindow[];
+    }): Promise<GoalScheduleResponse> =>
+      request("/api/goal-schedule", {
+        method: "POST",
+        body: JSON.stringify({ ...input, clientDate: todayISODate() }),
       }),
   },
   coach: {

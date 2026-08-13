@@ -26,14 +26,14 @@ import { isLightColor } from "@/lib/color";
 import { formatFullDate, parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import {
   currentPeriodKey,
-  goalCascadesInto,
+  goalOverlapsPeriod,
   periodKeyFor,
   periodLabel,
   periodStartDate,
   relativePeriodName,
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { goalColor, priorityRank } from "@/lib/goalPriority";
 import { spring, tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
@@ -104,13 +104,20 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     [goals, period, activeKey]
   );
 
-  // Coarser goals (a month goal, say) that are still "live" during this
-  // narrower view (one of that month's weeks) — see goalCascadesInto.
-  // Appended after this period's own goals and rendered a touch quieter
-  // (GoalCard's `cascaded` prop) so they read as "also going on", not as
-  // belonging natively to this period.
+  // Everything else "live" during this view but not natively filed under
+  // it — a coarser goal reaching down (a month goal, in one of that
+  // month's weeks) or a goal of the same scale whose own date range spills
+  // into this instance (a 2-month goal starting last month) — see
+  // goalOverlapsPeriod. Appended after this period's own goals and
+  // rendered a touch quieter (GoalCard's `cascaded` prop) so they read as
+  // "also going on", not as belonging natively to this period.
   const cascadedListed = useMemo(
-    () => goals.filter((g) => goalCascadesInto(g.period, g.periodKey, period, activeKey)),
+    () =>
+      goals.filter(
+        (g) =>
+          !(g.period === period && g.periodKey === activeKey) &&
+          goalOverlapsPeriod(g, period, activeKey)
+      ),
     [goals, period, activeKey]
   );
 
@@ -159,10 +166,30 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   // no reason. The scrollTo below is a genuine external-system side effect
   // (the DOM node itself), so that part does belong in an effect.
   const [carouselKey, setCarouselKey] = useState(`${period}:${activeKey}`);
+  const [showAllGoals, setShowAllGoals] = useState(false);
   if (carouselKey !== `${period}:${activeKey}`) {
     setCarouselKey(`${period}:${activeKey}`);
     setCarouselIndex(0);
+    setShowAllGoals(false);
   }
+
+  // Week is usually a short, immediate list — only Month/Year (which can
+  // accumulate a lot between native goals and everything cascading in) get
+  // capped to the highest-priority ones by default, with a way to see the
+  // rest. Order among the shown ones stays the list's normal order — only
+  // which ones are included is priority-driven, not the sequence.
+  const HIGH_PRIORITY_CAP = 4;
+  const visibleListed = useMemo(() => {
+    if (period === "week" || showAllGoals || listed.length <= HIGH_PRIORITY_CAP) return listed;
+    const topIds = new Set(
+      [...listed]
+        .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+        .slice(0, HIGH_PRIORITY_CAP)
+        .map((g) => g.id)
+    );
+    return listed.filter((g) => topIds.has(g.id));
+  }, [listed, period, showAllGoals]);
+  const hiddenGoalCount = listed.length - visibleListed.length;
   useEffect(() => {
     carouselRef.current?.scrollTo({ left: 0 });
   }, [period, activeKey]);
@@ -172,7 +199,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     if (!el || !first) return;
     const cardWidth = first.offsetWidth + 12; // gap-3
     const idx = Math.round(el.scrollLeft / cardWidth);
-    setCarouselIndex(Math.max(0, Math.min(listed.length - 1, idx)));
+    setCarouselIndex(Math.max(0, Math.min(visibleListed.length - 1, idx)));
   }
   function goToCard(i: number) {
     const card = carouselRef.current?.children[i] as HTMLElement | undefined;
@@ -318,20 +345,20 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
             className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 -mx-4 px-4"
             style={{ scrollbarWidth: "none" }}
           >
-            {listed.map((g) => (
+            {visibleListed.map((g) => (
               <GoalCard
                 key={g.id}
                 goal={g}
                 goals={goals}
                 tasks={tasks}
                 onOpen={() => setDetailGoalId(g.id)}
-                cascaded={g.period !== period}
+                cascaded={!(g.period === period && g.periodKey === activeKey)}
               />
             ))}
           </div>
-          {listed.length > 1 && (
+          {visibleListed.length > 1 && (
             <div className="flex justify-center gap-1.5">
-              {listed.map((g, i) => (
+              {visibleListed.map((g, i) => (
                 <button
                   key={g.id}
                   onClick={() => goToCard(i)}
@@ -349,6 +376,15 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                 </button>
               ))}
             </div>
+          )}
+          {hiddenGoalCount > 0 && (
+            <motion.button
+              onClick={() => setShowAllGoals(true)}
+              whileTap={tap}
+              className="w-full flex items-center justify-center gap-2 bg-surface-raised rounded-2xl px-4 py-3 text-sm font-medium text-fg-muted"
+            >
+              Showing high priority only — +{hiddenGoalCount} more this {period}
+            </motion.button>
           )}
         </>
       )}

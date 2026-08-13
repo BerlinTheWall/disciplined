@@ -1,6 +1,6 @@
-import { parseISODate } from "./date";
-import { currentPeriodKey } from "./goalPeriods";
-import type { Goal, GoalPeriod } from "@/types/goals";
+import { addDaysISO, parseISODate } from "./date";
+import { currentPeriodKey, goalEndDate, periodStartDate } from "./goalPeriods";
+import type { Goal, GoalMilestone, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
 // A goal's progress, derived from exactly one source, chosen implicitly by
@@ -28,7 +28,7 @@ export interface GoalProgress {
 // left of 100 evenly. The one rule "some items can be weighted, the rest
 // just share what's left" needs wherever partial weighting is allowed —
 // goal-level linked items, and milestones.
-function autoSplitWeights(weights: (number | undefined)[]): number[] {
+export function autoSplitWeights(weights: (number | undefined)[]): number[] {
   let pinnedSum = 0;
   let autoCount = 0;
   for (const w of weights) {
@@ -38,6 +38,48 @@ function autoSplitWeights(weights: (number | undefined)[]): number[] {
   const remaining = Math.max(0, 100 - Math.min(100, pinnedSum));
   const autoWeight = autoCount ? remaining / autoCount : 0;
   return weights.map((w) => (typeof w === "number" ? w : autoWeight));
+}
+
+export interface MilestoneWindow {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+// A calendar slice per not-yet-scheduled milestone — sized by weight (same
+// autoSplitWeights the progress ring uses) and laid out in milestone order
+// across the goal's own date range, so milestone one's slice starts on day
+// one and later milestones fall later, whether or not earlier ones are
+// actually done yet (a milestone's position in the timeline shouldn't jump
+// around just because something ahead of it got finished early or late).
+// Milestones that are done, or already have their own scheduled tasks, are
+// left out — there's nothing left to schedule for them.
+export function milestoneSchedulingWindows(goal: Goal): MilestoneWindow[] {
+  const ms = goal.milestones;
+  if (ms.length === 0) return [];
+
+  const shares = autoSplitWeights(ms.map((m) => m.weight));
+  const startIso = goal.startDate ?? periodStartDate(goal.period, goal.periodKey);
+  const endIso = goalEndDate(goal.period, goal.periodKey, goal.startDate, goal.durationCount);
+  const totalDays = Math.max(
+    1,
+    Math.round((parseISODate(endIso).getTime() - parseISODate(startIso).getTime()) / 86400000) + 1
+  );
+
+  const windows: MilestoneWindow[] = [];
+  let cursor = 0;
+  ms.forEach((m, i) => {
+    const days = Math.max(1, Math.round((shares[i] / 100) * totalDays));
+    const winStart = addDaysISO(startIso, cursor);
+    const winEnd = addDaysISO(startIso, Math.min(totalDays - 1, cursor + days - 1));
+    cursor += days;
+    const scheduled = (m.linkedTaskIds?.length ?? 0) > 0;
+    if (!m.done && !scheduled) {
+      windows.push({ id: m.id, label: m.label, startDate: winStart, endDate: winEnd });
+    }
+  });
+  return windows;
 }
 
 // `_depth` guards against a malformed link cycle recursing unbounded — real
@@ -101,7 +143,15 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
       milestoneShares[m.id] = resolved[i];
     });
 
-    const done = ms.filter((m) => m.done);
+    // A milestone with its own scheduled tasks derives completion from
+    // them (all done = milestone done); one without falls back to its own
+    // plain `done` flag, same as before this existed.
+    const milestoneDone = (m: GoalMilestone) =>
+      m.linkedTaskIds && m.linkedTaskIds.length > 0
+        ? m.linkedTaskIds.every((id) => tasks.find((t) => t.id === id)?.completed ?? false)
+        : m.done;
+
+    const done = ms.filter(milestoneDone);
     const completedPct = done.reduce((s, m) => s + milestoneShares[m.id], 0);
     // Finishing every milestone always counts as done, even if the assigned
     // weights sum to less than 100.
