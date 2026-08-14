@@ -470,6 +470,7 @@ export const api = {
   goalMilestones: {
     suggest: (input: {
       title: string;
+      description?: string | null;
       category?: string | null;
       note?: string | null;
       period: string;

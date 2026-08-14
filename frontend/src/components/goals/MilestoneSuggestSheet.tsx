@@ -41,6 +41,7 @@ export default function MilestoneSuggestSheet({
     try {
       const res = await api.goalMilestones.suggest({
         title: goal.title,
+        description: goal.description,
         category: goal.category,
         note: goal.note,
         period: goal.period,

@@ -23,6 +23,7 @@ async def suggest(
     try:
         milestones = await suggest_milestones(
             title=body.title,
+            description=body.description,
             category=body.category,
             note=body.note,
             period=body.period,

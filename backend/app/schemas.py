@@ -358,6 +358,7 @@ class GoalOut(GoalBase):
 
 class MilestoneSuggestRequest(CamelModel):
     title: str
+    description: str | None = None
     category: str | None = None
     note: str | None = None
     period: GoalPeriod
