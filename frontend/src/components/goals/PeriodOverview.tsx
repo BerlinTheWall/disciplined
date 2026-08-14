@@ -286,6 +286,7 @@ function PathDot({
             strokeLinecap="round"
             strokeDasharray={`${stop.fraction * circumference} ${circumference}`}
             transform={`rotate(-90 ${x} ${y})`}
+            style={{ transition: "stroke-dasharray 0.6s ease" }}
           />
         </>
       )}
@@ -373,6 +374,7 @@ function ItemRow({ item, onOpen }: { item: PeriodStopItem; onOpen: () => void })
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={item.done ? 0 : circumference * (1 - item.fraction)}
+            style={{ transition: "stroke-dashoffset 0.6s ease" }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center text-[8px] font-extrabold tabular-nums">

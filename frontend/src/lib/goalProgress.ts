@@ -3,6 +3,18 @@ import { currentPeriodKey, goalEndDate, periodStartDate } from "./goalPeriods";
 import type { Goal, GoalMilestone, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
+// A milestone with its own scheduled tasks derives completion from them
+// (all done = milestone done); one without falls back to its own plain
+// `done` flag. Exported so the detail screen's own checkbox can show the
+// exact same state it feeds into the ring below, instead of the two ever
+// drifting apart (the checkbox toggling `done` while the ring — the one
+// place that actually matters — keeps deriving from tasks and ignoring it).
+export function isMilestoneDone(m: GoalMilestone, tasks: Task[]): boolean {
+  return m.linkedTaskIds && m.linkedTaskIds.length > 0
+    ? m.linkedTaskIds.every((id) => tasks.find((t) => t.id === id)?.completed ?? false)
+    : m.done;
+}
+
 // A goal's progress, derived from exactly one source, chosen implicitly by
 // what's actually set on it: linked tasks/goals (weighted) > milestones
 // (weighted) > a manual numeric target > a bare check-off.
@@ -38,6 +50,25 @@ export function autoSplitWeights(weights: (number | undefined)[]): number[] {
   const remaining = Math.max(0, 100 - Math.min(100, pinnedSum));
   const autoWeight = autoCount ? remaining / autoCount : 0;
   return weights.map((w) => (typeof w === "number" ? w : autoWeight));
+}
+
+// Rounds a set of shares (e.g. autoSplitWeights' output) to whole percents
+// that still sum to the same total — plain per-item Math.round doesn't have
+// that property (six even 16.7% shares would each round up to 17%, visibly
+// summing to 102). Uses largest-remainder: floor everything, then hand the
+// leftover points to whichever entries got cut the most, one each.
+export function roundShares(shares: number[]): number[] {
+  const target = Math.round(shares.reduce((sum, s) => sum + s, 0));
+  const floors = shares.map((s) => Math.floor(s));
+  let remainder = target - floors.reduce((sum, f) => sum + f, 0);
+  const byRemainderDesc = shares
+    .map((s, i) => ({ i, frac: s - Math.floor(s) }))
+    .sort((a, b) => b.frac - a.frac);
+  const result = [...floors];
+  for (let k = 0; k < byRemainderDesc.length && remainder > 0; k++, remainder--) {
+    result[byRemainderDesc[k].i] += 1;
+  }
+  return result;
 }
 
 export interface MilestoneWindow {
@@ -143,15 +174,7 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
       milestoneShares[m.id] = resolved[i];
     });
 
-    // A milestone with its own scheduled tasks derives completion from
-    // them (all done = milestone done); one without falls back to its own
-    // plain `done` flag, same as before this existed.
-    const milestoneDone = (m: GoalMilestone) =>
-      m.linkedTaskIds && m.linkedTaskIds.length > 0
-        ? m.linkedTaskIds.every((id) => tasks.find((t) => t.id === id)?.completed ?? false)
-        : m.done;
-
-    const done = ms.filter(milestoneDone);
+    const done = ms.filter((m) => isMilestoneDone(m, tasks));
     const completedPct = done.reduce((s, m) => s + milestoneShares[m.id], 0);
     // Finishing every milestone always counts as done, even if the assigned
     // weights sum to less than 100.

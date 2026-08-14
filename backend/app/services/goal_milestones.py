@@ -44,7 +44,10 @@ same ground).
 set it when a step clearly takes noticeably more or less effort than the others (e.g. "Write the \
 draft" on a thesis is obviously worth more than "Pick a title") — omit it for milestones that should \
 just split whatever's left evenly, which is the right choice most of the time. Never force weights \
-to sum to exactly 100; that happens automatically for you.
+to sum to exactly 100; that happens automatically for you. A weight also becomes that milestone's \
+share of the goal's calendar time when it's later scheduled, so always give a low explicit weight \
+(a few percent) to a one-off administrative step — registering, signing up, booking, paying a fee \
+— rather than leaving it to split evenly with milestones that are real, multi-session bodies of work.
 - Use the goal's own title, description, category, why/note, and how long it runs to judge scope and \
 tone — a one-week goal doesn't need month-scale phases, and a goal marked "chore" doesn't need the \
 same ceremony as a "personal" growth goal."""

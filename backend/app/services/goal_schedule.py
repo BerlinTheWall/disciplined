@@ -55,11 +55,16 @@ with only a description of what you'd do.
 - First call list_events (or check_conflicts) to see what's already on the schedule within the \
 given window — never propose a session that overlaps an existing item, or another session you \
 already proposed this turn.
-- Decide how many sessions this milestone realistically needs and how long each should be, based \
-on how much work its label implies and how many days the window spans. A quick, small step \
-("Pick a title") is one short session; a substantial one ("Write the draft") needs several \
-sessions spread across the window, not crammed together — for a multi-week window that usually \
-means 3-6 sessions, not one.
+- Decide how many sessions this milestone realistically needs based on how much real work its \
+label implies — never on how many days the window spans. A wide window just means more places to \
+put the session(s), not more sessions to fill it with. A quick, small step ("Pick a title") is one \
+short session; a substantial one ("Write the draft") needs several sessions spread across the \
+window, not crammed together — for a genuinely multi-part body of work that usually means 3-6 \
+sessions, not one.
+- A one-off administrative or logistical action — registering, signing up, booking, paying a fee, \
+submitting a form — is ONE session, sized to how long that action actually takes (often well under \
+an hour), no matter how long the window is. Never split a single real-world action into several \
+sessions just because there's room in the window for them.
 - Call create_event immediately for each session as you decide on it — don't stop to narrate your \
 plan first and call the tools afterward; the calls are the proposal, not the reply text.
 - Spread sessions across the window rather than stacking them on consecutive days, unless the \
@@ -169,13 +174,20 @@ async def schedule_goal_milestones(
     today = resolve_today(client_date).isoformat()
     all_proposals: list[ScheduledTaskProposal] = []
     messages: list[str] = []
-    for milestone in milestones:
+    for index, milestone in enumerate(milestones):
         remaining = MAX_TOTAL_SESSIONS - len(all_proposals)
         if remaining <= 0:
             messages.append(f'Skipped "{milestone.label}" — already at the session limit for this pass.')
             continue
+        # Reserve at least one session for every milestone still to come, so
+        # a generous early milestone (e.g. several practice-test sessions)
+        # can't starve a later one out entirely — including, often, the
+        # milestone that matters most (the exam/deadline itself, usually
+        # last in the list).
+        milestones_left_after = len(milestones) - index - 1
+        budget = max(1, remaining - milestones_left_after)
         msg, proposals = await _schedule_one_milestone(
-            db, user_id, goal_title, today, milestone, remaining
+            db, user_id, goal_title, today, milestone, budget
         )
         all_proposals.extend(proposals)
         messages.append(msg)

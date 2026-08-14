@@ -5,7 +5,7 @@ import { Check, RefreshCw, Sparkles, X } from "lucide-react";
 import BottomSheet from "@/components/BottomSheet";
 import WeightInput from "@/components/goals/WeightInput";
 import { api, ApiError, type MilestoneSuggestion } from "@/lib/api";
-import { autoSplitWeights } from "@/lib/goalProgress";
+import { autoSplitWeights, roundShares } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import type { Goal } from "@/types/goals";
@@ -92,7 +92,11 @@ export default function MilestoneSuggestSheet({
   // Placeholder shares only across what's actually accepted — matching the
   // same auto-split rule the detail screen's own milestone list uses, just
   // scoped to the checked subset instead of the whole suggestion list.
-  const acceptedShares = autoSplitWeights(accepted.map((s) => s.weight));
+  // Rounded together so the displayed percents actually sum to 100 —
+  // rounding each row independently (six even 16.7% shares each rounding
+  // up) would otherwise visibly read as 102%, same bug as the detail
+  // screen's own milestone list.
+  const acceptedShares = roundShares(autoSplitWeights(accepted.map((s) => s.weight)));
 
   function handleAdd() {
     if (accepted.length === 0) return;

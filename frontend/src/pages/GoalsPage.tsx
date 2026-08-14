@@ -275,10 +275,13 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setDescGenerating(true);
     setDescError("");
     try {
+      const startDate = newStartDate || todayISODate();
+      const durationCount = durationCountFromEndDate(newScale, startDate, newEndDate || startDate);
       const res = await api.goalDescription.generate({
         title: trimmed,
         category: newCategory,
         period: newScale,
+        durationCount,
       });
       setNewDescription(res.description);
     } catch (e) {

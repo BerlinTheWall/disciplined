@@ -19,7 +19,14 @@ import LinkedGoalPicker from "@/components/goals/LinkedGoalPicker";
 import WeightInput from "@/components/goals/WeightInput";
 import { canLinkGoalPeriod } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
-import { GOAL_PACE_COLOR, GOAL_PACE_LABEL, goalPace, goalProgress } from "@/lib/goalProgress";
+import {
+  GOAL_PACE_COLOR,
+  GOAL_PACE_LABEL,
+  goalPace,
+  goalProgress,
+  isMilestoneDone,
+  roundShares,
+} from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
@@ -56,6 +63,20 @@ export default function GoalDetailScreen({
 
   const p = goalProgress(goal, tasks, goals);
   const pace = goalPace(goal, tasks, goals);
+  // Rounded together (not each independently, like WeightInput's own
+  // internal Math.round would) so the displayed percents actually sum to
+  // the true total instead of drifting — six even shares each rounding up
+  // would otherwise read as 102%. Linked tasks and goals share one weight
+  // pool (goalProgress computes them together), so they round together too.
+  const milestoneShareById: Record<string, number> = {};
+  roundShares(goal.milestones.map((m) => p.milestoneShares[m.id] ?? 0)).forEach((share, i) => {
+    milestoneShareById[goal.milestones[i].id] = share;
+  });
+  const linkedIds = [...p.linkedTasks.map((t) => t.id), ...p.linkedGoals.map((lg) => lg.id)];
+  const linkedShareById: Record<string, number> = {};
+  roundShares(linkedIds.map((id) => p.shares[id] ?? 0)).forEach((share, i) => {
+    linkedShareById[linkedIds[i]] = share;
+  });
   const accent = goalColor(goal.priority);
   const showNote = noteEditing || !!goal.note || pace === "behind" || pace === "at-risk";
   const linkableGoals = goals.filter(
@@ -195,6 +216,7 @@ export default function GoalDetailScreen({
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={p.done ? 0 : circumference * (1 - p.fraction)}
+                style={{ transition: "stroke-dashoffset 0.6s ease" }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -320,43 +342,69 @@ export default function GoalDetailScreen({
           </p>
           <div className="relative pl-[22px]">
             <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-surface-subtle" />
-            {goal.milestones.map((m) => (
-              <div key={m.id} className="relative py-2.5 flex items-center gap-3">
-                <button
-                  onClick={() => useGoalStore.getState().toggleMilestone(goal.id, m.id)}
-                  aria-label={m.done ? "Mark step not done" : "Mark step done"}
-                  className="absolute -left-[22px] w-4 h-4 rounded-full border-2 shrink-0"
-                  style={
-                    m.done
-                      ? { backgroundColor: accent, borderColor: accent }
-                      : { borderColor: "var(--surface-subtle)", backgroundColor: "var(--surface)" }
-                  }
-                />
-                <span
-                  className={`flex-1 min-w-0 text-[14.5px] font-medium truncate ${
-                    m.done ? "text-fg-faint line-through" : "text-fg"
-                  }`}
-                >
-                  {m.label}
-                </span>
-                {/* Weighting only means something with 2+ steps — a single
-                    one is trivially 100% of the goal. */}
-                {goal.milestones.length > 1 && (
-                  <WeightInput
-                    value={m.weight}
-                    placeholder={p.milestoneShares[m.id] ?? 0}
-                    onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)}
+            {goal.milestones.map((m) => {
+              // A milestone with AI-scheduled sessions derives its done
+              // state from them (see isMilestoneDone) — its dot must show
+              // that same state, and toggling it by hand would silently do
+              // nothing to the actual progress ring, so it isn't offered.
+              const hasLinkedTasks = (m.linkedTaskIds?.length ?? 0) > 0;
+              const done = isMilestoneDone(m, tasks);
+              return (
+                <div key={m.id} className="relative py-2.5 flex items-center gap-3">
+                  <button
+                    onClick={
+                      hasLinkedTasks
+                        ? undefined
+                        : () => useGoalStore.getState().toggleMilestone(goal.id, m.id)
+                    }
+                    disabled={hasLinkedTasks}
+                    aria-label={
+                      hasLinkedTasks
+                        ? done
+                          ? "Done — every scheduled session is completed"
+                          : "Not done — scheduled sessions still pending"
+                        : done
+                          ? "Mark step not done"
+                          : "Mark step done"
+                    }
+                    className={`absolute -left-[22px] w-4 h-4 rounded-full border-2 shrink-0 ${
+                      hasLinkedTasks ? "cursor-default" : ""
+                    }`}
+                    style={
+                      done
+                        ? { backgroundColor: accent, borderColor: accent }
+                        : {
+                            borderColor: "var(--surface-subtle)",
+                            backgroundColor: "var(--surface)",
+                          }
+                    }
                   />
-                )}
-                <button
-                  onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
-                  aria-label="Delete step"
-                  className="p-1 text-fg-faint shrink-0"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
+                  <span
+                    className={`flex-1 min-w-0 text-[14.5px] font-medium truncate ${
+                      done ? "text-fg-faint line-through" : "text-fg"
+                    }`}
+                  >
+                    {m.label}
+                  </span>
+                  {/* Weighting only means something with 2+ steps — a single
+                      one is trivially 100% of the goal. */}
+                  {goal.milestones.length > 1 && (
+                    <WeightInput
+                      value={m.weight}
+                      placeholder={milestoneShareById[m.id] ?? 0}
+                      onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)}
+                    />
+                  )}
+                  <button
+                    onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
+                    aria-label="Delete step"
+                    className="p-1 text-fg-faint shrink-0"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
           {goal.milestones.length > 1 && (
             <p className="text-[11px] text-fg-faint mt-2">
@@ -396,7 +444,7 @@ export default function GoalDetailScreen({
                 </button>
                 <WeightInput
                   value={goal.weights?.[t.id]}
-                  placeholder={p.shares[t.id]}
+                  placeholder={linkedShareById[t.id] ?? 0}
                   onChange={(w) => useGoalStore.getState().setWeight(goal.id, t.id, w)}
                 />
                 <button
@@ -428,7 +476,7 @@ export default function GoalDetailScreen({
                   </span>
                   <WeightInput
                     value={goal.weights?.[lg.id]}
-                    placeholder={p.shares[lg.id]}
+                    placeholder={linkedShareById[lg.id] ?? 0}
                     onChange={(w) => useGoalStore.getState().setWeight(goal.id, lg.id, w)}
                   />
                   <button
