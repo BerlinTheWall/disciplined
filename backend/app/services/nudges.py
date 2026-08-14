@@ -469,13 +469,17 @@ async def tasks_overdue_candidate(
 ) -> NudgeCandidate | None:
     """Events scheduled before today that never got marked done — Sunsama's
     rollover signal. A threshold of 3 keeps this from firing on the normal
-    background noise of a couple of stray unfinished tasks."""
+    background noise of a couple of stray unfinished tasks. Habits are never
+    counted (they live in their own table, tracked separately via
+    completed_dates/skipped_dates), and the window is capped to the last 7
+    days so a task abandoned long ago doesn't keep nagging forever."""
     count = await db.scalar(
         select(func.count())
         .select_from(Event)
         .where(
             Event.user_id == user_id,
             Event.date < today.isoformat(),
+            Event.date >= (today - timedelta(days=7)).isoformat(),
             Event.completed.is_(False),
         )
     )
