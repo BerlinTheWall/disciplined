@@ -25,7 +25,13 @@ import CalendarMonth from "@/components/timeline/CalendarMonth";
 import { FieldPanel } from "@/components/timeline/FieldPanel";
 import { api, ApiError } from "@/lib/api";
 import { isLightColor } from "@/lib/color";
-import { formatFullDate, parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
+import {
+  formatFullDate,
+  formatShortDate,
+  parseISODate,
+  relativeDayLabel,
+  todayISODate,
+} from "@/lib/date";
 import {
   currentPeriodKey,
   durationCountFromEndDate,
@@ -75,6 +81,15 @@ const PRIORITY_LEVELS: { key: Priority; label: string }[] = [
 // color, reused here for the date popup's "Done" button.
 const GOAL_ACCENT = "#3fcd9b";
 const GOAL_ACCENT_ON = isLightColor(GOAL_ACCENT) ? "#111827" : "#ffffff";
+
+// Same slide-in-from-the-side step transition as AddItemSheet's wizard, so
+// the add-goal sheet's own two-step flow feels like the same component
+// family rather than a plain instant swap.
+const stepVariants = {
+  enter: (d: number) => ({ x: d > 0 ? 32 : -32, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (d: number) => ({ x: d > 0 ? -32 : 32, opacity: 0 }),
+};
 
 export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => void }) {
   const goals = useGoalStore((s) => s.goals);
@@ -169,6 +184,8 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   // once. `step` only ever moves forward via Next/Back, never resets itself
   // mid-flow.
   const [step, setStep] = useState<1 | 2>(1);
+  // Which way the step transition slides — same as AddItemSheet's wizard.
+  const [stepDir, setStepDir] = useState(1);
   const [title, setTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [descGenerating, setDescGenerating] = useState(false);
@@ -193,6 +210,18 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setNewEndDate(goalEndDate(newScale, periodKeyFor(newScale, parseISODate(start)), start, null));
   }, [newScale, newStartDate, endDateTouched]);
 
+  // Step 2's header subtitle — same spirit as AddItemSheet's time-range
+  // line: a quick reminder of what was just set on step 1, since the start
+  // date field itself scrolls out of view once you're this far in.
+  const newGoalDays = useMemo(() => {
+    const start = newStartDate || todayISODate();
+    const end = newEndDate || start;
+    return Math.max(
+      1,
+      Math.round((parseISODate(end).getTime() - parseISODate(start).getTime()) / 86400000) + 1
+    );
+  }, [newStartDate, newEndDate]);
+
   // Custom tags typed in from a past goal (plus whatever's mid-entry right
   // now), offered as chips alongside the built-in categories — a user's own
   // tags stick around without needing a separate place to manage them.
@@ -215,8 +244,14 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   // Seed the new-goal fields from whatever period/instance is currently
   // being browsed, so leaving everything untouched behaves the same way
   // adding a goal always has: it lands in the period you're looking at.
+  function goToStep(next: 1 | 2) {
+    setStepDir(next > step ? 1 : -1);
+    setStep(next);
+  }
+
   function openAdd() {
     setStep(1);
+    setStepDir(1);
     setNewScale(period);
     setNewStartDate(isCurrent ? todayISODate() : periodStartDate(period, activeKey));
     setDateOpen(false);
@@ -231,7 +266,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
 
   function handleNext() {
     if (!title.trim()) return;
-    setStep(2);
+    goToStep(2);
   }
 
   async function generateDescription() {
@@ -363,274 +398,337 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
       <BottomSheet
         isOpen={addOpen}
         onClose={() => setAddOpen(false)}
-        className="overflow-hidden pb-[calc(20px+env(safe-area-inset-bottom))]"
+        className="bg-surface overflow-hidden pb-[calc(20px+env(safe-area-inset-bottom))]"
       >
-        {step === 1 ? (
-          <>
-            {/* Full-bleed accent header — the goal's own title doubles as
+        <AnimatePresence mode="wait" custom={stepDir} initial={false}>
+          {step === 1 ? (
+            <motion.div
+              key="step1"
+              custom={stepDir}
+              variants={stepVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.18 }}
+            >
+              {/* Full-bleed accent header — the goal's own title doubles as
                 this step's hero, typed directly onto the color instead of
                 sitting in a boxed input. */}
-            <div
-              style={{ backgroundColor: GOAL_ACCENT }}
-              className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
-            >
-              <motion.button
-                onClick={() => setAddOpen(false)}
-                whileTap={tap}
-                aria-label="Close"
-                style={{ backgroundColor: "rgba(0,0,0,0.18)", color: GOAL_ACCENT_ON }}
-                className="w-9 h-9 rounded-full flex items-center justify-center mb-4"
+              <div
+                style={{ backgroundColor: GOAL_ACCENT }}
+                className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
               >
-                <X size={18} />
-              </motion.button>
-              <div className="flex items-center gap-3">
-                <div
-                  style={{ backgroundColor: "#111827", color: GOAL_ACCENT }}
-                  className="w-14 h-14 rounded-full flex items-center justify-center shrink-0"
-                >
-                  <Target size={26} />
-                </div>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleNext()}
-                  placeholder="What do you want to accomplish?"
-                  autoFocus
-                  style={{
-                    color: GOAL_ACCENT_ON,
-                    caretColor: GOAL_ACCENT_ON,
-                    borderColor: "rgba(255,255,255,0.5)",
-                  }}
-                  className="flex-1 min-w-0 bg-transparent text-2xl font-semibold placeholder-white/50 border-b pb-1 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="bg-surface p-5">
-              <label className="text-xs font-bold tracking-wide text-fg-muted mb-2 block">
-                Timeframe scale
-              </label>
-              <div className="flex items-center bg-surface-raised rounded-xl p-1">
-                {SCALES.map((s) => (
-                  <button
-                    key={s.key}
-                    onClick={() => setNewScale(s.key)}
-                    className="relative flex-1 h-9 rounded-lg text-sm font-medium"
-                  >
-                    {newScale === s.key && (
-                      <motion.span
-                        layoutId="goalScaleSeg"
-                        transition={spring.snappy}
-                        className="absolute inset-0 bg-surface rounded-lg shadow-sm"
-                      />
-                    )}
-                    <span
-                      className={`relative z-10 ${newScale === s.key ? "text-fg" : "text-fg-muted"}`}
-                    >
-                      {s.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
-                Start date
-              </label>
-              <motion.button
-                onClick={() => setDateOpen(true)}
-                whileTap={tap}
-                className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5"
-              >
-                <span className="flex items-center gap-2 text-fg font-medium">
-                  <Calendar size={18} className="text-fg-faint" />
-                  {formatFullDate(newStartDate)}
-                </span>
-                <span className="flex items-center gap-1 text-fg-faint text-sm">
-                  {relativeDayLabel(newStartDate)}
-                  <ChevronRight size={16} />
-                </span>
-              </motion.button>
-
-              <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
-                End date
-              </label>
-              <motion.button
-                onClick={() => setEndDateOpen(true)}
-                whileTap={tap}
-                className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5"
-              >
-                <span className="flex items-center gap-2 text-fg font-medium">
-                  <Calendar size={18} className="text-fg-faint" />
-                  {formatFullDate(newEndDate)}
-                </span>
-                <span className="flex items-center gap-1 text-fg-faint text-sm">
-                  {relativeDayLabel(newEndDate)}
-                  <ChevronRight size={16} />
-                </span>
-              </motion.button>
-
-              <motion.button
-                onClick={handleNext}
-                whileTap={tap}
-                disabled={!title.trim()}
-                style={
-                  title.trim() ? { backgroundColor: GOAL_ACCENT, color: GOAL_ACCENT_ON } : undefined
-                }
-                className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
-                  title.trim() ? "" : "bg-surface-raised text-fg-faint"
-                }`}
-              >
-                Continue
-                <ChevronRight size={18} />
-              </motion.button>
-            </div>
-          </>
-        ) : (
-          <div className="bg-surface p-5">
-            <div className="flex items-center gap-2.5 mb-1">
-              <motion.button
-                onClick={() => setStep(1)}
-                whileTap={tap}
-                aria-label="Back"
-                className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center shrink-0"
-              >
-                <ChevronLeft size={16} />
-              </motion.button>
-              <p className="flex-1 min-w-0 truncate text-sm font-semibold text-fg">{title}</p>
-            </div>
-
-            <div className="flex items-center justify-between mt-4 mb-2">
-              <label className="text-xs font-bold tracking-wide text-fg-muted">Description</label>
-              <motion.button
-                onClick={generateDescription}
-                whileTap={tap}
-                disabled={!title.trim() || descGenerating}
-                className={`flex items-center gap-1 text-xs font-semibold ${
-                  !title.trim() ? "text-fg-faint" : ""
-                }`}
-                style={title.trim() ? { color: "var(--path-accent)" } : undefined}
-              >
-                <Sparkles size={12} className={descGenerating ? "animate-spin" : ""} />
-                Generate
-              </motion.button>
-            </div>
-            <textarea
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-              placeholder="What does done look like?"
-              rows={2}
-              className="w-full bg-surface-raised rounded-2xl px-4 py-3 text-sm text-fg placeholder-fg-faint focus:outline-none resize-none"
-            />
-            {descError && <p className="text-xs text-red-400 mt-1.5">{descError}</p>}
-
-            <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
-              Priority
-            </label>
-            <div className="flex items-center gap-2">
-              {PRIORITY_LEVELS.map((level) => {
-                const selected = newPriority === level.key;
-                const color = goalColor(level.key);
-                return (
-                  <motion.button
-                    key={level.key}
-                    onClick={() => setNewPriority(selected ? null : level.key)}
-                    whileTap={tap}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
-                    style={
-                      selected
-                        ? { borderColor: color, backgroundColor: `${color}1a`, color }
-                        : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
-                    }
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: color }}
-                    />
-                    {level.label}
-                  </motion.button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center justify-between mt-5 mb-2">
-              <label className="text-xs font-bold tracking-wide text-fg-muted">Category</label>
-              <motion.button
-                onClick={() => setAddingTag(true)}
-                whileTap={tap}
-                className="flex items-center gap-1 text-xs font-semibold"
-                style={{ color: "var(--path-accent)" }}
-              >
-                <Plus size={12} />
-                Add tag
-              </motion.button>
-            </div>
-
-            <Collapse open={addingTag}>
-              <div className="flex items-center gap-2 pb-2">
-                <input
-                  value={tagDraft}
-                  onChange={(e) => setTagDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitTag();
-                    if (e.key === "Escape") {
-                      setTagDraft("");
-                      setAddingTag(false);
-                    }
-                  }}
-                  placeholder="Tag name…"
-                  autoFocus
-                  className="flex-1 min-w-0 bg-surface-raised rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none"
-                />
                 <motion.button
-                  onClick={commitTag}
+                  onClick={() => setAddOpen(false)}
                   whileTap={tap}
-                  disabled={!tagDraft.trim()}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-semibold ${
-                    tagDraft.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
+                  aria-label="Close"
+                  style={{ backgroundColor: "rgba(0,0,0,0.18)", color: GOAL_ACCENT_ON }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center mb-4"
+                >
+                  <X size={18} />
+                </motion.button>
+                <div className="flex items-center gap-3">
+                  <div
+                    style={{ backgroundColor: "#111827", color: GOAL_ACCENT }}
+                    className="w-14 h-14 rounded-full flex items-center justify-center shrink-0"
+                  >
+                    <Target size={26} />
+                  </div>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleNext()}
+                    placeholder="What do you want to accomplish?"
+                    autoFocus
+                    style={{
+                      color: GOAL_ACCENT_ON,
+                      caretColor: GOAL_ACCENT_ON,
+                      borderColor: "rgba(255,255,255,0.5)",
+                    }}
+                    className="flex-1 min-w-0 bg-transparent text-2xl font-semibold placeholder-white/50 border-b pb-1 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-surface p-5">
+                <label className="text-xs font-bold tracking-wide text-fg-muted mb-2 block">
+                  Timeframe scale
+                </label>
+                <div className="flex items-center bg-surface-raised rounded-xl p-1">
+                  {SCALES.map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => setNewScale(s.key)}
+                      className="relative flex-1 h-9 rounded-lg text-sm font-medium"
+                    >
+                      {newScale === s.key && (
+                        <motion.span
+                          layoutId="goalScaleSeg"
+                          transition={spring.snappy}
+                          className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+                        />
+                      )}
+                      <span
+                        className={`relative z-10 ${newScale === s.key ? "text-fg" : "text-fg-muted"}`}
+                      >
+                        {s.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+                  Start date
+                </label>
+                <motion.button
+                  onClick={() => setDateOpen(true)}
+                  whileTap={tap}
+                  className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5"
+                >
+                  <span className="flex items-center gap-2 text-fg font-medium">
+                    <Calendar size={18} className="text-fg-faint" />
+                    {formatFullDate(newStartDate)}
+                  </span>
+                  <span className="flex items-center gap-1 text-fg-faint text-sm">
+                    {relativeDayLabel(newStartDate)}
+                    <ChevronRight size={16} />
+                  </span>
+                </motion.button>
+
+                <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+                  End date
+                </label>
+                <motion.button
+                  onClick={() => setEndDateOpen(true)}
+                  whileTap={tap}
+                  className="w-full flex items-center justify-between bg-surface-raised rounded-2xl px-4 py-2.5"
+                >
+                  <span className="flex items-center gap-2 text-fg font-medium">
+                    <Calendar size={18} className="text-fg-faint" />
+                    {formatFullDate(newEndDate)}
+                  </span>
+                  <span className="flex items-center gap-1 text-fg-faint text-sm">
+                    {relativeDayLabel(newEndDate)}
+                    <ChevronRight size={16} />
+                  </span>
+                </motion.button>
+
+                <motion.button
+                  onClick={handleNext}
+                  whileTap={tap}
+                  disabled={!title.trim()}
+                  style={
+                    title.trim()
+                      ? { backgroundColor: GOAL_ACCENT, color: GOAL_ACCENT_ON }
+                      : undefined
+                  }
+                  className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
+                    title.trim() ? "" : "bg-surface-raised text-fg-faint"
                   }`}
                 >
-                  Add
+                  Continue
+                  <ChevronRight size={18} />
                 </motion.button>
               </div>
-            </Collapse>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {CATEGORIES.map((c) => (
-                <motion.button
-                  key={c.key}
-                  onClick={() => setNewCategory((cur) => (cur === c.key ? null : c.key))}
-                  whileTap={tap}
-                  className={`flex items-center gap-1.5 ${chipCls(newCategory === c.key)}`}
-                >
-                  <c.icon size={13} />
-                  {c.label}
-                </motion.button>
-              ))}
-              {customTags.map((tag) => (
-                <motion.button
-                  key={tag}
-                  onClick={() => setNewCategory((cur) => (cur === tag ? null : tag))}
-                  whileTap={tap}
-                  className={chipCls(newCategory === tag)}
-                >
-                  {tag}
-                </motion.button>
-              ))}
-            </div>
-
-            <motion.button
-              onClick={handleAdd}
-              whileTap={tap}
-              disabled={!title.trim()}
-              className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
-                title.trim() ? "bg-fg text-fg-inverse" : "bg-surface-raised text-fg-faint"
-              }`}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="step2"
+              custom={stepDir}
+              variants={stepVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.18 }}
             >
-              <CirclePlus size={18} />
-              Create goal
-            </motion.button>
-          </div>
-        )}
+              {/* Same full-bleed accent header as step 1, so the sheet reads as
+                one continuous flow instead of switching styles mid-way. */}
+              <div
+                style={{ backgroundColor: GOAL_ACCENT }}
+                className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
+              >
+                <motion.button
+                  onClick={() => goToStep(1)}
+                  whileTap={tap}
+                  aria-label="Back"
+                  style={{ backgroundColor: "rgba(0,0,0,0.18)", color: GOAL_ACCENT_ON }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center mb-4"
+                >
+                  <ChevronLeft size={18} />
+                </motion.button>
+                <div className="flex items-center gap-3">
+                  <div
+                    style={{ backgroundColor: "#111827", color: GOAL_ACCENT }}
+                    className="w-14 h-14 rounded-full flex items-center justify-center shrink-0"
+                  >
+                    <Target size={26} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-sm mb-0.5 truncate"
+                      style={{
+                        color: isLightColor(GOAL_ACCENT)
+                          ? "rgba(17,24,39,0.7)"
+                          : "rgba(255,255,255,0.85)",
+                      }}
+                    >
+                      {formatShortDate(newStartDate)} · {newGoalDays}{" "}
+                      {newGoalDays === 1 ? "day" : "days"}
+                    </p>
+                    <p
+                      style={{ color: GOAL_ACCENT_ON }}
+                      className="truncate text-2xl font-semibold"
+                    >
+                      {title}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-surface p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold tracking-wide text-fg-muted">
+                    Description
+                  </label>
+                  <motion.button
+                    onClick={generateDescription}
+                    whileTap={tap}
+                    disabled={!title.trim() || descGenerating}
+                    className={`flex items-center gap-1 text-xs font-semibold ${
+                      !title.trim() ? "text-fg-faint" : ""
+                    }`}
+                    style={title.trim() ? { color: "var(--path-accent)" } : undefined}
+                  >
+                    <Sparkles size={12} className={descGenerating ? "animate-spin" : ""} />
+                    Generate
+                  </motion.button>
+                </div>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="What does done look like?"
+                  rows={2}
+                  className="w-full bg-surface-raised rounded-2xl px-4 py-3 text-sm text-fg placeholder-fg-faint focus:outline-none resize-none"
+                />
+                {descError && <p className="text-xs text-red-400 mt-1.5">{descError}</p>}
+
+                <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+                  Priority
+                </label>
+                <div className="flex items-center gap-2">
+                  {PRIORITY_LEVELS.map((level) => {
+                    const selected = newPriority === level.key;
+                    const color = goalColor(level.key);
+                    return (
+                      <motion.button
+                        key={level.key}
+                        onClick={() => setNewPriority(selected ? null : level.key)}
+                        whileTap={tap}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl border text-sm font-medium"
+                        style={
+                          selected
+                            ? { borderColor: color, backgroundColor: `${color}1a`, color }
+                            : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
+                        }
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        {level.label}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between mt-5 mb-2">
+                  <label className="text-xs font-bold tracking-wide text-fg-muted">Category</label>
+                  <motion.button
+                    onClick={() => setAddingTag(true)}
+                    whileTap={tap}
+                    className="flex items-center gap-1 text-xs font-semibold"
+                    style={{ color: "var(--path-accent)" }}
+                  >
+                    <Plus size={12} />
+                    Add tag
+                  </motion.button>
+                </div>
+
+                <Collapse open={addingTag}>
+                  <div className="flex items-center gap-2 pb-2">
+                    <input
+                      value={tagDraft}
+                      onChange={(e) => setTagDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitTag();
+                        if (e.key === "Escape") {
+                          setTagDraft("");
+                          setAddingTag(false);
+                        }
+                      }}
+                      placeholder="Tag name…"
+                      autoFocus
+                      className="flex-1 min-w-0 bg-surface-raised rounded-xl px-3.5 py-2.5 text-sm text-fg placeholder-fg-faint focus:outline-none"
+                    />
+                    <motion.button
+                      onClick={commitTag}
+                      whileTap={tap}
+                      disabled={!tagDraft.trim()}
+                      className={`px-4 py-2.5 rounded-xl text-sm font-semibold ${
+                        tagDraft.trim()
+                          ? "bg-fg text-fg-inverse"
+                          : "bg-surface-raised text-fg-faint"
+                      }`}
+                    >
+                      Add
+                    </motion.button>
+                  </div>
+                </Collapse>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {CATEGORIES.map((c) => (
+                    <motion.button
+                      key={c.key}
+                      onClick={() => setNewCategory((cur) => (cur === c.key ? null : c.key))}
+                      whileTap={tap}
+                      className={`flex items-center gap-1.5 ${chipCls(newCategory === c.key)}`}
+                    >
+                      <c.icon size={13} />
+                      {c.label}
+                    </motion.button>
+                  ))}
+                  {customTags.map((tag) => (
+                    <motion.button
+                      key={tag}
+                      onClick={() => setNewCategory((cur) => (cur === tag ? null : tag))}
+                      whileTap={tap}
+                      className={chipCls(newCategory === tag)}
+                    >
+                      {tag}
+                    </motion.button>
+                  ))}
+                </div>
+
+                <motion.button
+                  onClick={handleAdd}
+                  whileTap={tap}
+                  disabled={!title.trim()}
+                  style={
+                    title.trim()
+                      ? { backgroundColor: GOAL_ACCENT, color: GOAL_ACCENT_ON }
+                      : undefined
+                  }
+                  className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
+                    title.trim() ? "" : "bg-surface-raised text-fg-faint"
+                  }`}
+                >
+                  <CirclePlus size={18} />
+                  Create goal
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </BottomSheet>
 
       {/* Rendered as a sibling of the sheet (not inside it), same as the task
