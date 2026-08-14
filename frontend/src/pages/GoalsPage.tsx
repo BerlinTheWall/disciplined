@@ -442,7 +442,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                     onChange={(e) => setTitle(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleNext()}
                     placeholder="What do you want to accomplish?"
-                    autoFocus
                     style={{
                       color: GOAL_ACCENT_ON,
                       caretColor: GOAL_ACCENT_ON,
