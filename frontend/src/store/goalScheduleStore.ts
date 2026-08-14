@@ -47,6 +47,15 @@ export const useGoalScheduleStore = create<State & Actions>()((set, get) => ({
   ...initialState,
 
   start: async (goal) => {
+    // Re-entrancy guard: GoalPlanWizard's effect can legitimately call this
+    // twice back-to-back for the same goal (React StrictMode double-invokes
+    // effects in dev, and its "already has milestones" fast path has no
+    // gating user-interaction between the effect firing and this call, so
+    // both invocations reach here before either's request resolves) — see
+    // sync.ts's `hydrating` guard for the same class of problem. Without
+    // this, a second concurrent request racing the first can overwrite a
+    // good result with a later failure (or just double-bill the AI call).
+    if (get().busy) return;
     const windows = milestoneSchedulingWindows(goal);
     set({
       ...initialState,
