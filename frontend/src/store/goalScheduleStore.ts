@@ -29,6 +29,10 @@ interface Actions {
   start: (goal: Goal) => Promise<void>;
   close: () => void;
   removeProposal: (index: number) => void;
+  // Overrides one proposal's start time before confirming — the only field
+  // GoalScheduleSheet lets the user adjust; everything else (title, date,
+  // duration) stays whatever the AI proposed.
+  setProposalTime: (index: number, startMinutes: number) => void;
   confirm: () => Promise<void>;
 }
 
@@ -85,6 +89,14 @@ export const useGoalScheduleStore = create<State & Actions>()((set, get) => ({
 
   removeProposal: (index) => {
     set((state) => ({ proposals: state.proposals.filter((_, i) => i !== index) }));
+  },
+
+  setProposalTime: (index, startMinutes) => {
+    set((state) => ({
+      proposals: state.proposals.map((p, i) =>
+        i === index ? { ...p, args: { ...p.args, start_minutes: startMinutes } } : p
+      ),
+    }));
   },
 
   confirm: async () => {
