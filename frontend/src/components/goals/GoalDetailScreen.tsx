@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import Collapse from "@/components/Collapse";
-import { useConfirm } from "@/components/ConfirmDialog";
+import { useChoose, useConfirm } from "@/components/ConfirmDialog";
 import GoalCelebration from "@/components/goals/GoalCelebration";
 import LinkedGoalPicker from "@/components/goals/LinkedGoalPicker";
 import WeightInput from "@/components/goals/WeightInput";
@@ -47,6 +47,7 @@ export default function GoalDetailScreen({
   onOpenTask: (t: Task) => void;
 }) {
   const confirm = useConfirm();
+  const choose = useChoose();
   const [goalPickerOpen, setGoalPickerOpen] = useState(false);
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [milestoneText, setMilestoneText] = useState("");
@@ -60,6 +61,14 @@ export default function GoalDetailScreen({
   const linkableGoals = goals.filter(
     (g) => g.id !== goal.id && canLinkGoalPeriod(goal.period, g.period)
   );
+  // Every task this goal actually drives — its own links plus whatever's
+  // attached to a milestone (how AI-scheduled sessions get linked) — so
+  // deleting the goal can offer to take them with it instead of silently
+  // leaving them orphaned on the calendar.
+  const allLinkedTaskIds = [
+    ...goal.linkedTaskIds,
+    ...goal.milestones.flatMap((m) => m.linkedTaskIds ?? []),
+  ];
 
   const wasDoneRef = useRef(p.done);
   useEffect(() => {
@@ -123,16 +132,39 @@ export default function GoalDetailScreen({
           </motion.button>
           <motion.button
             onClick={async () => {
-              const ok = await confirm({
-                title: "Delete goal?",
-                message: `"${goal.title}" will be removed.`,
-                confirmLabel: "Delete",
-                destructive: true,
-              });
-              if (ok) {
-                useGoalStore.getState().deleteGoal(goal.id);
-                onClose();
+              const taskCount = allLinkedTaskIds.length;
+              let deleteTasksToo = false;
+
+              if (taskCount === 0) {
+                const ok = await confirm({
+                  title: "Delete goal?",
+                  message: `"${goal.title}" will be removed.`,
+                  confirmLabel: "Delete",
+                  destructive: true,
+                });
+                if (!ok) return;
+              } else {
+                const choice = await choose({
+                  title: "Delete goal?",
+                  message: `"${goal.title}" has ${taskCount} linked task${taskCount === 1 ? "" : "s"} on your calendar. Delete those too, or just unlink them from the goal?`,
+                  options: [
+                    {
+                      label: `Delete goal and ${taskCount} task${taskCount === 1 ? "" : "s"}`,
+                      value: "goal-and-tasks",
+                      destructive: true,
+                    },
+                    { label: "Delete goal only", value: "goal-only", destructive: true },
+                  ],
+                });
+                if (!choice) return;
+                deleteTasksToo = choice === "goal-and-tasks";
               }
+
+              if (deleteTasksToo) {
+                for (const taskId of allLinkedTaskIds) useTaskStore.getState().deleteTask(taskId);
+              }
+              useGoalStore.getState().deleteGoal(goal.id);
+              onClose();
             }}
             whileTap={tap}
             aria-label="Delete goal"
