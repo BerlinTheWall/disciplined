@@ -165,7 +165,7 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
     const sunday = addDaysISO(weekKey, 6);
     return {
       id: weekKey,
-      label: `W${i + 1}`,
+      label: `Week ${i + 1}`,
       fraction,
       hasData,
       isToday: weekKey <= today && today <= sunday,
