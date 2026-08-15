@@ -149,12 +149,14 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setKeys((k) => ({ ...k, [period]: shiftPeriodKey(period, k[period], delta) }));
   }
 
-  // The path's day-stops (Week view) open that day in the schedule; its
-  // week/month-stops (Month/Year view) zoom the goals list itself in one
-  // level, landing on that sub-period.
+  // The path's day-stops (Week view) just sync the selected date — tapping
+  // one used to also jump to the Schedule page, but that took the user away
+  // from Goals for an action that's really just "look at this day", so it
+  // no longer navigates. Its week/month-stops (Month/Year view) still zoom
+  // the goals list itself in one level, landing on that sub-period
+  // (onJumpPeriod below) — that's a within-Goals action, unaffected.
   function openDay(date: string) {
     setSelectedDate(date);
-    onOpenSchedule?.();
   }
   function jumpPeriod(p: GoalPeriod, key: string) {
     setPeriod(p);
