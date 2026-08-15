@@ -147,10 +147,16 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
   const weekKeys = weeksInMonth(activeKey);
   const todayIndex = weekKeys.findIndex((wk) => wk <= today && today <= addDaysISO(wk, 6));
   const foldIndex = todayIndex >= 0 ? todayIndex : 0;
-  // Goals filed directly under this month itself (not any specific week) —
-  // folded into whichever stop is "current" (or the first, if browsing a
+  // Goals filed directly under this month, or spanning into it from a
+  // neighboring month (goalOverlapsPeriod, not a strict periodKey match) —
+  // a 2-month goal starting last month is still just as much this month's
+  // goal for however many of its weeks land here, the same reasoning
+  // goalOverlapsPeriod's own doc comment gives one level up for Year.
+  // Folded into whichever stop is "current" (or the first, if browsing a
   // past/future month) rather than getting their own section.
-  const ownGoals = goals.filter((g) => g.period === "month" && g.periodKey === activeKey);
+  const ownGoals = goals.filter(
+    (g) => g.period === "month" && goalOverlapsPeriod(g, "month", activeKey)
+  );
 
   return weekKeys.map((weekKey, i) => {
     const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
