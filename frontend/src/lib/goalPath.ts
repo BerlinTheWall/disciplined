@@ -1,13 +1,13 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
-import { currentPeriodKey, goalOverlapsPeriod } from "./goalPeriods";
+import { currentPeriodKey, goalOverlapsPeriod, periodLabel } from "./goalPeriods";
 import { priorityRank } from "./goalPriority";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
-// What tapping a stop does: a day-stop (Week view) jumps to that day in the
-// schedule; a coarser stop (Month/Year view) jumps the goals list itself to
-// that sub-period, one zoom level in.
+// What tapping a stop does: a day-stop (Week view) syncs the selected date;
+// a coarser stop (Month/Year view) jumps the goals list itself to that
+// sub-period, one zoom level in.
 export type PeriodStopAction =
   { kind: "day"; date: string } | { kind: "period"; period: GoalPeriod; periodKey: string };
 
@@ -27,6 +27,11 @@ export interface PeriodStopItem {
 export interface PeriodStop {
   id: string;
   label: string;
+  // Small-print detail next to the label — the calendar range a "Week N"
+  // stop covers (Month view). Day-stops (Week view) and month-stops (Year
+  // view) already say exactly what they are via their own label, so this
+  // stays unset there.
+  sublabel?: string;
   fraction: number; // 0..1, meaningless when !hasData
   hasData: boolean; // whether anything was actually tracked at this stop
   isToday: boolean;
@@ -166,6 +171,7 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
     return {
       id: weekKey,
       label: `Week ${i + 1}`,
+      sublabel: periodLabel("week", weekKey),
       fraction,
       hasData,
       isToday: weekKey <= today && today <= sunday,

@@ -351,12 +351,19 @@ function StopCard({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <button
-            onClick={onActivateStop}
-            className="text-[13px] font-extrabold uppercase tracking-wide text-fg"
-          >
-            {stop.label}
-          </button>
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <button
+              onClick={onActivateStop}
+              className="text-[13px] font-extrabold uppercase tracking-wide text-fg shrink-0"
+            >
+              {stop.label}
+            </button>
+            {stop.sublabel && (
+              <span className="text-[11px] font-medium text-fg-faint truncate">
+                {stop.sublabel}
+              </span>
+            )}
+          </div>
           {isToday && (
             <span className="flex items-center gap-1 text-[11px] font-medium text-fg-faint shrink-0">
               <span
