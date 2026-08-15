@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlignLeft, CalendarPlus, LayoutGrid, Menu } from "lucide-react";
+import { AlignLeft, CalendarPlus, LayoutGrid, List, Menu, Waypoints } from "lucide-react";
 
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
@@ -38,6 +38,7 @@ import ProfilePage from "./pages/ProfilePage";
 import WorkoutPage from "./pages/WorkoutPage";
 import { useAuthStore } from "./store/authStore";
 import { useGoalFocusStore } from "./store/goalFocusStore";
+import { useGoalsViewStore } from "./store/goalsViewStore";
 import { useOnboardingStore } from "./store/onboardingStore";
 import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
@@ -86,6 +87,11 @@ function App() {
   // toggled from the header and the Settings sheet.
   const viewMode = useSettingsStore((s) => s.scheduleView) as ViewMode;
   const setViewMode = useSettingsStore((s) => s.setScheduleView);
+  // Goals & Plans' own view toggle — period-browsing overview vs a flat list
+  // of every goal — same header-pill pattern as the schedule page's own
+  // daily/weekly toggle just above.
+  const goalsView = useGoalsViewStore((s) => s.view);
+  const setGoalsView = useGoalsViewStore((s) => s.setView);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const onboardingDone = useOnboardingStore((s) => s.done);
@@ -399,6 +405,43 @@ function App() {
                           }`}
                         >
                           {m === "daily" ? <AlignLeft size={18} /> : <LayoutGrid size={18} />}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+              {activePage === "goals" && (
+                <motion.div
+                  key="goals-controls"
+                  // Opacity-only, instant-exit — same reasoning as
+                  // schedule-controls above.
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
+                  transition={spring.snappy}
+                >
+                  <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
+                    {(["overview", "all"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setGoalsView(m)}
+                        className="relative h-full px-2 rounded-md flex items-center justify-center"
+                        aria-label={m === "overview" ? "Overview" : "All goals"}
+                      >
+                        {goalsView === m && (
+                          <motion.div
+                            layoutId="goalsViewToggle"
+                            transition={spring.snappy}
+                            className="absolute inset-0 bg-surface rounded-md shadow-sm"
+                          />
+                        )}
+                        <span
+                          className={`relative z-10 block transform-gpu ${
+                            goalsView === m ? "text-fg" : "text-fg-faint"
+                          }`}
+                        >
+                          {m === "overview" ? <Waypoints size={18} /> : <List size={18} />}
                         </span>
                       </button>
                     ))}

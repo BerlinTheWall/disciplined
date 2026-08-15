@@ -17,6 +17,7 @@ import {
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
+import AllGoalsList from "@/components/goals/AllGoalsList";
 import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
 import GoalPlanWizard from "@/components/goals/GoalPlanWizard";
 import PeriodOverview from "@/components/goals/PeriodOverview";
@@ -47,6 +48,7 @@ import { goalColor } from "@/lib/goalPriority";
 import { spring, tap } from "@/lib/motion";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
+import { useGoalsViewStore } from "@/store/goalsViewStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { GoalCategory, GoalPeriod } from "@/types/goals";
@@ -96,6 +98,9 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const addGoal = useGoalStore((s) => s.addGoal);
   const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const tasks = useTaskStore((s) => s.tasks);
+  // Header toggle (App.tsx's goals-controls) between this period-browsing
+  // overview and a flat list of every goal.
+  const goalsView = useGoalsViewStore((s) => s.view);
 
   // Tap a linked task → land on its day in the schedule and scroll it into
   // view (DaySchedule consumes the focus id).
@@ -323,70 +328,88 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
 
   return (
     <div className="relative space-y-4 pb-6">
-      {/* Horizon toggle with an animated selected pill */}
-      <div className="flex items-center bg-surface-raised rounded-xl p-1">
-        {PERIODS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className="relative flex-1 h-9 rounded-lg text-sm font-medium"
-          >
-            {period === p.key && (
-              <motion.span
-                layoutId="goalSeg"
-                transition={spring.snappy}
-                className="absolute inset-0 bg-surface rounded-lg shadow-sm"
-              />
-            )}
-            <span className={`relative z-10 ${period === p.key ? "text-fg" : "text-fg-muted"}`}>
-              {p.label}
-            </span>
-          </button>
-        ))}
-      </div>
+      {goalsView === "overview" ? (
+        <>
+          {/* Horizon toggle with an animated selected pill */}
+          <div className="flex items-center bg-surface-raised rounded-xl p-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className="relative flex-1 h-9 rounded-lg text-sm font-medium"
+              >
+                {period === p.key && (
+                  <motion.span
+                    layoutId="goalSeg"
+                    transition={spring.snappy}
+                    className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+                  />
+                )}
+                <span className={`relative z-10 ${period === p.key ? "text-fg" : "text-fg-muted"}`}>
+                  {p.label}
+                </span>
+              </button>
+            ))}
+          </div>
 
-      {/* Period navigation */}
-      <div className="flex items-center justify-between px-1">
-        <motion.button onClick={() => shift(-1)} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-          <ChevronLeft size={18} />
-        </motion.button>
-        <div className="text-center">
-          <p className="text-sm font-semibold text-fg capitalize">
-            {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)}
-          </p>
-          {relativePeriodName(period, activeKey) && (
-            <p className="text-[11px] text-fg-faint">{periodLabel(period, activeKey)}</p>
-          )}
-        </div>
-        <motion.button onClick={() => shift(1)} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-          <ChevronRight size={18} />
-        </motion.button>
-      </div>
+          {/* Period navigation */}
+          <div className="flex items-center justify-between px-1">
+            <motion.button
+              onClick={() => shift(-1)}
+              whileTap={tap}
+              className="p-2 -m-2 text-fg-faint"
+            >
+              <ChevronLeft size={18} />
+            </motion.button>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-fg capitalize">
+                {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)}
+              </p>
+              {relativePeriodName(period, activeKey) && (
+                <p className="text-[11px] text-fg-faint">{periodLabel(period, activeKey)}</p>
+              )}
+            </div>
+            <motion.button
+              onClick={() => shift(1)}
+              whileTap={tap}
+              className="p-2 -m-2 text-fg-faint"
+            >
+              <ChevronRight size={18} />
+            </motion.button>
+          </div>
 
-      {/* Overview header: the browsed period's own label plus a running
-          count of every task linked (directly or via a milestone) to a
-          goal shown below. */}
-      <div className="flex items-center justify-between px-1">
-        <h2 className="text-base font-extrabold text-fg capitalize">
-          {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)} Overview
-        </h2>
-        <span className="text-sm text-fg-faint">{headerTaskCount} Tasks</span>
-      </div>
+          {/* Overview header: the browsed period's own label plus a running
+              count of every task linked (directly or via a milestone) to a
+              goal shown below. */}
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-base font-extrabold text-fg capitalize">
+              {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)} Overview
+            </h2>
+            <span className="text-sm text-fg-faint">{headerTaskCount} Tasks</span>
+          </div>
 
-      {/* Always shown, even with zero goals — every stop just reads "Nothing
-          here yet" (PeriodOverview/StopCard), so the timeline itself is the
-          empty state rather than replacing it with a separate placeholder. */}
-      <PeriodOverview
-        period={period}
-        activeKey={activeKey}
-        goals={goals}
-        tasks={tasks}
-        weekGoals={nativeListed}
-        onOpenGoal={(id) => setDetailGoalId(id)}
-        onOpenTask={openTask}
-        onOpenDay={openDay}
-        onJumpPeriod={jumpPeriod}
-      />
+          {/* Always shown, even with zero goals — every stop just reads
+              "Nothing here yet" (PeriodOverview/StopCard), so the timeline
+              itself is the empty state rather than replacing it with a
+              separate placeholder. */}
+          <PeriodOverview
+            period={period}
+            activeKey={activeKey}
+            goals={goals}
+            tasks={tasks}
+            weekGoals={nativeListed}
+            onOpenGoal={(id) => setDetailGoalId(id)}
+            onOpenTask={openTask}
+            onOpenDay={openDay}
+            onJumpPeriod={jumpPeriod}
+          />
+        </>
+      ) : (
+        <>
+          <h2 className="text-base font-extrabold text-fg px-1">All Goals</h2>
+          <AllGoalsList goals={goals} tasks={tasks} onOpenGoal={(id) => setDetailGoalId(id)} />
+        </>
+      )}
 
       {/* Floating add button — there's no natural "bottom of the list" once
           goals are a carousel, so quick-add moves off the always-visible bar
