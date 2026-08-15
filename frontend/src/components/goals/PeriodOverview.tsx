@@ -5,18 +5,34 @@ import { Check } from "lucide-react";
 import { buildPeriodStops, type PeriodStop, type PeriodStopItem } from "@/lib/goalPath";
 import { goalProgress } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
-import { smoothPathDVertical, waveLayoutVertical, type WavePoint } from "@/lib/pathGeometry";
+import { smoothPathDVertical, verticalPointsForHeights, type WavePoint } from "@/lib/pathGeometry";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
-const SPACING = 172; // tall enough for a ~3-item card
-const MARGIN_Y = SPACING / 2; // keeps a stop's dot vertically centered on its row
 const BASE_X = 20;
-const AMPLITUDE = 6;
+const AMPLITUDE = 0; // 0 = a straight rail; the wave drift lived here before
 const WIDTH = 40;
 const RAIL_GAP = 14; // space between the dot column and the card
-const MAX_HEIGHT = 640;
 const ITEM_CAP = 3;
+
+// A stop's row claims only as much height as its own card actually needs —
+// a quiet day with nothing on it stays compact, a day with a full 3 items
+// gets more room, rather than every day reserving the same generous slot
+// regardless of what's in it. Mirrors StopCard/ItemRow's own padding and
+// row sizes, so the reserved slot and the rendered card agree.
+const ROW_HEADER_H = 36; // card padding + the day-label row
+const ROW_EMPTY_H = 20; // "Nothing here yet" placeholder row
+const ROW_ITEM_H = 24; // one item row
+const ROW_ITEM_GAP = 4; // gap between item rows
+const ROW_MORE_H = 18; // "+N more" row, only when items exceed ITEM_CAP
+const ROW_MARGIN = 8; // breathing room so the card doesn't touch its slot's edges
+
+function stopRowHeight(itemCount: number): number {
+  const shown = Math.min(itemCount, ITEM_CAP);
+  const content = shown === 0 ? ROW_EMPTY_H : shown * ROW_ITEM_H + (shown - 1) * ROW_ITEM_GAP;
+  const more = itemCount > ITEM_CAP ? ROW_MORE_H : 0;
+  return ROW_HEADER_H + content + more + ROW_MARGIN;
+}
 
 type NodeState = "today" | "future" | "empty" | "done" | "partial";
 
@@ -62,9 +78,10 @@ export default function PeriodOverview({
     () => buildPeriodStops(period, activeKey, goals, tasks),
     [period, activeKey, goals, tasks]
   );
+  const rowHeights = useMemo(() => stops.map((s) => stopRowHeight(s.items.length)), [stops]);
   const points: WavePoint[] = useMemo(
-    () => waveLayoutVertical(stops.length, SPACING, BASE_X, AMPLITUDE, MARGIN_Y),
-    [stops.length]
+    () => verticalPointsForHeights(rowHeights, BASE_X, AMPLITUDE),
+    [rowHeights]
   );
   const pathD = useMemo(() => smoothPathDVertical(points), [points]);
 
@@ -74,20 +91,20 @@ export default function PeriodOverview({
   });
   const travelledD = travelEnd > 0 ? smoothPathDVertical(points.slice(0, travelEnd + 1)) : "";
 
-  const railHeight = stops.length * SPACING;
+  const railHeight = rowHeights.reduce((sum, h) => sum + h, 0);
 
   // Bring "today" into view whenever the period/instance being browsed
-  // changes — same reasoning PeriodPath used: the rail can outgrow
-  // MAX_HEIGHT (Year's 12 stops), so it scrolls internally instead of
-  // pushing the rest of the page down.
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // changes. The rail used to own a nested `overflow-y-auto` scroll region
+  // just for this — but every other scrollable surface in the app is its
+  // own full-screen sheet, never nested inside the page's own scroll
+  // container, and this one was: it fought the page's scroll (and its
+  // pull-to-refresh gesture, see App.tsx's attachPullToRefresh) for the
+  // same touch input, feeling stuck/janky. Scrolling the rail's own content
+  // into view on the page's scroll container instead avoids that entirely.
+  const todayRowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const todayIndex = stops.findIndex((s) => s.isToday);
-    if (todayIndex < 0) return;
-    const target = Math.max(0, points[todayIndex].y - el.clientHeight / 2);
-    el.scrollTo({ top: target, behavior: "auto" });
+    if (!stops.some((s) => s.isToday)) return;
+    todayRowRef.current?.scrollIntoView({ behavior: "auto", block: "center" });
     // Only re-run when the browsed period/instance changes, not on every
     // goal/task edit — a data change shouldn't yank the user's scroll spot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,53 +149,56 @@ export default function PeriodOverview({
       )}
 
       <div className="bg-surface rounded-2xl shadow-soft p-3">
-        <div ref={scrollRef} style={{ maxHeight: MAX_HEIGHT }} className="overflow-y-auto">
-          <div className="relative" style={{ height: railHeight }}>
-            <svg
-              width={WIDTH}
-              height={railHeight}
-              viewBox={`0 0 ${WIDTH} ${railHeight}`}
-              className="absolute left-0 top-0"
-              role="presentation"
-            >
+        <div className="relative" style={{ height: railHeight }}>
+          <svg
+            width={WIDTH}
+            height={railHeight}
+            viewBox={`0 0 ${WIDTH} ${railHeight}`}
+            className="absolute left-0 top-0"
+            role="presentation"
+          >
+            <path
+              d={pathD}
+              fill="none"
+              stroke="var(--path-road)"
+              strokeWidth={5}
+              strokeLinecap="round"
+            />
+            {travelledD && (
               <path
-                d={pathD}
+                d={travelledD}
                 fill="none"
-                stroke="var(--path-road)"
+                stroke="var(--path-accent)"
                 strokeWidth={5}
                 strokeLinecap="round"
               />
-              {travelledD && (
-                <path
-                  d={travelledD}
-                  fill="none"
-                  stroke="var(--path-accent)"
-                  strokeWidth={5}
-                  strokeLinecap="round"
-                />
-              )}
-              {stops.map((stop, i) => (
-                <PathDot
-                  key={stop.id}
-                  stop={stop}
-                  x={points[i].x}
-                  y={points[i].y}
-                  onActivate={() => handleActivate(stop)}
-                />
-              ))}
-            </svg>
+            )}
+            {stops.map((stop, i) => (
+              <PathDot
+                key={stop.id}
+                stop={stop}
+                x={points[i].x}
+                y={points[i].y}
+                onActivate={() => handleActivate(stop)}
+              />
+            ))}
+          </svg>
 
-            <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
-              {stops.map((stop) => (
-                <div key={stop.id} style={{ height: SPACING }} className="flex items-center pr-1">
-                  <StopCard
-                    stop={stop}
-                    onActivateStop={() => handleActivate(stop)}
-                    onOpenItem={openItem}
-                  />
-                </div>
-              ))}
-            </div>
+          <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
+            {stops.map((stop, i) => (
+              <div
+                key={stop.id}
+                ref={stop.isToday ? todayRowRef : undefined}
+                style={{ height: rowHeights[i] }}
+                className="flex items-center pr-1"
+              >
+                <StopCard
+                  stop={stop}
+                  onActivateStop={() => handleActivate(stop)}
+                  onOpenItem={openItem}
+                />
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -202,7 +222,9 @@ function PathDot({
   onActivate: () => void;
 }) {
   const state = nodeState(stop);
-  const circumference = 2 * Math.PI * 9;
+  const R = 11; // done/partial dot radius — bumped up from 9 so every day's
+  // marker reads clearly against the rail, not just today's
+  const circumference = 2 * Math.PI * R;
   // Only "today" gets the dedicated red accent — every other state keeps
   // the green used for progress everywhere else in Goals, so red reads
   // specifically as "you are here", not as more/less progress.
@@ -229,13 +251,13 @@ function PathDot({
             className="goal-path-pulse"
             cx={x}
             cy={y}
-            r={14}
+            r={16}
             fill="none"
             stroke={todayColor}
-            strokeWidth={1.5}
+            strokeWidth={2}
           />
-          <circle cx={x} cy={y} r={11} fill={todayColor} />
-          <circle cx={x} cy={y} r={11} fill="none" stroke="var(--surface)" strokeWidth={2} />
+          <circle cx={x} cy={y} r={13} fill={todayColor} />
+          <circle cx={x} cy={y} r={13} fill="none" stroke="var(--surface)" strokeWidth={2.5} />
         </>
       )}
 
@@ -243,22 +265,31 @@ function PathDot({
         <circle
           cx={x}
           cy={y}
-          r={6.5}
+          r={9}
           fill="var(--surface)"
           stroke="var(--path-road)"
-          strokeWidth={2.5}
+          strokeWidth={3}
         />
       )}
 
-      {state === "empty" && <circle cx={x} cy={y} r={4.5} fill="var(--surface-subtle)" />}
+      {state === "empty" && (
+        <circle
+          cx={x}
+          cy={y}
+          r={8}
+          fill="var(--surface-subtle)"
+          stroke="var(--path-road)"
+          strokeWidth={2}
+        />
+      )}
 
       {state === "done" && (
         <>
-          <circle cx={x} cy={y} r={9} fill="var(--path-accent)" />
+          <circle cx={x} cy={y} r={R} fill="var(--path-accent)" />
           <path
-            d={`M${x - 4},${y} l3,3 l5.5,-6.5`}
+            d={`M${x - 5},${y} l3.5,3.5 l6.5,-7.5`}
             stroke="var(--surface)"
-            strokeWidth={2}
+            strokeWidth={2.25}
             fill="none"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -271,18 +302,18 @@ function PathDot({
           <circle
             cx={x}
             cy={y}
-            r={9}
+            r={R}
             fill="var(--surface)"
             stroke="var(--path-road)"
-            strokeWidth={2.5}
+            strokeWidth={3}
           />
           <circle
             cx={x}
             cy={y}
-            r={9}
+            r={R}
             fill="none"
             stroke="var(--path-accent)"
-            strokeWidth={2.5}
+            strokeWidth={3}
             strokeLinecap="round"
             strokeDasharray={`${stop.fraction * circumference} ${circumference}`}
             transform={`rotate(-90 ${x} ${y})`}
@@ -310,7 +341,7 @@ function StopCard({
 
   return (
     <div
-      className={`flex-1 min-w-0 flex items-stretch gap-2.5 bg-surface-alt rounded-2xl p-2.5 ${
+      className={`flex-1 min-w-0 flex items-stretch gap-2 bg-surface-alt rounded-2xl p-2 ${
         past ? "opacity-70" : ""
       }`}
     >
@@ -319,17 +350,28 @@ function StopCard({
         style={{ backgroundColor: isToday ? "var(--path-today)" : "transparent" }}
       />
       <div className="min-w-0 flex-1">
-        <button
-          onClick={onActivateStop}
-          className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-1.5 block"
-        >
-          {stop.label}
-        </button>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <button
+            onClick={onActivateStop}
+            className="text-[13px] font-extrabold uppercase tracking-wide text-fg"
+          >
+            {stop.label}
+          </button>
+          {isToday && (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-fg-faint shrink-0">
+              <span
+                className="w-1 h-1 rounded-full"
+                style={{ backgroundColor: "var(--path-today)" }}
+              />
+              Today
+            </span>
+          )}
+        </div>
 
         {visible.length === 0 ? (
-          <p className="text-xs text-fg-faint py-1">Nothing here yet</p>
+          <p className="text-xs text-fg-faint py-0.5">Nothing here yet</p>
         ) : (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1">
             {visible.map((item) => (
               <ItemRow key={item.id} item={item} onOpen={() => onOpenItem(item)} />
             ))}
@@ -347,44 +389,58 @@ function StopCard({
 }
 
 function ItemRow({ item, onOpen }: { item: PeriodStopItem; onOpen: () => void }) {
-  const circumference = 2 * Math.PI * 11;
+  const circumference = 2 * Math.PI * 9;
   return (
     <motion.button
       onClick={onOpen}
       whileTap={tap}
       className="w-full flex items-center gap-2 text-left"
     >
-      <div className="relative w-7 h-7 shrink-0">
-        <svg width="28" height="28" className="-rotate-90">
-          <circle
-            cx="14"
-            cy="14"
-            r="11"
-            fill="none"
-            stroke="var(--surface-subtle)"
-            strokeWidth="3"
-          />
-          <circle
-            cx="14"
-            cy="14"
-            r="11"
-            fill="none"
-            stroke="var(--path-accent)"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={item.done ? 0 : circumference * (1 - item.fraction)}
-            style={{ transition: "stroke-dashoffset 0.6s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-[8px] font-extrabold tabular-nums">
-          {item.done ? (
-            <Check size={10} className="text-fg-muted" strokeWidth={3} />
-          ) : (
-            `${item.percent}%`
-          )}
+      {/* A task is always binary (done or not) — its fraction is only ever
+          0 or 1, so a proportional ring never showed anything a plain
+          checkbox couldn't. Goals genuinely have partial progress worth
+          showing, so they keep the ring. */}
+      {item.kind === "task" ? (
+        <span
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+            item.done ? "bg-fg border-fg text-fg-inverse" : "border-border-strong text-transparent"
+          }`}
+        >
+          <Check size={11} strokeWidth={3.5} />
+        </span>
+      ) : (
+        <div className="relative w-6 h-6 shrink-0">
+          <svg width="24" height="24" className="-rotate-90">
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="var(--surface-subtle)"
+              strokeWidth="2.5"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="var(--path-accent)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={item.done ? 0 : circumference * (1 - item.fraction)}
+              style={{ transition: "stroke-dashoffset 0.6s ease" }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center text-[7px] font-extrabold tabular-nums">
+            {item.done ? (
+              <Check size={9} className="text-fg-muted" strokeWidth={3} />
+            ) : (
+              `${item.percent}%`
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <span
         className={`flex-1 min-w-0 text-[13px] font-semibold truncate ${
           item.done ? "text-fg-faint line-through" : "text-fg"

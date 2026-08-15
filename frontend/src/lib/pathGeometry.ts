@@ -62,6 +62,23 @@ export function waveLayoutVertical(
   }));
 }
 
+// waveLayoutVertical's counterpart for stops that don't all deserve the same
+// amount of vertical room — each stop claims its own slice of height
+// (`heights[i]`, e.g. sized by how much content it actually has) instead of
+// a uniform spacing, and sits at the vertical center of that slice.
+export function verticalPointsForHeights(
+  heights: number[],
+  baseX = 62,
+  amplitude = 18
+): WavePoint[] {
+  let y = 0;
+  return heights.map((h, i) => {
+    const point = { x: baseX + amplitude * Math.sin(i * 1.05), y: y + h / 2 };
+    y += h;
+    return point;
+  });
+}
+
 // smoothPathD's counterpart for a vertical wave: control points offset
 // *vertically* toward the other end instead of horizontally, since the
 // large delta between consecutive stops is now in y, not x.
