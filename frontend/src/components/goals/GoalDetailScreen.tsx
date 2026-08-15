@@ -60,6 +60,11 @@ export default function GoalDetailScreen({
   const [milestoneText, setMilestoneText] = useState("");
   const [noteEditing, setNoteEditing] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  // Which milestone's linked-tasks list is expanded, if any — tapping a
+  // milestone with AI-scheduled sessions reveals which tasks it's actually
+  // tracking, since that's otherwise invisible (only its derived done state
+  // shows on the row itself).
+  const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
 
   const p = goalProgress(goal, tasks, goals);
   const pace = goalPace(goal, tasks, goals);
@@ -349,59 +354,104 @@ export default function GoalDetailScreen({
               // nothing to the actual progress ring, so it isn't offered.
               const hasLinkedTasks = (m.linkedTaskIds?.length ?? 0) > 0;
               const done = isMilestoneDone(m, tasks);
+              const expanded = expandedMilestoneId === m.id;
+              const linkedTasks = hasLinkedTasks
+                ? tasks
+                    .filter((t) => m.linkedTaskIds!.includes(t.id))
+                    .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes)
+                : [];
               return (
-                <div key={m.id} className="relative py-2.5 flex items-center gap-3">
-                  <button
-                    onClick={
-                      hasLinkedTasks
-                        ? undefined
-                        : () => useGoalStore.getState().toggleMilestone(goal.id, m.id)
-                    }
-                    disabled={hasLinkedTasks}
-                    aria-label={
-                      hasLinkedTasks
-                        ? done
-                          ? "Done — every scheduled session is completed"
-                          : "Not done — scheduled sessions still pending"
-                        : done
-                          ? "Mark step not done"
-                          : "Mark step done"
-                    }
-                    className={`absolute -left-[22px] w-4 h-4 rounded-full border-2 shrink-0 ${
-                      hasLinkedTasks ? "cursor-default" : ""
-                    }`}
-                    style={
-                      done
-                        ? { backgroundColor: accent, borderColor: accent }
-                        : {
-                            borderColor: "var(--surface-subtle)",
-                            backgroundColor: "var(--surface)",
-                          }
-                    }
-                  />
-                  <span
-                    className={`flex-1 min-w-0 text-[14.5px] font-medium truncate ${
-                      done ? "text-fg-faint line-through" : "text-fg"
-                    }`}
-                  >
-                    {m.label}
-                  </span>
-                  {/* Weighting only means something with 2+ steps — a single
-                      one is trivially 100% of the goal. */}
-                  {goal.milestones.length > 1 && (
-                    <WeightInput
-                      value={m.weight}
-                      placeholder={milestoneShareById[m.id] ?? 0}
-                      onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)}
+                <div key={m.id} className="relative">
+                  <div className="py-2.5 flex items-center gap-3">
+                    <button
+                      onClick={
+                        hasLinkedTasks
+                          ? undefined
+                          : () => useGoalStore.getState().toggleMilestone(goal.id, m.id)
+                      }
+                      disabled={hasLinkedTasks}
+                      aria-label={
+                        hasLinkedTasks
+                          ? done
+                            ? "Done — every scheduled session is completed"
+                            : "Not done — scheduled sessions still pending"
+                          : done
+                            ? "Mark step not done"
+                            : "Mark step done"
+                      }
+                      className={`absolute -left-[22px] w-4 h-4 rounded-full border-2 shrink-0 ${
+                        hasLinkedTasks ? "cursor-default" : ""
+                      }`}
+                      style={
+                        done
+                          ? { backgroundColor: accent, borderColor: accent }
+                          : {
+                              borderColor: "var(--surface-subtle)",
+                              backgroundColor: "var(--surface)",
+                            }
+                      }
                     />
+                    <button
+                      onClick={
+                        hasLinkedTasks
+                          ? () => setExpandedMilestoneId(expanded ? null : m.id)
+                          : undefined
+                      }
+                      className={`flex-1 min-w-0 text-left text-[14.5px] font-medium truncate ${
+                        done ? "text-fg-faint line-through" : "text-fg"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                    {/* Weighting only means something with 2+ steps — a single
+                        one is trivially 100% of the goal. */}
+                    {goal.milestones.length > 1 && (
+                      <WeightInput
+                        value={m.weight}
+                        placeholder={milestoneShareById[m.id] ?? 0}
+                        onChange={(w) =>
+                          useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)
+                        }
+                      />
+                    )}
+                    <button
+                      onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
+                      aria-label="Delete step"
+                      className="p-1 text-fg-faint shrink-0"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  {hasLinkedTasks && (
+                    <Collapse open={expanded} outerClassName="-mt-1" className="pb-2.5">
+                      <div className="flex flex-col gap-1.5">
+                        {linkedTasks.map((t) => (
+                          <div key={t.id} className="flex items-center gap-2">
+                            <button
+                              onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
+                              aria-label={t.completed ? "Mark task not done" : "Mark task done"}
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                t.completed
+                                  ? "bg-fg border-fg text-fg-inverse"
+                                  : "border-border-strong text-transparent"
+                              }`}
+                            >
+                              <Check size={9} strokeWidth={3.5} />
+                            </button>
+                            <button
+                              onClick={() => onOpenTask(t)}
+                              className={`flex-1 min-w-0 text-left text-xs truncate ${
+                                t.completed ? "text-fg-faint line-through" : "text-fg-muted"
+                              }`}
+                            >
+                              {t.title}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </Collapse>
                   )}
-                  <button
-                    onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
-                    aria-label="Delete step"
-                    className="p-1 text-fg-faint shrink-0"
-                  >
-                    <X size={13} />
-                  </button>
                 </div>
               );
             })}
