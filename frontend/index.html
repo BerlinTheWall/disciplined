@@ -8,6 +8,12 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <!-- Without these, iOS's "Add to Home Screen" can launch the manifest's
+         display:standalone mode with inconsistent viewport/safe-area geometry
+         (the source of goals-page-only-scrolls-when-installed reports) — these
+         are what actually put Safari into its well-tested standalone mode. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- Inter is now bundled locally via @fontsource-variable/inter (see main.tsx),
          so the app no longer fetches fonts from Google over the network. -->
     <title>disciplined</title>

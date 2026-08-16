@@ -150,8 +150,22 @@
 }
 
 /* ── Global base styles ────────────────────────────────────────────── */
+/* The app shell (App.tsx's root, h-dvh) is meant to be the one thing sized to
+   the screen, with data-scroll-lock as the app's only real scroll region (see
+   useScrollLock's doc comment) — html/body themselves should never scroll.
+   Without this, a shell that's briefly taller than the viewport (the iOS
+   standalone-mode 100vh/safe-area quirk h-dvh above works around) falls back
+   to scrolling the whole document instead of just clipping. */
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
+  overscroll-behavior-y: none;
   background: var(--app-bg);
   background-attachment: fixed;
   color: var(--fg);

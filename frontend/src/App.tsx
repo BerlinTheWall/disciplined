@@ -265,7 +265,14 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    // h-dvh (not min-h-screen/100vh) + overflow-hidden: the shell must never
+    // exceed the true visible screen. 100vh is unreliable specifically in iOS
+    // standalone (Add to Home Screen) mode — it can render taller than the
+    // real viewport there even when a plain Safari tab renders it correctly,
+    // which silently turns the whole document into a second, unintended
+    // scroll region on top of the one deliberate scroller (data-scroll-lock;
+    // see useScrollLock's doc comment).
+    <div className="h-dvh flex flex-col overflow-hidden">
       <SideMenu
         isOpen={isSideMenuOpen}
         onClose={() => setIsSideMenuOpen(false)}
