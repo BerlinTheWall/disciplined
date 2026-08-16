@@ -24,6 +24,7 @@ import PeriodOverview from "@/components/goals/PeriodOverview";
 import { chipCls } from "@/components/timeline/addItemOptions";
 import CalendarMonth from "@/components/timeline/CalendarMonth";
 import { FieldPanel } from "@/components/timeline/FieldPanel";
+import { useFillRemainingHeight } from "@/hooks/useFillRemainingHeight";
 import { api, ApiError } from "@/lib/api";
 import { isLightColor } from "@/lib/color";
 import {
@@ -101,6 +102,10 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   // Header toggle (App.tsx's goals-controls) between this period-browsing
   // overview and a flat list of every goal.
   const goalsView = useGoalsViewStore((s) => s.view);
+  // Overview mode fills the rest of the screen and never scrolls itself —
+  // see useFillRemainingHeight's own comment for why this is measured
+  // rather than done with a 100vh/100dvh calc.
+  const { ref: pageRef, height: fillHeight } = useFillRemainingHeight<HTMLDivElement>();
 
   // Tap a linked task → land on its day in the schedule and scroll it into
   // view (DaySchedule consumes the focus id).
@@ -339,9 +344,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
 
   return (
     <div
+      ref={pageRef}
       className={`relative flex flex-col gap-4 pb-6 ${
         goalsView === "overview" ? "h-full overflow-hidden" : ""
       }`}
+      style={goalsView === "overview" && fillHeight != null ? { height: fillHeight } : undefined}
     >
       {goalsView === "overview" ? (
         <>

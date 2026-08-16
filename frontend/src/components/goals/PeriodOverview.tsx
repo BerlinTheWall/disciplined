@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 
@@ -93,6 +93,26 @@ export default function PeriodOverview({
 
   const railHeight = rowHeights.reduce((sum, h) => sum + h, 0);
 
+  // Land on "today" (or the closest stop to it) whenever this box opens or
+  // the browsed period/instance changes — scoped to the box's own internal
+  // scroll now, not the page (which no longer scrolls at all), so it can't
+  // fight a page-level gesture the way the old page-scrolling version did.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const todayIndex = stops.findIndex((s) => s.isToday);
+    if (todayIndex < 0) {
+      el.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    const target = Math.max(0, points[todayIndex].y - el.clientHeight / 2);
+    el.scrollTo({ top: target, behavior: "auto" });
+    // Only re-run when the browsed period/instance changes, not on every
+    // goal/task edit — a data change shouldn't yank the user's scroll spot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, activeKey]);
+
   function handleActivate(stop: PeriodStop) {
     if (stop.action.kind === "day") onOpenDay(stop.action.date);
     else onJumpPeriod(stop.action.period, stop.action.periodKey);
@@ -142,7 +162,7 @@ export default function PeriodOverview({
           scroller is the inner div so padding/rounding never look clipped
           mid-scroll. */}
       <div className="bg-surface rounded-2xl shadow-soft flex-1 min-h-0 overflow-hidden">
-        <div className="h-full overflow-y-auto p-3">
+        <div ref={scrollRef} className="h-full overflow-y-auto p-3">
           <div className="relative" style={{ height: railHeight }}>
             <svg
               width={WIDTH}
