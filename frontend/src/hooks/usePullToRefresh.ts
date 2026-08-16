@@ -46,7 +46,30 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown>): PullToRefre
       tracking.current = false;
       return;
     }
-    tracking.current = (e.currentTarget as HTMLElement).scrollTop <= 0;
+    const outer = e.currentTarget as HTMLElement;
+    // This hook only ever sees `outer`'s own scrollTop — fine when `outer`
+    // is the page's one scrollable region, but a page can now size itself
+    // to fill exactly its available height (see useFillRemainingHeight) and
+    // put its own independent overflow-y-auto box inside that, e.g.
+    // PeriodOverview's rail. `outer`.scrollTop is permanently 0 in that
+    // case, so every downward swipe anywhere on the page — including ones
+    // meant to scroll that nested box — would otherwise read as "already at
+    // the top, start pulling". Walk up from the actual touch target and
+    // hand the gesture entirely to the nearest real scrollable ancestor
+    // instead, if there is one before reaching `outer`.
+    let node = e.target as HTMLElement | null;
+    while (node && node !== outer) {
+      const style = getComputedStyle(node);
+      const scrollable =
+        (style.overflowY === "auto" || style.overflowY === "scroll") &&
+        node.scrollHeight > node.clientHeight;
+      if (scrollable) {
+        tracking.current = false;
+        return;
+      }
+      node = node.parentElement;
+    }
+    tracking.current = outer.scrollTop <= 0;
     startX.current = e.touches[0].clientX;
     startY.current = e.touches[0].clientY;
     active.current = false;

@@ -105,7 +105,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   // Overview mode fills the rest of the screen and never scrolls itself —
   // see useFillRemainingHeight's own comment for why this is measured
   // rather than done with a 100vh/100dvh calc.
-  const { ref: pageRef, height: fillHeight } = useFillRemainingHeight<HTMLDivElement>();
+  const { ref: pageRef, height: fillHeight } = useFillRemainingHeight<HTMLDivElement>(10);
 
   // Tap a linked task → land on its day in the schedule and scroll it into
   // view (DaySchedule consumes the focus id).

@@ -12,7 +12,11 @@ import { useLayoutEffect, useRef, useState } from "react";
 // "fill the rest of the screen, and never scroll the page" has to be exact
 // — a few px of drift either way either clips content or lets the ambient
 // wrapper scroll again, which is the one thing this hook exists to prevent.
-export function useFillRemainingHeight<T extends HTMLElement>() {
+//
+// `margin` shaves a fixed number of extra px off the measured result (e.g.
+// a little breathing room above the floating nav/FAB beyond its own
+// reserved clearance) — 0 by default, meaning "exactly fill the gap".
+export function useFillRemainingHeight<T extends HTMLElement>(margin = 0) {
   const ref = useRef<T>(null);
   const [height, setHeight] = useState<number | null>(null);
 
@@ -36,7 +40,7 @@ export function useFillRemainingHeight<T extends HTMLElement>() {
         const paddingBottom = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
         bottom = rect.bottom - paddingBottom;
       }
-      const next = Math.round(bottom - top);
+      const next = Math.round(bottom - top) - margin;
       // Ignore transient/bogus reads (e.g. one caught mid page-transition
       // animation) instead of ever collapsing to a near-zero height — keep
       // whatever the last good measurement was (or the CSS fallback, if
@@ -55,7 +59,7 @@ export function useFillRemainingHeight<T extends HTMLElement>() {
       window.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("resize", update);
     };
-  }, []);
+  }, [margin]);
 
   return { ref, height };
 }

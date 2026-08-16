@@ -92,6 +92,11 @@ export default function PeriodOverview({
   const travelledD = travelEnd > 0 ? smoothPathDVertical(points.slice(0, travelEnd + 1)) : "";
 
   const railHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+  // The box fills whatever's left of the page (flex-1 below), but never
+  // more than its own content actually needs — a short Week view shouldn't
+  // stretch into a tall empty card just because the screen has the room.
+  // +24 is the scroller's own p-3 (12px top + 12px bottom).
+  const railBoxMaxHeight = railHeight + 24;
 
   // Land on "today" (or the closest stop to it) whenever this box opens or
   // the browsed period/instance changes — scoped to the box's own internal
@@ -157,11 +162,15 @@ export default function PeriodOverview({
 
       {/* The rail itself is the one thing that scrolls — bounded to
           whatever's left of the page's fixed height (see GoalsPage's own
-          root), rather than growing the whole page taller as more stops or
-          items pile up. Outer box clips to the rounded shape; the actual
-          scroller is the inner div so padding/rounding never look clipped
-          mid-scroll. */}
-      <div className="bg-surface rounded-2xl shadow-soft flex-1 min-h-0 overflow-hidden">
+          root) so more stops/items never grow the page, but also capped at
+          railBoxMaxHeight so it doesn't stretch past its own content just
+          because more space happens to be available. Outer box clips to the
+          rounded shape; the actual scroller is the inner div so
+          padding/rounding never look clipped mid-scroll. */}
+      <div
+        className="bg-surface rounded-2xl shadow-soft flex-1 min-h-0 overflow-hidden"
+        style={{ maxHeight: railBoxMaxHeight }}
+      >
         <div ref={scrollRef} className="h-full overflow-y-auto p-3">
           <div className="relative" style={{ height: railHeight }}>
             <svg
