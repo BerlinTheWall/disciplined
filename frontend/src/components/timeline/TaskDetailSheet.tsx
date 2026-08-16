@@ -34,12 +34,23 @@ const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 interface TaskDetailSheetProps {
   item: EditItem | null;
   onClose: () => void;
-  onEdit: (item: EditItem) => void;
+  // Omitted where there's no full editor to hand off to (e.g. opened from
+  // the goal detail sheet) — the Edit button just doesn't render then.
+  onEdit?: (item: EditItem) => void;
+  // Jumps to the item's day on the schedule and closes this sheet — offered
+  // when the sheet was opened from somewhere other than the schedule itself
+  // (e.g. a linked task inside a goal), where the item isn't already visible.
+  onShowOnCalendar?: () => void;
 }
 
 // Read-only popup with an item's details; a tap on a schedule row (outside the
 // page's editing mode) opens this instead of the editor.
-export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailSheetProps) {
+export default function TaskDetailSheet({
+  item,
+  onClose,
+  onEdit,
+  onShowOnCalendar,
+}: TaskDetailSheetProps) {
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);
@@ -89,15 +100,17 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
               >
                 <X size={20} />
               </motion.button>
-              <motion.button
-                onClick={() => onEdit(item)}
-                whileTap={tap}
-                className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
-                style={{ backgroundColor: headerBtnBg, color: onColor }}
-              >
-                <Pencil size={15} />
-                Edit
-              </motion.button>
+              {onEdit && (
+                <motion.button
+                  onClick={() => onEdit(item)}
+                  whileTap={tap}
+                  className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium"
+                  style={{ backgroundColor: headerBtnBg, color: onColor }}
+                >
+                  <Pencil size={15} />
+                  Edit
+                </motion.button>
+              )}
             </div>
 
             <div className="flex items-center gap-4 mt-3">
@@ -139,6 +152,26 @@ export default function TaskDetailSheet({ item, onClose, onEdit }: TaskDetailShe
 
           {/* Body */}
           <div className="p-4 pb-8 flex flex-col gap-2">
+            {onShowOnCalendar && (
+              <motion.button
+                onClick={() => {
+                  onShowOnCalendar();
+                  onClose();
+                }}
+                whileTap={tap}
+                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-alt text-left"
+              >
+                <span
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
+                  style={{ backgroundColor: color }}
+                >
+                  <Calendar size={15} />
+                </span>
+                <span className="flex-1 min-w-0 text-sm font-medium text-fg">Show on calendar</span>
+                <ArrowUpRight size={16} className="text-fg-faint shrink-0" />
+              </motion.button>
+            )}
+
             {item.type === "task" && (
               <InfoRow icon={Calendar} label="Date">
                 <span className="text-sm font-medium text-fg">

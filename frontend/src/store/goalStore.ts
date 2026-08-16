@@ -44,6 +44,19 @@ interface GoalState {
   addProgress: (id: string, delta: number) => void;
   setPriority: (id: string, priority: Priority | null) => void;
   setNote: (id: string, note: string) => void;
+  // Title/description/dates edited together from the detail sheet's Edit
+  // screen. Priority is deliberately not here — it goes through setPriority
+  // so an edit that changes it still re-slots the goal by rank.
+  updateGoal: (
+    id: string,
+    updates: {
+      title: string;
+      description: string | null;
+      startDate: string | null;
+      durationCount: number | null;
+      periodKey: string;
+    }
+  ) => void;
   // Weight a linked task or goal as a percent of the parent; null reverts it
   // to the even auto-split of the remaining percentage.
   setWeight: (goalId: string, itemId: string, weight: number | null) => void;
@@ -59,6 +72,7 @@ interface GoalState {
   // in the first place.
   linkGoal: (goalId: string | null, childGoalId: string) => void;
   addMilestone: (goalId: string, label: string) => void;
+  setMilestoneLabel: (goalId: string, milestoneId: string, label: string) => void;
   // Appends a whole batch in one update (e.g. accepted AI suggestions) —
   // same shape addMilestone would produce one at a time, just atomic so
   // there's no need to read the state back to find the new ids.
@@ -150,6 +164,11 @@ export const useGoalStore = create<GoalState>()(
       setNote: (id, note) =>
         set((state) => ({
           goals: state.goals.map((g) => (g.id === id ? { ...g, note } : g)),
+        })),
+
+      updateGoal: (id, updates) =>
+        set((state) => ({
+          goals: state.goals.map((g) => (g.id === id ? { ...g, ...updates } : g)),
         })),
 
       setWeight: (goalId, itemId, weight) =>
@@ -256,6 +275,18 @@ export const useGoalStore = create<GoalState>()(
           ),
         })),
 
+      setMilestoneLabel: (goalId, milestoneId, label) =>
+        set((state) => ({
+          goals: state.goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  milestones: g.milestones.map((m) => (m.id === milestoneId ? { ...m, label } : m)),
+                }
+              : g
+          ),
+        })),
+
       toggleMilestone: (goalId, milestoneId) =>
         set((state) => ({
           goals: state.goals.map((g) =>
@@ -325,7 +356,6 @@ export const useGoalStore = create<GoalState>()(
             };
           }),
         })),
-
     }),
     {
       name: "disciplined-goals",

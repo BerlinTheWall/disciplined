@@ -1,12 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ListChecks, MessageSquareText, Plus, Sparkles, Trash2, X } from "lucide-react";
+import {
+  Calendar,
+  Check,
+  FileText,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
 import { useChoose, useConfirm } from "@/components/ConfirmDialog";
 import GoalCelebration from "@/components/goals/GoalCelebration";
+import GoalEditSheet from "@/components/goals/GoalEditSheet";
+import MilestoneDetailSheet from "@/components/goals/MilestoneDetailSheet";
 import WeightInput from "@/components/goals/WeightInput";
+import TaskDetailSheet from "@/components/timeline/TaskDetailSheet";
+import { parseISODate, todayISODate } from "@/lib/date";
+import { goalEndDate } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
 import {
   GOAL_PACE_COLOR,
@@ -17,7 +32,6 @@ import {
   roundShares,
 } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
-import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -48,13 +62,7 @@ export default function GoalDetailScreen({
   const choose = useChoose();
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [milestoneText, setMilestoneText] = useState("");
-  const [noteEditing, setNoteEditing] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
-  // Which milestone's linked-tasks list is expanded, if any — tapping a
-  // milestone with AI-scheduled sessions reveals which tasks it's actually
-  // tracking, since that's otherwise invisible (only its derived done state
-  // shows on the row itself).
-  const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
 
   const p = goal ? goalProgress(goal, tasks, goals) : null;
   const pace = goal ? goalPace(goal, tasks, goals) : null;
@@ -85,14 +93,10 @@ export default function GoalDetailScreen({
           p={p}
           pace={pace}
           celebrate={celebrate}
-          noteEditing={noteEditing}
-          setNoteEditing={setNoteEditing}
           addingMilestone={addingMilestone}
           setAddingMilestone={setAddingMilestone}
           milestoneText={milestoneText}
           setMilestoneText={setMilestoneText}
-          expandedMilestoneId={expandedMilestoneId}
-          setExpandedMilestoneId={setExpandedMilestoneId}
           confirm={confirm}
           choose={choose}
           onClose={onClose}
@@ -110,14 +114,10 @@ function GoalDetailContent({
   p,
   pace,
   celebrate,
-  noteEditing,
-  setNoteEditing,
   addingMilestone,
   setAddingMilestone,
   milestoneText,
   setMilestoneText,
-  expandedMilestoneId,
-  setExpandedMilestoneId,
   confirm,
   choose,
   onClose,
@@ -129,19 +129,24 @@ function GoalDetailContent({
   p: ReturnType<typeof goalProgress>;
   pace: ReturnType<typeof goalPace>;
   celebrate: boolean;
-  noteEditing: boolean;
-  setNoteEditing: (v: boolean) => void;
   addingMilestone: boolean;
   setAddingMilestone: (v: boolean | ((prev: boolean) => boolean)) => void;
   milestoneText: string;
   setMilestoneText: (v: string) => void;
-  expandedMilestoneId: string | null;
-  setExpandedMilestoneId: (v: string | null) => void;
   confirm: ReturnType<typeof useConfirm>;
   choose: ReturnType<typeof useChoose>;
   onClose: () => void;
   onOpenTask: (t: Task) => void;
 }) {
+  // Tapping a linked task shows its info popup first (same one the schedule
+  // itself uses) rather than jumping straight to the calendar — "Show on
+  // calendar" inside it does that jump instead.
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [editing, setEditing] = useState(false);
+  // Tapping a milestone opens a popup with its title/weight/tasks — see
+  // MilestoneDetailSheet.
+  const [viewingMilestoneId, setViewingMilestoneId] = useState<string | null>(null);
+
   // Rounded together (not each independently, like WeightInput's own
   // internal Math.round would) so the displayed percents actually sum to
   // the true total instead of drifting — six even shares each rounding up
@@ -157,7 +162,6 @@ function GoalDetailContent({
     linkedShareById[linkedIds[i]] = share;
   });
   const accent = goalColor(goal.priority);
-  const showNote = noteEditing || !!goal.note || pace === "behind" || pace === "at-risk";
   // Every task this goal actually drives — its own links plus whatever's
   // attached to a milestone (how AI-scheduled sessions get linked) — so
   // deleting the goal can offer to take them with it instead of silently
@@ -173,7 +177,7 @@ function GoalDetailContent({
     useGoalStore.getState().setPriority(goal.id, next);
   };
 
-  const circumference = 2 * Math.PI * 44;
+  const circumference = 2 * Math.PI * 65;
   const subtitle =
     p.mode === "linked"
       ? `${p.current} of ${p.total} linked`
@@ -184,6 +188,10 @@ function GoalDetailContent({
           : p.done
             ? "Done"
             : "Not done yet";
+  const endDate = goalEndDate(goal.period, goal.periodKey, goal.startDate, goal.durationCount);
+  const daysRemaining = Math.round(
+    (parseISODate(endDate).getTime() - parseISODate(todayISODate()).getTime()) / 86400000
+  );
 
   return (
     <div className="relative px-5 pt-3 pb-[calc(28px+env(safe-area-inset-bottom))] max-w-md mx-auto">
@@ -207,6 +215,14 @@ function GoalDetailContent({
           style={{ color: accent, backgroundColor: `${accent}1f` }}
         >
           {goal.priority ?? "none"}
+        </motion.button>
+        <motion.button
+          onClick={() => setEditing(true)}
+          whileTap={tap}
+          aria-label="Edit goal"
+          className="p-1.5 text-fg-faint shrink-0"
+        >
+          <Pencil size={16} />
         </motion.button>
         <motion.button
           onClick={async () => {
@@ -252,24 +268,24 @@ function GoalDetailContent({
         </motion.button>
       </div>
 
-      <div className="flex items-start gap-4 mb-7">
-        <div className="relative w-[104px] h-[104px] shrink-0">
-          <svg width="104" height="104" className="-rotate-90">
+      <div className="flex items-center gap-4 mb-5">
+        <div className="relative w-38 h-38 shrink-0">
+          <svg width="152" height="152" className="-rotate-90">
             <circle
-              cx="52"
-              cy="52"
-              r="44"
+              cx="76"
+              cy="76"
+              r="65"
               fill="none"
               stroke="var(--surface-subtle)"
-              strokeWidth="10"
+              strokeWidth="12"
             />
             <circle
-              cx="52"
-              cy="52"
-              r="44"
+              cx="76"
+              cy="76"
+              r="65"
               fill="none"
               stroke={accent}
-              strokeWidth="10"
+              strokeWidth="12"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={p.done ? 0 : circumference * (1 - p.fraction)}
@@ -278,80 +294,99 @@ function GoalDetailContent({
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {p.done ? (
-              <Check size={28} style={{ color: accent }} strokeWidth={3} />
+              <Check size={36} style={{ color: accent }} strokeWidth={3} />
             ) : (
-              <b className="text-[22px] font-extrabold leading-none">{p.percent}%</b>
+              <b className="text-[29px] font-extrabold leading-none">{p.percent}%</b>
             )}
-            <span className="text-[10px] text-fg-faint font-semibold mt-1 text-center px-1">
+            <span className="text-[12px] text-fg-faint font-semibold mt-1.5 text-center px-2 leading-tight">
               {subtitle}
             </span>
           </div>
         </div>
 
-        <div className="flex-1 min-w-0 pt-1">
-          <h1 className="text-[19px] font-extrabold leading-tight">{goal.title}</h1>
-          {pace && (
-            <span
-              className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full mt-1.5"
-              style={{
-                color: GOAL_PACE_COLOR[pace],
-                backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
-              }}
-            >
-              {GOAL_PACE_LABEL[pace]}
-            </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="min-w-0 text-[19px] font-extrabold leading-tight">{goal.title}</h1>
+            {pace && (
+              <span
+                className="flex items-center gap-1 shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full"
+                style={{
+                  color: GOAL_PACE_COLOR[pace],
+                  backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
+                }}
+              >
+                {pace !== "on-track" && <TriangleAlert size={11} strokeWidth={2.5} />}
+                {GOAL_PACE_LABEL[pace]}
+              </span>
+            )}
+          </div>
+
+          {goal.description && (
+            <div className="flex items-center gap-1.5 mt-2 text-[13px] text-fg-muted">
+              <FileText size={13} className="shrink-0 text-fg-faint" />
+              <span className="min-w-0 truncate">{goal.description}</span>
+            </div>
           )}
+
+          <div className="flex items-center gap-1.5 mt-1.5 text-[13px] text-fg-muted">
+            <Calendar size={13} className="shrink-0 text-fg-faint" />
+            {parseISODate(endDate).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+            <span className="text-fg-faint">
+              ·{" "}
+              {daysRemaining > 0
+                ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
+                : daysRemaining === 0
+                  ? "Last day"
+                  : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
+            </span>
+          </div>
+
           {p.mode === "manual" && !p.done && (
             <motion.button
               onClick={() => useGoalStore.getState().addProgress(goal.id, 1)}
               whileTap={tap}
-              className="flex items-center gap-1 text-[12.5px] font-semibold mt-1.5 px-2.5 py-1 rounded-full bg-surface-raised"
+              className="flex items-center gap-1 text-[12.5px] font-semibold mt-2 px-2.5 py-1 rounded-full bg-surface-raised"
               style={{ color: accent }}
             >
               <Plus size={13} />
               Add progress
             </motion.button>
           )}
-          <Collapse open={showNote} className="pt-1.5">
-            <input
-              value={goal.note ?? ""}
-              onChange={(e) => useGoalStore.getState().setNote(goal.id, e.target.value)}
-              onBlur={() => {
-                if (!goal.note) setNoteEditing(false);
-              }}
-              placeholder="Why this matters…"
-              className="w-full bg-transparent text-[13px] italic text-fg-muted placeholder-fg-faint focus:outline-none"
-            />
-          </Collapse>
         </div>
       </div>
 
-      <div className="space-y-2 mb-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          {!showNote && (
-            <ActionChip icon={MessageSquareText} label="Why" onClick={() => setNoteEditing(true)} />
-          )}
-          <ActionChip
-            icon={Plus}
-            label="Task"
-            accent={accent}
-            onClick={() => useGoalFocusStore.getState().requestAddTask(goal.id)}
-          />
-          <ActionChip
-            icon={ListChecks}
-            label="Milestone"
-            accent={accent}
+      <div className="flex justify-end mb-4">
+        <motion.button
+          onClick={() => useGoalPlanWizardStore.getState().start(goal.id)}
+          whileTap={tap}
+          className="shrink-0 flex items-center justify-center gap-1 h-9 px-3.5 rounded-full text-[13px] font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+        >
+          <Sparkles size={14} />
+          Plan with AI
+        </motion.button>
+      </div>
+
+      <div className="border-t border-border pt-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint">
+            Milestones
+          </p>
+          <motion.button
             onClick={() => setAddingMilestone((v) => !v)}
-          />
-          <ActionChip
-            icon={Sparkles}
-            label="Plan with AI"
-            accent={accent}
-            onClick={() => useGoalPlanWizardStore.getState().start(goal.id)}
-          />
+            whileTap={tap}
+            className="shrink-0 flex items-center gap-1 h-7 px-2.5 rounded-full bg-surface-raised text-[12px] font-semibold"
+          >
+            <Plus size={12} />
+            Add Milestone
+          </motion.button>
         </div>
 
-        <Collapse open={addingMilestone}>
+        <Collapse open={addingMilestone} className="pb-3">
           <input
             autoFocus
             value={milestoneText}
@@ -367,127 +402,169 @@ function GoalDetailContent({
             className="w-full bg-surface-alt rounded-xl px-3.5 py-2.5 text-[13.5px] text-fg placeholder-fg-faint focus:outline-none"
           />
         </Collapse>
-      </div>
 
-      <Collapse open={goal.milestones.length > 0} outerClassName="mb-6">
-        <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-3">
-          Milestones
-        </p>
-        <div className="relative pl-[22px]">
-          <div className="absolute left-[7px] top-1.5 bottom-1.5 w-[2px] bg-surface-subtle" />
-          {goal.milestones.map((m) => {
-            // A milestone with AI-scheduled sessions derives its done
-            // state from them (see isMilestoneDone) — its dot must show
-            // that same state, and toggling it by hand would silently do
-            // nothing to the actual progress ring, so it isn't offered.
-            const hasLinkedTasks = (m.linkedTaskIds?.length ?? 0) > 0;
-            const done = isMilestoneDone(m, tasks);
-            const expanded = expandedMilestoneId === m.id;
-            const linkedTasks = hasLinkedTasks
-              ? tasks
-                  .filter((t) => m.linkedTaskIds!.includes(t.id))
-                  .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes)
-              : [];
-            return (
-              <div key={m.id} className="relative">
-                <div className="py-2.5 flex items-center gap-3">
-                  <button
-                    onClick={
-                      hasLinkedTasks
-                        ? undefined
-                        : () => useGoalStore.getState().toggleMilestone(goal.id, m.id)
-                    }
-                    disabled={hasLinkedTasks}
-                    aria-label={
-                      hasLinkedTasks
-                        ? done
-                          ? "Done — every scheduled session is completed"
-                          : "Not done — scheduled sessions still pending"
-                        : done
-                          ? "Mark step not done"
-                          : "Mark step done"
-                    }
-                    className={`absolute -left-[22px] w-4 h-4 rounded-full border-2 shrink-0 ${
-                      hasLinkedTasks ? "cursor-default" : ""
-                    }`}
-                    style={
-                      done
-                        ? { backgroundColor: accent, borderColor: accent }
-                        : {
-                            borderColor: "var(--surface-subtle)",
-                            backgroundColor: "var(--surface)",
-                          }
-                    }
-                  />
-                  <button
-                    onClick={
-                      hasLinkedTasks
-                        ? () => setExpandedMilestoneId(expanded ? null : m.id)
-                        : undefined
-                    }
-                    className={`flex-1 min-w-0 text-left text-[14.5px] font-medium truncate ${
-                      done ? "text-fg-faint line-through" : "text-fg"
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                  {/* Weighting only means something with 2+ steps — a single
-                        one is trivially 100% of the goal. */}
-                  {goal.milestones.length > 1 && (
-                    <WeightInput
-                      value={m.weight}
-                      placeholder={milestoneShareById[m.id] ?? 0}
-                      onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)}
-                    />
-                  )}
-                  <button
-                    onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
-                    aria-label="Delete step"
-                    className="p-1 text-fg-faint shrink-0"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-
-                {hasLinkedTasks && (
-                  <Collapse open={expanded} outerClassName="-mt-1" className="pb-2.5">
-                    <div className="flex flex-col gap-1.5">
-                      {linkedTasks.map((t) => (
-                        <div key={t.id} className="flex items-center gap-2">
-                          <button
-                            onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
-                            aria-label={t.completed ? "Mark task not done" : "Mark task done"}
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                              t.completed
-                                ? "bg-fg border-fg text-fg-inverse"
-                                : "border-border-strong text-transparent"
-                            }`}
-                          >
-                            <Check size={9} strokeWidth={3.5} />
-                          </button>
-                          <button
-                            onClick={() => onOpenTask(t)}
-                            className={`flex-1 min-w-0 text-left text-xs truncate ${
-                              t.completed ? "text-fg-faint line-through" : "text-fg-muted"
-                            }`}
-                          >
-                            {t.title}
-                          </button>
-                        </div>
-                      ))}
+        <Collapse open={goal.milestones.length > 0}>
+          <div className="relative">
+            <div className="absolute left-3.75 top-3 bottom-3 w-0.75 rounded-full bg-surface-subtle" />
+            {/* One colored segment per milestone, each confined to that
+              milestone's own equal slice of the trail — not one continuous
+              bar sized by the goal's overall (weighted) fraction, which
+              used to fill well past a milestone's own dot whenever its
+              weight was high relative to its position in the list. A
+              milestone with scheduled sessions fills proportionally as
+              they're checked off; a plain one is all-or-nothing. */}
+            {goal.milestones.map((m, i) => {
+              const linkedIds = m.linkedTaskIds ?? [];
+              const segFraction =
+                linkedIds.length > 0
+                  ? linkedIds.filter((id) => tasks.find((t) => t.id === id)?.completed).length /
+                    linkedIds.length
+                  : m.done
+                    ? 1
+                    : 0;
+              if (segFraction <= 0) return null;
+              const n = goal.milestones.length;
+              return (
+                <div
+                  key={m.id}
+                  className="absolute left-3.75 w-0.75 rounded-full transition-[height] duration-500 ease-out"
+                  style={{
+                    backgroundColor: accent,
+                    top: `calc(0.75rem + (100% - 1.5rem) * ${i / n})`,
+                    height: `calc((100% - 1.5rem) * ${segFraction / n})`,
+                  }}
+                />
+              );
+            })}
+            <div className="flex flex-col">
+              {goal.milestones.map((m) => {
+                // A milestone with AI-scheduled sessions derives its done
+                // state from them (see isMilestoneDone) — its dot must show
+                // that same state, and toggling it by hand would silently do
+                // nothing to the actual progress ring, so it isn't offered.
+                const hasLinkedTasks = (m.linkedTaskIds?.length ?? 0) > 0;
+                const done = isMilestoneDone(m, tasks);
+                const linkedTasks = hasLinkedTasks
+                  ? tasks
+                      .filter((t) => m.linkedTaskIds!.includes(t.id))
+                      .sort(
+                        (a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes
+                      )
+                  : [];
+                const doneTaskCount = linkedTasks.filter((t) => t.completed).length;
+                return (
+                  <div key={m.id} className="relative flex gap-3 py-2.5">
+                    <div className="relative z-10 w-7.5 shrink-0 flex justify-center pt-0.5">
+                      <button
+                        onClick={
+                          hasLinkedTasks
+                            ? undefined
+                            : () => useGoalStore.getState().toggleMilestone(goal.id, m.id)
+                        }
+                        disabled={hasLinkedTasks}
+                        aria-label={
+                          hasLinkedTasks
+                            ? done
+                              ? "Done — every scheduled session is completed"
+                              : "Not done — scheduled sessions still pending"
+                            : done
+                              ? "Mark step not done"
+                              : "Mark step done"
+                        }
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          hasLinkedTasks ? "cursor-default" : ""
+                        }`}
+                        style={
+                          done
+                            ? { backgroundColor: accent, borderColor: accent }
+                            : {
+                                borderColor: "var(--surface-subtle)",
+                                backgroundColor: "var(--surface)",
+                              }
+                        }
+                      >
+                        {done && <Check size={11} strokeWidth={3.5} className="text-fg-inverse" />}
+                      </button>
                     </div>
-                  </Collapse>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {goal.milestones.length > 1 && (
-          <p className="text-[11px] text-fg-faint mt-2">
-            Type a step's % of this goal, or leave it blank to share the rest evenly.
-          </p>
-        )}
-      </Collapse>
+
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setViewingMilestoneId(m.id)}
+                          className={`flex-1 min-w-0 text-left text-[14.5px] font-semibold truncate ${
+                            done ? "text-fg-faint line-through" : "text-fg"
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                        {/* Weighting only means something with 2+ steps — a
+                          single one is trivially 100% of the goal. */}
+                        {goal.milestones.length > 1 && (
+                          <WeightInput
+                            value={m.weight}
+                            placeholder={milestoneShareById[m.id] ?? 0}
+                            onChange={(w) =>
+                              useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)
+                            }
+                          />
+                        )}
+                        <button
+                          onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
+                          aria-label="Delete step"
+                          className="p-1 text-fg-faint shrink-0"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                      {hasLinkedTasks && (
+                        <p className="text-[11px] text-fg-faint mt-0.5">
+                          {doneTaskCount} of {linkedTasks.length} sessions
+                        </p>
+                      )}
+
+                      {hasLinkedTasks && (
+                        <div className="flex flex-col gap-1.5 mt-2">
+                          {linkedTasks.map((t) => (
+                            <div
+                              key={t.id}
+                              className="flex items-center gap-2 rounded-xl bg-surface-alt px-2.5 py-2"
+                            >
+                              <button
+                                onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
+                                aria-label={t.completed ? "Mark task not done" : "Mark task done"}
+                                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                  t.completed
+                                    ? "bg-fg border-fg text-fg-inverse"
+                                    : "border-border-strong text-transparent"
+                                }`}
+                              >
+                                <Check size={9} strokeWidth={3.5} />
+                              </button>
+                              <button
+                                onClick={() => setViewingTask(t)}
+                                className={`flex-1 min-w-0 text-left text-[12.5px] truncate ${
+                                  t.completed ? "text-fg-faint line-through" : "text-fg-muted"
+                                }`}
+                              >
+                                {t.title}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {goal.milestones.length > 1 && (
+            <p className="text-[11px] text-fg-faint mt-2">
+              Type a step's % of this goal, or leave it blank to share the rest evenly.
+            </p>
+          )}
+        </Collapse>
+      </div>
 
       <Collapse open={p.linkedTasks.length > 0 || p.linkedGoals.length > 0}>
         <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-3">
@@ -511,7 +588,7 @@ function GoalDetailContent({
                 <Check size={11} strokeWidth={3.5} />
               </button>
               <button
-                onClick={() => onOpenTask(t)}
+                onClick={() => setViewingTask(t)}
                 className={`flex-1 min-w-0 text-left text-sm truncate ${
                   t.completed ? "text-fg-faint line-through" : "text-fg"
                 }`}
@@ -570,29 +647,24 @@ function GoalDetailContent({
           Type a task or goal's % of this one, or leave it blank to share the rest evenly.
         </p>
       </Collapse>
-    </div>
-  );
-}
 
-function ActionChip({
-  icon: Icon,
-  label,
-  onClick,
-  accent,
-}: {
-  icon: typeof Plus;
-  label: string;
-  onClick: () => void;
-  accent?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-full bg-surface-raised"
-      style={accent ? { color: accent } : { color: "var(--fg-faint)" }}
-    >
-      <Icon size={13} />
-      {label}
-    </button>
+      <TaskDetailSheet
+        item={viewingTask ? { type: "task", data: viewingTask } : null}
+        onClose={() => setViewingTask(null)}
+        onShowOnCalendar={viewingTask ? () => onOpenTask(viewingTask) : undefined}
+      />
+
+      <GoalEditSheet goal={editing ? goal : null} onClose={() => setEditing(false)} />
+
+      <MilestoneDetailSheet
+        goal={goal}
+        milestoneId={viewingMilestoneId}
+        tasks={tasks}
+        accent={accent}
+        milestoneShareById={milestoneShareById}
+        onClose={() => setViewingMilestoneId(null)}
+        onViewTask={setViewingTask}
+      />
+    </div>
   );
 }

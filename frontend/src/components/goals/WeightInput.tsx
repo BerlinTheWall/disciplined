@@ -23,7 +23,7 @@ export default function WeightInput({
         placeholder={String(Math.round(placeholder))}
         inputMode="numeric"
         aria-label="Weight"
-        className="w-8 bg-transparent text-right text-xs font-medium tabular-nums text-fg placeholder-fg-faint focus:outline-none"
+        className="w-8 bg-transparent text-right text-xs font-medium tabular-nums text-fg-muted placeholder-fg-muted focus:outline-none"
       />
       <span className="text-xs text-fg-faint">%</span>
     </div>
