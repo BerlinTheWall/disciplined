@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Briefcase,
@@ -211,23 +211,26 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
 
-  useEffect(() => {
-    if (endDateTouched) return;
+  // Until the user picks an end date by hand, it tracks the scale/start date
+  // so it always shows the same "one period" default the goal would get if
+  // left untouched. Derived during render rather than synced via effect.
+  const defaultEndDate = useMemo(() => {
     const start = newStartDate || todayISODate();
-    setNewEndDate(goalEndDate(newScale, periodKeyFor(newScale, parseISODate(start)), start, null));
-  }, [newScale, newStartDate, endDateTouched]);
+    return goalEndDate(newScale, periodKeyFor(newScale, parseISODate(start)), start, null);
+  }, [newScale, newStartDate]);
+  const effectiveEndDate = endDateTouched ? newEndDate : defaultEndDate;
 
   // Step 2's header subtitle — same spirit as AddItemSheet's time-range
   // line: a quick reminder of what was just set on step 1, since the start
   // date field itself scrolls out of view once you're this far in.
   const newGoalDays = useMemo(() => {
     const start = newStartDate || todayISODate();
-    const end = newEndDate || start;
+    const end = effectiveEndDate || start;
     return Math.max(
       1,
       Math.round((parseISODate(end).getTime() - parseISODate(start).getTime()) / 86400000) + 1
     );
-  }, [newStartDate, newEndDate]);
+  }, [newStartDate, effectiveEndDate]);
 
   // Custom tags typed in from a past goal (plus whatever's mid-entry right
   // now), offered as chips alongside the built-in categories — a user's own
@@ -283,7 +286,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setDescError("");
     try {
       const startDate = newStartDate || todayISODate();
-      const durationCount = durationCountFromEndDate(newScale, startDate, newEndDate || startDate);
+      const durationCount = durationCountFromEndDate(
+        newScale,
+        startDate,
+        effectiveEndDate || startDate
+      );
       const res = await api.goalDescription.generate({
         title: trimmed,
         category: newCategory,
@@ -304,7 +311,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     const trimmed = title.trim();
     if (!trimmed) return;
     const startDate = newStartDate || todayISODate();
-    const durationCount = durationCountFromEndDate(newScale, startDate, newEndDate || startDate);
+    const durationCount = durationCountFromEndDate(
+      newScale,
+      startDate,
+      effectiveEndDate || startDate
+    );
     const id = addGoal({
       period: newScale,
       periodKey: periodKeyFor(newScale, parseISODate(startDate)),
@@ -327,11 +338,15 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   }
 
   return (
-    <div className="relative space-y-4 pb-6">
+    <div
+      className={`relative flex flex-col gap-4 pb-6 ${
+        goalsView === "overview" ? "h-full overflow-hidden" : ""
+      }`}
+    >
       {goalsView === "overview" ? (
         <>
           {/* Horizon toggle with an animated selected pill */}
-          <div className="flex items-center bg-surface-raised rounded-xl p-1">
+          <div className="flex items-center bg-surface-raised rounded-xl p-1 shrink-0">
             {PERIODS.map((p) => (
               <button
                 key={p.key}
@@ -353,7 +368,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           </div>
 
           {/* Period navigation */}
-          <div className="flex items-center justify-between px-1">
+          <div className="flex items-center justify-between px-1 shrink-0">
             <motion.button
               onClick={() => shift(-1)}
               whileTap={tap}
@@ -381,7 +396,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
           {/* Overview header: the browsed period's own label plus a running
               count of every task linked (directly or via a milestone) to a
               goal shown below. */}
-          <div className="flex items-center justify-between px-1">
+          <div className="flex items-center justify-between px-1 shrink-0">
             <h2 className="text-base font-extrabold text-fg capitalize">
               {relativePeriodName(period, activeKey) ?? periodLabel(period, activeKey)} Overview
             </h2>
@@ -532,10 +547,10 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                 >
                   <span className="flex items-center gap-2 text-fg font-medium">
                     <Calendar size={18} className="text-fg-faint" />
-                    {formatFullDate(newEndDate)}
+                    {formatFullDate(effectiveEndDate)}
                   </span>
                   <span className="flex items-center gap-1 text-fg-faint text-sm">
-                    {relativeDayLabel(newEndDate)}
+                    {relativeDayLabel(effectiveEndDate)}
                     <ChevronRight size={16} />
                   </span>
                 </motion.button>
@@ -786,7 +801,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         onClose={() => setEndDateOpen(false)}
       >
         <CalendarMonth
-          value={newEndDate}
+          value={effectiveEndDate}
           color={GOAL_ACCENT}
           onChange={(iso) => {
             setNewEndDate(iso);

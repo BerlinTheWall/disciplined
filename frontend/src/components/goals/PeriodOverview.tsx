@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 
@@ -93,23 +93,6 @@ export default function PeriodOverview({
 
   const railHeight = rowHeights.reduce((sum, h) => sum + h, 0);
 
-  // Bring "today" into view whenever the period/instance being browsed
-  // changes. The rail used to own a nested `overflow-y-auto` scroll region
-  // just for this — but every other scrollable surface in the app is its
-  // own full-screen sheet, never nested inside the page's own scroll
-  // container, and this one was: it fought the page's scroll (and its
-  // pull-to-refresh gesture, see App.tsx's attachPullToRefresh) for the
-  // same touch input, feeling stuck/janky. Scrolling the rail's own content
-  // into view on the page's scroll container instead avoids that entirely.
-  const todayRowRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!stops.some((s) => s.isToday)) return;
-    todayRowRef.current?.scrollIntoView({ behavior: "auto", block: "center" });
-    // Only re-run when the browsed period/instance changes, not on every
-    // goal/task edit — a data change shouldn't yank the user's scroll spot.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, activeKey]);
-
   function handleActivate(stop: PeriodStop) {
     if (stop.action.kind === "day") onOpenDay(stop.action.date);
     else onJumpPeriod(stop.action.period, stop.action.periodKey);
@@ -125,9 +108,9 @@ export default function PeriodOverview({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
       {period === "week" && weekGoals.length > 0 && (
-        <div className="bg-surface rounded-2xl shadow-soft p-3">
+        <div className="bg-surface rounded-2xl shadow-soft p-3 shrink-0">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
             This week's goals
           </p>
@@ -148,57 +131,64 @@ export default function PeriodOverview({
         </div>
       )}
 
-      <div className="bg-surface rounded-2xl shadow-soft p-3">
-        <div className="relative" style={{ height: railHeight }}>
-          <svg
-            width={WIDTH}
-            height={railHeight}
-            viewBox={`0 0 ${WIDTH} ${railHeight}`}
-            className="absolute left-0 top-0"
-            role="presentation"
-          >
-            <path
-              d={pathD}
-              fill="none"
-              stroke="var(--path-road)"
-              strokeWidth={5}
-              strokeLinecap="round"
-            />
-            {travelledD && (
+      {/* The rail itself is the one thing that scrolls — bounded to
+          whatever's left of the page's fixed height (see GoalsPage's own
+          root), rather than growing the whole page taller as more stops or
+          items pile up. Outer box clips to the rounded shape; the actual
+          scroller is the inner div so padding/rounding never look clipped
+          mid-scroll. */}
+      <div className="bg-surface rounded-2xl shadow-soft flex-1 min-h-0 overflow-hidden">
+        <div className="h-full overflow-y-auto p-3">
+          <div className="relative" style={{ height: railHeight }}>
+            <svg
+              width={WIDTH}
+              height={railHeight}
+              viewBox={`0 0 ${WIDTH} ${railHeight}`}
+              className="absolute left-0 top-0"
+              role="presentation"
+            >
               <path
-                d={travelledD}
+                d={pathD}
                 fill="none"
-                stroke="var(--path-accent)"
+                stroke="var(--path-road)"
                 strokeWidth={5}
                 strokeLinecap="round"
               />
-            )}
-            {stops.map((stop, i) => (
-              <PathDot
-                key={stop.id}
-                stop={stop}
-                x={points[i].x}
-                y={points[i].y}
-                onActivate={() => handleActivate(stop)}
-              />
-            ))}
-          </svg>
-
-          <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
-            {stops.map((stop, i) => (
-              <div
-                key={stop.id}
-                ref={stop.isToday ? todayRowRef : undefined}
-                style={{ height: rowHeights[i] }}
-                className="flex items-center pr-1"
-              >
-                <StopCard
-                  stop={stop}
-                  onActivateStop={() => handleActivate(stop)}
-                  onOpenItem={openItem}
+              {travelledD && (
+                <path
+                  d={travelledD}
+                  fill="none"
+                  stroke="var(--path-accent)"
+                  strokeWidth={5}
+                  strokeLinecap="round"
                 />
-              </div>
-            ))}
+              )}
+              {stops.map((stop, i) => (
+                <PathDot
+                  key={stop.id}
+                  stop={stop}
+                  x={points[i].x}
+                  y={points[i].y}
+                  onActivate={() => handleActivate(stop)}
+                />
+              ))}
+            </svg>
+
+            <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
+              {stops.map((stop, i) => (
+                <div
+                  key={stop.id}
+                  style={{ height: rowHeights[i] }}
+                  className="flex items-center pr-1"
+                >
+                  <StopCard
+                    stop={stop}
+                    onActivateStop={() => handleActivate(stop)}
+                    onOpenItem={openItem}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
