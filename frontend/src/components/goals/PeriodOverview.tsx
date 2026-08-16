@@ -110,7 +110,11 @@ export default function PeriodOverview({
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       {period === "week" && weekGoals.length > 0 && (
-        <div className="bg-surface rounded-2xl shadow-soft p-3 shrink-0">
+        <div className="bg-surface rounded-2xl shadow-soft p-3 shrink-0 max-h-44 overflow-y-auto">
+          {/* Capped and independently scrollable — a long list of week goals
+              must never eat into the rail's own space below (that's the box
+              meant to fill whatever's left and stay the one thing that
+              scrolls to keep the page itself fixed-height). */}
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
             This week's goals
           </p>
