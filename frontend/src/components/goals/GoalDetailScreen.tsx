@@ -1,23 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import {
-  Check,
-  ListChecks,
-  MessageSquareText,
-  Plus,
-  Sparkles,
-  Trash2,
-  Waypoints,
-  X,
-} from "lucide-react";
+import { Check, ListChecks, MessageSquareText, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
 import { useChoose, useConfirm } from "@/components/ConfirmDialog";
 import GoalCelebration from "@/components/goals/GoalCelebration";
-import LinkedGoalPicker from "@/components/goals/LinkedGoalPicker";
 import WeightInput from "@/components/goals/WeightInput";
-import { canLinkGoalPeriod } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
 import {
   GOAL_PACE_COLOR,
@@ -57,7 +46,6 @@ export default function GoalDetailScreen({
 }) {
   const confirm = useConfirm();
   const choose = useChoose();
-  const [goalPickerOpen, setGoalPickerOpen] = useState(false);
   const [addingMilestone, setAddingMilestone] = useState(false);
   const [milestoneText, setMilestoneText] = useState("");
   const [noteEditing, setNoteEditing] = useState(false);
@@ -99,8 +87,6 @@ export default function GoalDetailScreen({
           celebrate={celebrate}
           noteEditing={noteEditing}
           setNoteEditing={setNoteEditing}
-          goalPickerOpen={goalPickerOpen}
-          setGoalPickerOpen={setGoalPickerOpen}
           addingMilestone={addingMilestone}
           setAddingMilestone={setAddingMilestone}
           milestoneText={milestoneText}
@@ -126,8 +112,6 @@ function GoalDetailContent({
   celebrate,
   noteEditing,
   setNoteEditing,
-  goalPickerOpen,
-  setGoalPickerOpen,
   addingMilestone,
   setAddingMilestone,
   milestoneText,
@@ -147,8 +131,6 @@ function GoalDetailContent({
   celebrate: boolean;
   noteEditing: boolean;
   setNoteEditing: (v: boolean) => void;
-  goalPickerOpen: boolean;
-  setGoalPickerOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
   addingMilestone: boolean;
   setAddingMilestone: (v: boolean | ((prev: boolean) => boolean)) => void;
   milestoneText: string;
@@ -176,9 +158,6 @@ function GoalDetailContent({
   });
   const accent = goalColor(goal.priority);
   const showNote = noteEditing || !!goal.note || pace === "behind" || pace === "at-risk";
-  const linkableGoals = goals.filter(
-    (g) => g.id !== goal.id && canLinkGoalPeriod(goal.period, g.period)
-  );
   // Every task this goal actually drives — its own links plus whatever's
   // attached to a milestone (how AI-scheduled sessions get linked) — so
   // deleting the goal can offer to take them with it instead of silently
@@ -194,7 +173,7 @@ function GoalDetailContent({
     useGoalStore.getState().setPriority(goal.id, next);
   };
 
-  const circumference = 2 * Math.PI * 66;
+  const circumference = 2 * Math.PI * 44;
   const subtitle =
     p.mode === "linked"
       ? `${p.current} of ${p.total} linked`
@@ -358,14 +337,6 @@ function GoalDetailContent({
             accent={accent}
             onClick={() => useGoalFocusStore.getState().requestAddTask(goal.id)}
           />
-          {linkableGoals.length > 0 && (
-            <ActionChip
-              icon={Waypoints}
-              label="Goal"
-              accent={accent}
-              onClick={() => setGoalPickerOpen((v) => !v)}
-            />
-          )}
           <ActionChip
             icon={ListChecks}
             label="Milestone"
@@ -379,10 +350,6 @@ function GoalDetailContent({
             onClick={() => useGoalPlanWizardStore.getState().start(goal.id)}
           />
         </div>
-
-        <Collapse open={goalPickerOpen}>
-          <LinkedGoalPicker goal={goal} allGoals={goals} />
-        </Collapse>
 
         <Collapse open={addingMilestone}>
           <input

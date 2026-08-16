@@ -1,5 +1,5 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
-import { currentPeriodKey, goalOverlapsPeriod, periodLabel, periodRange } from "./goalPeriods";
+import { currentPeriodKey, goalOverlapsPeriod, periodLabel } from "./goalPeriods";
 import { priorityRank } from "./goalPriority";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
@@ -146,61 +146,17 @@ function weeksInMonth(monthKey: string): string[] {
 function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): PeriodStop[] {
   const today = todayISODate();
   const weekKeys = weeksInMonth(activeKey);
-  const todayIndex = weekKeys.findIndex((wk) => wk <= today && today <= addDaysISO(wk, 6));
-  const foldIndex = todayIndex >= 0 ? todayIndex : 0;
-  // Goals filed directly under this month, or spanning into it from a
-  // neighboring month (goalOverlapsPeriod, not a strict periodKey match) —
-  // a 2-month goal starting last month is still just as much this month's
-  // goal for however many of its weeks land here, the same reasoning
-  // goalOverlapsPeriod's own doc comment gives one level up for Year.
-  // Folded into whichever stop is "current" (or the first, if browsing a
-  // past/future month) rather than getting their own section.
-  const ownGoals = goals.filter(
-    (g) => g.period === "month" && goalOverlapsPeriod(g, "month", activeKey)
-  );
 
   return weekKeys.map((weekKey, i) => {
+    const sunday = addDaysISO(weekKey, 6);
+    // Every goal actually live during this week — native week goals, plus
+    // coarser (month/year) goals reaching down into it — each shown as its
+    // own chip. A month-long goal is live across several weeks, so it
+    // deliberately gets a chip in every one of them, not just one "fold"
+    // week; the point is "what's active this week", not "who owns this week".
     const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
     const { fraction, hasData } = fractionOfGoals(cascadeGoals, goals, tasks);
-
-    const sunday = addDaysISO(weekKey, 6);
-
-    // Card items: narrower than the ring's cascade set — this week's own
-    // native (or same-scale spanning) goals only, plus the fold above.
-    const nativeGoals = goals.filter(
-      (g) => g.period === "week" && goalOverlapsPeriod(g, "week", weekKey)
-    );
-    const chipGoals = i === foldIndex ? [...nativeGoals, ...ownGoals] : nativeGoals;
-    const chipGoalIds = new Set(chipGoals.map((g) => g.id));
-
-    // A coarser (month/year) goal cascades into every one of this month's
-    // weeks (cascadeGoals, above) but only ever gets its own chip in the fold
-    // week — so a goal with one task per week would otherwise only ever show
-    // up in that single week's card, even though it genuinely has a session
-    // in every other week too. Surface those actual per-week sessions here,
-    // skipping goals already shown as their own chip this week so the same
-    // goal doesn't appear twice in one card.
-    const taskLinkedGoals = cascadeGoals.filter((g) => !chipGoalIds.has(g.id));
-    const weekTaskIds = new Set(
-      taskLinkedGoals.flatMap((g) => [
-        ...(g.linkedTaskIds ?? []),
-        ...g.milestones.flatMap((m) => m.linkedTaskIds ?? []),
-      ])
-    );
-    const weekTasks = tasks
-      .filter((t) => weekTaskIds.has(t.id) && t.date >= weekKey && t.date <= sunday)
-      .sort((a, b) => a.startMinutes - b.startMinutes);
-    const taskItems: PeriodStopItem[] = weekTasks.map((t) => ({
-      kind: "task",
-      id: t.id,
-      title: t.title,
-      done: t.completed,
-      fraction: t.completed ? 1 : 0,
-      percent: t.completed ? 100 : 0,
-      sortKey: t.startMinutes,
-    }));
-
-    const items = [...goalItems(chipGoals, goals, tasks), ...taskItems];
+    const items = goalItems(cascadeGoals, goals, tasks);
 
     return {
       id: weekKey,
@@ -223,48 +179,14 @@ function buildYearStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
     { length: 12 },
     (_, i) => `${activeKey}-${String(i + 1).padStart(2, "0")}`
   );
-  const todayIndex = activeKey === todayYearKey ? monthKeys.indexOf(todayMonthKey) : -1;
-  const foldIndex = todayIndex >= 0 ? todayIndex : 0;
-  // Goals filed directly under this year itself — same fold rule one level up.
-  const ownGoals = goals.filter((g) => g.period === "year" && g.periodKey === activeKey);
 
   return monthKeys.map((monthKey, i) => {
+    // Same reasoning as buildMonthStops one level down — every goal live
+    // during this month gets its own chip here, including a year-long goal
+    // reaching down into several months at once.
     const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "month", monthKey));
     const { fraction, hasData } = fractionOfGoals(cascadeGoals, goals, tasks);
-
-    const nativeGoals = goals.filter(
-      (g) => g.period === "month" && goalOverlapsPeriod(g, "month", monthKey)
-    );
-    const chipGoals = i === foldIndex ? [...nativeGoals, ...ownGoals] : nativeGoals;
-    const chipGoalIds = new Set(chipGoals.map((g) => g.id));
-
-    // Same reasoning as buildMonthStops one level down: a year goal only
-    // ever gets its own chip in the fold month, so surface its actually-
-    // scheduled tasks under whichever month they're really on too.
-    const { start: monthStart, end: monthEnd } = periodRange("month", monthKey);
-    const monthStartISO = toISODate(monthStart);
-    const monthEndISO = toISODate(monthEnd);
-    const taskLinkedGoals = cascadeGoals.filter((g) => !chipGoalIds.has(g.id));
-    const monthTaskIds = new Set(
-      taskLinkedGoals.flatMap((g) => [
-        ...(g.linkedTaskIds ?? []),
-        ...g.milestones.flatMap((m) => m.linkedTaskIds ?? []),
-      ])
-    );
-    const monthTasks = tasks
-      .filter((t) => monthTaskIds.has(t.id) && t.date >= monthStartISO && t.date <= monthEndISO)
-      .sort((a, b) => a.startMinutes - b.startMinutes);
-    const taskItems: PeriodStopItem[] = monthTasks.map((t) => ({
-      kind: "task",
-      id: t.id,
-      title: t.title,
-      done: t.completed,
-      fraction: t.completed ? 1 : 0,
-      percent: t.completed ? 100 : 0,
-      sortKey: t.startMinutes,
-    }));
-
-    const items = [...goalItems(chipGoals, goals, tasks), ...taskItems];
+    const items = goalItems(cascadeGoals, goals, tasks);
 
     return {
       id: monthKey,
