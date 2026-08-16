@@ -818,18 +818,13 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         />
       </FieldPanel>
 
-      <AnimatePresence>
-        {detailGoal && (
-          <GoalDetailScreen
-            key={detailGoal.id}
-            goal={detailGoal}
-            goals={goals}
-            tasks={tasks}
-            onClose={() => setDetailGoalId(null)}
-            onOpenTask={openTask}
-          />
-        )}
-      </AnimatePresence>
+      <GoalDetailScreen
+        goal={detailGoal}
+        goals={goals}
+        tasks={tasks}
+        onClose={() => setDetailGoalId(null)}
+        onOpenTask={openTask}
+      />
 
       <GoalPlanWizard />
     </div>
