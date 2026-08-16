@@ -158,10 +158,11 @@ export default function PeriodOverview({
       {/* The rail itself is the one thing that scrolls — bounded to
           whatever's left of the page's fixed height (see GoalsPage's own
           root), rather than growing the whole page taller as more stops or
-          items pile up. Outer box clips to the rounded shape; the actual
-          scroller is the inner div so padding/rounding never look clipped
-          mid-scroll. */}
-      <div className="bg-surface rounded-2xl shadow-soft flex-1 min-h-0 overflow-hidden">
+          items pile up. Capped below that too (max-h), so it doesn't stretch
+          to fill a tall screen just because the space is there. Outer box
+          clips to the rounded shape; the actual scroller is the inner div so
+          padding/rounding never look clipped mid-scroll. */}
+      <div className="bg-surface rounded-2xl shadow-soft flex-1 min-h-0 max-h-90 overflow-hidden">
         <div ref={scrollRef} className="h-full overflow-y-auto p-3">
           <div className="relative" style={{ height: railHeight }}>
             <svg
