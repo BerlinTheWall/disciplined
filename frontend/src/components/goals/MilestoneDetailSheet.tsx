@@ -4,6 +4,7 @@ import { Check, ListChecks, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import WeightInput from "@/components/goals/WeightInput";
+import { hexToRgba } from "@/lib/color";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -138,18 +139,23 @@ function MilestoneDetailContent({
           {linkedTasks.map((t) => (
             <div
               key={t.id}
-              className="flex items-center gap-2.5 rounded-xl bg-surface-alt px-3 py-2.5"
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
+              style={{ backgroundColor: hexToRgba(t.color, 0.12) }}
             >
               <button
                 onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
                 aria-label={t.completed ? "Mark task not done" : "Mark task done"}
-                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  t.completed
-                    ? "bg-fg border-fg text-fg-inverse"
-                    : "border-border-strong text-transparent"
-                }`}
+                className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: t.completed ? t.color : "transparent",
+                  borderColor: t.color,
+                }}
               >
-                <Check size={11} strokeWidth={3.5} />
+                <Check
+                  size={11}
+                  strokeWidth={3.5}
+                  className={t.completed ? "text-white" : "text-transparent"}
+                />
               </button>
               <button
                 onClick={() => onViewTask(t)}

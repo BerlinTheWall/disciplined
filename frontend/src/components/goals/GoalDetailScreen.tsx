@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Briefcase,
   Calendar,
   Check,
+  CheckSquare,
   FileText,
+  Heart,
   Pencil,
   Plus,
   Sparkles,
   Trash2,
   TriangleAlert,
+  User,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
@@ -20,6 +25,7 @@ import GoalEditSheet from "@/components/goals/GoalEditSheet";
 import MilestoneDetailSheet from "@/components/goals/MilestoneDetailSheet";
 import WeightInput from "@/components/goals/WeightInput";
 import TaskDetailSheet from "@/components/timeline/TaskDetailSheet";
+import { hexToRgba } from "@/lib/color";
 import { parseISODate, todayISODate } from "@/lib/date";
 import { goalEndDate } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
@@ -31,7 +37,7 @@ import {
   isMilestoneDone,
   roundShares,
 } from "@/lib/goalProgress";
-import { tap } from "@/lib/motion";
+import { spring, tap } from "@/lib/motion";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -39,6 +45,16 @@ import type { Goal } from "@/types/goals";
 import type { Priority, Task } from "@/types/task";
 
 const PRIORITY_CYCLE: (Priority | null)[] = [null, "high", "medium", "low"];
+
+// Same built-in categories as GoalsPage's add-goal sheet (a custom typed-in
+// tag falls back to the plain description icon below) — lets the
+// description line show what the goal is actually filed under at a glance.
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  personal: User,
+  work: Briefcase,
+  chore: CheckSquare,
+  health: Heart,
+};
 
 // A bottom sheet, same as tapping a task on the timeline opens — depth lives
 // here (hero ring, milestone trail, linked items) rather than in an inline
@@ -162,6 +178,7 @@ function GoalDetailContent({
     linkedShareById[linkedIds[i]] = share;
   });
   const accent = goalColor(goal.priority);
+  const DescriptionIcon = (goal.category && CATEGORY_ICON[goal.category]) || FileText;
   // Every task this goal actually drives — its own links plus whatever's
   // attached to a milestone (how AI-scheduled sessions get linked) — so
   // deleting the goal can offer to take them with it instead of silently
@@ -177,7 +194,7 @@ function GoalDetailContent({
     useGoalStore.getState().setPriority(goal.id, next);
   };
 
-  const circumference = 2 * Math.PI * 65;
+  const circumference = 2 * Math.PI * 40;
   const subtitle =
     p.mode === "linked"
       ? `${p.current} of ${p.total} linked`
@@ -197,7 +214,7 @@ function GoalDetailContent({
     <div className="relative px-5 pt-3 pb-[calc(28px+env(safe-area-inset-bottom))] max-w-md mx-auto">
       <GoalCelebration show={celebrate} />
 
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-5">
         <motion.button
           onClick={onClose}
           whileTap={tap}
@@ -207,15 +224,6 @@ function GoalDetailContent({
           <X size={17} />
         </motion.button>
         <div className="flex-1" />
-        <motion.button
-          onClick={cyclePriority}
-          whileTap={tap}
-          aria-label="Priority"
-          className="text-[11px] font-extrabold uppercase tracking-wide shrink-0 px-2 py-1 rounded-full"
-          style={{ color: accent, backgroundColor: `${accent}1f` }}
-        >
-          {goal.priority ?? "none"}
-        </motion.button>
         <motion.button
           onClick={() => setEditing(true)}
           whileTap={tap}
@@ -268,95 +276,138 @@ function GoalDetailContent({
         </motion.button>
       </div>
 
-      <div className="flex items-center gap-4 mb-5">
-        <div className="relative w-38 h-38 shrink-0">
-          <svg width="152" height="152" className="-rotate-90">
-            <circle
-              cx="76"
-              cy="76"
-              r="65"
-              fill="none"
-              stroke="var(--surface-subtle)"
-              strokeWidth="12"
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <motion.button
+            onClick={cyclePriority}
+            whileTap={tap}
+            aria-label="Priority"
+            className="flex items-center gap-1.5 shrink-0 text-[11px] font-extrabold uppercase tracking-wide px-2.5 py-1.5 rounded-full"
+            style={{ color: accent, backgroundColor: `${accent}1f` }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: accent }}
             />
-            <circle
-              cx="76"
-              cy="76"
-              r="65"
-              fill="none"
-              stroke={accent}
-              strokeWidth="12"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={p.done ? 0 : circumference * (1 - p.fraction)}
-              style={{ transition: "stroke-dashoffset 0.6s ease" }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {p.done ? (
-              <Check size={36} style={{ color: accent }} strokeWidth={3} />
-            ) : (
-              <b className="text-[29px] font-extrabold leading-none">{p.percent}%</b>
-            )}
-            <span className="text-[12px] text-fg-faint font-semibold mt-1.5 text-center px-2 leading-tight">
-              {subtitle}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h1 className="min-w-0 text-[19px] font-extrabold leading-tight">{goal.title}</h1>
-            {pace && (
-              <span
-                className="flex items-center gap-1 shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full"
-                style={{
-                  color: GOAL_PACE_COLOR[pace],
-                  backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
-                }}
-              >
-                {pace !== "on-track" && <TriangleAlert size={11} strokeWidth={2.5} />}
-                {GOAL_PACE_LABEL[pace]}
-              </span>
-            )}
-          </div>
-
-          {goal.description && (
-            <div className="flex items-center gap-1.5 mt-2 text-[13px] text-fg-muted">
-              <FileText size={13} className="shrink-0 text-fg-faint" />
-              <span className="min-w-0 truncate">{goal.description}</span>
-            </div>
-          )}
-
-          <div className="flex items-center gap-1.5 mt-1.5 text-[13px] text-fg-muted">
-            <Calendar size={13} className="shrink-0 text-fg-faint" />
-            {parseISODate(endDate).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-            <span className="text-fg-faint">
-              ·{" "}
-              {daysRemaining > 0
-                ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
-                : daysRemaining === 0
-                  ? "Last day"
-                  : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
-            </span>
-          </div>
-
-          {p.mode === "manual" && !p.done && (
-            <motion.button
-              onClick={() => useGoalStore.getState().addProgress(goal.id, 1)}
-              whileTap={tap}
-              className="flex items-center gap-1 text-[12.5px] font-semibold mt-2 px-2.5 py-1 rounded-full bg-surface-raised"
-              style={{ color: accent }}
+            {goal.priority ?? "none"}
+          </motion.button>
+          {pace && (
+            <span
+              className="flex items-center gap-1 shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
+              style={{
+                color: GOAL_PACE_COLOR[pace],
+                backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
+              }}
             >
-              <Plus size={13} />
-              Add progress
-            </motion.button>
+              {pace !== "on-track" && <TriangleAlert size={11} strokeWidth={2.5} />}
+              {GOAL_PACE_LABEL[pace]}
+            </span>
           )}
         </div>
+        <span className="flex items-center gap-1.5 shrink-0 text-[12px] font-semibold text-fg-muted bg-surface-raised px-2.5 py-1.5 rounded-full">
+          <Calendar size={13} className="shrink-0 text-fg-faint" />
+          {parseISODate(endDate).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </span>
+      </div>
+
+      <h1 className="text-[25px] font-extrabold leading-tight mb-1.5">{goal.title}</h1>
+
+      {goal.description && (
+        <div className="flex items-center gap-1.5 mb-1.5 text-[13.5px] text-fg-muted">
+          <DescriptionIcon size={14} className="shrink-0" style={{ color: accent }} />
+          <span className="min-w-0 truncate">{goal.description}</span>
+        </div>
+      )}
+
+      <p className="text-[12.5px] text-fg-faint mb-5">
+        {daysRemaining > 0
+          ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
+          : daysRemaining === 0
+            ? "Last day"
+            : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
+      </p>
+
+      <div className="rounded-2xl bg-surface-feature text-white p-5 mb-4">
+        <div className="flex items-center gap-4">
+          <div className="relative w-24 h-24 shrink-0">
+            <svg width="96" height="96" className="-rotate-90">
+              <circle
+                cx="48"
+                cy="48"
+                r="40"
+                fill="none"
+                stroke="rgba(255,255,255,0.14)"
+                strokeWidth="9"
+              />
+              <circle
+                cx="48"
+                cy="48"
+                r="40"
+                fill="none"
+                stroke={accent}
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={p.done ? 0 : circumference * (1 - p.fraction)}
+                style={{ transition: "stroke-dashoffset 0.6s ease" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              {p.done ? (
+                <Check size={26} style={{ color: accent }} strokeWidth={3} />
+              ) : (
+                <b className="text-[21px] font-extrabold leading-none">{p.percent}%</b>
+              )}
+              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wide mt-1">
+                Completed
+              </span>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p
+                className="text-[10.5px] font-extrabold uppercase tracking-wide"
+                style={{ color: accent }}
+              >
+                Overall progress
+              </p>
+              <span className="shrink-0 text-[10px] font-semibold text-gray-400 bg-surface-feature-alt px-2 py-0.5 rounded-full">
+                Target 100%
+              </span>
+            </div>
+            <p className="text-[14.5px] font-bold leading-tight mb-3">{subtitle}</p>
+            <div className="h-1.5 rounded-full bg-surface-feature-alt overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                style={{ backgroundColor: accent }}
+                initial={false}
+                animate={{ width: `${Math.round((p.done ? 1 : p.fraction) * 100)}%` }}
+                transition={spring.gentle}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[11px] font-semibold">
+              <span className="text-gray-500">Start</span>
+              <span style={{ color: accent }}>{p.done ? "Done" : "In progress"}</span>
+            </div>
+          </div>
+        </div>
+
+        {p.mode === "manual" && !p.done && (
+          <motion.button
+            onClick={() => useGoalStore.getState().addProgress(goal.id, 1)}
+            whileTap={tap}
+            className="flex items-center gap-1 text-[12.5px] font-semibold mt-4 px-2.5 py-1 rounded-full bg-surface-feature-alt"
+            style={{ color: accent }}
+          >
+            <Plus size={13} />
+            Add progress
+          </motion.button>
+        )}
       </div>
 
       <div className="flex justify-end mb-4">
@@ -527,18 +578,23 @@ function GoalDetailContent({
                           {linkedTasks.map((t) => (
                             <div
                               key={t.id}
-                              className="flex items-center gap-2 rounded-xl bg-surface-alt px-2.5 py-2"
+                              className="flex items-center gap-2 rounded-xl px-2.5 py-2"
+                              style={{ backgroundColor: hexToRgba(t.color, 0.12) }}
                             >
                               <button
                                 onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
                                 aria-label={t.completed ? "Mark task not done" : "Mark task done"}
-                                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                                  t.completed
-                                    ? "bg-fg border-fg text-fg-inverse"
-                                    : "border-border-strong text-transparent"
-                                }`}
+                                className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
+                                style={{
+                                  backgroundColor: t.completed ? t.color : "transparent",
+                                  borderColor: t.color,
+                                }}
                               >
-                                <Check size={9} strokeWidth={3.5} />
+                                <Check
+                                  size={9}
+                                  strokeWidth={3.5}
+                                  className={t.completed ? "text-white" : "text-transparent"}
+                                />
                               </button>
                               <button
                                 onClick={() => setViewingTask(t)}
@@ -574,18 +630,23 @@ function GoalDetailContent({
           {p.linkedTasks.map((t) => (
             <div
               key={t.id}
-              className="flex items-center gap-2.5 rounded-xl bg-surface-alt px-3 py-2.5"
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
+              style={{ backgroundColor: hexToRgba(t.color, 0.12) }}
             >
               <button
                 onClick={() => useTaskStore.getState().toggleTaskCompleted(t.id)}
                 aria-label={t.completed ? "Mark task not done" : "Mark task done"}
-                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  t.completed
-                    ? "bg-fg border-fg text-fg-inverse"
-                    : "border-border-strong text-transparent"
-                }`}
+                className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: t.completed ? t.color : "transparent",
+                  borderColor: t.color,
+                }}
               >
-                <Check size={11} strokeWidth={3.5} />
+                <Check
+                  size={11}
+                  strokeWidth={3.5}
+                  className={t.completed ? "text-white" : "text-transparent"}
+                />
               </button>
               <button
                 onClick={() => setViewingTask(t)}
