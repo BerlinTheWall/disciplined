@@ -1282,9 +1282,7 @@ export default function AddItemSheet({
               </div>
 
               {/* Extras */}
-              {(mode === "task" ||
-                (mode !== "task" && workoutSessions.length > 0) ||
-                recipes.length > 0) && (
+              {(mode === "task" || workoutSessions.length > 0 || recipes.length > 0) && (
                 <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
                   {mode === "task" && (
                     <FieldRow
