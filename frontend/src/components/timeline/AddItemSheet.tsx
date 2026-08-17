@@ -36,6 +36,7 @@ import {
   repeatSummary,
 } from "./addItemOptions";
 import CalendarMonth from "./CalendarMonth";
+import { findTimeConflicts } from "./dayRows";
 import { FieldPanel, FieldRow, type EditRowKey } from "./FieldPanel";
 import { GoalLinkSection } from "./GoalLinkSection";
 import { RecipeLinkSection, WorkoutLinkSection } from "./LinkSections";
@@ -132,6 +133,10 @@ export default function AddItemSheet({
         state.toggleHabitCompleted,
       ])
     );
+  // Only read for the time-conflict check in handleSubmit — every other
+  // task/habit mutation above goes through the store actions directly.
+  const allTasks = useTaskStore((s) => s.tasks);
+  const allHabits = useHabitStore((s) => s.habits);
   const workoutSessions = useWorkoutStore((s) => s.sessions);
   const recipes = useRecipeStore((s) => s.recipes);
   const addPreset = usePresetStore((s) => s.addPreset);
@@ -392,6 +397,34 @@ export default function AddItemSheet({
     if (!title.trim() || duration < 1) return;
     const startMinutes = timeStringToMinutes(time);
     if (startMinutes + duration > MINUTES_PER_DAY) return;
+
+    // Habits recur across many days, so "does this conflict" doesn't have a
+    // single day to check against — scoped to tasks only, same as the goal
+    // milestone "Add task" flow that motivated this (see pendingMilestone).
+    if (mode === "task") {
+      const excludeId = isEditing && editItem!.type === "task" ? editItem!.data.id : undefined;
+      const conflicts = findTimeConflicts(
+        allTasks,
+        allHabits,
+        date,
+        startMinutes,
+        duration,
+        excludeId
+      );
+      if (conflicts.length > 0) {
+        // Cancel (the dialog's own built-in button, labeled "Go back" here)
+        // and dismissing both resolve to null — either way just returns to
+        // the form so the time can be changed, same as "proceed" being the
+        // only real choice to opt into.
+        const choice = await choose({
+          title: "Time conflict",
+          message: `This overlaps with ${conflicts.map((c) => c.title).join(", ")}.`,
+          options: [{ label: "Add anyway", value: "proceed" }],
+          cancelLabel: "Go back",
+        });
+        if (choice !== "proceed") return;
+      }
+    }
 
     // Doubles as both the interval/monthly cycle anchor and, for a plain
     // weekly habit, its start date — isHabitActiveOnDate never shows an

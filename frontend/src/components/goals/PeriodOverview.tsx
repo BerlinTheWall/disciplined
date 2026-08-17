@@ -429,12 +429,18 @@ function ItemRow({ item, onOpen }: { item: PeriodStopItem; onOpen: () => void })
       {/* A task is always binary (done or not) — its fraction is only ever
           0 or 1, so a proportional ring never showed anything a plain
           checkbox couldn't. Goals genuinely have partial progress worth
-          showing, so they keep the ring. */}
+          showing, so they keep the ring. Its outline doubles as a "which
+          goal" tag (Week view only mixes tasks from several goals on the
+          same day) — tinted with that goal's own accent when not done;
+          done still reads as a plain solid fill so the done/not-done signal
+          itself never gets muddied by which goal it happens to belong to. */}
       {item.kind === "task" ? (
         <span
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
-            item.done ? "bg-fg border-fg text-fg-inverse" : "border-border-strong text-transparent"
+            item.done ? "bg-fg border-fg text-fg-inverse" : "text-transparent"
           }`}
+          style={item.done ? undefined : { borderColor: item.goalAccent ?? "var(--border-strong)" }}
+          aria-label={item.goalTitle ? `Linked to goal: ${item.goalTitle}` : undefined}
         >
           <Check size={11} strokeWidth={3.5} />
         </span>

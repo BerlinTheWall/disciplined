@@ -1,6 +1,6 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
 import { currentPeriodKey, goalOverlapsPeriod, periodLabel } from "./goalPeriods";
-import { priorityRank } from "./goalPriority";
+import { goalColor, priorityRank } from "./goalPriority";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
@@ -22,6 +22,12 @@ export interface PeriodStopItem {
   fraction: number; // 0..1
   percent: number; // round(fraction * 100)
   sortKey: number; // priorityRank for goals; startMinutes for tasks — ascending
+  // Which goal a task item belongs to — Week's day-stops only (a day can mix
+  // tasks from several goals active that week), so the card can tag each
+  // one with its goal's accent instead of them all reading identically.
+  goalId?: string;
+  goalTitle?: string;
+  goalAccent?: string;
 }
 
 export interface PeriodStop {
@@ -96,29 +102,43 @@ function buildWeekStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
   // through the AI wizard has its tasks attached to milestones
   // (linkTasksToMilestones), never to the goal's own linkedTaskIds, so
   // reading only the latter would make every AI-scheduled session invisible
-  // here.
-  const linkedTaskIds = new Set(
-    weekGoals.flatMap((g) => [
-      ...(g.linkedTaskIds ?? []),
-      ...g.milestones.flatMap((m) => m.linkedTaskIds ?? []),
-    ])
-  );
+  // here. Kept as a task id -> owning goal map (first goal wins on the rare
+  // double-link) rather than a plain Set, so each day's items can tag
+  // themselves with their own goal's accent instead of reading identically
+  // when several goals are active the same week.
+  const taskGoalMap = new Map<string, Goal>();
+  for (const g of weekGoals) {
+    for (const id of g.linkedTaskIds ?? []) {
+      if (!taskGoalMap.has(id)) taskGoalMap.set(id, g);
+    }
+    for (const m of g.milestones) {
+      for (const id of m.linkedTaskIds ?? []) {
+        if (!taskGoalMap.has(id)) taskGoalMap.set(id, g);
+      }
+    }
+  }
 
   return Array.from({ length: 7 }, (_, i) => {
     const date = addDaysISO(activeKey, i);
     const dayTasks = tasks
-      .filter((t) => t.date === date && linkedTaskIds.has(t.id))
+      .filter((t) => t.date === date && taskGoalMap.has(t.id))
       .sort((a, b) => a.startMinutes - b.startMinutes);
     const { fraction, hasData } = fractionOfTasks(dayTasks);
-    const items: PeriodStopItem[] = dayTasks.map((t) => ({
-      kind: "task",
-      id: t.id,
-      title: t.title,
-      done: t.completed,
-      fraction: t.completed ? 1 : 0,
-      percent: t.completed ? 100 : 0,
-      sortKey: t.startMinutes,
-    }));
+    const items: PeriodStopItem[] = dayTasks.map((t) => {
+      const owner = taskGoalMap.get(t.id);
+      return {
+        kind: "task",
+        id: t.id,
+        title: t.title,
+        done: t.completed,
+        fraction: t.completed ? 1 : 0,
+        percent: t.completed ? 100 : 0,
+        sortKey: t.startMinutes,
+        goalId: owner?.id,
+        goalTitle: owner?.title,
+        goalAccent: owner ? goalColor(owner.priority) : undefined,
+      };
+    });
     const parsedDate = parseISODate(date);
     return {
       id: date,
