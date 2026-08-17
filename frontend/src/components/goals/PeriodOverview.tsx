@@ -6,6 +6,7 @@ import { buildPeriodStops, type PeriodStop, type PeriodStopItem } from "@/lib/go
 import { goalProgress } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { smoothPathDVertical, verticalPointsForHeights, type WavePoint } from "@/lib/pathGeometry";
+import { useTaskStore } from "@/store/taskStore";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
@@ -421,31 +422,38 @@ function StopCard({
 function ItemRow({ item, onOpen }: { item: PeriodStopItem; onOpen: () => void }) {
   const circumference = 2 * Math.PI * 9;
   return (
-    <motion.button
-      onClick={onOpen}
-      whileTap={tap}
-      className="w-full flex items-center gap-2 text-left"
-    >
+    <div className="w-full flex items-center gap-2 text-left">
       {/* A task is always binary (done or not) — its fraction is only ever
           0 or 1, so a proportional ring never showed anything a plain
           checkbox couldn't. Goals genuinely have partial progress worth
-          showing, so they keep the ring. Its outline doubles as a "which
+          showing, so they keep the ring (tapping it opens the goal, same as
+          the title — a goal has no single toggle of its own). A task's
+          circle is its own button instead, checking it off right here
+          without opening the task first; its outline doubles as a "which
           goal" tag (Week view only mixes tasks from several goals on the
-          same day) — tinted with that goal's own accent when not done;
-          done still reads as a plain solid fill so the done/not-done signal
-          itself never gets muddied by which goal it happens to belong to. */}
+          same day) — tinted with that goal's own accent when not done, so
+          the done/not-done fill itself never gets muddied by which goal it
+          happens to belong to. */}
       {item.kind === "task" ? (
-        <span
+        <motion.button
+          onClick={() => useTaskStore.getState().toggleTaskCompleted(item.id)}
+          whileTap={tap}
+          aria-label={item.done ? "Mark task not done" : "Mark task done"}
+          title={item.goalTitle}
           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
             item.done ? "bg-fg border-fg text-fg-inverse" : "text-transparent"
           }`}
           style={item.done ? undefined : { borderColor: item.goalAccent ?? "var(--border-strong)" }}
-          aria-label={item.goalTitle ? `Linked to goal: ${item.goalTitle}` : undefined}
         >
           <Check size={11} strokeWidth={3.5} />
-        </span>
+        </motion.button>
       ) : (
-        <div className="relative w-6 h-6 shrink-0">
+        <motion.button
+          onClick={onOpen}
+          whileTap={tap}
+          aria-label={item.title}
+          className="relative w-6 h-6 shrink-0"
+        >
           <svg width="24" height="24" className="-rotate-90">
             <circle
               cx="12"
@@ -475,15 +483,17 @@ function ItemRow({ item, onOpen }: { item: PeriodStopItem; onOpen: () => void })
               `${item.percent}%`
             )}
           </div>
-        </div>
+        </motion.button>
       )}
-      <span
-        className={`flex-1 min-w-0 text-[13px] font-semibold truncate ${
+      <motion.button
+        onClick={onOpen}
+        whileTap={tap}
+        className={`flex-1 min-w-0 text-left text-[13px] font-semibold truncate ${
           item.done ? "text-fg-faint line-through" : "text-fg"
         }`}
       >
         {item.title}
-      </span>
-    </motion.button>
+      </motion.button>
+    </div>
   );
 }

@@ -11,6 +11,9 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean; // styles the confirm button as a red, irreversible action
+  // Renders just the confirm button, full width, no Cancel — for a pure
+  // "OK, got it" acknowledgment where there's nothing to actually cancel.
+  hideCancel?: boolean;
 }
 
 export interface ChoiceOption {
@@ -144,13 +147,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
                   {pending.kind === "confirm" && (
                     <div className="flex gap-2 mt-5">
-                      <motion.button
-                        onClick={() => close(false)}
-                        whileTap={tap}
-                        className={CANCEL_BTN}
-                      >
-                        {pending.options.cancelLabel ?? "Cancel"}
-                      </motion.button>
+                      {!pending.options.hideCancel && (
+                        <motion.button
+                          onClick={() => close(false)}
+                          whileTap={tap}
+                          className={CANCEL_BTN}
+                        >
+                          {pending.options.cancelLabel ?? "Cancel"}
+                        </motion.button>
+                      )}
                       <motion.button
                         onClick={() => close(true)}
                         whileTap={tap}

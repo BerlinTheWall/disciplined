@@ -179,6 +179,15 @@ export default function AddItemSheet({
   // a milestoned goal reads its progress from the milestones, not from a
   // goal-level link (see goalProgress.ts's mode precedence).
   const [pendingMilestone, setPendingMilestone] = useState<PendingMilestoneLink | null>(null);
+  // Read-only mirror of "is the task being edited already linked to a goal
+  // through one of its milestones" (linkTasksToMilestones, not the goal's
+  // own linkedTaskIds — see pendingMilestone above). Only feeds goalLinked
+  // below, to keep the habit toggle disabled for it too; deliberately never
+  // written back through goalLink/GoalLinkSection, since doing so would add
+  // a *second*, goal-level link on save and flip the goal's progress mode
+  // (see goalProgress.ts's mode precedence) instead of leaving the existing
+  // milestone link alone.
+  const [editingMilestoneLink, setEditingMilestoneLink] = useState(false);
   const [reminder, setReminder] = useState<number | null>(null);
   const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
   const [done, setDone] = useState(false);
@@ -236,6 +245,14 @@ export default function AddItemSheet({
       setGoalLink(linkedGoal?.id ?? null);
       setGoalWeight(linkedGoal?.weights?.[editItem.data.id] ?? null);
       setPendingMilestone(null);
+      setEditingMilestoneLink(
+        editItem.type === "task" &&
+          useGoalStore
+            .getState()
+            .goals.some((g) =>
+              g.milestones.some((m) => m.linkedTaskIds?.includes(editItem.data.id))
+            )
+      );
       setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
@@ -271,6 +288,7 @@ export default function AddItemSheet({
     setPendingMilestone(milestoneLink);
     setGoalLink(milestoneLink ? null : goalId);
     setGoalWeight(null);
+    setEditingMilestoneLink(false);
     setReminder(useSettingsStore.getState().defaultReminderMinutes);
   }
 
@@ -891,7 +909,7 @@ export default function AddItemSheet({
   // progress reads t.completed directly, which a Habit has no equivalent of
   // (it tracks per-day completedDates instead). So a task already linked to
   // a goal can't become a habit without silently orphaning that link.
-  const goalLinked = !!goalLink || !!pendingMilestone;
+  const goalLinked = !!goalLink || !!pendingMilestone || editingMilestoneLink;
 
   const typeCards = (
     <div>
@@ -903,9 +921,22 @@ export default function AddItemSheet({
           return (
             <motion.button
               key={m}
-              onClick={() => !disabled && setMode(m)}
-              whileTap={disabled ? undefined : tap}
-              disabled={disabled}
+              onClick={() => {
+                // Kept clickable rather than a real `disabled` button (which
+                // would silently swallow the tap) specifically so tapping it
+                // can explain why, instead of just doing nothing.
+                if (disabled) {
+                  confirm({
+                    title: "Can't repeat",
+                    message: "A task linked to a goal can't be a recurring habit.",
+                    confirmLabel: "Got it",
+                    hideCancel: true,
+                  });
+                  return;
+                }
+                setMode(m);
+              }}
+              whileTap={tap}
               aria-disabled={disabled}
               className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${
                 disabled
@@ -1559,6 +1590,17 @@ export default function AddItemSheet({
                         </motion.button>
                       )}
                     </div>
+
+                    {/* The star's own icon doesn't say what it does — spell
+                      it out once, right under it, rather than leaving it a
+                      guess. */}
+                    {mode === "task" && !isEditing && (
+                      <p className="text-[11px] text-fg-faint -mt-3 mb-5 px-1">
+                        {saveAsPreset
+                          ? "Starred — this will be saved as a one-tap preset for next time."
+                          : "Tap the star to save this as a one-tap preset you can reuse later."}
+                      </p>
+                    )}
 
                     {typeLinksBody}
 
