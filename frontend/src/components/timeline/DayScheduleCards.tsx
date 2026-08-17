@@ -44,7 +44,10 @@ const PERIODS = [
   { key: "night", label: "Night", icon: Moon, until: 24 * 60, color: "#6f79bd" },
 ] as const;
 
-const DONE_GREEN = "#5f8c78";
+// Muted indigo — deliberately not the same hex as PRIORITY_META.low
+// (lib/priority.ts), which it used to be identical to (a low-priority task
+// and a completed task read as the same color right next to each other).
+const DONE_COLOR = "#7c7fd1";
 
 function periodKey(min: number) {
   return (PERIODS.find((p) => min < p.until) ?? PERIODS[PERIODS.length - 1]).key;
@@ -391,8 +394,8 @@ export default function DayScheduleCards({ date, active, onDetail }: DaySchedule
             onClick={() => setShowCompleted((v) => !v)}
             className="flex items-center gap-2 w-full px-1"
           >
-            <CheckCircle2 size={17} style={{ color: DONE_GREEN }} />
-            <h3 className="text-lg font-semibold" style={{ color: DONE_GREEN }}>
+            <CheckCircle2 size={17} style={{ color: DONE_COLOR }} />
+            <h3 className="text-lg font-semibold" style={{ color: DONE_COLOR }}>
               Completed
             </h3>
             <span className="text-sm text-fg-faint">{doneItems.length}</span>

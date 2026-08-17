@@ -281,7 +281,7 @@ export default function TaskDetailSheet({
               <InfoRow icon={CheckCircle2} label="Status">
                 <span
                   className={`text-sm font-medium ${item.data.completed ? "" : "text-fg-faint"}`}
-                  style={item.data.completed ? { color: "#5f8c78" } : undefined}
+                  style={item.data.completed ? { color: "#7c7fd1" } : undefined}
                 >
                   {item.data.completed ? "Completed" : "Not completed"}
                 </span>

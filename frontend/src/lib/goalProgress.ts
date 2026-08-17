@@ -255,10 +255,14 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
 
 export type GoalPace = "on-track" | "behind" | "at-risk";
 
+// Indigo/slate/rose — its own hue family, distinct from GOAL_PRIORITY_COLOR
+// (goalPriority.ts) on purpose. Both used to share the same red/amber/green
+// three colors, so a goal's priority and its pace read as the same signal
+// wherever they appeared together.
 export const GOAL_PACE_COLOR: Record<GoalPace, string> = {
-  "on-track": "#4ade80",
-  behind: "#fbbf24",
-  "at-risk": "#f87171",
+  "on-track": "#6366f1",
+  behind: "#94a3b8",
+  "at-risk": "#f43f5e",
 };
 
 export const GOAL_PACE_LABEL: Record<GoalPace, string> = {

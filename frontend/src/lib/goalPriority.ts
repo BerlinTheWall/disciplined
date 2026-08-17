@@ -1,14 +1,18 @@
 import type { Priority } from "@/types/task";
 
-// Goal priority palette — a traffic-light plus blue for "no priority".
-// Vivid on purpose (distinct from the muted task-priority colours), since the
-// numbered rank circle is the goal's main visual anchor.
+// Goal priority palette — coral/gold/teal, plus neutral slate for "no
+// priority". Vivid on purpose (distinct from the muted task-priority
+// colours), since the numbered rank circle is the goal's main visual
+// anchor. Deliberately its own hue family, not the red/amber/green a
+// goal's pace (GOAL_PACE_COLOR in lib/goalProgress.ts) uses — the two used
+// to be the exact same three colors, so a high-priority goal that was also
+// behind pace showed identical yellow for two unrelated facts.
 export const GOAL_PRIORITY_COLOR: Record<Priority, string> = {
-  high: "#f87171", // red
-  medium: "#fbbf24", // yellow
-  low: "#4ade80", // green
+  high: "#ff6b5e", // coral
+  medium: "#ffb443", // gold
+  low: "#2dd4bf", // teal
 };
-export const GOAL_NONE_COLOR = "#60a5fa"; // blue
+export const GOAL_NONE_COLOR = "#a1a1aa"; // neutral slate
 
 export const goalColor = (p: Priority | null) => (p ? GOAL_PRIORITY_COLOR[p] : GOAL_NONE_COLOR);
 

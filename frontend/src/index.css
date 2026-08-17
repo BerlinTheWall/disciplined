@@ -11,13 +11,18 @@
      its keyboard lift with it). */
   --safe-top: env(safe-area-inset-top, 0px);
 
+  /* Wider-step neutral ramp: each surface level sits a clear jump from its
+     neighbor (was ~6-16 RGB points apart at the tightest; now 2-3x that)
+     so nested cards/chips actually read as a different layer instead of
+     blending into whatever they sit on. Plain grayscale, no tint — only
+     the spacing between steps changed, not the character. */
   --surface: #ffffff;
-  --surface-alt: #f9fafb;
-  --surface-raised: #f3f4f6;
-  --surface-subtle: #e5e7eb;
-  --surface-inverse: #111827;
-  --surface-feature: #111827;
-  --surface-feature-alt: #1f2937;
+  --surface-alt: #eef0f3;
+  --surface-raised: #dfe2e7;
+  --surface-subtle: #c7cbd3;
+  --surface-inverse: #0b1120;
+  --surface-feature: #0b1120;
+  --surface-feature-alt: #1b2436;
 
   --fg: #111827;
   --fg-muted: #6b7280;
@@ -26,10 +31,10 @@
   --fg-inverse: #ffffff;
   --fg-muted-inverse: #9ca3af;
 
-  --border: #f3f4f6;
-  --border-strong: #e5e7eb;
-  --border-input: #e5e7eb;
-  --border-focus: #9ca3af;
+  --border: #dfe2e7;
+  --border-strong: #c7cbd3;
+  --border-input: #c7cbd3;
+  --border-focus: #6b7280;
 
   /* Subtle ambient gradient behind everything: a faint warm glow in one corner
      and a cool one in the other, fading into the base surface. Floating white
@@ -54,24 +59,28 @@
 }
 
 [data-theme="dark"] {
-  --surface: #111827;
-  --surface-alt: #1f2937;
-  --surface-raised: #374151;
-  --surface-subtle: #4b5563;
-  --surface-inverse: #f9fafb;
-  --surface-feature: #1f2937;
-  --surface-feature-alt: #374151;
+  /* Same wider-step ramp as light mode, plus a real fix: surface-feature
+     used to be the exact same hex as surface-alt (#1f2937 both) — a card
+     using one and a chip using the other were visually identical. It now
+     gets its own value, between surface and surface-alt. */
+  --surface: #0b1120;
+  --surface-alt: #1b2436;
+  --surface-raised: #2c3752;
+  --surface-subtle: #435071;
+  --surface-inverse: #f4f6fa;
+  --surface-feature: #161f33;
+  --surface-feature-alt: #2a3552;
 
-  --fg: #f9fafb;
-  --fg-muted: #9ca3af;
+  --fg: #f4f6fa;
+  --fg-muted: #9aa4b8;
   --fg-faint: #6b7280;
-  --fg-disabled: #4b5563;
-  --fg-inverse: #111827;
+  --fg-disabled: #435071;
+  --fg-inverse: #0b1120;
   --fg-muted-inverse: #6b7280;
 
-  --border: #374151;
-  --border-strong: #4b5563;
-  --border-input: #4b5563;
+  --border: #2c3752;
+  --border-strong: #435071;
+  --border-input: #435071;
   --border-focus: #6b7280;
 
   /* Same idea, dialled right down for the dark surface. */
