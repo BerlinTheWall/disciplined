@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { motion } from "framer-motion";
 import {
   Briefcase,
@@ -11,7 +12,6 @@ import {
   Plus,
   Sparkles,
   Trash2,
-  TriangleAlert,
   User,
   X,
 } from "lucide-react";
@@ -42,9 +42,7 @@ import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Goal } from "@/types/goals";
-import type { Priority, Task } from "@/types/task";
-
-const PRIORITY_CYCLE: (Priority | null)[] = [null, "high", "medium", "low"];
+import type { Task } from "@/types/task";
 
 // Same built-in categories as GoalsPage's add-goal sheet (a custom typed-in
 // tag falls back to the plain description icon below) — lets the
@@ -162,6 +160,85 @@ function GoalDetailContent({
   // Tapping a milestone opens a popup with its title/weight/tasks — see
   // MilestoneDetailSheet.
   const [viewingMilestoneId, setViewingMilestoneId] = useState<string | null>(null);
+  // Description collapses to 1 line, expanding on "Show more". Animating
+  // this with framer-motion's `layout` prop (the first attempt) used its
+  // FLIP technique — scaling the whole box between its before/after size —
+  // which visibly warps the text mid-transition instead of just revealing
+  // more of it. Animating an explicit pixel `height` instead (measured via
+  // a permanently 1-line-clamped, invisible probe copy of the text — its
+  // clientHeight is the collapsed target, scrollHeight the expanded one,
+  // both readable even while it stays clamped) avoids that: the real,
+  // unclamped text sits in a plain box whose height we tween directly, so
+  // it just reflows normally and gets progressively revealed.
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descLineHeight, setDescLineHeight] = useState<number | null>(null);
+  const [descFullHeight, setDescFullHeight] = useState<number | null>(null);
+  const descProbeRef = useRef<HTMLSpanElement>(null);
+  const descWrapRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const probe = descProbeRef.current;
+    const wrap = descWrapRef.current;
+    if (!probe || !wrap || !goal.description) return;
+    function measure() {
+      if (!probe) return;
+      setDescLineHeight(probe.clientHeight);
+      setDescFullHeight(probe.scrollHeight);
+    }
+    measure();
+    // Watching the wrapper (not the clamped probe itself, whose box never
+    // resizes) catches width-driven reflow — sheet resize, orientation
+    // change; re-measuring once the real font is ready catches Inter
+    // Variable's async webfont swap (main.tsx) changing how much text fits
+    // versus the fallback font used for the very first measurement.
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrap);
+    document.fonts?.ready.then(measure);
+    return () => observer.disconnect();
+  }, [goal.description]);
+  const descOverflowing =
+    descLineHeight != null && descFullHeight != null && descFullHeight - descLineHeight > 1;
+
+  // Pixel-precise centers of each milestone's dot, relative to the trail
+  // container — the trail's fill used to assume every row was the same
+  // height (each milestone got an equal 1/n slice), but a row with
+  // AI-scheduled sessions is visibly taller than a plain one, so the
+  // percentage math drifted away from where the dots actually sit the
+  // moment milestones weren't uniform. getBoundingClientRect sidesteps
+  // that (and every intervening padding/position:relative wrapper) by
+  // reading real layout instead of assuming it.
+  const trailRef = useRef<HTMLDivElement>(null);
+  const dotRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [dotCenters, setDotCenters] = useState<number[]>([]);
+  // Where the trail should end after the last milestone — its own row's
+  // real bottom edge (which already includes its full linked-task list,
+  // however tall that made it), not a guessed "next dot" distance. Lets
+  // the last milestone's segment reach all the way down instead of
+  // stopping short whenever it happens to be the tallest row, and gives
+  // the closing end-dot below a real position to sit at.
+  const [trailEnd, setTrailEnd] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const container = trailRef.current;
+    if (!container) return;
+    function measure() {
+      if (!container) return;
+      const containerTop = container.getBoundingClientRect().top;
+      const centers = goal.milestones.map((m) => {
+        const dot = dotRefs.current[m.id];
+        if (!dot) return null;
+        const r = dot.getBoundingClientRect();
+        return r.top - containerTop + r.height / 2;
+      });
+      if (centers.every((c): c is number => c !== null)) setDotCenters(centers);
+      const lastMilestone = goal.milestones[goal.milestones.length - 1];
+      const lastRow = lastMilestone ? rowRefs.current[lastMilestone.id] : null;
+      if (lastRow) setTrailEnd(lastRow.getBoundingClientRect().bottom - containerTop);
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [goal.milestones]);
 
   // Rounded together (not each independently, like WeightInput's own
   // internal Math.round would) so the displayed percents actually sum to
@@ -188,11 +265,10 @@ function GoalDetailContent({
     ...goal.milestones.flatMap((m) => m.linkedTaskIds ?? []),
   ];
 
-  const cyclePriority = () => {
-    const next =
-      PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(goal.priority) + 1) % PRIORITY_CYCLE.length];
-    useGoalStore.getState().setPriority(goal.id, next);
-  };
+  // Every milestone gets its own trail segment below its dot — including
+  // the last one, which reaches its own row's measured bottom (trailEnd)
+  // rather than a guessed "next dot" distance.
+  const trailMeasured = dotCenters.length === goal.milestones.length && trailEnd != null;
 
   const circumference = 2 * Math.PI * 40;
   const subtitle =
@@ -214,7 +290,7 @@ function GoalDetailContent({
     <div className="relative px-5 pt-3 pb-[calc(28px+env(safe-area-inset-bottom))] max-w-md mx-auto">
       <GoalCelebration show={celebrate} />
 
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-2 mb-5">
         <motion.button
           onClick={onClose}
           whileTap={tap}
@@ -224,6 +300,15 @@ function GoalDetailContent({
           <X size={17} />
         </motion.button>
         <div className="flex-1" />
+        <motion.button
+          onClick={() => useGoalPlanWizardStore.getState().start(goal.id)}
+          whileTap={tap}
+          className="shrink-0 flex items-center justify-center gap-1 h-9 px-3.5 rounded-full text-[13px] font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+        >
+          <Sparkles size={14} />
+          Plan with AI
+        </motion.button>
         <motion.button
           onClick={() => setEditing(true)}
           whileTap={tap}
@@ -276,34 +361,8 @@ function GoalDetailContent({
         </motion.button>
       </div>
 
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <motion.button
-            onClick={cyclePriority}
-            whileTap={tap}
-            aria-label="Priority"
-            className="flex items-center gap-1.5 shrink-0 text-[11px] font-extrabold uppercase tracking-wide px-2.5 py-1.5 rounded-full"
-            style={{ color: accent, backgroundColor: `${accent}1f` }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ backgroundColor: accent }}
-            />
-            {goal.priority ?? "none"}
-          </motion.button>
-          {pace && (
-            <span
-              className="flex items-center gap-1 shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
-              style={{
-                color: GOAL_PACE_COLOR[pace],
-                backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
-              }}
-            >
-              {pace !== "on-track" && <TriangleAlert size={11} strokeWidth={2.5} />}
-              {GOAL_PACE_LABEL[pace]}
-            </span>
-          )}
-        </div>
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <h1 className="min-w-0 text-[25px] font-extrabold leading-tight">{goal.title}</h1>
         <span className="flex items-center gap-1.5 shrink-0 text-[12px] font-semibold text-fg-muted bg-surface-raised px-2.5 py-1.5 rounded-full">
           <Calendar size={13} className="shrink-0 text-fg-faint" />
           {parseISODate(endDate).toLocaleDateString(undefined, {
@@ -314,22 +373,37 @@ function GoalDetailContent({
         </span>
       </div>
 
-      <h1 className="text-[25px] font-extrabold leading-tight mb-1.5">{goal.title}</h1>
-
       {goal.description && (
-        <div className="flex items-center gap-1.5 mb-1.5 text-[13.5px] text-fg-muted">
-          <DescriptionIcon size={14} className="shrink-0" style={{ color: accent }} />
-          <span className="min-w-0 truncate">{goal.description}</span>
+        <div className="flex items-start gap-1.5 mb-5 text-[13.5px] text-fg-muted">
+          <DescriptionIcon size={14} className="shrink-0 mt-0.5" style={{ color: accent }} />
+          <div ref={descWrapRef} className="relative min-w-0 flex-1">
+            <span
+              ref={descProbeRef}
+              aria-hidden
+              className="line-clamp-1 invisible absolute inset-x-0 pointer-events-none select-none"
+            >
+              {goal.description}
+            </span>
+            <motion.div
+              className="overflow-hidden"
+              initial={false}
+              animate={{ height: (descExpanded ? descFullHeight : descLineHeight) ?? "auto" }}
+              transition={spring.gentle}
+            >
+              <span>{goal.description}</span>
+            </motion.div>
+            {descOverflowing && (
+              <button
+                onClick={() => setDescExpanded((v) => !v)}
+                className="block text-[12px] font-semibold mt-0.5"
+                style={{ color: accent }}
+              >
+                {descExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </div>
         </div>
       )}
-
-      <p className="text-[12.5px] text-fg-faint mb-5">
-        {daysRemaining > 0
-          ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
-          : daysRemaining === 0
-            ? "Last day"
-            : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
-      </p>
 
       <div className="rounded-2xl bg-surface-feature text-white p-5 mb-4">
         <div className="flex items-center gap-4">
@@ -362,9 +436,6 @@ function GoalDetailContent({
               ) : (
                 <b className="text-[21px] font-extrabold leading-none">{p.percent}%</b>
               )}
-              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wide mt-1">
-                Completed
-              </span>
             </div>
           </div>
 
@@ -376,9 +447,17 @@ function GoalDetailContent({
               >
                 Overall progress
               </p>
-              <span className="shrink-0 text-[10px] font-semibold text-gray-400 bg-surface-feature-alt px-2 py-0.5 rounded-full">
-                Target 100%
-              </span>
+              {pace && (
+                <span
+                  className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    color: GOAL_PACE_COLOR[pace],
+                    backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
+                  }}
+                >
+                  {GOAL_PACE_LABEL[pace]}
+                </span>
+              )}
             </div>
             <p className="text-[14.5px] font-bold leading-tight mb-3">{subtitle}</p>
             <div className="h-1.5 rounded-full bg-surface-feature-alt overflow-hidden">
@@ -390,10 +469,13 @@ function GoalDetailContent({
                 transition={spring.gentle}
               />
             </div>
-            <div className="flex items-center justify-between mt-2 text-[11px] font-semibold">
-              <span className="text-gray-500">Start</span>
-              <span style={{ color: accent }}>{p.done ? "Done" : "In progress"}</span>
-            </div>
+            <p className="text-right text-[10.5px] font-semibold text-gray-400 mt-1.5">
+              {daysRemaining > 0
+                ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
+                : daysRemaining === 0
+                  ? "Last day"
+                  : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
+            </p>
           </div>
         </div>
 
@@ -410,21 +492,9 @@ function GoalDetailContent({
         )}
       </div>
 
-      <div className="flex justify-end mb-4">
-        <motion.button
-          onClick={() => useGoalPlanWizardStore.getState().start(goal.id)}
-          whileTap={tap}
-          className="shrink-0 flex items-center justify-center gap-1 h-9 px-3.5 rounded-full text-[13px] font-semibold text-white"
-          style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
-        >
-          <Sparkles size={14} />
-          Plan with AI
-        </motion.button>
-      </div>
-
       <div className="border-t border-border pt-4 mb-6">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint">
+          <p className="text-[14px] font-extrabold uppercase tracking-wide text-fg-faint">
             Milestones
           </p>
           <motion.button
@@ -455,15 +525,29 @@ function GoalDetailContent({
         </Collapse>
 
         <Collapse open={goal.milestones.length > 0}>
-          <div className="relative">
-            <div className="absolute left-3.75 top-3 bottom-3 w-0.75 rounded-full bg-surface-subtle" />
-            {/* One colored segment per milestone, each confined to that
-              milestone's own equal slice of the trail — not one continuous
-              bar sized by the goal's overall (weighted) fraction, which
-              used to fill well past a milestone's own dot whenever its
-              weight was high relative to its position in the list. A
-              milestone with scheduled sessions fills proportionally as
-              they're checked off; a plain one is all-or-nothing. */}
+          <div ref={trailRef} className="relative">
+            {/* Background + fill both prefer the dots' real on-screen
+              centers (dotCenters), measured by the effect above — but
+              never wait on that measurement to show *something*: until
+              it lands (or if it never does, for whatever reason), fall
+              back to the old assumed-equal-slice percentages rather than
+              rendering no trail at all. */}
+            {goal.milestones.length > 1 && (
+              <div
+                className="absolute left-3.75 w-0.75 rounded-full bg-surface-subtle"
+                style={
+                  trailMeasured
+                    ? { top: `${dotCenters[0]}px`, height: `${trailEnd! - dotCenters[0]}px` }
+                    : { top: "0.75rem", bottom: "0.75rem" }
+                }
+              />
+            )}
+            {/* One segment per milestone, starting at its own dot — the
+              last one has no next dot to measure toward, so it reaches for
+              its own row's real bottom (trailEnd, which already accounts
+              for however tall its linked-task list made that row) instead.
+              Fills as its own scheduled sessions get checked off, or
+              all-or-nothing for a plain one. */}
             {goal.milestones.map((m, i) => {
               const linkedIds = m.linkedTaskIds ?? [];
               const segFraction =
@@ -473,17 +557,25 @@ function GoalDetailContent({
                   : m.done
                     ? 1
                     : 0;
-              if (segFraction <= 0) return null;
               const n = goal.milestones.length;
+              const style: CSSProperties = trailMeasured
+                ? {
+                    backgroundColor: accent,
+                    top: `${dotCenters[i]}px`,
+                    height: `${
+                      ((i < n - 1 ? dotCenters[i + 1] : trailEnd!) - dotCenters[i]) * segFraction
+                    }px`,
+                  }
+                : {
+                    backgroundColor: accent,
+                    top: `calc(0.75rem + (100% - 1.5rem) * ${i / n})`,
+                    height: `calc((100% - 1.5rem) * ${segFraction / n})`,
+                  };
               return (
                 <div
                   key={m.id}
                   className="absolute left-3.75 w-0.75 rounded-full transition-[height] duration-500 ease-out"
-                  style={{
-                    backgroundColor: accent,
-                    top: `calc(0.75rem + (100% - 1.5rem) * ${i / n})`,
-                    height: `calc((100% - 1.5rem) * ${segFraction / n})`,
-                  }}
+                  style={style}
                 />
               );
             })}
@@ -504,9 +596,18 @@ function GoalDetailContent({
                   : [];
                 const doneTaskCount = linkedTasks.filter((t) => t.completed).length;
                 return (
-                  <div key={m.id} className="relative flex gap-3 py-2.5">
+                  <div
+                    key={m.id}
+                    ref={(el) => {
+                      rowRefs.current[m.id] = el;
+                    }}
+                    className="relative flex gap-3 py-2.5"
+                  >
                     <div className="relative z-10 w-7.5 shrink-0 flex justify-center pt-0.5">
                       <button
+                        ref={(el) => {
+                          dotRefs.current[m.id] = el;
+                        }}
                         onClick={
                           hasLinkedTasks
                             ? undefined
@@ -613,6 +714,33 @@ function GoalDetailContent({
                 );
               })}
             </div>
+            {/* Closes off the trail after the last milestone, mirroring
+              every other dot — filled once that milestone itself is done,
+              same as a real one, since there's no further milestone to
+              hand off to. */}
+            {trailMeasured &&
+              goal.milestones.length > 1 &&
+              (() => {
+                const lastMilestone = goal.milestones[goal.milestones.length - 1];
+                const lastDone = isMilestoneDone(lastMilestone, tasks);
+                return (
+                  <div
+                    className="absolute z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                    style={{
+                      left: "0.3125rem",
+                      top: `${trailEnd! - 10}px`,
+                      ...(lastDone
+                        ? { backgroundColor: accent, borderColor: accent }
+                        : {
+                            borderColor: "var(--surface-subtle)",
+                            backgroundColor: "var(--surface)",
+                          }),
+                    }}
+                  >
+                    {lastDone && <Check size={11} strokeWidth={3.5} className="text-fg-inverse" />}
+                  </div>
+                );
+              })()}
           </div>
           {goal.milestones.length > 1 && (
             <p className="text-[11px] text-fg-faint mt-2">

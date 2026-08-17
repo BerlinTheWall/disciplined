@@ -5,6 +5,7 @@ import { Check, ListChecks, X } from "lucide-react";
 import BottomSheet from "@/components/BottomSheet";
 import WeightInput from "@/components/goals/WeightInput";
 import { hexToRgba } from "@/lib/color";
+import { isMilestoneDone } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
@@ -90,15 +91,47 @@ function MilestoneDetailContent({
     .filter((t): t is Task => !!t)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes);
 
+  // Same rule as the row's own dot: a milestone with AI-scheduled sessions
+  // derives its done state from them, so toggling it by hand here would
+  // silently do nothing to the actual progress ring — it isn't offered.
+  const hasLinkedTasks = (milestone.linkedTaskIds?.length ?? 0) > 0;
+  const done = isMilestoneDone(milestone, tasks);
+
   return (
     <div className="px-5 pt-5">
       <div className="flex items-center justify-between mb-4">
-        <span
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: `${accent}1f`, color: accent }}
+        <motion.button
+          onClick={
+            hasLinkedTasks
+              ? undefined
+              : () => useGoalStore.getState().toggleMilestone(goal.id, milestone.id)
+          }
+          whileTap={hasLinkedTasks ? undefined : tap}
+          disabled={hasLinkedTasks}
+          aria-label={
+            hasLinkedTasks
+              ? done
+                ? "Done — every scheduled session is completed"
+                : "Not done — scheduled sessions still pending"
+              : done
+                ? "Mark step not done"
+                : "Mark step done"
+          }
+          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 ${
+            hasLinkedTasks ? "cursor-default" : ""
+          }`}
+          style={
+            done
+              ? { backgroundColor: accent, borderColor: accent }
+              : { backgroundColor: `${accent}1f`, borderColor: `${accent}55` }
+          }
         >
-          <ListChecks size={16} />
-        </span>
+          {done ? (
+            <Check size={16} strokeWidth={3} className="text-white" />
+          ) : (
+            <ListChecks size={16} style={{ color: accent }} />
+          )}
+        </motion.button>
         <motion.button
           onClick={onClose}
           whileTap={tap}

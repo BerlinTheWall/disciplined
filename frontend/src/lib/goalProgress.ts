@@ -3,16 +3,28 @@ import { currentPeriodKey, goalEndDate, periodStartDate } from "./goalPeriods";
 import type { Goal, GoalMilestone, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
-// A milestone with its own scheduled tasks derives completion from them
-// (all done = milestone done); one without falls back to its own plain
-// `done` flag. Exported so the detail screen's own checkbox can show the
-// exact same state it feeds into the ring below, instead of the two ever
-// drifting apart (the checkbox toggling `done` while the ring — the one
-// place that actually matters — keeps deriving from tasks and ignoring it).
+// How much of one milestone is actually done, 0..1: a milestone with its
+// own scheduled tasks derives this from how many of them are completed (so
+// checking one off already nudges the goal's overall progress forward
+// instead of that milestone staying a flat 0% contribution until the very
+// last session is done); one without linked tasks is all-or-nothing, from
+// its own plain `done` flag.
+export function milestoneCompletionFraction(m: GoalMilestone, tasks: Task[]): number {
+  if (m.linkedTaskIds && m.linkedTaskIds.length > 0) {
+    const done = m.linkedTaskIds.filter(
+      (id) => tasks.find((t) => t.id === id)?.completed ?? false
+    ).length;
+    return done / m.linkedTaskIds.length;
+  }
+  return m.done ? 1 : 0;
+}
+
+// Exported so the detail screen's own checkbox can show the exact same
+// state it feeds into the ring below, instead of the two ever drifting
+// apart (the checkbox toggling `done` while the ring — the one place that
+// actually matters — keeps deriving from tasks and ignoring it).
 export function isMilestoneDone(m: GoalMilestone, tasks: Task[]): boolean {
-  return m.linkedTaskIds && m.linkedTaskIds.length > 0
-    ? m.linkedTaskIds.every((id) => tasks.find((t) => t.id === id)?.completed ?? false)
-    : m.done;
+  return milestoneCompletionFraction(m, tasks) >= 1;
 }
 
 // A goal's progress, derived from exactly one source, chosen implicitly by
@@ -175,7 +187,14 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
     });
 
     const done = ms.filter((m) => isMilestoneDone(m, tasks));
-    const completedPct = done.reduce((s, m) => s + milestoneShares[m.id], 0);
+    // Weighted by each milestone's own completion fraction, not just
+    // full-share-if-fully-done — a milestone with scheduled sessions moves
+    // the goal's overall progress forward as they're checked off one at a
+    // time, rather than staying flat until the last one lands.
+    const completedPct = ms.reduce(
+      (s, m) => s + milestoneShares[m.id] * milestoneCompletionFraction(m, tasks),
+      0
+    );
     // Finishing every milestone always counts as done, even if the assigned
     // weights sum to less than 100.
     const allDone = done.length === ms.length;
