@@ -16,9 +16,23 @@ interface BottomSheetProps {
   // Panel extras: background, padding, max-height, overflow/flex behavior.
   className?: string;
   children: ReactNode;
+  // Bumps the backdrop/panel a tier above the default z-40/z-50 — for a
+  // sheet that's opened globally (e.g. from App.tsx) and so may need to
+  // stack over a page-level sheet already open underneath it (same z-40/z-50
+  // by default, so paint order would otherwise depend on incidental DOM
+  // position and framer-motion transform contexts rather than actually
+  // being on top). Still below FieldPanel/ConfirmDialog's z-60/z-70, so
+  // those keep layering correctly over an elevated sheet too.
+  elevated?: boolean;
 }
 
-export default function BottomSheet({ isOpen, onClose, className, children }: BottomSheetProps) {
+export default function BottomSheet({
+  isOpen,
+  onClose,
+  className,
+  children,
+  elevated = false,
+}: BottomSheetProps) {
   useScrollLock(isOpen);
   const panelRef = useRef<HTMLDivElement>(null);
   // iOS overlays the keyboard on the layout viewport rather than resizing it,
@@ -46,7 +60,7 @@ export default function BottomSheet({ isOpen, onClose, className, children }: Bo
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
+            className={`fixed inset-0 bg-black/40 ${elevated ? "z-45" : "z-40"}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -54,7 +68,7 @@ export default function BottomSheet({ isOpen, onClose, className, children }: Bo
           />
           <motion.div
             ref={panelRef}
-            className={`fixed bottom-0 left-0 right-0 rounded-t-2xl z-50 shadow-xl ${className ?? ""}`}
+            className={`fixed bottom-0 left-0 right-0 rounded-t-2xl ${elevated ? "z-55" : "z-50"} shadow-xl ${className ?? ""}`}
             initial={{ y: "100%" }}
             animate={{ y: -lift }}
             exit={{ y: "100%" }}

@@ -65,6 +65,7 @@ import {
 } from "@/lib/time";
 import { WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
+import type { PendingMilestoneLink } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { usePresetStore } from "@/store/presetStore";
@@ -167,6 +168,12 @@ export default function AddItemSheet({
   const [priority, setPriority] = useState<Priority | null>(null);
   const [goalLink, setGoalLink] = useState<string | null>(null);
   const [goalWeight, setGoalWeight] = useState<number | null>(null);
+  // Set instead of goalLink when opened from a milestone's own "+ Add task"
+  // (see goalFocusStore) — the new task attaches to that specific milestone
+  // via linkTasksToMilestones rather than the goal's own linkedTaskIds, since
+  // a milestoned goal reads its progress from the milestones, not from a
+  // goal-level link (see goalProgress.ts's mode precedence).
+  const [pendingMilestone, setPendingMilestone] = useState<PendingMilestoneLink | null>(null);
   const [reminder, setReminder] = useState<number | null>(null);
   const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
   const [done, setDone] = useState(false);
@@ -223,6 +230,7 @@ export default function AddItemSheet({
           : undefined;
       setGoalLink(linkedGoal?.id ?? null);
       setGoalWeight(linkedGoal?.weights?.[editItem.data.id] ?? null);
+      setPendingMilestone(null);
       setReminder(editItem.data.reminderMinutesBefore ?? null);
     } else {
       resetForm();
@@ -248,8 +256,15 @@ export default function AddItemSheet({
     setWorkoutSessionId(undefined);
     setRecipeId(undefined);
     setPriority(null);
-    // Pre-link when the sheet was opened from a goal's "Add task".
-    setGoalLink(useGoalFocusStore.getState().consume());
+    // Pre-link when the sheet was opened from a milestone's own "+ Add task"
+    // — takes priority over a plain goal-level link, since the two are
+    // mutually exclusive (see pendingMilestone above). Both are always
+    // consumed (clearing either) even though only one can be set at a time,
+    // so neither lingers stale into some later, unrelated open.
+    const milestoneLink = useGoalFocusStore.getState().consumeMilestone();
+    const goalId = useGoalFocusStore.getState().consume();
+    setPendingMilestone(milestoneLink);
+    setGoalLink(milestoneLink ? null : goalId);
     setGoalWeight(null);
     setReminder(useSettingsStore.getState().defaultReminderMinutes);
   }
@@ -499,8 +514,16 @@ export default function AddItemSheet({
           workoutSessionId,
           recipeId,
         });
-        useGoalStore.getState().linkTask(goalLink, newTaskId);
-        if (goalLink) useGoalStore.getState().setWeight(goalLink, newTaskId, goalWeight);
+        if (pendingMilestone) {
+          useGoalStore
+            .getState()
+            .linkTasksToMilestones(pendingMilestone.goalId, [
+              { milestoneId: pendingMilestone.milestoneId, taskId: newTaskId },
+            ]);
+        } else {
+          useGoalStore.getState().linkTask(goalLink, newTaskId);
+          if (goalLink) useGoalStore.getState().setWeight(goalLink, newTaskId, goalWeight);
+        }
         if (saveAsPreset) {
           addPreset({
             title: title.trim(),
@@ -618,7 +641,7 @@ export default function AddItemSheet({
   // offer a one-tap link without making the user dig into Advanced settings.
   const guessedKind = guessLinkKind(title, icon);
   const linkSuggestion =
-    guessedKind === "workout" && !workoutSessionId && workoutSessions.length > 0
+    mode !== "task" && guessedKind === "workout" && !workoutSessionId && workoutSessions.length > 0
       ? ("workout" as const)
       : guessedKind === "meal" && !recipeId && recipes.length > 0
         ? ("meal" as const)
@@ -831,18 +854,33 @@ export default function AddItemSheet({
     </div>
   );
 
+  // A goal (or one of its milestones) only ever links to a Task — its
+  // progress reads t.completed directly, which a Habit has no equivalent of
+  // (it tracks per-day completedDates instead). So a task already linked to
+  // a goal can't become a habit without silently orphaning that link.
+  const goalLinked = !!goalLink || !!pendingMilestone;
+
   const typeCards = (
     <div>
       <label className="text-xs font-medium text-fg-muted mb-2 block">This is a…</label>
       <div className="flex flex-col gap-2">
         {(["task", "habit"] as const).map((m) => {
           const selected = mode === m;
+          const disabled = m === "habit" && goalLinked;
           return (
             <motion.button
               key={m}
-              onClick={() => setMode(m)}
-              whileTap={tap}
-              className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${selected ? "border-surface-inverse bg-surface-alt" : "border-border-strong"}`}
+              onClick={() => !disabled && setMode(m)}
+              whileTap={disabled ? undefined : tap}
+              disabled={disabled}
+              aria-disabled={disabled}
+              className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left ${
+                disabled
+                  ? "border-border-strong opacity-50 cursor-default"
+                  : selected
+                    ? "border-surface-inverse bg-surface-alt"
+                    : "border-border-strong"
+              }`}
             >
               <div
                 className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
@@ -860,7 +898,9 @@ export default function AddItemSheet({
                 <p className="text-xs text-fg-faint">
                   {m === "task"
                     ? "Happens once on the chosen date"
-                    : "Repeats on the days you pick"}
+                    : disabled
+                      ? "Unlink from the goal to make this repeat"
+                      : "Repeats on the days you pick"}
                 </p>
               </div>
               {selected && <Check size={18} className="text-fg shrink-0" />}
@@ -1028,7 +1068,7 @@ export default function AddItemSheet({
           {priorityButtons}
         </div>
       </Collapse>
-      {workoutSessions.length > 0 && (
+      {mode !== "task" && workoutSessions.length > 0 && (
         <div className="mt-4">
           <WorkoutLinkSection
             workoutSessionId={workoutSessionId}
@@ -1048,7 +1088,7 @@ export default function AddItemSheet({
           />
         </div>
       )}
-      {mode === "task" && (
+      {mode === "task" && !pendingMilestone && (
         <div className="mt-4">
           <GoalLinkSection
             goalId={goalLink}
@@ -1077,6 +1117,7 @@ export default function AddItemSheet({
       <BottomSheet
         isOpen={isOpen}
         onClose={onClose}
+        elevated
         className="bg-surface max-h-[92vh] overflow-y-auto"
       >
         <style>{".wheel-col::-webkit-scrollbar{display:none}"}</style>
@@ -1241,7 +1282,9 @@ export default function AddItemSheet({
               </div>
 
               {/* Extras */}
-              {(mode === "task" || workoutSessions.length > 0 || recipes.length > 0) && (
+              {(mode === "task" ||
+                (mode !== "task" && workoutSessions.length > 0) ||
+                recipes.length > 0) && (
                 <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
                   {mode === "task" && (
                     <FieldRow
@@ -1251,12 +1294,22 @@ export default function AddItemSheet({
                       onPress={() => setOpenRow("priority")}
                     />
                   )}
-                  {(workoutSessions.length > 0 || recipes.length > 0) && (
+                  {((mode !== "task" && workoutSessions.length > 0) || recipes.length > 0) && (
                     <FieldRow
                       icon={Link2}
-                      value={linkedSession?.name ?? linkedRecipe?.name ?? "No link"}
-                      hint={linkedSession ? "Workout" : linkedRecipe ? "Recipe" : undefined}
-                      muted={!linkedSession && !linkedRecipe}
+                      value={
+                        (mode !== "task" ? linkedSession?.name : undefined) ??
+                        linkedRecipe?.name ??
+                        "No link"
+                      }
+                      hint={
+                        mode !== "task" && linkedSession
+                          ? "Workout"
+                          : linkedRecipe
+                            ? "Recipe"
+                            : undefined
+                      }
+                      muted={!(mode !== "task" && linkedSession) && !linkedRecipe}
                       onPress={() => setOpenRow("links")}
                     />
                   )}
@@ -1543,19 +1596,21 @@ export default function AddItemSheet({
         {openRow === "priority" && priorityButtons}
         {openRow === "links" && (
           <div className="flex flex-col gap-4">
-            <WorkoutLinkSection
-              workoutSessionId={workoutSessionId}
-              onLink={linkWorkout}
-              color={color}
-              onSheetClose={onClose}
-            />
+            {mode !== "task" && (
+              <WorkoutLinkSection
+                workoutSessionId={workoutSessionId}
+                onLink={linkWorkout}
+                color={color}
+                onSheetClose={onClose}
+              />
+            )}
             <RecipeLinkSection
               recipeId={recipeId}
               onLink={linkRecipe}
               color={color}
               onSheetClose={onClose}
             />
-            {mode === "task" && (
+            {mode === "task" && !pendingMilestone && (
               <GoalLinkSection
                 goalId={goalLink}
                 onLink={setGoalLink}

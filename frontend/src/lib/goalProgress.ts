@@ -8,13 +8,15 @@ import type { Task } from "@/types/task";
 // checking one off already nudges the goal's overall progress forward
 // instead of that milestone staying a flat 0% contribution until the very
 // last session is done); one without linked tasks is all-or-nothing, from
-// its own plain `done` flag.
+// its own plain `done` flag. Stale ids (the task was deleted — taskStore's
+// deleteTask cleans these up going forward via unlinkTaskEverywhere, but this
+// stays defensive for anything already stale) are dropped before dividing,
+// so one can't sit in the denominator forever capping the fraction below 1.
 export function milestoneCompletionFraction(m: GoalMilestone, tasks: Task[]): number {
-  if (m.linkedTaskIds && m.linkedTaskIds.length > 0) {
-    const done = m.linkedTaskIds.filter(
-      (id) => tasks.find((t) => t.id === id)?.completed ?? false
-    ).length;
-    return done / m.linkedTaskIds.length;
+  const linkedIds = m.linkedTaskIds?.filter((id) => tasks.some((t) => t.id === id)) ?? [];
+  if (linkedIds.length > 0) {
+    const done = linkedIds.filter((id) => tasks.find((t) => t.id === id)!.completed).length;
+    return done / linkedIds.length;
   }
   return m.done ? 1 : 0;
 }

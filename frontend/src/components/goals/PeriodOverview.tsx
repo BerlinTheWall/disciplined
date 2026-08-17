@@ -177,7 +177,7 @@ export default function PeriodOverview({
               width={WIDTH}
               height={railHeight}
               viewBox={`0 0 ${WIDTH} ${railHeight}`}
-              className="absolute left-0 top-0"
+              className="absolute left-0 top-0 overflow-visible"
               role="presentation"
             >
               <path
@@ -462,7 +462,7 @@ function ItemRow({ item, onOpen }: { item: PeriodStopItem; onOpen: () => void })
               style={{ transition: "stroke-dashoffset 0.6s ease" }}
             />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center text-[7px] font-extrabold tabular-nums">
+          <div className="absolute inset-0 flex items-center justify-center text-[6px] font-extrabold leading-none tabular-nums">
             {item.done ? (
               <Check size={9} className="text-fg-muted" strokeWidth={3} />
             ) : (

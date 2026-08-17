@@ -87,6 +87,13 @@ interface GoalState {
   // GoalScheduleSheet) — a task ends up owned by exactly one milestone, so
   // it's dropped from any other milestone in this goal that already had it.
   linkTasksToMilestones: (goalId: string, links: { milestoneId: string; taskId: string }[]) => void;
+  // Strips a task id from every goal's linkedTaskIds/weights and every
+  // milestone's linkedTaskIds, across every goal — called from taskStore's
+  // deleteTask so a deleted task can never linger as a stale reference that
+  // permanently caps a goal/milestone's progress below 100% (its completion
+  // fraction divides by linkedTaskIds.length, which would still count an id
+  // that no longer resolves to a real task).
+  unlinkTaskEverywhere: (taskId: string) => void;
 }
 
 export const useGoalStore = create<GoalState>()(
@@ -353,6 +360,24 @@ export const useGoalStore = create<GoalState>()(
                 }
                 return { ...m, linkedTaskIds: [...kept, ...incoming] };
               }),
+            };
+          }),
+        })),
+
+      unlinkTaskEverywhere: (taskId) =>
+        set((state) => ({
+          goals: state.goals.map((g) => {
+            const weights = { ...g.weights };
+            delete weights[taskId];
+            return {
+              ...g,
+              linkedTaskIds: g.linkedTaskIds.filter((id) => id !== taskId),
+              weights,
+              milestones: g.milestones.map((m) =>
+                m.linkedTaskIds?.includes(taskId)
+                  ? { ...m, linkedTaskIds: m.linkedTaskIds.filter((id) => id !== taskId) }
+                  : m
+              ),
             };
           }),
         })),

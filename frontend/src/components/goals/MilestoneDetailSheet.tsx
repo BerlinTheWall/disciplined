@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ListChecks, X } from "lucide-react";
+import { Check, ListChecks, Pencil, Plus, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import WeightInput from "@/components/goals/WeightInput";
 import { hexToRgba } from "@/lib/color";
 import { isMilestoneDone } from "@/lib/goalProgress";
 import { tap } from "@/lib/motion";
+import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Goal, GoalMilestone } from "@/types/goals";
@@ -92,10 +93,18 @@ function MilestoneDetailContent({
     .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes);
 
   // Same rule as the row's own dot: a milestone with AI-scheduled sessions
-  // derives its done state from them, so toggling it by hand here would
-  // silently do nothing to the actual progress ring — it isn't offered.
+  // derives its done state from them, so tapping this completes (or, once
+  // they're all done, un-completes) every one of those tasks instead of a
+  // plain `done` flag.
   const hasLinkedTasks = (milestone.linkedTaskIds?.length ?? 0) > 0;
   const done = isMilestoneDone(milestone, tasks);
+
+  function toggleTasks() {
+    const completed = !done;
+    for (const id of milestone.linkedTaskIds ?? []) {
+      useTaskStore.getState().updateTask(id, { completed });
+    }
+  }
 
   return (
     <div className="px-5 pt-5">
@@ -103,23 +112,12 @@ function MilestoneDetailContent({
         <motion.button
           onClick={
             hasLinkedTasks
-              ? undefined
+              ? toggleTasks
               : () => useGoalStore.getState().toggleMilestone(goal.id, milestone.id)
           }
-          whileTap={hasLinkedTasks ? undefined : tap}
-          disabled={hasLinkedTasks}
-          aria-label={
-            hasLinkedTasks
-              ? done
-                ? "Done — every scheduled session is completed"
-                : "Not done — scheduled sessions still pending"
-              : done
-                ? "Mark step not done"
-                : "Mark step done"
-          }
-          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 ${
-            hasLinkedTasks ? "cursor-default" : ""
-          }`}
+          whileTap={tap}
+          aria-label={done ? "Mark step not done" : "Mark step done"}
+          className="w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0"
           style={
             done
               ? { backgroundColor: accent, borderColor: accent }
@@ -142,31 +140,58 @@ function MilestoneDetailContent({
         </motion.button>
       </div>
 
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={commitTitle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-        className="w-full bg-transparent text-xl font-extrabold text-fg focus:outline-none border-b border-transparent focus:border-border-strong pb-1.5 mb-5"
-      />
+      <div className="relative mb-5">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="w-full bg-surface-alt rounded-xl pl-3.5 pr-9 py-2.5 text-lg font-bold text-fg focus:outline-none"
+        />
+        <Pencil
+          size={14}
+          className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-fg-faint"
+        />
+      </div>
 
       {/* Weighting only means something with 2+ steps — a single one is
-        trivially 100% of the goal (same rule the row's own WeightInput
-        used to gate on). */}
+        trivially 100% of the goal (same rule the row's own read-only %
+        used to gate on). Kept as a small pill, not a full row — it's a
+        secondary, rarely-touched setting next to the title and task list. */}
       {goal.milestones.length > 1 && (
-        <div className="flex items-center justify-between mb-5 px-0.5">
-          <span className="text-sm font-medium text-fg-muted">Weight</span>
-          <WeightInput
-            value={milestone.weight}
-            placeholder={shareFallback}
-            onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, milestone.id, w)}
-          />
+        <div className="mb-5">
+          <div className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1">
+            <span className="text-[11px] font-medium text-fg-faint">Weight</span>
+            <WeightInput
+              value={milestone.weight}
+              placeholder={shareFallback}
+              onChange={(w) => useGoalStore.getState().setMilestoneWeight(goal.id, milestone.id, w)}
+            />
+          </div>
         </div>
       )}
 
-      <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2">Tasks</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint">Tasks</p>
+        <motion.button
+          onClick={() => {
+            // Closes this sheet first, then App.tsx's own subscription to
+            // the pending-milestone signal opens the add-task sheet — same
+            // "close the viewer, open the editor" handoff GoalDetailScreen
+            // uses elsewhere, so the two sheets never stack.
+            onClose();
+            useGoalFocusStore.getState().requestAddTaskForMilestone(goal.id, milestone.id);
+          }}
+          whileTap={tap}
+          className="flex items-center gap-1 text-[12px] font-semibold"
+          style={{ color: accent }}
+        >
+          <Plus size={13} />
+          Add task
+        </motion.button>
+      </div>
       {linkedTasks.length > 0 ? (
         <div className="flex flex-col gap-2">
           {linkedTasks.map((t) => (

@@ -224,6 +224,29 @@ function App() {
     });
   }, []);
 
+  // Same, one level down — "Add task" from inside a milestone's own sheet.
+  useEffect(() => {
+    return useGoalFocusStore.subscribe((state, prev) => {
+      if (state.pendingLinkMilestone && state.pendingLinkMilestone !== prev.pendingLinkMilestone) {
+        setIsAddOpen(true);
+      }
+    });
+  }, []);
+
+  // Same pattern as the workout/recipe focus stores: a linked task asking to
+  // open its goal jumps to the Goals page, which consumes the pending id.
+  useEffect(() => {
+    return useGoalFocusStore.subscribe((state, prev) => {
+      if (state.pendingViewGoalId && state.pendingViewGoalId !== prev.pendingViewGoalId) {
+        setPage(([curr]) => {
+          if (curr === "goals") return [curr, 0];
+          const from = PAGE_ORDER.indexOf(curr);
+          return ["goals", PAGE_ORDER.indexOf("goals") > from ? 1 : -1];
+        });
+      }
+    });
+  }, []);
+
   function goToSchedule(date: string) {
     useTaskStore.getState().setSelectedDate(date);
     go("schedule");

@@ -1,47 +1,82 @@
 import { AnimatePresence, motion } from "framer-motion";
 
-const PIECES = [
-  { dx: -34, dy: -46, rotate: -35, color: "#f87171", delay: 0 },
-  { dx: 6, dy: -58, rotate: 15, color: "#fbbf24", delay: 0.03 },
-  { dx: 38, dy: -42, rotate: 50, color: "#4ade80", delay: 0.06 },
-  { dx: -46, dy: -14, rotate: -70, color: "#60a5fa", delay: 0.02 },
-  { dx: 44, dy: -10, rotate: 80, color: "#f87171", delay: 0.08 },
-  { dx: -20, dy: -60, rotate: -10, color: "#4ade80", delay: 0.1 },
-  { dx: 22, dy: -60, rotate: 40, color: "#fbbf24", delay: 0.05 },
-  { dx: 0, dy: -30, rotate: 0, color: "#60a5fa", delay: 0.12 },
-];
+const CONFETTI_COLORS = ["#f87171", "#fbbf24", "#4ade80", "#60a5fa", "#c084fc", "#fb923c"];
 
-// A brief, positive-only burst when a goal flips to done — never a modal,
-// never blocks the next tap, no penalty state to speak of if a goal never
-// gets here. Reduced motion is handled globally by the app's
+// A burst radiating evenly around the ring, index-derived (not Math.random())
+// so it's reproducible and never recomputes mid-flight on a re-render. Each
+// piece gets its own angle, travel distance and fall, so the burst reads as
+// scattered rather than a uniform ring of dots.
+const PIECE_COUNT = 20;
+const PIECES = Array.from({ length: PIECE_COUNT }, (_, i) => {
+  const angle = (i / PIECE_COUNT) * Math.PI * 2 + ((i * 47) % 10) * 0.03;
+  const distance = 70 + ((i * 37) % 55); // 70..125
+  return {
+    dx: Math.cos(angle) * distance,
+    dy: Math.sin(angle) * distance * 0.6 + 30, // gravity-biased downward drift
+    rotate: ((i * 71) % 360) - 180,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    delay: (i % 7) * 0.025,
+    duration: 0.85 + ((i * 13) % 5) * 0.08,
+    size: i % 3 === 0 ? 7 : 5,
+    round: i % 2 === 0,
+  };
+});
+
+// The confetti + flash burst when a goal flips to done — rendered as a plain
+// `absolute inset-0` overlay *inside the ring's own container* (see
+// GoalDetailScreen), so it's centered on the ring for free via flexbox
+// rather than guessing the ring's pixel offset within the wider card. Never
+// blocks the next tap. Reduced motion is handled globally by the app's
 // <MotionConfig reducedMotion="user"> wrapper (main.tsx), so this needs no
 // media-query handling of its own.
-export default function GoalCelebration({ show }: { show: boolean }) {
+export default function GoalCelebrationBurst({ show }: { show: boolean }) {
   return (
     <AnimatePresence>
       {show && (
-        <div className="pointer-events-none absolute right-9 top-3 z-10">
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          {/* Soft flash right behind the ring */}
+          <motion.div
+            className="absolute h-40 w-40 rounded-full"
+            style={{
+              background: "radial-gradient(circle, rgba(255,255,255,0.4), transparent 70%)",
+            }}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 0, scale: 1.7 }}
+            transition={{ duration: 0.8, ease: "easeOut", opacity: { duration: 0.5 } }}
+          />
+
           {PIECES.map((p, i) => (
             <motion.span
               key={i}
-              className="absolute w-1.5 h-2.5 rounded-[1px]"
-              style={{ backgroundColor: p.color }}
-              initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 1 }}
-              animate={{ x: p.dx, y: p.dy, opacity: 0, rotate: p.rotate, scale: 0.6 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.7, delay: p.delay, ease: "easeOut" }}
+              className={`absolute ${p.round ? "rounded-full" : "rounded-[1px]"}`}
+              style={{ backgroundColor: p.color, width: p.size, height: p.size * 1.4 }}
+              initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 0.5 }}
+              animate={{ x: p.dx, y: p.dy, opacity: 0, rotate: p.rotate, scale: 1 }}
+              transition={{ duration: p.duration, delay: p.delay, ease: "easeOut" }}
             />
           ))}
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: -8 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
-            className="absolute right-0 -top-1 -translate-y-full whitespace-nowrap rounded-full bg-fg text-fg-inverse text-[11px] font-medium px-2.5 py-1 shadow-soft"
-          >
-            Nice — goal complete
-          </motion.div>
         </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// The "well done" chip, shown separately from the burst above — the card's
+// own footer rather than the ring, so it never fights the confetti for the
+// same small centered spot.
+export function GoalCelebrationLabel({ show }: { show: boolean }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.p
+          initial={{ opacity: 0, y: 10, scale: 0.85 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -6, scale: 0.9 }}
+          transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
+          className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-surface-inverse px-3.5 py-1.5 text-[13px] font-bold text-fg-inverse shadow-soft"
+        >
+          🎉 Well done!
+        </motion.p>
       )}
     </AnimatePresence>
   );

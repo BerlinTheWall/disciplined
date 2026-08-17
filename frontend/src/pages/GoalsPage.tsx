@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Briefcase,
@@ -47,6 +48,7 @@ import {
 } from "@/lib/goalPeriods";
 import { goalColor } from "@/lib/goalPriority";
 import { spring, tap } from "@/lib/motion";
+import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useGoalsViewStore } from "@/store/goalsViewStore";
@@ -59,12 +61,6 @@ const PERIODS: { key: GoalPeriod; label: string }[] = [
   { key: "week", label: "Week" },
   { key: "month", label: "Month" },
   { key: "year", label: "Year" },
-];
-
-const SCALES: { key: GoalPeriod; label: string }[] = [
-  { key: "week", label: "Weekly" },
-  { key: "month", label: "Monthly" },
-  { key: "year", label: "Yearly" },
 ];
 
 const CATEGORIES: { key: GoalCategory; label: string; icon: typeof User }[] = [
@@ -189,6 +185,16 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
 
   const [detailGoalId, setDetailGoalId] = useState<string | null>(null);
   const detailGoal = goals.find((g) => g.id === detailGoalId) ?? null;
+
+  // Consume a "jump to this goal" intent from a linked task: open its detail
+  // screen (mirrors WorkoutPage's pendingSessionId handling).
+  const pendingViewGoalId = useGoalFocusStore((s) => s.pendingViewGoalId);
+  const clearViewGoal = useGoalFocusStore((s) => s.clearViewGoal);
+  useEffect(() => {
+    if (!pendingViewGoalId) return;
+    if (goals.some((g) => g.id === pendingViewGoalId)) setDetailGoalId(pendingViewGoalId);
+    clearViewGoal();
+  }, [pendingViewGoalId, goals, clearViewGoal]);
 
   const [addOpen, setAddOpen] = useState(false);
   // Split across two screens of the same sheet — what/when first, details
@@ -440,7 +446,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
         onClick={openAdd}
         whileTap={tap}
         aria-label="Add a goal"
-        className="fixed right-5 bottom-[calc(84px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-lg z-30"
+        // Same position as the schedule page's own add-task FAB (BottomNav.tsx)
+        // — right-5, w-14 h-14, and this exact bottom formula — so the two
+        // read as the same control, just relocated to whichever page you're on.
+        className="fixed right-5 z-30 w-14 h-14 rounded-full bg-fg text-fg-inverse flex items-center justify-center shadow-lg"
+        style={{ bottom: "calc(78px + var(--nav-bottom))" }}
       >
         <Plus size={26} />
       </motion.button>
@@ -488,7 +498,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleNext()}
-                    placeholder="What do you want to accomplish?"
+                    placeholder="What's your goal?"
                     style={{
                       color: GOAL_ACCENT_ON,
                       caretColor: GOAL_ACCENT_ON,
@@ -501,32 +511,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
 
               <div className="bg-surface p-5">
                 <label className="text-xs font-bold tracking-wide text-fg-muted mb-2 block">
-                  Timeframe scale
-                </label>
-                <div className="flex items-center bg-surface-raised rounded-xl p-1">
-                  {SCALES.map((s) => (
-                    <button
-                      key={s.key}
-                      onClick={() => setNewScale(s.key)}
-                      className="relative flex-1 h-9 rounded-lg text-sm font-medium"
-                    >
-                      {newScale === s.key && (
-                        <motion.span
-                          layoutId="goalScaleSeg"
-                          transition={spring.snappy}
-                          className="absolute inset-0 bg-surface rounded-lg shadow-sm"
-                        />
-                      )}
-                      <span
-                        className={`relative z-10 ${newScale === s.key ? "text-fg" : "text-fg-muted"}`}
-                      >
-                        {s.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
                   Start date
                 </label>
                 <motion.button

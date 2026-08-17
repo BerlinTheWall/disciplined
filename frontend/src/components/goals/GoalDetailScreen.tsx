@@ -11,7 +11,6 @@ import {
   Pencil,
   Plus,
   Sparkles,
-  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -20,11 +19,13 @@ import type { LucideIcon } from "lucide-react";
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
 import { useChoose, useConfirm } from "@/components/ConfirmDialog";
-import GoalCelebration from "@/components/goals/GoalCelebration";
+import GoalCelebrationBurst, { GoalCelebrationLabel } from "@/components/goals/GoalCelebration";
 import GoalEditSheet from "@/components/goals/GoalEditSheet";
 import MilestoneDetailSheet from "@/components/goals/MilestoneDetailSheet";
 import WeightInput from "@/components/goals/WeightInput";
+import AddItemSheet from "@/components/timeline/AddItemSheet";
 import TaskDetailSheet from "@/components/timeline/TaskDetailSheet";
+import type { EditItem } from "@/components/timeline/Timeline";
 import { hexToRgba } from "@/lib/color";
 import { parseISODate, todayISODate } from "@/lib/date";
 import { goalEndDate } from "@/lib/goalPeriods";
@@ -41,8 +42,23 @@ import { spring, tap } from "@/lib/motion";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useTaskStore } from "@/store/taskStore";
-import type { Goal } from "@/types/goals";
+import type { Goal, GoalMilestone } from "@/types/goals";
 import type { Task } from "@/types/task";
+
+// A milestone with linked (AI-scheduled) tasks has no plain `done` flag to
+// toggle by hand — its circle instead completes (or, tapped again once
+// they're all done, un-completes) every one of those tasks, which is what
+// isMilestoneDone actually derives its state from.
+function toggleMilestoneTasks(m: GoalMilestone, tasks: Task[]) {
+  const completed = !isMilestoneDone(m, tasks);
+  for (const id of m.linkedTaskIds ?? []) {
+    useTaskStore.getState().updateTask(id, { completed });
+  }
+}
+
+// A little extra trail past the last milestone's own measured bottom
+// (trailEnd), so the closing "Done" dot doesn't sit flush against it.
+const TRAIL_CLOSE_PAD = 12;
 
 // Same built-in categories as GoalsPage's add-goal sheet (a custom typed-in
 // tag falls back to the plain description icon below) — lets the
@@ -88,7 +104,9 @@ export default function GoalDetailScreen({
     wasDoneRef.current = p.done;
     if (!wasDone && p.done) {
       setCelebrate(true);
-      const t = setTimeout(() => setCelebrate(false), 900);
+      // Long enough for the confetti burst and its label to fully play out
+      // and fade (see GoalCelebration) rather than getting cut off mid-way.
+      const t = setTimeout(() => setCelebrate(false), 1600);
       return () => clearTimeout(t);
     }
   }, [p?.done]);
@@ -97,7 +115,7 @@ export default function GoalDetailScreen({
     <BottomSheet
       isOpen={!!goal}
       onClose={onClose}
-      className="bg-surface max-h-[92vh] overflow-y-auto"
+      className="bg-surface max-h-[82vh] overflow-y-auto"
     >
       {goal && p && (
         <GoalDetailContent
@@ -156,6 +174,11 @@ function GoalDetailContent({
   // itself uses) rather than jumping straight to the calendar — "Show on
   // calendar" inside it does that jump instead.
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  // The full task editor, handed off from the read-only viewer's own Edit
+  // button — same "close the viewer, open the editor" flow the schedule
+  // page itself uses (Timeline.tsx), rather than the viewer being a dead
+  // end here.
+  const [editingItem, setEditingItem] = useState<EditItem | null>(null);
   const [editing, setEditing] = useState(false);
   // Tapping a milestone opens a popup with its title/weight/tasks — see
   // MilestoneDetailSheet.
@@ -265,6 +288,46 @@ function GoalDetailContent({
     ...goal.milestones.flatMap((m) => m.linkedTaskIds ?? []),
   ];
 
+  // Lives in the edit sheet as a quiet destructive button at the bottom
+  // (Structured-style — see the design-reference memory) rather than as
+  // its own icon up here next to Edit, so the two aren't sitting side by
+  // side inviting a mis-tap.
+  async function handleDeleteGoal() {
+    const taskCount = allLinkedTaskIds.length;
+    let deleteTasksToo = false;
+
+    if (taskCount === 0) {
+      const ok = await confirm({
+        title: "Delete goal?",
+        message: `"${goal.title}" will be removed.`,
+        confirmLabel: "Delete",
+        destructive: true,
+      });
+      if (!ok) return;
+    } else {
+      const choice = await choose({
+        title: "Delete goal?",
+        message: `"${goal.title}" has ${taskCount} linked task${taskCount === 1 ? "" : "s"} on your calendar. Delete those too, or just unlink them from the goal?`,
+        options: [
+          {
+            label: `Delete goal and ${taskCount} task${taskCount === 1 ? "" : "s"}`,
+            value: "goal-and-tasks",
+            destructive: true,
+          },
+          { label: "Delete goal only", value: "goal-only", destructive: true },
+        ],
+      });
+      if (!choice) return;
+      deleteTasksToo = choice === "goal-and-tasks";
+    }
+
+    if (deleteTasksToo) {
+      for (const taskId of allLinkedTaskIds) useTaskStore.getState().deleteTask(taskId);
+    }
+    useGoalStore.getState().deleteGoal(goal.id);
+    onClose();
+  }
+
   // Every milestone gets its own trail segment below its dot — including
   // the last one, which reaches its own row's measured bottom (trailEnd)
   // rather than a guessed "next dot" distance.
@@ -288,8 +351,6 @@ function GoalDetailContent({
 
   return (
     <div className="relative px-5 pt-3 pb-[calc(28px+env(safe-area-inset-bottom))] max-w-md mx-auto">
-      <GoalCelebration show={celebrate} />
-
       <div className="flex items-center gap-2 mb-5">
         <motion.button
           onClick={onClose}
@@ -312,52 +373,10 @@ function GoalDetailContent({
         <motion.button
           onClick={() => setEditing(true)}
           whileTap={tap}
-          aria-label="Edit goal"
-          className="p-1.5 text-fg-faint shrink-0"
+          className="flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-surface-raised text-sm font-medium text-fg shrink-0"
         >
-          <Pencil size={16} />
-        </motion.button>
-        <motion.button
-          onClick={async () => {
-            const taskCount = allLinkedTaskIds.length;
-            let deleteTasksToo = false;
-
-            if (taskCount === 0) {
-              const ok = await confirm({
-                title: "Delete goal?",
-                message: `"${goal.title}" will be removed.`,
-                confirmLabel: "Delete",
-                destructive: true,
-              });
-              if (!ok) return;
-            } else {
-              const choice = await choose({
-                title: "Delete goal?",
-                message: `"${goal.title}" has ${taskCount} linked task${taskCount === 1 ? "" : "s"} on your calendar. Delete those too, or just unlink them from the goal?`,
-                options: [
-                  {
-                    label: `Delete goal and ${taskCount} task${taskCount === 1 ? "" : "s"}`,
-                    value: "goal-and-tasks",
-                    destructive: true,
-                  },
-                  { label: "Delete goal only", value: "goal-only", destructive: true },
-                ],
-              });
-              if (!choice) return;
-              deleteTasksToo = choice === "goal-and-tasks";
-            }
-
-            if (deleteTasksToo) {
-              for (const taskId of allLinkedTaskIds) useTaskStore.getState().deleteTask(taskId);
-            }
-            useGoalStore.getState().deleteGoal(goal.id);
-            onClose();
-          }}
-          whileTap={tap}
-          aria-label="Delete goal"
-          className="p-1.5 text-fg-faint shrink-0"
-        >
-          <Trash2 size={17} />
+          <Pencil size={15} />
+          Edit
         </motion.button>
       </div>
 
@@ -405,9 +424,16 @@ function GoalDetailContent({
         </div>
       )}
 
-      <div className="rounded-2xl bg-surface-feature text-white p-5 mb-4">
+      <div className="relative overflow-hidden rounded-2xl bg-surface-feature text-white p-5 mb-4">
+        <GoalCelebrationLabel show={celebrate} />
+
         <div className="flex items-center gap-4">
-          <div className="relative w-24 h-24 shrink-0">
+          <motion.div
+            className="relative w-24 h-24 shrink-0"
+            animate={celebrate ? { scale: [1, 1.14, 1] } : undefined}
+            transition={spring.pop}
+          >
+            <GoalCelebrationBurst show={celebrate} />
             <svg width="96" height="96" className="-rotate-90">
               <circle
                 cx="48"
@@ -432,12 +458,18 @@ function GoalDetailContent({
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               {p.done ? (
-                <Check size={26} style={{ color: accent }} strokeWidth={3} />
+                <motion.div
+                  initial={{ scale: 0, rotate: -30 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={spring.pop}
+                >
+                  <Check size={26} style={{ color: accent }} strokeWidth={3} />
+                </motion.div>
               ) : (
                 <b className="text-[21px] font-extrabold leading-none">{p.percent}%</b>
               )}
             </div>
-          </div>
+          </motion.div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -447,15 +479,18 @@ function GoalDetailContent({
               >
                 Overall progress
               </p>
-              {pace && (
+              {/* Once done, pace no longer means anything (goalPace returns
+                null for a finished goal) — shown as "Done" in the same spot
+                instead of just disappearing. */}
+              {(pace || p.done) && (
                 <span
                   className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full"
                   style={{
-                    color: GOAL_PACE_COLOR[pace],
-                    backgroundColor: `${GOAL_PACE_COLOR[pace]}26`,
+                    color: p.done ? GOAL_PACE_COLOR["on-track"] : GOAL_PACE_COLOR[pace!],
+                    backgroundColor: `${p.done ? GOAL_PACE_COLOR["on-track"] : GOAL_PACE_COLOR[pace!]}26`,
                   }}
                 >
-                  {GOAL_PACE_LABEL[pace]}
+                  {p.done ? "Done" : GOAL_PACE_LABEL[pace!]}
                 </span>
               )}
             </div>
@@ -534,10 +569,13 @@ function GoalDetailContent({
               rendering no trail at all. */}
             {goal.milestones.length > 1 && (
               <div
-                className="absolute left-3.75 w-0.75 rounded-full bg-surface-subtle"
+                className="absolute left-[13.5px] w-0.75 rounded-full bg-surface-subtle"
                 style={
                   trailMeasured
-                    ? { top: `${dotCenters[0]}px`, height: `${trailEnd! - dotCenters[0]}px` }
+                    ? {
+                        top: `${dotCenters[0]}px`,
+                        height: `${trailEnd! + TRAIL_CLOSE_PAD - dotCenters[0]}px`,
+                      }
                     : { top: "0.75rem", bottom: "0.75rem" }
                 }
               />
@@ -563,7 +601,9 @@ function GoalDetailContent({
                     backgroundColor: accent,
                     top: `${dotCenters[i]}px`,
                     height: `${
-                      ((i < n - 1 ? dotCenters[i + 1] : trailEnd!) - dotCenters[i]) * segFraction
+                      ((i < n - 1 ? dotCenters[i + 1] : trailEnd! + TRAIL_CLOSE_PAD) -
+                        dotCenters[i]) *
+                      segFraction
                     }px`,
                   }
                 : {
@@ -574,7 +614,7 @@ function GoalDetailContent({
               return (
                 <div
                   key={m.id}
-                  className="absolute left-3.75 w-0.75 rounded-full transition-[height] duration-500 ease-out"
+                  className="absolute left-[13.5px] w-0.75 rounded-full transition-[height] duration-500 ease-out"
                   style={style}
                 />
               );
@@ -582,9 +622,9 @@ function GoalDetailContent({
             <div className="flex flex-col">
               {goal.milestones.map((m) => {
                 // A milestone with AI-scheduled sessions derives its done
-                // state from them (see isMilestoneDone) — its dot must show
-                // that same state, and toggling it by hand would silently do
-                // nothing to the actual progress ring, so it isn't offered.
+                // state from them (see isMilestoneDone) — its dot completes
+                // (or un-completes) every one of those tasks instead of a
+                // plain `done` flag, via toggleMilestoneTasks above.
                 const hasLinkedTasks = (m.linkedTaskIds?.length ?? 0) > 0;
                 const done = isMilestoneDone(m, tasks);
                 const linkedTasks = hasLinkedTasks
@@ -608,24 +648,13 @@ function GoalDetailContent({
                         ref={(el) => {
                           dotRefs.current[m.id] = el;
                         }}
-                        onClick={
+                        onClick={() =>
                           hasLinkedTasks
-                            ? undefined
-                            : () => useGoalStore.getState().toggleMilestone(goal.id, m.id)
+                            ? toggleMilestoneTasks(m, tasks)
+                            : useGoalStore.getState().toggleMilestone(goal.id, m.id)
                         }
-                        disabled={hasLinkedTasks}
-                        aria-label={
-                          hasLinkedTasks
-                            ? done
-                              ? "Done — every scheduled session is completed"
-                              : "Not done — scheduled sessions still pending"
-                            : done
-                              ? "Mark step not done"
-                              : "Mark step done"
-                        }
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                          hasLinkedTasks ? "cursor-default" : ""
-                        }`}
+                        aria-label={done ? "Mark step not done" : "Mark step done"}
+                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
                         style={
                           done
                             ? { backgroundColor: accent, borderColor: accent }
@@ -649,16 +678,13 @@ function GoalDetailContent({
                         >
                           {m.label}
                         </button>
-                        {/* Weighting only means something with 2+ steps — a
-                          single one is trivially 100% of the goal. */}
+                        {/* Read-only here — weighting only means something
+                          with 2+ steps, and is only editable from the
+                          milestone's own edit sheet (tap to open). */}
                         {goal.milestones.length > 1 && (
-                          <WeightInput
-                            value={m.weight}
-                            placeholder={milestoneShareById[m.id] ?? 0}
-                            onChange={(w) =>
-                              useGoalStore.getState().setMilestoneWeight(goal.id, m.id, w)
-                            }
-                          />
+                          <span className="shrink-0 text-xs font-medium tabular-nums text-fg-faint">
+                            {Math.round(m.weight ?? milestoneShareById[m.id] ?? 0)}%
+                          </span>
                         )}
                         <button
                           onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
@@ -714,39 +740,70 @@ function GoalDetailContent({
                 );
               })}
             </div>
-            {/* Closes off the trail after the last milestone, mirroring
-              every other dot — filled once that milestone itself is done,
-              same as a real one, since there's no further milestone to
-              hand off to. */}
+            {/* Closes off the trail after the last milestone with a "Done"
+              marker for the goal as a whole — filled only once every
+              milestone is, unlike the real dots above which each track just
+              their own. Toggles the last milestone on tap, same rule as its
+              own row dot (see toggleMilestoneTasks above) — that's a
+              separate thing from what the fill now shows, but the tap
+              target sits right where that row's own dot would be, so it
+              stays wired to it rather than doing nothing. Overlapping the
+              real dot above it — which can happen for a milestone without
+              linked tasks, whose row is short — is harmless here since both
+              trigger the exact same toggle for the exact same milestone. */}
             {trailMeasured &&
               goal.milestones.length > 1 &&
               (() => {
                 const lastMilestone = goal.milestones[goal.milestones.length - 1];
+                const lastHasLinkedTasks = (lastMilestone.linkedTaskIds?.length ?? 0) > 0;
                 const lastDone = isMilestoneDone(lastMilestone, tasks);
+                const allDone = goal.milestones.every((m) => isMilestoneDone(m, tasks));
+                const closeTop = trailEnd! + TRAIL_CLOSE_PAD - 10;
                 return (
-                  <div
-                    className="absolute z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center"
-                    style={{
-                      left: "0.3125rem",
-                      top: `${trailEnd! - 10}px`,
-                      ...(lastDone
-                        ? { backgroundColor: accent, borderColor: accent }
-                        : {
-                            borderColor: "var(--surface-subtle)",
-                            backgroundColor: "var(--surface)",
-                          }),
-                    }}
-                  >
-                    {lastDone && <Check size={11} strokeWidth={3.5} className="text-fg-inverse" />}
-                  </div>
+                  <>
+                    <button
+                      onClick={() =>
+                        lastHasLinkedTasks
+                          ? toggleMilestoneTasks(lastMilestone, tasks)
+                          : useGoalStore.getState().toggleMilestone(goal.id, lastMilestone.id)
+                      }
+                      aria-label={lastDone ? "Mark step not done" : "Mark step done"}
+                      className="absolute z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                      style={{
+                        left: "0.3125rem",
+                        top: `${closeTop}px`,
+                        ...(allDone
+                          ? { backgroundColor: accent, borderColor: accent }
+                          : {
+                              borderColor: "var(--surface-subtle)",
+                              backgroundColor: "var(--surface)",
+                            }),
+                      }}
+                    >
+                      {allDone && <Check size={11} strokeWidth={3.5} className="text-fg-inverse" />}
+                    </button>
+                    <span
+                      className="absolute z-10 text-[14.5px] font-semibold"
+                      style={{
+                        left: "2.625rem",
+                        top: `${closeTop}px`,
+                        lineHeight: "1.25rem",
+                        color: allDone ? accent : "var(--fg-faint)",
+                      }}
+                    >
+                      Done
+                    </span>
+                  </>
                 );
               })()}
+            {/* Reserves real flow space for the closing dot/label above,
+              which — like every dot before it — sits 10px past its own
+              anchor and is now anchored TRAIL_CLOSE_PAD past trailEnd on
+              top of that. Absolute positioning doesn't grow trailRef's own
+              box to fit it, so without this spacer that overhang would
+              paint past the sheet's last bit of bottom padding and clip. */}
+            {goal.milestones.length > 1 && <div style={{ height: TRAIL_CLOSE_PAD + 10 }} />}
           </div>
-          {goal.milestones.length > 1 && (
-            <p className="text-[11px] text-fg-faint mt-2">
-              Type a step's % of this goal, or leave it blank to share the rest evenly.
-            </p>
-          )}
         </Collapse>
       </div>
 
@@ -841,9 +898,23 @@ function GoalDetailContent({
         item={viewingTask ? { type: "task", data: viewingTask } : null}
         onClose={() => setViewingTask(null)}
         onShowOnCalendar={viewingTask ? () => onOpenTask(viewingTask) : undefined}
+        onEdit={(item) => {
+          setViewingTask(null);
+          setEditingItem(item);
+        }}
       />
 
-      <GoalEditSheet goal={editing ? goal : null} onClose={() => setEditing(false)} />
+      <AddItemSheet
+        isOpen={!!editingItem}
+        onClose={() => setEditingItem(null)}
+        editItem={editingItem}
+      />
+
+      <GoalEditSheet
+        goal={editing ? goal : null}
+        onClose={() => setEditing(false)}
+        onDelete={handleDeleteGoal}
+      />
 
       <MilestoneDetailSheet
         goal={goal}

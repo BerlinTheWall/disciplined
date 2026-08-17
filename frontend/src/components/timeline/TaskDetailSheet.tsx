@@ -9,6 +9,7 @@ import {
   Flame,
   Pencil,
   Repeat,
+  Target,
   X,
 } from "lucide-react";
 
@@ -16,12 +17,15 @@ import { repeatSummary } from "./addItemOptions";
 import type { EditItem } from "./Timeline";
 import { isLightColor } from "@/lib/color";
 import { formatFullDate } from "@/lib/date";
+import { goalColor } from "@/lib/goalPriority";
 import { anchorDay, getHabitStreak } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { tap } from "@/lib/motion";
 import { PRIORITY_META } from "@/lib/priority";
 import { reminderLabel } from "@/lib/reminders";
 import { durationWords, formatTimeLabel } from "@/lib/time";
+import { useGoalFocusStore } from "@/store/goalFocusStore";
+import { useGoalStore } from "@/store/goalStore";
 import { useRecipeFocusStore } from "@/store/recipeFocusStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
@@ -55,6 +59,8 @@ export default function TaskDetailSheet({
   const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
   const recipes = useRecipeStore((s) => s.recipes);
   const openRecipe = useRecipeFocusStore((s) => s.openRecipe);
+  const goals = useGoalStore((s) => s.goals);
+  const openGoal = useGoalFocusStore((s) => s.openGoal);
 
   const data = item?.data;
   const color = data?.color ?? "#6366f1";
@@ -64,6 +70,14 @@ export default function TaskDetailSheet({
 
   const linkedSession = workoutSessions.find((s) => s.id === data?.workoutSessionId);
   const linkedRecipe = recipes.find((r) => r.id === data?.recipeId);
+  const linkedGoal =
+    item?.type === "task"
+      ? goals.find(
+          (g) =>
+            g.linkedTaskIds.includes(item.data.id) ||
+            g.milestones.some((m) => m.linkedTaskIds?.includes(item.data.id))
+        )
+      : undefined;
   const priority = item?.type === "task" ? item.data.priority : null;
   const streak = item?.type === "habit" ? getHabitStreak(item.data, new Date()) : 0;
 
@@ -282,7 +296,7 @@ export default function TaskDetailSheet({
               </div>
             )}
 
-            {linkedSession && (
+            {item.type === "habit" && linkedSession && (
               <motion.button
                 onClick={() => {
                   openWorkoutSession(linkedSession.id);
@@ -326,6 +340,31 @@ export default function TaskDetailSheet({
                   <span className="block text-xs text-fg-faint">Linked recipe</span>
                   <span className="block text-sm font-medium text-fg truncate">
                     {linkedRecipe.name}
+                  </span>
+                </span>
+                <ArrowUpRight size={16} className="text-fg-faint shrink-0" />
+              </motion.button>
+            )}
+
+            {linkedGoal && (
+              <motion.button
+                onClick={() => {
+                  openGoal(linkedGoal.id);
+                  onClose();
+                }}
+                whileTap={tap}
+                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-alt text-left"
+              >
+                <span
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
+                  style={{ backgroundColor: goalColor(linkedGoal.priority) }}
+                >
+                  <Target size={15} />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-xs text-fg-faint">Linked goal</span>
+                  <span className="block text-sm font-medium text-fg truncate">
+                    {linkedGoal.title}
                   </span>
                 </span>
                 <ArrowUpRight size={16} className="text-fg-faint shrink-0" />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Calendar, ChevronRight, Target, X } from "lucide-react";
+import { Calendar, Target, Trash2, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import CalendarMonth from "@/components/timeline/CalendarMonth";
@@ -32,19 +32,35 @@ const PRIORITY_LEVELS: { key: Priority; label: string }[] = [
 // a plain form, so it reads as the same sheet family. Milestones/links/
 // category stay editable inline on the detail screen itself; this is only
 // for the fields that screen shows read-only in its hero.
-export default function GoalEditSheet({ goal, onClose }: { goal: Goal | null; onClose: () => void }) {
+export default function GoalEditSheet({
+  goal,
+  onClose,
+  onDelete,
+}: {
+  goal: Goal | null;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
   return (
     <BottomSheet
       isOpen={!!goal}
       onClose={onClose}
       className="bg-surface overflow-hidden max-h-[92vh] flex flex-col"
     >
-      {goal && <GoalEditForm goal={goal} onClose={onClose} />}
+      {goal && <GoalEditForm goal={goal} onClose={onClose} onDelete={onDelete} />}
     </BottomSheet>
   );
 }
 
-function GoalEditForm({ goal, onClose }: { goal: Goal; onClose: () => void }) {
+function GoalEditForm({
+  goal,
+  onClose,
+  onDelete,
+}: {
+  goal: Goal;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
   // Lazily seeded once per mount (the sheet fully unmounts on close, since
   // its parent gates `goal` to null — see GoalDetailScreen's own comment on
   // the same pattern), so reopening always starts from the goal's current
@@ -82,7 +98,10 @@ function GoalEditForm({ goal, onClose }: { goal: Goal; onClose: () => void }) {
   return (
     <>
       <div className="overflow-y-auto">
-        <div style={{ backgroundColor: accent }} className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6">
+        <div
+          style={{ backgroundColor: accent }}
+          className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
+        >
           <div className="flex items-center mb-4">
             <motion.button
               onClick={onClose}
@@ -104,8 +123,12 @@ function GoalEditForm({ goal, onClose }: { goal: Goal; onClose: () => void }) {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="What do you want to accomplish?"
-              style={{ color: onAccent, caretColor: onAccent, borderColor: "rgba(255,255,255,0.5)" }}
+              placeholder="What's your goal?"
+              style={{
+                color: onAccent,
+                caretColor: onAccent,
+                borderColor: "rgba(255,255,255,0.5)",
+              }}
               className="flex-1 min-w-0 bg-transparent text-2xl font-semibold placeholder-white/50 border-b pb-1 focus:outline-none"
             />
           </div>
@@ -162,7 +185,10 @@ function GoalEditForm({ goal, onClose }: { goal: Goal; onClose: () => void }) {
                       : { borderColor: "var(--border-strong)", color: "var(--fg-muted)" }
                   }
                 >
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: color }}
+                  />
                   {level.label}
                 </motion.button>
               );
@@ -178,8 +204,16 @@ function GoalEditForm({ goal, onClose }: { goal: Goal; onClose: () => void }) {
               title.trim() ? "" : "bg-surface-raised text-fg-faint"
             }`}
           >
-            Save changes
-            <ChevronRight size={18} />
+            Update Goal
+          </motion.button>
+
+          <motion.button
+            onClick={onDelete}
+            whileTap={tap}
+            className="mt-4 w-full flex items-center justify-center gap-1.5 py-2 text-sm font-medium text-red-400"
+          >
+            <Trash2 size={15} />
+            Delete goal
           </motion.button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
 import { todayISODate } from "@/lib/date";
+import { useGoalStore } from "@/store/goalStore";
 import type { Task } from "@/types/task";
 
 const today = todayISODate();
@@ -90,10 +91,15 @@ export const useTaskStore = create<State & Actions>()(
           }
         }),
 
-      deleteTask: (id) =>
+      deleteTask: (id) => {
         set((state) => {
           state.tasks = state.tasks.filter((t) => t.id !== id);
-        }),
+        });
+        // Otherwise a deleted task lingers in linkedTaskIds forever, permanently
+        // capping its goal/milestone's progress below 100% (see goalStore's own
+        // comment on unlinkTaskEverywhere).
+        useGoalStore.getState().unlinkTaskEverywhere(id);
+      },
 
       updateTask: (id, changes) =>
         set((state) => {
