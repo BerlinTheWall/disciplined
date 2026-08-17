@@ -425,7 +425,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
             activeKey={activeKey}
             goals={goals}
             tasks={tasks}
-            weekGoals={nativeListed}
+            // Native week goals plus coarser goals cascading down into this
+            // week (same set the day-stops themselves now use — see
+            // buildWeekStops) — a month/year goal active this week belongs
+            // here too, not just goals natively filed under the week itself.
+            weekGoals={listed}
             onOpenGoal={(id) => setDetailGoalId(id)}
             onOpenTask={openTask}
             onOpenDay={openDay}

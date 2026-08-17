@@ -86,7 +86,12 @@ function goalItems(goals: Goal[], allGoals: Goal[], tasks: Task[]): PeriodStopIt
 
 function buildWeekStops(activeKey: string, goals: Goal[], tasks: Task[]): PeriodStop[] {
   const today = todayISODate();
-  const weekGoals = goals.filter((g) => g.period === "week" && g.periodKey === activeKey);
+  // Native week goals plus coarser (month/year) goals reaching down into
+  // this week — same cascade rule buildMonthStops/buildYearStops use one
+  // level up, so a month/year goal's own AI-scheduled session lands on the
+  // right day here too, instead of only ever-native week goals being able
+  // to place anything on the rail.
+  const weekGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", activeKey));
   // Union both goal-level and milestone-level linked tasks — a goal planned
   // through the AI wizard has its tasks attached to milestones
   // (linkTasksToMilestones), never to the goal's own linkedTaskIds, so
