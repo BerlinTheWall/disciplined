@@ -23,6 +23,13 @@
   --surface-inverse: #0b1120;
   --surface-feature: #0b1120;
   --surface-feature-alt: #1b2436;
+  /* surface-feature's light-mode counterpart — surface-feature itself is
+     deliberately always-dark (GoalDetailScreen/MealDetailSheet/etc. pair it
+     with hardcoded white/gray-400 text, regardless of theme), so this is a
+     separate token rather than a light-mode override of that one: a pale
+     tint of the same indigo used for goal pace/ring accents, for callouts
+     that DO want to flip light/dark with the rest of the theme. */
+  --surface-feature-soft: #e1e6ff;
 
   --fg: #111827;
   --fg-muted: #6b7280;
@@ -70,6 +77,7 @@
   --surface-inverse: #f4f6fa;
   --surface-feature: #161f33;
   --surface-feature-alt: #2a3552;
+  --surface-feature-soft: #161f33;
 
   --fg: #f4f6fa;
   --fg-muted: #9aa4b8;
@@ -106,6 +114,7 @@
   --surface-inverse: #dc1414;
   --surface-feature: #1c1c1c;
   --surface-feature-alt: #2a2a2a;
+  --surface-feature-soft: #1c1c1c;
 
   --fg: #f5f5f5;
   --fg-muted: #b0b0b0;
@@ -144,6 +153,7 @@
   --color-surface-inverse: var(--surface-inverse);
   --color-surface-feature: var(--surface-feature);
   --color-surface-feature-alt: var(--surface-feature-alt);
+  --color-surface-feature-soft: var(--surface-feature-soft);
 
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);

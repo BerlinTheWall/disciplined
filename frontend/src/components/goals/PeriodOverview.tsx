@@ -156,7 +156,13 @@ export default function PeriodOverview({
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
       {periodGoals.length > 0 && (
-        <div className="bg-surface rounded-2xl shadow-soft p-3 shrink-0">
+        // bg-surface-feature-soft (index.css) — surface-feature's light/dark
+        // adaptive sibling: a pale indigo tint in light theme, the same dark
+        // fill as surface-feature itself in dark theme. Plain surface-feature
+        // stays dark even in light mode (it's paired with hardcoded white
+        // text everywhere else it's used), which read as a jarring black box
+        // here against an otherwise light page.
+        <div className="bg-surface-feature-soft rounded-2xl shadow-soft p-3 shrink-0">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
             {relativePeriodName(period, activeKey)
               ? `${relativePeriodName(period, activeKey)}'s goals`

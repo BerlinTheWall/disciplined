@@ -38,7 +38,13 @@ export default function AllGoalsList({
           .sort((a, b) => a.periodKey.localeCompare(b.periodKey) || a.order - b.order);
         if (group.length === 0) return null;
         return (
-          <div key={key} className="bg-surface rounded-2xl shadow-soft p-3">
+          // bg-surface-feature-soft (index.css) — surface-feature's
+          // light/dark adaptive sibling: a pale indigo tint in light theme,
+          // the same dark fill as surface-feature itself in dark theme.
+          // Plain surface-feature stays dark even in light mode (it's paired
+          // with hardcoded white text everywhere else it's used), which read
+          // as a jarring black box here against an otherwise light page.
+          <div key={key} className="bg-surface-feature-soft rounded-2xl shadow-soft p-3">
             <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
               {label} · {group.length}
             </p>

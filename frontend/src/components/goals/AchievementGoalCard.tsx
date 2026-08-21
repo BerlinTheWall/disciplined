@@ -9,13 +9,13 @@ import type { Goal } from "@/types/goals";
 import type { Task } from "@/types/task";
 
 // The shared "achievement card" look for a goal shown outside its own detail
-// screen — bg-fg/5, a whisper-thin tint of the card's own text color
-// rather than a fixed surface step, so the fill stays close to whatever
-// bg-surface box it's sitting in (no separate grey hue to clash with either
-// theme) while the border-fg/10 outline still draws a clear edge. Used both
-// by PeriodOverview's "this week's goals" strip and AllGoalsList's
-// per-period groups, always laid out in a horizontal slider rather than a
-// stacked list. Ring/status color
+// screen — a solid bg-surface card against its section's own bg-fg/5 tinted
+// box (see PeriodOverview/AllGoalsList), so the card reads as the crisp,
+// tappable surface and the box around it reads as the quieter backdrop,
+// plus the border-fg/10 outline for a clear edge either way. Used both by
+// PeriodOverview's "this week's goals" strip and AllGoalsList's per-period
+// groups, always laid out in a horizontal slider rather than a stacked
+// list. Ring/status color
 // comes from the goal's pace when it has one (only meaningful for the
 // period actually running now — see goalPace) and falls back to its
 // priority color otherwise, mirroring GoalDetailScreen's own ring/pill
@@ -70,7 +70,7 @@ export default function AchievementGoalCard({
     <motion.button
       onClick={onOpen}
       whileTap={tap}
-      className={`${solo ? "w-full" : "w-60 shrink-0 snap-start"} flex flex-col gap-3 rounded-2xl p-3.5 text-left bg-fg/5 border border-fg/10 shadow-soft`}
+      className={`${solo ? "w-full" : "w-60 shrink-0 snap-start"} flex flex-col gap-3 rounded-2xl p-3.5 text-left bg-surface border border-fg/10 shadow-soft`}
     >
       <div className="flex items-center gap-3 min-w-0">
         <div className="relative w-11 h-11 shrink-0">
