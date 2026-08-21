@@ -638,7 +638,7 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
     <div className="mb-4">
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-2 bg-surface-raised rounded-full pl-4 pr-1.5 py-2"
+        className="flex items-center gap-2 bg-surface shadow-card rounded-full pl-4 pr-1.5 py-2"
       >
         <Plus size={20} className="text-fg-faint shrink-0" />
         <input

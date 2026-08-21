@@ -18,18 +18,18 @@
      the spacing between steps changed, not the character. */
   --surface: #ffffff;
   --surface-alt: #eef0f3;
-  --surface-raised: #dfe2e7;
+  --surface-raised: #e1e6ff;
   --surface-subtle: #c7cbd3;
   --surface-inverse: #0b1120;
   --surface-feature: #0b1120;
   --surface-feature-alt: #1b2436;
-  /* surface-feature's light-mode counterpart — surface-feature itself is
-     deliberately always-dark (GoalDetailScreen/MealDetailSheet/etc. pair it
-     with hardcoded white/gray-400 text, regardless of theme), so this is a
-     separate token rather than a light-mode override of that one: a pale
-     tint of the same indigo used for goal pace/ring accents, for callouts
-     that DO want to flip light/dark with the rest of the theme. */
-  --surface-feature-soft: #e1e6ff;
+  /* The unselected track of a segmented toggle (daily/weekly switch,
+     Goals page's Week/Month/Year and Overview/All toggles) — needs to stay
+     visibly darker than the selected pill inside it (bg-surface + shadow),
+     so it can't just go pure white like the other raised elements on these
+     pages did. Its own token rather than reusing surface-raised since that
+     one's now a much bluer tint than this neutral light grey. */
+  --surface-toggle-track: #f2f3f8;
 
   --fg: #111827;
   --fg-muted: #6b7280;
@@ -50,19 +50,22 @@
     radial-gradient(60% 50% at 12% 6%, rgba(250, 224, 216, 0.45), transparent 72%),
     radial-gradient(60% 50% at 88% 94%, rgba(227, 223, 246, 0.48), transparent 72%), var(--surface);
 
-  /* Goals & Plans path — a single flowing line of stops. Sage green: not a
-     new hue introduced for this, it's what the very first Goals summary
-     bar already used, just reused here. --path-ink is tuned separately from
-     --path-accent for text contrast, since the accent is chosen for the
-     trail/dots, not for small type. */
-  --path-road: #dfe3d6;
-  --path-accent: #7ea852;
-  --path-ink: #3f5c28;
-  /* The overview's "today" stop specifically (PeriodOverview) — a
-     deliberate red, distinct from the sage used for progress/travelled
-     trail elsewhere on the path, so the current stop reads as a different
-     kind of signal (where you are) rather than more progress. */
-  --path-today: #ef4444;
+  /* Goals & Plans path — a single flowing line of stops. Indigo, the same
+     family as GOAL_PACE_COLOR's "on-track" (goalProgress.ts) and this
+     session's own surface-raised/surface-toggle-track tint — replaces the
+     old sage green, which was its own disconnected hue nothing else in the
+     app shared. --path-ink is tuned separately from --path-accent for text
+     contrast, since the accent is chosen for the trail/dots, not for small
+     type. */
+  --path-road: #e2e3f0;
+  --path-accent: #6366f1;
+  --path-ink: #4338ca;
+  /* The overview's "today" stop specifically (PeriodOverview) — purple, a
+     hue nothing else in the app's palette uses, so it reads as a clearly
+     different *kind* of signal from the indigo progress trail without
+     reaching for red, green, or the gold already spoken for by
+     GOAL_PRIORITY_COLOR's "medium" (goalPriority.ts). */
+  --path-today: #8b3cc7;
 }
 
 [data-theme="dark"] {
@@ -77,7 +80,7 @@
   --surface-inverse: #f4f6fa;
   --surface-feature: #161f33;
   --surface-feature-alt: #2a3552;
-  --surface-feature-soft: #161f33;
+  --surface-toggle-track: #2c3752;
 
   --fg: #f4f6fa;
   --fg-muted: #9aa4b8;
@@ -96,10 +99,10 @@
     radial-gradient(60% 50% at 12% 6%, rgba(122, 98, 90, 0.2), transparent 72%),
     radial-gradient(60% 50% at 88% 94%, rgba(98, 94, 130, 0.22), transparent 72%), var(--surface);
 
-  --path-road: #303629;
-  --path-accent: #9ec06a;
-  --path-ink: #c3dc9e;
-  --path-today: #f87171;
+  --path-road: #2a2b40;
+  --path-accent: #818cf8;
+  --path-ink: #c7c9fa;
+  --path-today: #a855f7;
 }
 
 /* ── SIGMA MODE ────────────────────────────────────────────────────────
@@ -114,7 +117,7 @@
   --surface-inverse: #dc1414;
   --surface-feature: #1c1c1c;
   --surface-feature-alt: #2a2a2a;
-  --surface-feature-soft: #1c1c1c;
+  --surface-toggle-track: #1c1c1c;
 
   --fg: #f5f5f5;
   --fg-muted: #b0b0b0;
@@ -153,7 +156,7 @@
   --color-surface-inverse: var(--surface-inverse);
   --color-surface-feature: var(--surface-feature);
   --color-surface-feature-alt: var(--surface-feature-alt);
-  --color-surface-feature-soft: var(--surface-feature-soft);
+  --color-surface-toggle-track: var(--surface-toggle-track);
 
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);

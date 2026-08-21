@@ -405,12 +405,12 @@ function App() {
                   <motion.button
                     onClick={() => setIsPlanOpen(true)}
                     whileTap={tap}
-                    className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface-raised rounded-lg h-10 px-3 text-base font-medium text-fg"
+                    className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface shadow-card rounded-lg h-10 px-3 text-base font-medium text-fg"
                   >
                     <CalendarPlus size={18} />
                     Day Plan
                   </motion.button>
-                  <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
+                  <div className="flex items-center bg-surface-toggle-track rounded-lg h-10 p-1">
                     {(["daily", "weekly"] as const).map((m) => (
                       <button
                         key={m}
@@ -451,7 +451,7 @@ function App() {
                   exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={spring.snappy}
                 >
-                  <div className="flex items-center bg-surface-raised rounded-lg h-10 p-1">
+                  <div className="flex items-center bg-surface-toggle-track rounded-lg h-10 p-1">
                     {(["overview", "all"] as const).map((m) => (
                       <button
                         key={m}

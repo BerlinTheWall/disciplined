@@ -97,7 +97,7 @@ export default function WeekHeader({ leftGutter = 0 }: WeekHeaderProps) {
                 animate={{ scale: isSelected ? 1.05 : 1 }}
                 transition={spring.snappy}
                 style={{ transformOrigin: scaleOrigin }}
-                className="w-full flex flex-col items-center gap-2.5 rounded-full bg-surface-raised shadow-card py-1.5"
+                className="w-full flex flex-col items-center gap-2.5 rounded-full bg-surface shadow-card py-1.5"
               >
                 <span
                   className={`text-xs pt-2 ${isSelected ? "font-bold text-fg" : "font-medium text-fg-muted"}`}

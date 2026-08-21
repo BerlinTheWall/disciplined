@@ -354,7 +354,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
       {goalsView === "overview" ? (
         <>
           {/* Horizon toggle with an animated selected pill */}
-          <div className="flex items-center bg-surface-raised rounded-xl p-1 shrink-0">
+          <div className="flex items-center bg-surface-toggle-track rounded-xl p-1 shrink-0">
             {PERIODS.map((p) => (
               <button
                 key={p.key}
