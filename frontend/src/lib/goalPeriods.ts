@@ -1,4 +1,4 @@
-import { getWeekDates, parseISODate, toISODate } from "./date";
+import { getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
 import type { GoalPeriod } from "@/types/goals";
 
 // Period-instance keys: week → the Monday's ISO date, month → "YYYY-MM",
@@ -91,6 +91,30 @@ export function goalEndDate(
   return toISODate(end);
 }
 
+// "Due in 3 days" / "50 days left" / "3 months left" — how much runway a
+// goal has left before goalEndDate, for a compact card footer. Close
+// deadlines read as "due" (urgent, worth naming the exact day count);
+// anything further out just reads as time remaining, and past ~2 months
+// collapses to whole months since a day count that large isn't a useful
+// unit to skim. Null once the goal's run has already ended — a stale
+// countdown reads worse than no countdown at all.
+export function goalTimeLeftLabel(
+  period: GoalPeriod,
+  periodKey: string,
+  startDate: string | null,
+  durationCount: number | null
+): string | null {
+  const end = goalEndDate(period, periodKey, startDate, durationCount);
+  const daysLeft = Math.round(
+    (parseISODate(end).getTime() - parseISODate(todayISODate()).getTime()) / 86400000
+  );
+  if (daysLeft < 0) return null;
+  if (daysLeft <= 7) return `Due in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
+  if (daysLeft <= 60) return `${daysLeft} days left`;
+  const months = Math.round(daysLeft / 30);
+  return `${months} month${months === 1 ? "" : "s"} left`;
+}
+
 // goalEndDate's inverse: given a start and a target end date the user
 // actually picked (add-goal sheet's "End date" field), the whole-`period`
 // durationCount that reproduces it — so the stored field stays a count of
@@ -120,7 +144,8 @@ export function durationCountFromEndDate(
   target.setDate(target.getDate() + 1);
 
   if (period === "month") {
-    let months = (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
+    let months =
+      (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth());
     if (target.getDate() < start.getDate()) months -= 1;
     return Math.max(1, months);
   }

@@ -1,3 +1,4 @@
+import { isLightColor } from "./color";
 import type { Priority } from "@/types/task";
 
 // Goal priority palette — coral/gold/teal, plus neutral slate for "no
@@ -20,3 +21,10 @@ export const goalColor = (p: Priority | null) => (p ? GOAL_PRIORITY_COLOR[p] : G
 // goals before the user drags them.
 export const priorityRank = (p: Priority | null): number =>
   p === "high" ? 0 : p === "medium" ? 1 : p === "low" ? 2 : 3;
+
+// The Goals & Plans feature's own identity color (same sage as
+// --path-accent, index.css) — moved here from GoalsPage.tsx so anything
+// representing "Goals" in aggregate (not one specific goal's own priority)
+// can share it.
+export const GOAL_ACCENT = "#3fcd9b";
+export const GOAL_ACCENT_ON = isLightColor(GOAL_ACCENT) ? "#111827" : "#ffffff";

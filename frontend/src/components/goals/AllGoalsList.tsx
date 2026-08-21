@@ -1,10 +1,5 @@
-import { motion } from "framer-motion";
-import { Check } from "lucide-react";
-
+import AchievementGoalCard from "@/components/goals/AchievementGoalCard";
 import { periodLabel, relativePeriodName } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
-import { goalProgress } from "@/lib/goalProgress";
-import { tap } from "@/lib/motion";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
 
@@ -47,14 +42,31 @@ export default function AllGoalsList({
             <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
               {label} · {group.length}
             </p>
-            <div className="flex flex-col gap-1">
+            {/* Same horizontal slider of achievement cards as PeriodOverview's
+                "this week's goals" strip — a group here can span every
+                instance of its period at once, so each card carries its own
+                period label (see AchievementGoalCard's `meta`) instead of one
+                shared heading the way PeriodOverview's single-instance strip
+                can get away with. Scrollbar hidden the same way every other
+                horizontal slider in the app is — a bare native scrollbar
+                reads as a broken widget, not a carousel. No edge-to-edge
+                bleed trick here — it stays inside the box's own p-3 padding
+                on both ends, same as every other side of the box. */}
+            <div
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-0.5"
+              style={{ scrollbarWidth: "none" }}
+            >
               {group.map((g) => (
-                <GoalRow
+                <AchievementGoalCard
                   key={g.id}
                   goal={g}
                   goals={goals}
                   tasks={tasks}
                   onOpen={() => onOpenGoal(g.id)}
+                  meta={
+                    relativePeriodName(g.period, g.periodKey) ?? periodLabel(g.period, g.periodKey)
+                  }
+                  solo={group.length === 1}
                 />
               ))}
             </div>
@@ -62,73 +74,5 @@ export default function AllGoalsList({
         );
       })}
     </div>
-  );
-}
-
-function GoalRow({
-  goal,
-  goals,
-  tasks,
-  onOpen,
-}: {
-  goal: Goal;
-  goals: Goal[];
-  tasks: Task[];
-  onOpen: () => void;
-}) {
-  const p = goalProgress(goal, tasks, goals);
-  const accent = goalColor(goal.priority);
-  const circumference = 2 * Math.PI * 11;
-  const dateLabel =
-    relativePeriodName(goal.period, goal.periodKey) ?? periodLabel(goal.period, goal.periodKey);
-
-  return (
-    <motion.button
-      onClick={onOpen}
-      whileTap={tap}
-      className="w-full flex items-center gap-2.5 rounded-xl px-1.5 py-2 text-left"
-    >
-      <div className="relative w-8 h-8 shrink-0">
-        <svg width="32" height="32" className="-rotate-90">
-          <circle
-            cx="16"
-            cy="16"
-            r="11"
-            fill="none"
-            stroke="var(--surface-subtle)"
-            strokeWidth="3"
-          />
-          <circle
-            cx="16"
-            cy="16"
-            r="11"
-            fill="none"
-            stroke={accent}
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={p.done ? 0 : circumference * (1 - p.fraction)}
-            style={{ transition: "stroke-dashoffset 0.6s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          {p.done ? (
-            <Check size={13} className="text-fg-muted" strokeWidth={3} />
-          ) : (
-            <span className="text-[9px] font-extrabold tabular-nums">{p.percent}%</span>
-          )}
-        </div>
-      </div>
-      <div className="min-w-0 flex-1">
-        <p
-          className={`text-sm font-semibold truncate ${
-            p.done ? "text-fg-faint line-through" : "text-fg"
-          }`}
-        >
-          {goal.title}
-        </p>
-        <p className="text-[11px] text-fg-faint truncate">{dateLabel}</p>
-      </div>
-    </motion.button>
   );
 }

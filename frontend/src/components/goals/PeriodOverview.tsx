@@ -2,8 +2,9 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 
+import AchievementGoalCard from "@/components/goals/AchievementGoalCard";
 import { buildPeriodStops, type PeriodStop, type PeriodStopItem } from "@/lib/goalPath";
-import { goalProgress } from "@/lib/goalProgress";
+import { periodLabel, relativePeriodName } from "@/lib/goalPeriods";
 import { tap } from "@/lib/motion";
 import { smoothPathDVertical, verticalPointsForHeights, type WavePoint } from "@/lib/pathGeometry";
 import { useTaskStore } from "@/store/taskStore";
@@ -27,11 +28,28 @@ const ROW_ITEM_H = 24; // one item row
 const ROW_ITEM_GAP = 4; // gap between item rows
 const ROW_MORE_H = 18; // "+N more" row, only when items exceed ITEM_CAP
 const ROW_MARGIN = 8; // breathing room so the card doesn't touch its slot's edges
+const ROW_SUMMARY_H = 40; // a done/partial stop that isn't today — one line, not a full card
+const ROW_GHOST_H = 26; // an empty stop that isn't today — just a quiet label, not "Nothing here yet"
 
-function stopRowHeight(itemCount: number): number {
-  const shown = Math.min(itemCount, ITEM_CAP);
+// Which of three treatments a stop's row gets: today is the one place that
+// still earns a full itemized card; every other stop with real activity
+// collapses to a one-line summary; a stretch of empty future (or untracked
+// past) days collapses further still, so the rail isn't a repeated wall of
+// "Nothing here yet" cards.
+type RowMode = "today" | "summary" | "ghost";
+
+function rowMode(stop: PeriodStop): RowMode {
+  if (stop.isToday) return "today";
+  return stop.hasData ? "summary" : "ghost";
+}
+
+function stopRowHeight(stop: PeriodStop): number {
+  const mode = rowMode(stop);
+  if (mode === "ghost") return ROW_GHOST_H;
+  if (mode === "summary") return ROW_SUMMARY_H;
+  const shown = Math.min(stop.items.length, ITEM_CAP);
   const content = shown === 0 ? ROW_EMPTY_H : shown * ROW_ITEM_H + (shown - 1) * ROW_ITEM_GAP;
-  const more = itemCount > ITEM_CAP ? ROW_MORE_H : 0;
+  const more = stop.items.length > ITEM_CAP ? ROW_MORE_H : 0;
   return ROW_HEADER_H + content + more + ROW_MARGIN;
 }
 
@@ -48,15 +66,16 @@ function nodeState(stop: PeriodStop): NodeState {
 // The merged path+card overview: a vertical winding rail of stops (today,
 // upcoming days/weeks/months), each with its own top-items card laid out
 // right beside it — replaces the old side-by-side PeriodPath + flat
-// GoalRow list. Week view additionally gets a "this week's goals" strip
-// above the rail (see the `weekGoals` prop) for goals that don't belong to
-// any specific day.
+// GoalRow list. A "this period's goals" strip sits above the rail (see the
+// `periodGoals` prop) for the browsed period's own goals — the rail's stops
+// index by day/week/month, so a goal doesn't otherwise get a slot of its
+// own to sit in.
 export default function PeriodOverview({
   period,
   activeKey,
   goals,
   tasks,
-  weekGoals,
+  periodGoals,
   onOpenGoal,
   onOpenTask,
   onOpenDay,
@@ -66,10 +85,11 @@ export default function PeriodOverview({
   activeKey: string;
   goals: Goal[];
   tasks: Task[];
-  // Week view only: goals natively filed under this week itself, with no
-  // day-card representation of their own (see PeriodStop's day items,
-  // which are tasks only — days don't host Goal entities).
-  weekGoals: Goal[];
+  // Goals native to the browsed period/instance, plus coarser or
+  // date-overlapping ones cascading into it (GoalsPage's own `listed`) — the
+  // strip's own card list, shown above the rail regardless of which of
+  // Week/Month/Year is being browsed.
+  periodGoals: Goal[];
   onOpenGoal: (goalId: string) => void;
   onOpenTask: (task: Task) => void;
   onOpenDay: (date: string) => void;
@@ -79,7 +99,7 @@ export default function PeriodOverview({
     () => buildPeriodStops(period, activeKey, goals, tasks),
     [period, activeKey, goals, tasks]
   );
-  const rowHeights = useMemo(() => stops.map((s) => stopRowHeight(s.items.length)), [stops]);
+  const rowHeights = useMemo(() => stops.map(stopRowHeight), [stops]);
   const points: WavePoint[] = useMemo(
     () => verticalPointsForHeights(rowHeights, BASE_X, AMPLITUDE),
     [rowHeights]
@@ -135,26 +155,34 @@ export default function PeriodOverview({
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
-      {period === "week" && weekGoals.length > 0 && (
-        <div className="bg-surface rounded-2xl shadow-soft p-3 shrink-0 max-h-44 overflow-y-auto">
-          {/* Capped and independently scrollable — a long list of week goals
-              must never eat into the rail's own space below (that's the box
-              meant to fill whatever's left and stay the one thing that
-              scrolls to keep the page itself fixed-height). */}
+      {periodGoals.length > 0 && (
+        <div className="bg-surface rounded-2xl shadow-soft p-3 shrink-0">
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
-            This week's goals
+            {relativePeriodName(period, activeKey)
+              ? `${relativePeriodName(period, activeKey)}'s goals`
+              : `${periodLabel(period, activeKey)} goals`}
           </p>
-          <div className="flex flex-col gap-1">
-            {weekGoals.map((g) => (
-              <ItemRow
+          {/* A horizontal slider, not a stacked list — this row sits above
+              the rail (the page's real vertical scroller) so it must claim
+              a fixed, compact height of its own rather than growing with
+              however many goals the period has. Scrollbar hidden the same
+              way every other horizontal slider in the app is (see e.g.
+              WorkoutSessionSheet, RecipeSheet) — a bare native scrollbar
+              reads as a broken widget, not a carousel. No edge-to-edge
+              bleed trick here — it stays inside the box's own p-3 padding
+              on both ends, same as every other side of the box. */}
+          <div
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-0.5"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {periodGoals.map((g) => (
+              <AchievementGoalCard
                 key={g.id}
-                item={{
-                  kind: "goal",
-                  id: g.id,
-                  title: g.title,
-                  ...toRingProps(goalProgress(g, tasks, goals)),
-                }}
+                goal={g}
+                goals={goals}
+                tasks={tasks}
                 onOpen={() => onOpenGoal(g.id)}
+                solo={periodGoals.length === 1}
               />
             ))}
           </div>
@@ -209,19 +237,28 @@ export default function PeriodOverview({
             </svg>
 
             <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
-              {stops.map((stop, i) => (
-                <div
-                  key={stop.id}
-                  style={{ height: rowHeights[i] }}
-                  className="flex items-center pr-1"
-                >
-                  <StopCard
-                    stop={stop}
-                    onActivateStop={() => handleActivate(stop)}
-                    onOpenItem={openItem}
-                  />
-                </div>
-              ))}
+              {stops.map((stop, i) => {
+                const mode = rowMode(stop);
+                return (
+                  <div
+                    key={stop.id}
+                    style={{ height: rowHeights[i] }}
+                    className="flex items-center pr-1"
+                  >
+                    {mode === "today" ? (
+                      <StopCard
+                        stop={stop}
+                        onActivateStop={() => handleActivate(stop)}
+                        onOpenItem={openItem}
+                      />
+                    ) : mode === "summary" ? (
+                      <StopSummaryRow stop={stop} onActivateStop={() => handleActivate(stop)} />
+                    ) : (
+                      <StopGhostRow stop={stop} onActivateStop={() => handleActivate(stop)} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -230,8 +267,53 @@ export default function PeriodOverview({
   );
 }
 
-function toRingProps(p: ReturnType<typeof goalProgress>) {
-  return { done: p.done, fraction: p.fraction, percent: p.percent, sortKey: 0 };
+// A done/partial stop that isn't today — one line, not a full itemized
+// card. Reuses each item's own `done` flag (present for both task and goal
+// items) so the same summary text works whether a stop's items are one
+// day's tasks (Week view) or a week/month's goals (Month/Year view).
+function StopSummaryRow({
+  stop,
+  onActivateStop,
+}: {
+  stop: PeriodStop;
+  onActivateStop: () => void;
+}) {
+  const doneCount = stop.items.filter((it) => it.done).length;
+  return (
+    <button
+      onClick={onActivateStop}
+      className="flex-1 min-w-0 flex items-baseline gap-2 text-left px-2 py-1.5 rounded-xl"
+    >
+      <span className="text-[12px] font-extrabold uppercase tracking-wide text-fg-faint shrink-0">
+        {stop.label}
+      </span>
+      {stop.sublabel && (
+        <span className="text-[11px] font-medium text-fg-faint truncate">{stop.sublabel}</span>
+      )}
+      <span className="flex-1" />
+      {stop.items.length > 0 && (
+        <span className="text-[11.5px] text-fg-faint shrink-0">
+          {doneCount} of {stop.items.length} done
+        </span>
+      )}
+    </button>
+  );
+}
+
+// An empty stop that isn't today — a quiet label only, no "Nothing here
+// yet" boilerplate repeated down the whole rail.
+function StopGhostRow({ stop, onActivateStop }: { stop: PeriodStop; onActivateStop: () => void }) {
+  return (
+    <button
+      onClick={onActivateStop}
+      className="flex-1 min-w-0 flex items-baseline gap-2 text-left px-2"
+    >
+      <span className="text-[11px] font-semibold text-fg-faint shrink-0">{stop.label}</span>
+      {stop.sublabel && (
+        <span className="text-[10.5px] text-fg-faint truncate">{stop.sublabel}</span>
+      )}
+    </button>
+  );
 }
 
 function PathDot({

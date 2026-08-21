@@ -46,7 +46,7 @@ import {
   relativePeriodName,
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { GOAL_ACCENT, GOAL_ACCENT_ON, goalColor } from "@/lib/goalPriority";
 import { spring, tap } from "@/lib/motion";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
@@ -75,11 +75,6 @@ const PRIORITY_LEVELS: { key: Priority; label: string }[] = [
   { key: "medium", label: "Medium" },
   { key: "high", label: "High" },
 ];
-
-// Same sage accent as --path-accent (index.css) — the Goals feature's own
-// color, reused here for the date popup's "Done" button.
-const GOAL_ACCENT = "#3fcd9b";
-const GOAL_ACCENT_ON = isLightColor(GOAL_ACCENT) ? "#111827" : "#ffffff";
 
 // Same slide-in-from-the-side step transition as AddItemSheet's wizard, so
 // the add-goal sheet's own two-step flow feels like the same component
@@ -425,11 +420,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
             activeKey={activeKey}
             goals={goals}
             tasks={tasks}
-            // Native week goals plus coarser goals cascading down into this
-            // week (same set the day-stops themselves now use — see
-            // buildWeekStops) — a month/year goal active this week belongs
-            // here too, not just goals natively filed under the week itself.
-            weekGoals={listed}
+            // Goals native to the browsed period/instance, plus coarser or
+            // date-overlapping goals cascading into it — a month/year goal
+            // active this week belongs here too, not just goals natively
+            // filed under the week itself.
+            periodGoals={listed}
             onOpenGoal={(id) => setDetailGoalId(id)}
             onOpenTask={openTask}
             onOpenDay={openDay}
