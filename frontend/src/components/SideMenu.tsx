@@ -210,9 +210,7 @@ export default function SideMenu({
                               className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
                             >
                               <Heart size={20} className="text-fg-muted" strokeWidth={1.8} />
-                              <span className="font-medium text-fg-muted">
-                                Things you want to make time for
-                              </span>
+                              <span className="font-medium text-fg-muted">Make time for</span>
                             </motion.button>
                           </>
                         )}

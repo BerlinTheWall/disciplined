@@ -1,11 +1,13 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
-import { motion } from "framer-motion";
-import { Check } from "lucide-react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, ChevronDown } from "lucide-react";
 
+import Collapse from "@/components/Collapse";
 import AchievementGoalCard from "@/components/goals/AchievementGoalCard";
 import { buildPeriodStops, type PeriodStop, type PeriodStopItem } from "@/lib/goalPath";
 import { periodLabel, relativePeriodName } from "@/lib/goalPeriods";
-import { tap } from "@/lib/motion";
+import { spring, tap } from "@/lib/motion";
 import { smoothPathDVertical, verticalPointsForHeights, type WavePoint } from "@/lib/pathGeometry";
 import { useTaskStore } from "@/store/taskStore";
 import type { Goal, GoalPeriod } from "@/types/goals";
@@ -15,51 +17,62 @@ const BASE_X = 20;
 const AMPLITUDE = 0; // 0 = a straight rail; the wave drift lived here before
 const WIDTH = 40;
 const RAIL_GAP = 14; // space between the dot column and the card
-const ITEM_CAP = 3;
 
 // A stop's row claims only as much height as its own card actually needs —
-// a quiet day with nothing on it stays compact, a day with a full 3 items
-// gets more room, rather than every day reserving the same generous slot
-// regardless of what's in it. Mirrors StopCard/ItemRow's own padding and
-// row sizes, so the reserved slot and the rendered card agree.
+// a quiet, unselected day stays compact, a selected day with a full item
+// list gets more room, rather than every day reserving the same generous
+// slot regardless of what's in it. Mirrors StopCard/ItemRow's own padding
+// and row sizes, so the reserved slot and the rendered card agree.
 const ROW_HEADER_H = 36; // card padding + the day-label row
 const ROW_EMPTY_H = 20; // "Nothing here yet" placeholder row
 const ROW_ITEM_H = 24; // one item row
 const ROW_ITEM_GAP = 4; // gap between item rows
-const ROW_MORE_H = 18; // "+N more" row, only when items exceed ITEM_CAP
 const ROW_MARGIN = 8; // breathing room so the card doesn't touch its slot's edges
-const ROW_SUMMARY_H = 40; // a done/partial stop that isn't today — one line, not a full card
-const ROW_GHOST_H = 26; // an empty stop that isn't today — just a quiet label, not "Nothing here yet"
+const ROW_SUMMARY_H = 40; // an unselected stop with data — one line, not a full card
+// An unselected, empty stop — just a quiet label, not "Nothing here yet".
+// The smallest a row ever gets, so it also sets the rail's minimum gap
+// between two consecutive dots (their y sits at the vertical center of
+// their own row) — bumped up from 26 for a bit more breathing room between
+// dots at their tightest, back-to-back-ghost-rows spacing.
+const ROW_GHOST_H = 34;
 
-// Which of three treatments a stop's row gets: today is the one place that
-// still earns a full itemized card; every other stop with real activity
-// collapses to a one-line summary; a stretch of empty future (or untracked
-// past) days collapses further still, so the rail isn't a repeated wall of
-// "Nothing here yet" cards.
-type RowMode = "today" | "summary" | "ghost";
+// Which of three treatments a stop's row gets: the one currently selected
+// (today, by default — see selectedStopId) earns a full itemized card;
+// tapping a dot no longer jumps to that stop's own scope, it just expands
+// it in place, deselecting whichever stop (today included) was expanded
+// before. Every other stop with real activity collapses to a one-line
+// summary; a stretch of empty future (or untracked past) days collapses
+// further still, so the rail isn't a repeated wall of "Nothing here yet"
+// cards.
+type RowMode = "expanded" | "summary" | "ghost";
 
-function rowMode(stop: PeriodStop): RowMode {
-  if (stop.isToday) return "today";
+function rowMode(stop: PeriodStop, selected: boolean): RowMode {
+  if (selected) return "expanded";
   return stop.hasData ? "summary" : "ghost";
 }
 
-function stopRowHeight(stop: PeriodStop): number {
-  const mode = rowMode(stop);
+// The selected stop shows every item uncapped — selecting it *is* the "show
+// me everything" gesture (StopCard is only ever rendered for the selected
+// stop, so there's never a "+N more" left to page through).
+function stopRowHeight(stop: PeriodStop, selected: boolean): number {
+  const mode = rowMode(stop, selected);
   if (mode === "ghost") return ROW_GHOST_H;
   if (mode === "summary") return ROW_SUMMARY_H;
-  const shown = Math.min(stop.items.length, ITEM_CAP);
-  const content = shown === 0 ? ROW_EMPTY_H : shown * ROW_ITEM_H + (shown - 1) * ROW_ITEM_GAP;
-  const more = stop.items.length > ITEM_CAP ? ROW_MORE_H : 0;
-  return ROW_HEADER_H + content + more + ROW_MARGIN;
+  const count = stop.items.length;
+  const content = count === 0 ? ROW_EMPTY_H : count * ROW_ITEM_H + (count - 1) * ROW_ITEM_GAP;
+  return ROW_HEADER_H + content + ROW_MARGIN;
 }
 
-type NodeState = "today" | "future" | "empty" | "done" | "partial";
+type NodeState = "today" | "future" | "done" | "partial";
 
+// Nothing tracked (no tasks/goals at all) reads the same as everything
+// tracked being done — there was nothing left undone either way — so both
+// get the tick. Only a stop with something real still outstanding gets the
+// distinct "partial" ring instead.
 function nodeState(stop: PeriodStop): NodeState {
   if (stop.isToday) return "today";
   if (stop.isFuture) return "future";
-  if (!stop.hasData) return "empty";
-  if (stop.fraction >= 1) return "done";
+  if (!stop.hasData || stop.fraction >= 1) return "done";
   return "partial";
 }
 
@@ -79,7 +92,6 @@ export default function PeriodOverview({
   onOpenGoal,
   onOpenTask,
   onOpenDay,
-  onJumpPeriod,
 }: {
   period: GoalPeriod;
   activeKey: string;
@@ -93,13 +105,35 @@ export default function PeriodOverview({
   onOpenGoal: (goalId: string) => void;
   onOpenTask: (task: Task) => void;
   onOpenDay: (date: string) => void;
-  onJumpPeriod: (period: GoalPeriod, periodKey: string) => void;
 }) {
   const stops = useMemo(
     () => buildPeriodStops(period, activeKey, goals, tasks),
     [period, activeKey, goals, tasks]
   );
-  const rowHeights = useMemo(() => stops.map(stopRowHeight), [stops]);
+  // A density preference, not tied to whatever's being browsed — stays as
+  // the user left it across period/tab switches, unlike selectedStopId below.
+  const [goalsStripOpen, setGoalsStripOpen] = useState(true);
+  // Which stop is expanded to its full itemized card via a tap on its own
+  // dot/row — replaces the rail's old behavior of jumping straight into
+  // that stop's own scope (a week's dot used to switch the page to Week
+  // view on that week, etc.); now it just reveals what's inside right here
+  // instead. Only one stop is ever expanded at a time — today starts out
+  // selected by default (same as before this was selectable at all), but
+  // picking a different stop deselects it rather than leaving both open.
+  // Reset (back to today) whenever the browsed period/instance changes so a
+  // selection never survives into an unrelated view.
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedStopId(stops.find((s) => s.isToday)?.id ?? null);
+    // Deliberately keyed on period/activeKey, not `stops` — a data edit
+    // shouldn't yank the user's current selection back to today.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, activeKey]);
+
+  const rowHeights = useMemo(
+    () => stops.map((s) => stopRowHeight(s, s.id === selectedStopId)),
+    [stops, selectedStopId]
+  );
   const points: WavePoint[] = useMemo(
     () => verticalPointsForHeights(rowHeights, BASE_X, AMPLITUDE),
     [rowHeights]
@@ -139,9 +173,13 @@ export default function PeriodOverview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, activeKey]);
 
+  // A dot/row tap toggles that stop's selection (see selectedStopId above)
+  // instead of navigating anywhere. Day-stops (Week view) additionally still
+  // sync the selected date, same as before — that's a separate, harmless
+  // side effect (it never left the Goals page), not a scope jump.
   function handleActivate(stop: PeriodStop) {
     if (stop.action.kind === "day") onOpenDay(stop.action.date);
-    else onJumpPeriod(stop.action.period, stop.action.periodKey);
+    setSelectedStopId((cur) => (cur === stop.id ? null : stop.id));
   }
 
   function openItem(item: PeriodStopItem) {
@@ -159,35 +197,50 @@ export default function PeriodOverview({
         // Same fill as the header's segmented-toggle tracks (bg-surface-toggle-track,
         // index.css) — a light neutral in light theme, a dark one in dark theme.
         <div className="bg-surface-toggle-track rounded-2xl shadow-soft p-3 shrink-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
-            {relativePeriodName(period, activeKey)
-              ? `${relativePeriodName(period, activeKey)}'s goals`
-              : `${periodLabel(period, activeKey)} goals`}
-          </p>
-          {/* A horizontal slider, not a stacked list — this row sits above
-              the rail (the page's real vertical scroller) so it must claim
-              a fixed, compact height of its own rather than growing with
-              however many goals the period has. Scrollbar hidden the same
-              way every other horizontal slider in the app is (see e.g.
-              WorkoutSessionSheet, RecipeSheet) — a bare native scrollbar
-              reads as a broken widget, not a carousel. No edge-to-edge
-              bleed trick here — it stays inside the box's own p-3 padding
-              on both ends, same as every other side of the box. */}
-          <div
-            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-0.5"
-            style={{ scrollbarWidth: "none" }}
+          <button
+            onClick={() => setGoalsStripOpen((v) => !v)}
+            aria-expanded={goalsStripOpen}
+            className="flex w-full items-center justify-between gap-2 px-0.5"
           >
-            {periodGoals.map((g) => (
-              <AchievementGoalCard
-                key={g.id}
-                goal={g}
-                goals={goals}
-                tasks={tasks}
-                onOpen={() => onOpenGoal(g.id)}
-                solo={periodGoals.length === 1}
-              />
-            ))}
-          </div>
+            <span className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint">
+              {relativePeriodName(period, activeKey)
+                ? `${relativePeriodName(period, activeKey)}'s goals`
+                : `${periodLabel(period, activeKey)} goals`}
+            </span>
+            <motion.span
+              animate={{ rotate: goalsStripOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+              className="text-fg-faint shrink-0"
+            >
+              <ChevronDown size={15} />
+            </motion.span>
+          </button>
+          <Collapse open={goalsStripOpen} outerClassName="mt-2" className="pb-0.5">
+            {/* A horizontal slider, not a stacked list — this row sits above
+                the rail (the page's real vertical scroller) so it must claim
+                a fixed, compact height of its own rather than growing with
+                however many goals the period has. Scrollbar hidden the same
+                way every other horizontal slider in the app is (see e.g.
+                WorkoutSessionSheet, RecipeSheet) — a bare native scrollbar
+                reads as a broken widget, not a carousel. No edge-to-edge
+                bleed trick here — it stays inside the box's own p-3 padding
+                on both ends, same as every other side of the box. */}
+            <div
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {periodGoals.map((g) => (
+                <AchievementGoalCard
+                  key={g.id}
+                  goal={g}
+                  goals={goals}
+                  tasks={tasks}
+                  onOpen={() => onOpenGoal(g.id)}
+                  solo={periodGoals.length === 1}
+                />
+              ))}
+            </div>
+          </Collapse>
         </div>
       )}
 
@@ -217,6 +270,7 @@ export default function PeriodOverview({
                 stroke="var(--path-road)"
                 strokeWidth={5}
                 strokeLinecap="round"
+                style={{ transition: "d 0.4s ease" }}
               />
               {travelledD && (
                 <path
@@ -225,6 +279,7 @@ export default function PeriodOverview({
                   stroke="var(--path-accent)"
                   strokeWidth={5}
                   strokeLinecap="round"
+                  style={{ transition: "d 0.4s ease" }}
                 />
               )}
               {stops.map((stop, i) => (
@@ -233,6 +288,7 @@ export default function PeriodOverview({
                   stop={stop}
                   x={points[i].x}
                   y={points[i].y}
+                  selected={stop.id === selectedStopId}
                   onActivate={() => handleActivate(stop)}
                 />
               ))}
@@ -240,25 +296,93 @@ export default function PeriodOverview({
 
             <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
               {stops.map((stop, i) => {
-                const mode = rowMode(stop);
+                const selected = stop.id === selectedStopId;
+                const mode = rowMode(stop, selected);
+                // A collapsed row (summary/ghost) is one uniform tap target —
+                // the click lives on the row itself now, not a button hugging
+                // just the label text, so the *entire* row's width and height
+                // select it, same as its dot does. An expanded row (StopCard)
+                // stays hands-off here since it hosts its own independent
+                // controls (item checkboxes, the milestone label, etc.) that
+                // must each keep their own click, not also toggle the row.
+                const rowClickable = mode !== "expanded";
                 return (
-                  <div
+                  // Height animates as an explicit tween to the known target
+                  // (rowHeights[i]) rather than framer-motion's generic
+                  // `layout` FLIP measurement — layout's scale-compensation
+                  // trick visibly squashes/stretches content when what's
+                  // inside changes shape entirely (a card growing into an
+                  // itemized list, say), which read as the "unsmooth" part.
+                  // overflow-hidden keeps the taller/shorter content clipped
+                  // to that height mid-transition instead of spilling out.
+                  <motion.div
                     key={stop.id}
-                    style={{ height: rowHeights[i] }}
+                    initial={false}
+                    animate={{ height: rowHeights[i] }}
+                    transition={spring.gentle}
+                    style={{ overflow: "hidden", cursor: rowClickable ? "pointer" : undefined }}
                     className="flex items-center pr-1"
+                    onClick={rowClickable ? () => handleActivate(stop) : undefined}
+                    role={rowClickable ? "button" : undefined}
+                    tabIndex={rowClickable ? 0 : undefined}
+                    aria-label={rowClickable ? stop.label : undefined}
+                    onKeyDown={
+                      rowClickable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleActivate(stop);
+                            }
+                          }
+                        : undefined
+                    }
                   >
-                    {mode === "today" ? (
-                      <StopCard
-                        stop={stop}
-                        onActivateStop={() => handleActivate(stop)}
-                        onOpenItem={openItem}
-                      />
-                    ) : mode === "summary" ? (
-                      <StopSummaryRow stop={stop} onActivateStop={() => handleActivate(stop)} />
-                    ) : (
-                      <StopGhostRow stop={stop} onActivateStop={() => handleActivate(stop)} />
-                    )}
-                  </div>
+                    {/* The row's own content (card vs. one-line summary vs.
+                      ghost label) swaps entirely rather than just resizing —
+                      cross-fades instead of popping straight from one to the
+                      other, decoupled from (and layered under) the height
+                      tween above. */}
+                    <AnimatePresence mode="wait" initial={false}>
+                      {mode === "expanded" ? (
+                        <motion.div
+                          key="expanded"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="min-w-0 flex-1"
+                        >
+                          <StopCard
+                            stop={stop}
+                            onActivateStop={() => handleActivate(stop)}
+                            onOpenItem={openItem}
+                          />
+                        </motion.div>
+                      ) : mode === "summary" ? (
+                        <motion.div
+                          key="summary"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="min-w-0 flex-1"
+                        >
+                          <StopSummaryRow stop={stop} />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="ghost"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="min-w-0 flex-1"
+                        >
+                          <StopGhostRow stop={stop} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
                 );
               })}
             </div>
@@ -273,48 +397,37 @@ export default function PeriodOverview({
 // card. Reuses each item's own `done` flag (present for both task and goal
 // items) so the same summary text works whether a stop's items are one
 // day's tasks (Week view) or a week/month's goals (Month/Year view).
-function StopSummaryRow({
-  stop,
-  onActivateStop,
-}: {
-  stop: PeriodStop;
-  onActivateStop: () => void;
-}) {
+function StopSummaryRow({ stop }: { stop: PeriodStop }) {
   const doneCount = stop.items.filter((it) => it.done).length;
   return (
-    <button
-      onClick={onActivateStop}
-      className="flex-1 min-w-0 flex items-baseline gap-2 text-left px-2 py-1.5 rounded-xl"
-    >
-      <span className="text-[12px] font-extrabold uppercase tracking-wide text-fg-faint shrink-0">
-        {stop.label}
+    <div className="flex w-full min-w-0 items-baseline justify-between gap-2 px-2 py-1.5 rounded-xl">
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="text-[12px] font-extrabold uppercase tracking-wide text-fg-faint shrink-0">
+          {stop.label}
+        </span>
+        {stop.sublabel && (
+          <span className="text-[11px] font-medium text-fg-faint truncate">{stop.sublabel}</span>
+        )}
       </span>
-      {stop.sublabel && (
-        <span className="text-[11px] font-medium text-fg-faint truncate">{stop.sublabel}</span>
-      )}
-      <span className="flex-1" />
       {stop.items.length > 0 && (
         <span className="text-[11.5px] text-fg-faint shrink-0">
           {doneCount} of {stop.items.length} done
         </span>
       )}
-    </button>
+    </div>
   );
 }
 
 // An empty stop that isn't today — a quiet label only, no "Nothing here
 // yet" boilerplate repeated down the whole rail.
-function StopGhostRow({ stop, onActivateStop }: { stop: PeriodStop; onActivateStop: () => void }) {
+function StopGhostRow({ stop }: { stop: PeriodStop }) {
   return (
-    <button
-      onClick={onActivateStop}
-      className="flex-1 min-w-0 flex items-baseline gap-2 text-left px-2"
-    >
+    <div className="flex w-full min-w-0 items-baseline gap-2 px-2">
       <span className="text-[11px] font-semibold text-fg-faint shrink-0">{stop.label}</span>
       {stop.sublabel && (
         <span className="text-[10.5px] text-fg-faint truncate">{stop.sublabel}</span>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -322,11 +435,16 @@ function PathDot({
   stop,
   x,
   y,
+  selected,
   onActivate,
 }: {
   stop: PeriodStop;
   x: number;
   y: number;
+  // The expanded stop's own dot reads larger than the rest of the rail, so
+  // it's obvious at a glance which one you're looking at without needing to
+  // find the (also-expanded) card beside it.
+  selected: boolean;
   onActivate: () => void;
 }) {
   const state = nodeState(stop);
@@ -338,8 +456,17 @@ function PathDot({
   // specifically as "you are here", not as more/less progress.
   const todayColor = "var(--path-today)";
 
+  // Inner shapes are all drawn relative to the dot's own origin (0,0); the
+  // group itself is what's actually positioned and sized, via framer-motion's
+  // x/y/scale (not raw SVG transform/attribute changes — those would fight
+  // whileTap's own scale transform) so a stop expanding/collapsing, shifting
+  // every dot below it, and being selected/deselected all animate smoothly
+  // instead of snapping straight to the new layout.
   return (
     <motion.g
+      initial={false}
+      animate={{ x, y, scale: selected ? 1.25 : 1 }}
+      transition={spring.gentle}
       whileTap={tap}
       style={{ transformBox: "fill-box", transformOrigin: "center", cursor: "pointer" }}
       onClick={onActivate}
@@ -357,22 +484,22 @@ function PathDot({
         <>
           <circle
             className="goal-path-pulse"
-            cx={x}
-            cy={y}
+            cx={0}
+            cy={0}
             r={16}
             fill="none"
             stroke={todayColor}
             strokeWidth={2}
           />
-          <circle cx={x} cy={y} r={13} fill={todayColor} />
-          <circle cx={x} cy={y} r={13} fill="none" stroke="var(--surface)" strokeWidth={2.5} />
+          <circle cx={0} cy={0} r={13} fill={todayColor} />
+          <circle cx={0} cy={0} r={13} fill="none" stroke="var(--surface)" strokeWidth={2.5} />
         </>
       )}
 
       {state === "future" && (
         <circle
-          cx={x}
-          cy={y}
+          cx={0}
+          cy={0}
           r={9}
           fill="var(--surface)"
           stroke="var(--path-road)"
@@ -380,22 +507,11 @@ function PathDot({
         />
       )}
 
-      {state === "empty" && (
-        <circle
-          cx={x}
-          cy={y}
-          r={8}
-          fill="var(--surface-subtle)"
-          stroke="var(--path-road)"
-          strokeWidth={2}
-        />
-      )}
-
       {state === "done" && (
         <>
-          <circle cx={x} cy={y} r={R} fill="var(--path-accent)" />
+          <circle cx={0} cy={0} r={R} fill="var(--path-accent)" />
           <path
-            d={`M${x - 5},${y} l3.5,3.5 l6.5,-7.5`}
+            d="M-5,0 l3.5,3.5 l6.5,-7.5"
             stroke="var(--surface)"
             strokeWidth={2.25}
             fill="none"
@@ -408,23 +524,23 @@ function PathDot({
       {state === "partial" && (
         <>
           <circle
-            cx={x}
-            cy={y}
+            cx={0}
+            cy={0}
             r={R}
             fill="var(--surface)"
             stroke="var(--path-road)"
             strokeWidth={3}
           />
           <circle
-            cx={x}
-            cy={y}
+            cx={0}
+            cy={0}
             r={R}
             fill="none"
             stroke="var(--path-accent)"
             strokeWidth={3}
             strokeLinecap="round"
             strokeDasharray={`${stop.fraction * circumference} ${circumference}`}
-            transform={`rotate(-90 ${x} ${y})`}
+            transform="rotate(-90)"
             style={{ transition: "stroke-dasharray 0.6s ease" }}
           />
         </>
@@ -433,6 +549,9 @@ function PathDot({
   );
 }
 
+// Only ever rendered for the currently-selected stop (rowMode gates on
+// exactly that), so it always shows every item, uncapped — no "+N more"
+// left to page through once a stop is actually expanded.
 function StopCard({
   stop,
   onActivateStop,
@@ -443,8 +562,6 @@ function StopCard({
   onOpenItem: (item: PeriodStopItem) => void;
 }) {
   const isToday = stop.isToday;
-  const visible = stop.items.slice(0, ITEM_CAP);
-  const hiddenCount = stop.items.length - visible.length;
   const past = !isToday && !stop.isFuture;
 
   return (
@@ -455,7 +572,7 @@ function StopCard({
     >
       <span
         className="w-0.75 rounded-full shrink-0"
-        style={{ backgroundColor: isToday ? "var(--path-today)" : "transparent" }}
+        style={{ backgroundColor: isToday ? "var(--path-today)" : "var(--path-accent)" }}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 mb-1">
@@ -483,20 +600,14 @@ function StopCard({
           )}
         </div>
 
-        {visible.length === 0 ? (
+        {stop.items.length === 0 ? (
           <p className="text-xs text-fg-faint py-0.5">Nothing here yet</p>
         ) : (
           <div className="flex flex-col gap-1">
-            {visible.map((item) => (
+            {stop.items.map((item) => (
               <ItemRow key={item.id} item={item} onOpen={() => onOpenItem(item)} />
             ))}
           </div>
-        )}
-
-        {hiddenCount > 0 && (
-          <button onClick={onActivateStop} className="text-[11px] font-semibold text-fg-faint mt-1">
-            +{hiddenCount} more
-          </button>
         )}
       </div>
     </div>

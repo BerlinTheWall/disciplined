@@ -153,15 +153,12 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   // The path's day-stops (Week view) just sync the selected date — tapping
   // one used to also jump to the Schedule page, but that took the user away
   // from Goals for an action that's really just "look at this day", so it
-  // no longer navigates. Its week/month-stops (Month/Year view) still zoom
-  // the goals list itself in one level, landing on that sub-period
-  // (onJumpPeriod below) — that's a within-Goals action, unaffected.
+  // no longer navigates. Its week/month-stops (Month/Year view) used to zoom
+  // the goals list itself in one level; PeriodOverview now just expands that
+  // stop's own card in place on tap instead (selectedStopId), so there's no
+  // scope-jump left here to wire up either.
   function openDay(date: string) {
     setSelectedDate(date);
-  }
-  function jumpPeriod(p: GoalPeriod, key: string) {
-    setPeriod(p);
-    setKeys((k) => ({ ...k, [p]: key }));
   }
 
   // Total unique tasks linked across every goal shown in this view — the
@@ -353,19 +350,24 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     >
       {goalsView === "overview" ? (
         <>
-          {/* Horizon toggle with an animated selected pill */}
-          <div className="flex items-center bg-surface-toggle-track rounded-xl p-1 shrink-0">
+          {/* Horizon toggle with an animated selected pill — rounded-full on
+              both the track and the pill (rather than a fixed corner radius
+              like rounded-xl/rounded-lg) so the left/right ends are true
+              semicircles, a full capsule shape, at whatever height this
+              happens to render at. overflow-hidden keeps the pill's own
+              shadow from poking past that curve at the outer segments. */}
+          <div className="flex items-center bg-surface-toggle-track rounded-full p-1 shrink-0 overflow-hidden">
             {PERIODS.map((p) => (
               <button
                 key={p.key}
                 onClick={() => setPeriod(p.key)}
-                className="relative flex-1 h-9 rounded-lg text-sm font-medium"
+                className="relative flex-1 h-9 rounded-full text-sm font-medium"
               >
                 {period === p.key && (
                   <motion.span
                     layoutId="goalSeg"
                     transition={spring.snappy}
-                    className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+                    className="absolute inset-0 bg-surface rounded-full shadow-sm"
                   />
                 )}
                 <span className={`relative z-10 ${period === p.key ? "text-fg" : "text-fg-muted"}`}>
@@ -428,7 +430,6 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
             onOpenGoal={(id) => setDetailGoalId(id)}
             onOpenTask={openTask}
             onOpenDay={openDay}
-            onJumpPeriod={jumpPeriod}
           />
         </>
       ) : (
