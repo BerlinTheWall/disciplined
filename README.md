@@ -1,73 +1,103 @@
-# React + TypeScript + Vite
+# Disciplined
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An AI personal assistant and scheduler, built as a cross-platform mobile app.
+Plan your day by talking to it, and let it handle the structure — tasks,
+calendar, and reminders in one place.
 
-Currently, two official plugins are available:
+> In active development. **[FILL: one sentence on where it is — private beta,
+> pre-release, targeting an App Store submission, whatever is true]**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What it does
 
-## React Compiler
+**[FILL: 4–6 bullets of actual capabilities, written as what a user does, not
+what the code contains. Some of these are implied by the dependencies — keep
+only what is genuinely built:]**
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Capture tasks by voice, using on-device speech recognition
+- Read and write to the device calendar so scheduling stays in one place
+- Reorder and reschedule by dragging
+- Local notifications for reminders that work without a server round-trip
+- **[FILL: what the AI actually does — plan the day? break tasks down? re-prioritise? summarise? Be specific, this is the part people care about]**
 
-## Expanding the ESLint configuration
+## Screenshots
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+**[FILL: add two or three. A mobile app with no screenshots in its README loses
+most of its readers before they scroll. Drop images in `docs/` and reference
+them here.]**
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Architecture
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Native mobile clients built from a single React codebase via Capacitor, talking
+to a FastAPI service over HTTP.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+React 19 + TypeScript (Vite)
+        │
+   Capacitor bridge  ──  iOS · Android
+        │
+        │  local notifications · calendar · speech recognition · filesystem
+        │
+        ▼
+FastAPI (async)  ──  Google Gemini
+        │
+        ▼
+PostgreSQL (SQLAlchemy async + Alembic)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+**Frontend** — React 19, TypeScript, Vite, Tailwind CSS 4. State in Zustand
+with Immer. Animation with Framer Motion, drag-and-drop with dnd-kit, icons
+from Lucide. Packaged for iOS and Android through Capacitor, using its App,
+Browser, Filesystem, Local Notifications, Calendar and Speech Recognition
+plugins.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+**Backend** — FastAPI on Uvicorn. Async SQLAlchemy over asyncpg against
+PostgreSQL, with Alembic handling migrations. Authentication via JWT and
+bcrypt. LLM calls through `google-genai`. Settings validated with Pydantic.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+**Testing** — pytest on the backend, Playwright for end-to-end browser tests.
+
+## Running it locally
+
+### Backend
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env        # [FILL: add a .env.example — list every variable, no values]
+alembic upgrade head
+uvicorn main:app --reload   # [FILL: correct the module path if it differs]
 ```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Mobile builds
+
+```bash
+npm run build
+npx cap sync
+npx cap open ios        # requires Xcode
+npx cap open android    # requires Android Studio
+```
+
+## Configuration
+
+**[FILL: list every environment variable the backend needs — database URL,
+JWT secret, Gemini API key — with a one-line description each and NO values.]**
+
+## Project status
+
+**[FILL: what's done, what's in progress, what's planned. Honest is better than
+impressive here — a clear roadmap reads as a real project, a vague one reads
+like a template.]**
+
+## Why I built it
+
+**[FILL: two or three sentences. Every good side project has a reason someone
+started it, and it's usually the most memorable thing in the README.]**
