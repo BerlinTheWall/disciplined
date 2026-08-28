@@ -19,7 +19,7 @@
   --surface: #ffffff;
   --surface-alt: #eef0f3;
   --surface-raised: #e1e6ff;
-  --surface-subtle: #c7cbd3;
+  --surface-subtle: #dbdfe6;
   --surface-inverse: #0b1120;
   --surface-feature: #0b1120;
   --surface-feature-alt: #1b2436;
@@ -29,7 +29,7 @@
      so it can't just go pure white like the other raised elements on these
      pages did. Its own token rather than reusing surface-raised since that
      one's now a much bluer tint than this neutral light grey. */
-  --surface-toggle-track: #f2f3f8;
+  --surface-toggle-track: #dde0ed;
 
   --fg: #111827;
   --fg-muted: #6b7280;
