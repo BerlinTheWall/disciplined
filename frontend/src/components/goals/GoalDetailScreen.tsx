@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Briefcase,
   Calendar,
@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Sparkles,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -36,6 +37,7 @@ import {
   goalPace,
   goalProgress,
   isMilestoneDone,
+  milestoneCompletionFraction,
   roundShares,
 } from "@/lib/goalProgress";
 import { spring, tap } from "@/lib/motion";
@@ -180,6 +182,9 @@ function GoalDetailContent({
   // end here.
   const [editingItem, setEditingItem] = useState<EditItem | null>(null);
   const [editing, setEditing] = useState(false);
+  // Toggles the milestone list into "edit mode" — delete buttons only show
+  // per row once this is on, so a stray tap on the list can't delete a step.
+  const [editingMilestones, setEditingMilestones] = useState(false);
   // Tapping a milestone opens a popup with its title/weight/tasks — see
   // MilestoneDetailSheet.
   const [viewingMilestoneId, setViewingMilestoneId] = useState<string | null>(null);
@@ -532,14 +537,26 @@ function GoalDetailContent({
           <p className="text-[14px] font-extrabold uppercase tracking-wide text-fg-faint">
             Milestones
           </p>
-          <motion.button
-            onClick={() => setAddingMilestone((v) => !v)}
-            whileTap={tap}
-            className="shrink-0 flex items-center gap-1 h-7 px-2.5 rounded-full bg-surface-raised text-[12px] font-semibold"
-          >
-            <Plus size={12} />
-            Add Milestone
-          </motion.button>
+          <div className="flex items-center gap-2">
+            {goal.milestones.length > 0 && (
+              <motion.button
+                onClick={() => setEditingMilestones((v) => !v)}
+                whileTap={tap}
+                aria-label={editingMilestones ? "Done editing milestones" : "Edit milestones"}
+                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface-raised"
+              >
+                {editingMilestones ? <Check size={13} strokeWidth={3} /> : <Pencil size={12} />}
+              </motion.button>
+            )}
+            <motion.button
+              onClick={() => setAddingMilestone((v) => !v)}
+              whileTap={tap}
+              className="shrink-0 flex items-center gap-1 h-7 px-2.5 rounded-full bg-surface-raised text-[12px] font-semibold"
+            >
+              <Plus size={12} />
+              Add Milestone
+            </motion.button>
+          </div>
         </div>
 
         <Collapse open={addingMilestone} className="pb-3">
@@ -603,14 +620,7 @@ function GoalDetailContent({
               Fills as its own scheduled sessions get checked off, or
               all-or-nothing for a plain one. */}
             {goal.milestones.map((m, i) => {
-              const linkedIds = m.linkedTaskIds ?? [];
-              const segFraction =
-                linkedIds.length > 0
-                  ? linkedIds.filter((id) => tasks.find((t) => t.id === id)?.completed).length /
-                    linkedIds.length
-                  : m.done
-                    ? 1
-                    : 0;
+              const segFraction = milestoneCompletionFraction(m, tasks);
               const n = goal.milestones.length;
               const style: CSSProperties = trailMeasured
                 ? {
@@ -685,7 +695,7 @@ function GoalDetailContent({
                     </div>
 
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <div className="flex items-center gap-2">
+                      <motion.div layout="position" className="flex items-center gap-2">
                         <button
                           onClick={() => setViewingMilestoneId(m.id)}
                           className={`flex-1 min-w-0 text-left text-[14.5px] font-semibold truncate ${
@@ -702,14 +712,26 @@ function GoalDetailContent({
                             {Math.round(m.weight ?? milestoneShareById[m.id] ?? 0)}%
                           </span>
                         )}
-                        <button
-                          onClick={() => useGoalStore.getState().deleteMilestone(goal.id, m.id)}
-                          aria-label="Delete step"
-                          className="p-1 text-fg-faint shrink-0"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
+                        <AnimatePresence initial={false}>
+                          {editingMilestones && (
+                            <motion.button
+                              key="delete"
+                              initial={{ x: 20, opacity: 0 }}
+                              animate={{ x: 0, opacity: 1 }}
+                              exit={{ x: 20, opacity: 0 }}
+                              transition={spring}
+                              whileTap={tap}
+                              onClick={() =>
+                                useGoalStore.getState().deleteMilestone(goal.id, m.id)
+                              }
+                              aria-label="Delete step"
+                              className="w-6 h-6 rounded-full border border-red-500/30 bg-red-500/10 text-red-500 flex items-center justify-center shrink-0"
+                            >
+                              <Trash2 size={12} />
+                            </motion.button>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
                       {hasLinkedTasks && (
                         <p className="text-[11px] text-fg-faint mt-0.5">
                           {doneTaskCount} of {linkedTasks.length} sessions
