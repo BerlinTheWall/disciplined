@@ -294,7 +294,13 @@ export default function PeriodOverview({
               ))}
             </svg>
 
-            <div className="absolute left-0 top-0 w-full" style={{ paddingLeft: WIDTH + RAIL_GAP }}>
+            {/* Starts exactly at the card column (left: WIDTH+RAIL_GAP), not
+              at x:0 with padding-left standing in for it — a w-full box
+              padded over like that still occupies the dot column with its
+              own (invisible but very much still hit-testable) padding area,
+              which — being painted after the SVG — silently intercepted
+              every tap meant for a dot underneath it. */}
+            <div className="absolute top-0 right-0" style={{ left: WIDTH + RAIL_GAP }}>
               {stops.map((stop, i) => {
                 const selected = stop.id === selectedStopId;
                 const mode = rowMode(stop, selected);
