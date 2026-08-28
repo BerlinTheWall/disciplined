@@ -58,6 +58,7 @@ export const useNudgeStore = create<NudgeState>()(
             title: "Disciplined noticed something",
             body: alert.message,
             firedAt: Date.now(),
+            pendingAction: alert.pendingAction,
             actionPhrase: alert.actionPhrase,
             nudgeType: alert.type,
             subjectId: alert.subjectId,

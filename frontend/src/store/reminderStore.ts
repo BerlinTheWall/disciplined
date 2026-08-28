@@ -85,6 +85,7 @@ export const useReminderStore = create<ReminderState>()(
             body: alert.body,
             firedAt: Date.now(),
             date: alert.date,
+            itemId: alert.id,
           });
           return { alerts: [...state.alerts, alert] };
         }),

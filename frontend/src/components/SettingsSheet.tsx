@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { GraduationCap, Heart, Sparkles, X } from "lucide-react";
+import { GraduationCap, Sparkles, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "./BottomSheet";
 import Collapse from "./Collapse";
-import InterestsSheet from "./InterestsSheet";
 import Switch from "./Switch";
 import { primeAudioChannel, speakAssistant, stopSpeaking } from "@/hooks/useSpeech";
 import { BACKGROUNDS } from "@/lib/backgrounds";
@@ -131,7 +130,6 @@ function ChipRow<T>({
 }
 
 export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
-  const [showInterests, setShowInterests] = useState(false);
   const [altStyle, setAltStyle, background, setBackground] = useSettingsStore(
     useShallow((state) => [
       state.altStyle,
@@ -228,171 +226,153 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
       : undefined;
 
   return (
-    <>
-      <BottomSheet
-        isOpen={isOpen}
-        onClose={onClose}
-        className="bg-surface-alt max-h-[70vh] flex flex-col overflow-hidden"
-      >
-        {/* Fixed header — stays put while the sections below scroll */}
-        <div className="flex items-center justify-between p-5 pb-4">
-          <h2 className="text-xl font-bold text-fg">Settings</h2>
-          <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
-            <X size={22} />
-          </motion.button>
-        </div>
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      className="bg-surface-alt max-h-[70vh] flex flex-col overflow-hidden"
+    >
+      {/* Fixed header — stays put while the sections below scroll */}
+      <div className="flex items-center justify-between p-5 pb-4">
+        <h2 className="text-xl font-bold text-fg">Settings</h2>
+        <motion.button onClick={onClose} whileTap={tap} className="p-2 -m-2 text-fg-faint">
+          <X size={22} />
+        </motion.button>
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-          <Section title="Notifications">
-            <Row
-              title="Reminders"
-              subtitle={reminderSubtitle}
-              on={remindersEnabled}
-              onToggle={() => void toggleReminders()}
+      <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+        <Section title="Notifications">
+          <Row
+            title="Reminders"
+            subtitle={reminderSubtitle}
+            on={remindersEnabled}
+            onToggle={() => void toggleReminders()}
+          />
+          <Collapse open={remindersEnabled}>
+            <ChipRow
+              title="Default reminder"
+              options={REMINDER_OPTIONS}
+              keyOf={(o) => String(o.value)}
+              labelOf={(o) => o.label}
+              selected={(o) => defaultReminderMinutes === o.value}
+              onSelect={(o) => setDefaultReminderMinutes(o.value)}
             />
-            <Collapse open={remindersEnabled}>
-              <ChipRow
-                title="Default reminder"
-                options={REMINDER_OPTIONS}
-                keyOf={(o) => String(o.value)}
-                labelOf={(o) => o.label}
-                selected={(o) => defaultReminderMinutes === o.value}
-                onSelect={(o) => setDefaultReminderMinutes(o.value)}
-              />
-            </Collapse>
-          </Section>
+          </Collapse>
+        </Section>
 
-          <Section title="Voice">
-            <Row
-              title="Spoken voice"
-              subtitle="Read reminders, AI replies, and summaries aloud"
-              on={voiceEnabled}
-              onToggle={toggleVoiceEnabled}
+        <Section title="Voice">
+          <Row
+            title="Spoken voice"
+            subtitle="Read reminders, AI replies, and summaries aloud"
+            on={voiceEnabled}
+            onToggle={toggleVoiceEnabled}
+          />
+          <Collapse open={voiceEnabled}>
+            <ChipRow
+              title="Voice"
+              options={GOOGLE_VOICES}
+              keyOf={(v) => v.id}
+              labelOf={(v) => v.label}
+              selected={(v) => googleVoice === v.id}
+              onSelect={(v) => pickGoogleVoice(v.id)}
             />
-            <Collapse open={voiceEnabled}>
-              <ChipRow
-                title="Voice"
-                options={GOOGLE_VOICES}
-                keyOf={(v) => v.id}
-                labelOf={(v) => v.label}
-                selected={(v) => googleVoice === v.id}
-                onSelect={(v) => pickGoogleVoice(v.id)}
-              />
-            </Collapse>
-            <Collapse open={voiceEnabled}>
-              <ChipRow
-                title="Reminder tone"
-                options={VOICE_TONES}
-                keyOf={(t) => t.value}
-                labelOf={(t) => t.label}
-                selected={(t) => voiceTone === t.value}
-                onSelect={(t) => pickVoiceTone(t.value)}
-              />
-            </Collapse>
-            <Collapse open={voiceEnabled}>
-              <Row
-                title="Morning briefing"
-                subtitle="Hear your day on the first open of each day"
-                on={morningBriefing}
-                onToggle={() => setMorningBriefing(!morningBriefing)}
-              />
-            </Collapse>
-            <Collapse open={voiceEnabled && morningBriefing}>
-              <ChipRow
-                title="Not before"
-                options={BRIEFING_FROM_OPTIONS}
-                selected={(o) => o.value === morningBriefingFromMinutes}
-                onSelect={(o) => setMorningBriefingFromMinutes(o.value)}
-                labelOf={(o) => o.label}
-                keyOf={(o) => String(o.value)}
-              />
-            </Collapse>
-          </Section>
+          </Collapse>
+          <Collapse open={voiceEnabled}>
+            <ChipRow
+              title="Reminder tone"
+              options={VOICE_TONES}
+              keyOf={(t) => t.value}
+              labelOf={(t) => t.label}
+              selected={(t) => voiceTone === t.value}
+              onSelect={(t) => pickVoiceTone(t.value)}
+            />
+          </Collapse>
+          <Collapse open={voiceEnabled}>
+            <Row
+              title="Morning briefing"
+              subtitle="Hear your day on the first open of each day"
+              on={morningBriefing}
+              onToggle={() => setMorningBriefing(!morningBriefing)}
+            />
+          </Collapse>
+          <Collapse open={voiceEnabled && morningBriefing}>
+            <ChipRow
+              title="Not before"
+              options={BRIEFING_FROM_OPTIONS}
+              selected={(o) => o.value === morningBriefingFromMinutes}
+              onSelect={(o) => setMorningBriefingFromMinutes(o.value)}
+              labelOf={(o) => o.label}
+              keyOf={(o) => String(o.value)}
+            />
+          </Collapse>
+        </Section>
 
-          <Section title="Appearance">
-            <Row title="Dark mode" on={theme === "dark"} onToggle={toggleTheme} />
-            <Row
-              title="Alternate style"
-              subtitle="A different look for the calendar and tasks"
-              on={altStyle}
-              onToggle={() => setAltStyle(!altStyle)}
-            />
-            <div className="px-4 py-3">
-              <p className="text-[15px] font-medium text-fg mb-2">Background</p>
-              <div className="flex gap-2">
-                {BACKGROUNDS.map((bg) => {
-                  const selected = background === bg.key;
-                  return (
-                    <motion.button
-                      key={bg.key}
-                      onClick={() => setBackground(bg.key)}
-                      whileTap={tap}
-                      className="flex-1 flex flex-col items-center gap-1.5"
+        <Section title="Appearance">
+          <Row title="Dark mode" on={theme === "dark"} onToggle={toggleTheme} />
+          <Row
+            title="Alternate style"
+            subtitle="A different look for the calendar and tasks"
+            on={altStyle}
+            onToggle={() => setAltStyle(!altStyle)}
+          />
+          <div className="px-4 py-3">
+            <p className="text-[15px] font-medium text-fg mb-2">Background</p>
+            <div className="flex gap-2">
+              {BACKGROUNDS.map((bg) => {
+                const selected = background === bg.key;
+                return (
+                  <motion.button
+                    key={bg.key}
+                    onClick={() => setBackground(bg.key)}
+                    whileTap={tap}
+                    className="flex-1 flex flex-col items-center gap-1.5"
+                  >
+                    <span
+                      className="w-full h-12 rounded-xl border-2 transition-colors"
+                      style={{
+                        background: bg.swatch,
+                        borderColor: selected ? "var(--fg)" : "var(--border-strong)",
+                      }}
+                    />
+                    <span
+                      className={`text-[11px] font-medium ${selected ? "text-fg" : "text-fg-muted"}`}
                     >
-                      <span
-                        className="w-full h-12 rounded-xl border-2 transition-colors"
-                        style={{
-                          background: bg.swatch,
-                          borderColor: selected ? "var(--fg)" : "var(--border-strong)",
-                        }}
-                      />
-                      <span
-                        className={`text-[11px] font-medium ${selected ? "text-fg" : "text-fg-muted"}`}
-                      >
-                        {bg.label}
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
+                      {bg.label}
+                    </span>
+                  </motion.button>
+                );
+              })}
             </div>
-          </Section>
+          </div>
+        </Section>
 
-          <Section title="Activities">
-            <motion.button
-              onClick={() => setShowInterests(true)}
-              whileTap={tap}
-              className="flex items-center gap-3 w-full px-4 py-3 text-left"
-            >
-              <span className="text-[15px] font-medium text-fg flex-1">
-                Things you want to make time for
-              </span>
-              <Heart size={18} className="text-fg-muted" />
-            </motion.button>
-          </Section>
-
-          <Section title="Help">
-            <motion.button
-              onClick={() => {
-                // Back to the welcome card; close Settings so the tour has the
-                // screen to itself.
-                useTutorialStore.getState().restart();
-                onClose();
-              }}
-              whileTap={tap}
-              className="flex items-center gap-3 w-full px-4 py-3 text-left"
-            >
-              <span className="text-[15px] font-medium text-fg flex-1">Replay the tutorial</span>
-              <GraduationCap size={18} className="text-fg-muted" />
-            </motion.button>
-            <motion.button
-              onClick={() => {
-                // Re-show the first-launch setup wizard (for testing).
-                useOnboardingStore.getState().restart();
-                onClose();
-              }}
-              whileTap={tap}
-              className="flex items-center gap-3 w-full px-4 py-3 text-left"
-            >
-              <span className="text-[15px] font-medium text-fg flex-1">
-                Replay the setup wizard
-              </span>
-              <Sparkles size={18} className="text-fg-muted" />
-            </motion.button>
-          </Section>
-        </div>
-      </BottomSheet>
-      <InterestsSheet isOpen={showInterests} onClose={() => setShowInterests(false)} />
-    </>
+        <Section title="Help">
+          <motion.button
+            onClick={() => {
+              // Back to the welcome card; close Settings so the tour has the
+              // screen to itself.
+              useTutorialStore.getState().restart();
+              onClose();
+            }}
+            whileTap={tap}
+            className="flex items-center gap-3 w-full px-4 py-3 text-left"
+          >
+            <span className="text-[15px] font-medium text-fg flex-1">Replay the tutorial</span>
+            <GraduationCap size={18} className="text-fg-muted" />
+          </motion.button>
+          <motion.button
+            onClick={() => {
+              // Re-show the first-launch setup wizard (for testing).
+              useOnboardingStore.getState().restart();
+              onClose();
+            }}
+            whileTap={tap}
+            className="flex items-center gap-3 w-full px-4 py-3 text-left"
+          >
+            <span className="text-[15px] font-medium text-fg flex-1">Replay the setup wizard</span>
+            <Sparkles size={18} className="text-fg-muted" />
+          </motion.button>
+        </Section>
+      </div>
+    </BottomSheet>
   );
 }

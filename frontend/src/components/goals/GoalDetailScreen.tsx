@@ -543,20 +543,36 @@ function GoalDetailContent({
         </div>
 
         <Collapse open={addingMilestone} className="pb-3">
-          <input
-            autoFocus
-            value={milestoneText}
-            onChange={(e) => setMilestoneText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              const trimmed = milestoneText.trim();
-              if (trimmed) useGoalStore.getState().addMilestone(goal.id, trimmed);
-              setMilestoneText("");
-              setAddingMilestone(false);
-            }}
-            placeholder="Add a step…"
-            className="w-full bg-surface-alt rounded-xl px-3.5 py-2.5 text-[13.5px] text-fg placeholder-fg-faint focus:outline-none"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={milestoneText}
+              onChange={(e) => setMilestoneText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                const trimmed = milestoneText.trim();
+                if (trimmed) useGoalStore.getState().addMilestone(goal.id, trimmed);
+                setMilestoneText("");
+                setAddingMilestone(false);
+              }}
+              placeholder="Add a step…"
+              className="w-full bg-surface-alt rounded-xl px-3.5 py-2.5 text-[13.5px] text-fg placeholder-fg-faint focus:outline-none"
+            />
+            <motion.button
+              whileTap={tap}
+              disabled={!milestoneText.trim()}
+              aria-label="Confirm milestone"
+              onClick={() => {
+                const trimmed = milestoneText.trim();
+                if (trimmed) useGoalStore.getState().addMilestone(goal.id, trimmed);
+                setMilestoneText("");
+                setAddingMilestone(false);
+              }}
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-inverse text-fg-inverse disabled:opacity-40"
+            >
+              <Check size={16} strokeWidth={3} />
+            </motion.button>
+          </div>
         </Collapse>
 
         <Collapse open={goal.milestones.length > 0}>

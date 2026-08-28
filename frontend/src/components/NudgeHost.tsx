@@ -6,11 +6,13 @@ import { api } from "@/lib/api";
 import { initCoachNotifications, scheduleCoachPlan } from "@/lib/coach";
 import { addDaysISO, todayISODate } from "@/lib/date";
 import { spring, tap } from "@/lib/motion";
-import { refreshForActions, useChatStore } from "@/store/chatStore";
+import { isPendingActionStale, runPendingAction } from "@/lib/pendingAction";
+import { useChatStore } from "@/store/chatStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { DISMISS_COOLDOWN_DAYS, useNudgeStore } from "@/store/nudgeStore";
 import { useTaskStore } from "@/store/taskStore";
+import { useToastStore } from "@/store/toastStore";
 
 // Debounces bursts of foreground/data-change events into one check.
 const CHECK_DEBOUNCE_MS = 1500;
@@ -47,13 +49,14 @@ async function runCheck() {
 }
 
 interface Props {
+  onOpenSchedule: (date: string) => void;
   onOpenGoals: () => void;
 }
 
 // Proactive counterpart to ReminderHost: instead of firing at a scheduled
 // time, this checks in whenever the app is opened/foregrounded or the
 // underlying data changes, and surfaces at most one AI-noticed nudge a day.
-export default function NudgeHost({ onOpenGoals }: Props) {
+export default function NudgeHost({ onOpenSchedule, onOpenGoals }: Props) {
   const current = useNudgeStore((s) => s.current);
   const dismissTimer = useRef<number>(undefined);
 
@@ -140,11 +143,16 @@ export default function NudgeHost({ onOpenGoals }: Props) {
                       useNudgeStore.getState().setCurrent(null);
                       if (alert.pendingAction) {
                         // Executed directly — no chat round-trip, so "Yes"
-                        // can't be misinterpreted by the model.
-                        void api
-                          .confirmChatActions([alert.pendingAction])
-                          .then(() => refreshForActions([alert.pendingAction!]))
-                          .catch(() => {});
+                        // can't be misinterpreted by the model. A slot that's
+                        // already passed (rare — the banner auto-dismisses
+                        // after 15s, but not impossible) can't be honestly
+                        // booked there anymore, so this says so instead of
+                        // silently failing or booking the wrong time.
+                        if (isPendingActionStale(alert.pendingAction)) {
+                          useToastStore.getState().show("That time's already passed", "error");
+                          return;
+                        }
+                        void runPendingAction(alert.pendingAction, onOpenSchedule);
                       } else if (alert.actionPhrase) {
                         useChatStore.getState().openChat();
                         void useChatStore

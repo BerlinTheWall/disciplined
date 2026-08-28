@@ -291,6 +291,7 @@ function tick() {
               body: reminder.body,
               firedAt: Date.now(),
               date: reminder.date,
+              itemId: reminder.id,
             });
           }
         }

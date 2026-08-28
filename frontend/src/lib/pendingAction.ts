@@ -1,6 +1,10 @@
-import type { PendingAction } from "./api";
-import { formatFullDate, relativeDayLabel } from "./date";
+import { api, type PendingAction } from "./api";
+import { formatFullDate, parseISODate, relativeDayLabel } from "./date";
 import { formatTimeLabel, formatTimeRange } from "./time";
+import { refreshForActions } from "@/store/chatStore";
+import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
+import { useTaskStore } from "@/store/taskStore";
+import { useToastStore } from "@/store/toastStore";
 import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
 import type { Task } from "@/types/task";
@@ -125,4 +129,67 @@ export function describePendingAction(
     default:
       return `${action.tool}(${JSON.stringify(action.args)})`;
   }
+}
+
+// The concrete date/time a create_event pendingAction proposes, or null for
+// any other tool (or a malformed one) — used to tell whether a nudge's
+// offered slot has already passed.
+export function pendingActionDateTime(action: PendingAction | null | undefined): Date | null {
+  if (!action || action.tool !== "create_event") return null;
+  const { date, start_minutes: startMinutes } = action.args as {
+    date?: unknown;
+    start_minutes?: unknown;
+  };
+  if (typeof date !== "string" || typeof startMinutes !== "number") return null;
+  const d = parseISODate(date);
+  d.setMinutes(d.getMinutes() + startMinutes);
+  return d;
+}
+
+// True once the proposed slot is in the past — a nudge offering it can no
+// longer honestly book it there, so it's no longer actionable.
+export function isPendingActionStale(action: PendingAction | null | undefined): boolean {
+  const dt = pendingActionDateTime(action);
+  return dt != null && dt.getTime() < Date.now();
+}
+
+interface CreatedEvent {
+  id: number | string;
+  title: string;
+  date: string;
+  start_minutes: number;
+}
+
+// Executes a nudge's one-tap create_event action (bypassing chat/Gemini
+// entirely — confirmChatActions runs the tool directly server-side), then
+// makes the result obvious instead of the previous silent success/failure:
+// a toast naming what got added and when, and — only on a genuine success —
+// jumps straight to that day with the new task highlighted (scheduleFocusStore,
+// the same mechanism GoalsPage's own "open this task" already uses). Resolves
+// true only on success, so callers know whether it's safe to record the nudge
+// as "agreed" — never on a failed/rejected attempt, so the user can retry.
+export async function runPendingAction(
+  action: PendingAction,
+  navigate: (date: string) => void
+): Promise<boolean> {
+  const res = await api.confirmChatActions([action]).catch(() => null);
+  const first = res?.results?.[0] as
+    { created?: CreatedEvent; error?: string; message?: string } | undefined;
+  if (!res?.ok || !first?.created) {
+    useToastStore.getState().show(first?.message ?? "Couldn't add that — try again", "error");
+    return false;
+  }
+  // Awaited (not fire-and-forget) so the task actually exists in the store
+  // by the time we navigate + focus it below.
+  await refreshForActions([action]);
+  const { created } = first;
+  useToastStore
+    .getState()
+    .show(
+      `Added "${created.title}" — ${relativeDayLabel(created.date)} at ${formatTimeLabel(created.start_minutes)}`
+    );
+  useTaskStore.getState().setSelectedDate(created.date);
+  useScheduleFocusStore.getState().focusItem(String(created.id));
+  navigate(created.date);
+  return true;
 }

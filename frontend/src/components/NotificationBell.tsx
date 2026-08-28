@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Sparkles } from "lucide-react";
+import { Bell, Sparkles, X } from "lucide-react";
 
 import BottomSheet from "./BottomSheet";
 import { addDaysISO, todayISODate } from "@/lib/date";
 import { tap } from "@/lib/motion";
+import { isPendingActionStale, runPendingAction } from "@/lib/pendingAction";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationHistoryStore, type HistoryEntry } from "@/store/notificationHistoryStore";
 import { DISMISS_COOLDOWN_DAYS, useNudgeStore } from "@/store/nudgeStore";
+import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
+import { useToastStore } from "@/store/toastStore";
 
 interface Props {
   onOpenSchedule: (date: string) => void;
@@ -20,23 +23,51 @@ interface Props {
 export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props) {
   const entries = useNotificationHistoryStore((s) => s.entries);
   const markAllRead = useNotificationHistoryStore((s) => s.markAllRead);
+  const removeEntry = useNotificationHistoryStore((s) => s.removeEntry);
   const [isOpen, setIsOpen] = useState(false);
   const unreadCount = entries.filter((e) => !e.read).length;
 
   function open() {
     setIsOpen(true);
     markAllRead();
+    // A slot-proposing nudge (pendingAction) stops being honestly actionable
+    // the moment its slot passes — sweep those out here too (App.tsx already
+    // does this once on boot), so a stale one never sits there still looking
+    // tappable in a long-lived session.
+    useNotificationHistoryStore.getState().pruneStaleActions();
   }
 
   function handleTap(entry: HistoryEntry) {
     setIsOpen(false);
-    if (entry.date) onOpenSchedule(entry.date);
+    if (!entry.date) return;
+    // Scrolls the actual task/habit row into view once the schedule page
+    // lands on that day, same mechanism GoalsPage's own "open this task"
+    // already uses — not just the right day, but the right row on it.
+    if (entry.itemId) useScheduleFocusStore.getState().focusItem(entry.itemId);
+    onOpenSchedule(entry.date);
   }
 
-  // "Agree" mirrors NudgeHost's live "Yes" action — send the nudge's action
-  // phrase as if the user typed it, or fall back to opening Goals for the
-  // ones (goal_pacing) that don't carry one.
-  function respondAgree(entry: HistoryEntry) {
+  // "Agree" mirrors NudgeHost's live "Yes" — same three-way branch: run the
+  // one-tap action directly if there is one, else send the action phrase as
+  // if typed, else fall back to Goals (goal_pacing and friends, which carry
+  // neither). Only recorded as "agreed" once the action actually succeeds,
+  // so a failed attempt (or the phrase/Goals paths, which have no notion of
+  // failure) leaves Yes/Dismiss available rather than falsely reading
+  // "Confirmed" for something that never happened.
+  async function respondAgree(entry: HistoryEntry) {
+    if (entry.pendingAction) {
+      if (isPendingActionStale(entry.pendingAction)) {
+        removeEntry(entry.id);
+        useToastStore.getState().show("That time already passed", "error");
+        return;
+      }
+      const ok = await runPendingAction(entry.pendingAction, (date) => {
+        setIsOpen(false);
+        onOpenSchedule(date);
+      });
+      if (ok) useNotificationHistoryStore.getState().setResponse(entry.id, "agreed");
+      return;
+    }
     useNotificationHistoryStore.getState().setResponse(entry.id, "agreed");
     if (entry.actionPhrase) {
       setIsOpen(false);
@@ -103,19 +134,33 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
                 // response instead of reminders' plain tap-to-jump.
                 if (entry.kind !== "nudge" && entry.kind !== "coach") {
                   return (
-                    <button
+                    <div
                       key={entry.id}
-                      onClick={() => handleTap(entry)}
-                      className="flex items-start gap-3 p-3 rounded-2xl bg-surface text-left"
+                      className="flex items-start gap-3 p-3 rounded-2xl bg-surface"
                     >
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                        <Bell size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
-                        <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
-                      </div>
-                    </button>
+                      <button
+                        onClick={() => handleTap(entry)}
+                        className="flex flex-1 min-w-0 items-start gap-3 text-left"
+                      >
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
+                          <Bell size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-fg text-sm leading-tight">
+                            {entry.title}
+                          </p>
+                          <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+                        </div>
+                      </button>
+                      <motion.button
+                        onClick={() => removeEntry(entry.id)}
+                        whileTap={tap}
+                        aria-label="Remove notification"
+                        className="p-1 -m-1 text-fg-faint shrink-0"
+                      >
+                        <X size={16} />
+                      </motion.button>
+                    </div>
                   );
                 }
 
@@ -136,7 +181,7 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
                       <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
                       {entry.response ? (
                         <p className="text-xs text-fg-faint mt-2 italic">
-                          {entry.response === "agreed" ? "You agreed" : "You disagreed"}
+                          {entry.response === "agreed" ? "Confirmed" : "Discarded"}
                         </p>
                       ) : (
                         <div className="flex gap-2 mt-2">
@@ -157,6 +202,14 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
                         </div>
                       )}
                     </div>
+                    <motion.button
+                      onClick={() => removeEntry(entry.id)}
+                      whileTap={tap}
+                      aria-label="Remove notification"
+                      className="p-1 -m-1 text-fg-faint shrink-0"
+                    >
+                      <X size={16} />
+                    </motion.button>
                   </div>
                 );
               })}

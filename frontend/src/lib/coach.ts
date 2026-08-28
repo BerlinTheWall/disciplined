@@ -147,6 +147,7 @@ async function planAndScheduleCoachCheckins() {
         title: c.title,
         body: c.body,
         firedAt: Date.now(),
+        pendingAction: c.pendingAction,
         actionPhrase: c.actionPhrase,
       });
     }

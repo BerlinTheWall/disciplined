@@ -39,6 +39,7 @@ import WorkoutPage from "./pages/WorkoutPage";
 import { useAuthStore } from "./store/authStore";
 import { useGoalFocusStore } from "./store/goalFocusStore";
 import { useGoalsViewStore } from "./store/goalsViewStore";
+import { useNotificationHistoryStore } from "./store/notificationHistoryStore";
 import { useOnboardingStore } from "./store/onboardingStore";
 import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
@@ -80,6 +81,14 @@ function App() {
   useEffect(() => {
     useSettingsStore.getState().setLastActivePage(activePage);
   }, [activePage]);
+  // Sweeps week-old notifications on boot — addEntry only prunes inline
+  // when a *new* entry with a matching id arrives, so anything that simply
+  // never fires again would otherwise sit in the list (and the unread badge)
+  // indefinitely.
+  useEffect(() => {
+    useNotificationHistoryStore.getState().pruneExpired();
+    useNotificationHistoryStore.getState().pruneStaleActions();
+  }, []);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isPlanOpen, setIsPlanOpen] = useState(false);
   const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false);
@@ -541,7 +550,7 @@ function App() {
 
       {/* Proactive assistant nudges — checks in on app open/foreground, at
           most one banner a day */}
-      <NudgeHost onOpenGoals={() => go("goals")} />
+      <NudgeHost onOpenSchedule={goToSchedule} onOpenGoals={() => go("goals")} />
 
       {/* Generic one-off confirmation toast (e.g. "Google Calendar connected") */}
       <ToastHost />
