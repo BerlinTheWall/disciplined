@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, ListChecks, Pencil, Plus, X } from "lucide-react";
+import { Check, ListChecks, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import { useChoose, useConfirm } from "@/components/ConfirmDialog";
 import WeightInput from "@/components/goals/WeightInput";
 import { hexToRgba } from "@/lib/color";
 import { isMilestoneDone } from "@/lib/goalProgress";
@@ -80,6 +81,8 @@ function MilestoneDetailContent({
   // gates `milestoneId` to null), so reopening always starts from the
   // milestone's current committed label rather than a stale draft.
   const [title, setTitle] = useState(milestone.label);
+  const confirm = useConfirm();
+  const choose = useChoose();
 
   function commitTitle() {
     const trimmed = title.trim();
@@ -91,6 +94,46 @@ function MilestoneDetailContent({
     .map((id) => tasks.find((t) => t.id === id))
     .filter((t): t is Task => !!t)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes);
+
+  // Same choice goal-deletion already offers (GoalDetailScreen's
+  // handleDeleteGoal) — a step with scheduled sessions shouldn't silently
+  // orphan them on the calendar, but deleting them outright isn't always
+  // wanted either.
+  async function handleDelete() {
+    const taskCount = linkedTasks.length;
+    let deleteTasksToo = false;
+
+    if (taskCount === 0) {
+      const ok = await confirm({
+        title: "Delete this step?",
+        message: `"${milestone.label}" will be removed.`,
+        confirmLabel: "Delete",
+        destructive: true,
+      });
+      if (!ok) return;
+    } else {
+      const choice = await choose({
+        title: "Delete this step?",
+        message: `"${milestone.label}" has ${taskCount} scheduled session${taskCount === 1 ? "" : "s"} on your calendar. Delete those too, or just unlink them from the step?`,
+        options: [
+          {
+            label: `Delete step and ${taskCount} session${taskCount === 1 ? "" : "s"}`,
+            value: "step-and-tasks",
+            destructive: true,
+          },
+          { label: "Delete step only", value: "step-only", destructive: true },
+        ],
+      });
+      if (!choice) return;
+      deleteTasksToo = choice === "step-and-tasks";
+    }
+
+    if (deleteTasksToo) {
+      for (const t of linkedTasks) useTaskStore.getState().deleteTask(t.id);
+    }
+    useGoalStore.getState().deleteMilestone(goal.id, milestone.id);
+    onClose();
+  }
 
   // Same rule as the row's own dot: a milestone with AI-scheduled sessions
   // derives its done state from them, so tapping this completes (or, once
@@ -130,14 +173,24 @@ function MilestoneDetailContent({
             <ListChecks size={16} style={{ color: accent }} />
           )}
         </motion.button>
-        <motion.button
-          onClick={onClose}
-          whileTap={tap}
-          aria-label="Close"
-          className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center"
-        >
-          <X size={16} />
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <motion.button
+            onClick={() => void handleDelete()}
+            whileTap={tap}
+            aria-label="Delete step"
+            className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center text-red-400"
+          >
+            <Trash2 size={15} />
+          </motion.button>
+          <motion.button
+            onClick={onClose}
+            whileTap={tap}
+            aria-label="Close"
+            className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center"
+          >
+            <X size={16} />
+          </motion.button>
+        </div>
       </div>
 
       <div className="relative mb-5">

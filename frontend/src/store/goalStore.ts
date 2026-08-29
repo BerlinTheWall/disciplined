@@ -79,6 +79,9 @@ interface GoalState {
   addMilestones: (goalId: string, items: { label: string; weight?: number }[]) => void;
   toggleMilestone: (goalId: string, milestoneId: string) => void;
   deleteMilestone: (goalId: string, milestoneId: string) => void;
+  // Replaces the milestone array order wholesale — array order is display
+  // order, so a drag-to-reorder just hands back the full new id sequence.
+  reorderMilestones: (goalId: string, orderedIds: string[]) => void;
   // Weight a milestone as a percent of its goal; null reverts it to the even
   // auto-split of the remaining percentage — same rule as setWeight above,
   // one level down.
@@ -315,6 +318,16 @@ export const useGoalStore = create<GoalState>()(
               ? { ...g, milestones: g.milestones.filter((m) => m.id !== milestoneId) }
               : g
           ),
+        })),
+
+      reorderMilestones: (goalId, orderedIds) =>
+        set((state) => ({
+          goals: state.goals.map((g) => {
+            if (g.id !== goalId) return g;
+            const byId = new Map(g.milestones.map((m) => [m.id, m]));
+            const milestones = orderedIds.map((id) => byId.get(id)).filter((m) => !!m);
+            return milestones.length === g.milestones.length ? { ...g, milestones } : g;
+          }),
         })),
 
       setMilestoneWeight: (goalId, milestoneId, weight) =>

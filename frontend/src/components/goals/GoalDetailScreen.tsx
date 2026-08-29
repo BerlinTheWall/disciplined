@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
+  ArrowUpDown,
   Briefcase,
   Calendar,
   Check,
@@ -11,7 +12,6 @@ import {
   Pencil,
   Plus,
   Sparkles,
-  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -19,10 +19,11 @@ import type { LucideIcon } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
-import { useChoose, useConfirm } from "@/components/ConfirmDialog";
+import { useChoose, useConfirm, usePrompt } from "@/components/ConfirmDialog";
 import GoalCelebrationBurst, { GoalCelebrationLabel } from "@/components/goals/GoalCelebration";
 import GoalEditSheet from "@/components/goals/GoalEditSheet";
 import MilestoneDetailSheet from "@/components/goals/MilestoneDetailSheet";
+import MilestoneReorderSheet from "@/components/goals/MilestoneReorderSheet";
 import WeightInput from "@/components/goals/WeightInput";
 import AddItemSheet from "@/components/timeline/AddItemSheet";
 import TaskDetailSheet from "@/components/timeline/TaskDetailSheet";
@@ -92,8 +93,7 @@ export default function GoalDetailScreen({
 }) {
   const confirm = useConfirm();
   const choose = useChoose();
-  const [addingMilestone, setAddingMilestone] = useState(false);
-  const [milestoneText, setMilestoneText] = useState("");
+  const prompt = usePrompt();
   const [celebrate, setCelebrate] = useState(false);
 
   const p = goal ? goalProgress(goal, tasks, goals) : null;
@@ -127,12 +127,9 @@ export default function GoalDetailScreen({
           p={p}
           pace={pace}
           celebrate={celebrate}
-          addingMilestone={addingMilestone}
-          setAddingMilestone={setAddingMilestone}
-          milestoneText={milestoneText}
-          setMilestoneText={setMilestoneText}
           confirm={confirm}
           choose={choose}
+          prompt={prompt}
           onClose={onClose}
           onOpenTask={onOpenTask}
         />
@@ -148,12 +145,9 @@ function GoalDetailContent({
   p,
   pace,
   celebrate,
-  addingMilestone,
-  setAddingMilestone,
-  milestoneText,
-  setMilestoneText,
   confirm,
   choose,
+  prompt,
   onClose,
   onOpenTask,
 }: {
@@ -163,12 +157,9 @@ function GoalDetailContent({
   p: ReturnType<typeof goalProgress>;
   pace: ReturnType<typeof goalPace>;
   celebrate: boolean;
-  addingMilestone: boolean;
-  setAddingMilestone: (v: boolean | ((prev: boolean) => boolean)) => void;
-  milestoneText: string;
-  setMilestoneText: (v: string) => void;
   confirm: ReturnType<typeof useConfirm>;
   choose: ReturnType<typeof useChoose>;
+  prompt: ReturnType<typeof usePrompt>;
   onClose: () => void;
   onOpenTask: (t: Task) => void;
 }) {
@@ -182,12 +173,12 @@ function GoalDetailContent({
   // end here.
   const [editingItem, setEditingItem] = useState<EditItem | null>(null);
   const [editing, setEditing] = useState(false);
-  // Toggles the milestone list into "edit mode" — delete buttons only show
-  // per row once this is on, so a stray tap on the list can't delete a step.
-  const [editingMilestones, setEditingMilestones] = useState(false);
   // Tapping a milestone opens a popup with its title/weight/tasks — see
   // MilestoneDetailSheet.
   const [viewingMilestoneId, setViewingMilestoneId] = useState<string | null>(null);
+  // Opens the flat drag-to-reorder list (MilestoneReorderSheet) — separate
+  // from viewingMilestoneId since it's a whole-list action, not one row's.
+  const [reordering, setReordering] = useState(false);
   // Description collapses to 1 line, expanding on "Show more". Animating
   // this with framer-motion's `layout` prop (the first attempt) used its
   // FLIP technique — scaling the whole box between its before/after size —
@@ -429,7 +420,10 @@ function GoalDetailContent({
         </div>
       )}
 
-      <div className="relative overflow-hidden rounded-2xl bg-surface-feature text-white p-5 mb-4">
+      <div
+        className="relative overflow-hidden rounded-2xl text-fg p-5 mb-4"
+        style={{ backgroundColor: `${accent}14` }}
+      >
         <GoalCelebrationLabel show={celebrate} />
 
         <div className="flex items-center gap-4">
@@ -445,7 +439,7 @@ function GoalDetailContent({
                 cy="48"
                 r="40"
                 fill="none"
-                stroke="rgba(255,255,255,0.14)"
+                stroke="var(--surface-subtle)"
                 strokeWidth="9"
               />
               <circle
@@ -471,7 +465,7 @@ function GoalDetailContent({
                   <Check size={26} style={{ color: accent }} strokeWidth={3} />
                 </motion.div>
               ) : (
-                <b className="text-[21px] font-extrabold leading-none">{p.percent}%</b>
+                <b className="text-[21px] font-extrabold leading-none text-fg">{p.percent}%</b>
               )}
             </div>
           </motion.div>
@@ -499,8 +493,8 @@ function GoalDetailContent({
                 </span>
               )}
             </div>
-            <p className="text-[14.5px] font-bold leading-tight mb-3">{subtitle}</p>
-            <div className="h-1.5 rounded-full bg-surface-feature-alt overflow-hidden">
+            <p className="text-[14.5px] font-bold leading-tight mb-3 text-fg">{subtitle}</p>
+            <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
               <motion.div
                 className="h-full rounded-full"
                 style={{ backgroundColor: accent }}
@@ -509,7 +503,7 @@ function GoalDetailContent({
                 transition={spring.gentle}
               />
             </div>
-            <p className="text-right text-[10.5px] font-semibold text-gray-400 mt-1.5">
+            <p className="text-right text-[10.5px] font-semibold text-fg-faint mt-1.5">
               {daysRemaining > 0
                 ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
                 : daysRemaining === 0
@@ -523,8 +517,8 @@ function GoalDetailContent({
           <motion.button
             onClick={() => useGoalStore.getState().addProgress(goal.id, 1)}
             whileTap={tap}
-            className="flex items-center gap-1 text-[12.5px] font-semibold mt-4 px-2.5 py-1 rounded-full bg-surface-feature-alt"
-            style={{ color: accent }}
+            className="flex items-center gap-1 text-[12.5px] font-semibold mt-4 px-2.5 py-1 rounded-full"
+            style={{ color: accent, backgroundColor: `${accent}26` }}
           >
             <Plus size={13} />
             Add progress
@@ -538,18 +532,26 @@ function GoalDetailContent({
             Milestones
           </p>
           <div className="flex items-center gap-2">
-            {goal.milestones.length > 0 && (
+            {goal.milestones.length > 1 && (
               <motion.button
-                onClick={() => setEditingMilestones((v) => !v)}
+                onClick={() => setReordering(true)}
                 whileTap={tap}
-                aria-label={editingMilestones ? "Done editing milestones" : "Edit milestones"}
+                aria-label="Reorder milestones"
                 className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface-raised"
               >
-                {editingMilestones ? <Check size={13} strokeWidth={3} /> : <Pencil size={12} />}
+                <ArrowUpDown size={13} />
               </motion.button>
             )}
             <motion.button
-              onClick={() => setAddingMilestone((v) => !v)}
+              onClick={async () => {
+                const label = await prompt({
+                  title: "Add Milestone",
+                  placeholder: "Add a step…",
+                  confirmLabel: "Add",
+                });
+                const trimmed = label?.trim();
+                if (trimmed) useGoalStore.getState().addMilestone(goal.id, trimmed);
+              }}
               whileTap={tap}
               className="shrink-0 flex items-center gap-1 h-7 px-2.5 rounded-full bg-surface-raised text-[12px] font-semibold"
             >
@@ -558,39 +560,6 @@ function GoalDetailContent({
             </motion.button>
           </div>
         </div>
-
-        <Collapse open={addingMilestone} className="pb-3">
-          <div className="flex items-center gap-2">
-            <input
-              autoFocus
-              value={milestoneText}
-              onChange={(e) => setMilestoneText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                const trimmed = milestoneText.trim();
-                if (trimmed) useGoalStore.getState().addMilestone(goal.id, trimmed);
-                setMilestoneText("");
-                setAddingMilestone(false);
-              }}
-              placeholder="Add a step…"
-              className="w-full bg-surface-alt rounded-xl px-3.5 py-2.5 text-[13.5px] text-fg placeholder-fg-faint focus:outline-none"
-            />
-            <motion.button
-              whileTap={tap}
-              disabled={!milestoneText.trim()}
-              aria-label="Confirm milestone"
-              onClick={() => {
-                const trimmed = milestoneText.trim();
-                if (trimmed) useGoalStore.getState().addMilestone(goal.id, trimmed);
-                setMilestoneText("");
-                setAddingMilestone(false);
-              }}
-              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-inverse text-fg-inverse disabled:opacity-40"
-            >
-              <Check size={16} strokeWidth={3} />
-            </motion.button>
-          </div>
-        </Collapse>
 
         <Collapse open={goal.milestones.length > 0}>
           <div ref={trailRef} className="relative">
@@ -695,7 +664,7 @@ function GoalDetailContent({
                     </div>
 
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <motion.div layout="position" className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => setViewingMilestoneId(m.id)}
                           className={`flex-1 min-w-0 text-left text-[14.5px] font-semibold truncate ${
@@ -706,32 +675,15 @@ function GoalDetailContent({
                         </button>
                         {/* Read-only here — weighting only means something
                           with 2+ steps, and is only editable from the
-                          milestone's own edit sheet (tap to open). */}
+                          milestone's own edit sheet (tap to open, see
+                          MilestoneDetailSheet — that's also where it's
+                          deleted from). */}
                         {goal.milestones.length > 1 && (
                           <span className="shrink-0 text-xs font-medium tabular-nums text-fg-faint">
                             {Math.round(m.weight ?? milestoneShareById[m.id] ?? 0)}%
                           </span>
                         )}
-                        <AnimatePresence initial={false}>
-                          {editingMilestones && (
-                            <motion.button
-                              key="delete"
-                              initial={{ x: 20, opacity: 0 }}
-                              animate={{ x: 0, opacity: 1 }}
-                              exit={{ x: 20, opacity: 0 }}
-                              transition={spring}
-                              whileTap={tap}
-                              onClick={() =>
-                                useGoalStore.getState().deleteMilestone(goal.id, m.id)
-                              }
-                              aria-label="Delete step"
-                              className="w-6 h-6 rounded-full border border-red-500/30 bg-red-500/10 text-red-500 flex items-center justify-center shrink-0"
-                            >
-                              <Trash2 size={12} />
-                            </motion.button>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
+                      </div>
                       {hasLinkedTasks && (
                         <p className="text-[11px] text-fg-faint mt-0.5">
                           {doneTaskCount} of {linkedTasks.length} sessions
@@ -963,6 +915,8 @@ function GoalDetailContent({
         onClose={() => setViewingMilestoneId(null)}
         onViewTask={setViewingTask}
       />
+
+      <MilestoneReorderSheet goal={goal} isOpen={reordering} onClose={() => setReordering(false)} />
     </div>
   );
 }
