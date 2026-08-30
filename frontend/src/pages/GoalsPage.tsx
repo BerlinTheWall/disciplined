@@ -33,6 +33,7 @@ import {
   formatShortDate,
   parseISODate,
   relativeDayLabel,
+  toISODate,
   todayISODate,
 } from "@/lib/date";
 import {
@@ -42,6 +43,7 @@ import {
   goalOverlapsPeriod,
   periodKeyFor,
   periodLabel,
+  periodRange,
   periodStartDate,
   relativePeriodName,
   shiftPeriodKey,
@@ -161,19 +163,26 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
     setSelectedDate(date);
   }
 
-  // Total unique tasks linked across every goal shown in this view — the
-  // header's "{N} Tasks" count. Unions goal-level and milestone-level
-  // linkedTaskIds: a goal planned through the AI wizard has its tasks on
-  // its milestones, not on the goal itself, so counting only the former
-  // would silently undercount.
+  // Total unique tasks linked across every goal shown in this view AND
+  // actually landing in the browsed period — the header's "{N} Tasks"
+  // count. Unions goal-level and milestone-level linkedTaskIds: a goal
+  // planned through the AI wizard has its tasks on its milestones, not on
+  // the goal itself, so counting only the former would silently undercount.
+  // Filtering by date matters for a cascaded goal (a month-long goal's
+  // sessions are spread across several weeks) — without it, browsing to a
+  // week with nothing scheduled would still show that goal's *total*
+  // linked-task count instead of 0.
   const headerTaskCount = useMemo(() => {
+    const { start, end } = periodRange(period, activeKey);
+    const startIso = toISODate(start);
+    const endIso = toISODate(end);
     const ids = new Set<string>();
     for (const g of listed) {
       for (const id of g.linkedTaskIds ?? []) ids.add(id);
       for (const m of g.milestones) for (const id of m.linkedTaskIds ?? []) ids.add(id);
     }
-    return ids.size;
-  }, [listed]);
+    return tasks.filter((t) => ids.has(t.id) && t.date >= startIso && t.date <= endIso).length;
+  }, [listed, tasks, period, activeKey]);
 
   const [detailGoalId, setDetailGoalId] = useState<string | null>(null);
   const detailGoal = goals.find((g) => g.id === detailGoalId) ?? null;

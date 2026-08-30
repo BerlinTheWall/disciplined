@@ -1,5 +1,5 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
-import { currentPeriodKey, goalOverlapsPeriod, periodLabel } from "./goalPeriods";
+import { currentPeriodKey, goalOverlapsPeriod, periodLabel, periodRange } from "./goalPeriods";
 import { goalColor, priorityRank } from "./goalPriority";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
@@ -55,21 +55,20 @@ function fractionOfTasks(tasks: Task[]): { fraction: number; hasData: boolean } 
   return { fraction: tasks.filter((t) => t.completed).length / tasks.length, hasData: true };
 }
 
-// Average of goalProgress().fraction across a set of goals — used for a
-// stop's ring fill, which reads the *sibling* period's own goals (Week
-// goals for a week-stop, Month goals for a month-stop) rather than trying
-// to bucket a single goal's linked tasks by date. Deliberately broader than
-// the card `items` set below (includes cascaded/coarser goals too) — the
-// ring is a rough "how's this stop doing" signal, the card is specifically
-// that stop's own goals.
-function fractionOfGoals(
-  matched: Goal[],
-  allGoals: Goal[],
-  tasks: Task[]
-): { fraction: number; hasData: boolean } {
-  if (matched.length === 0) return { fraction: 0, hasData: false };
-  const sum = matched.reduce((s, g) => s + goalProgress(g, tasks, allGoals).fraction, 0);
-  return { fraction: sum / matched.length, hasData: true };
+// Tasks belonging to any of `matched`'s goals (own or via a milestone —
+// same union AI-scheduled sessions need, see buildWeekStops) that actually
+// fall within [startIso, endIso]. Used to scope a Month/Year stop's ring
+// fill to that specific week/month's own scheduled work, rather than the
+// goal's overall completion — a month-long goal being 60% done elsewhere
+// shouldn't mark a week with nothing scheduled in it as "still has
+// something undone".
+function tasksInRange(matched: Goal[], tasks: Task[], startIso: string, endIso: string): Task[] {
+  const ids = new Set<string>();
+  for (const g of matched) {
+    for (const id of g.linkedTaskIds ?? []) ids.add(id);
+    for (const m of g.milestones) for (const id of m.linkedTaskIds ?? []) ids.add(id);
+  }
+  return tasks.filter((t) => ids.has(t.id) && t.date >= startIso && t.date <= endIso);
 }
 
 // Maps goals to sorted PeriodStopItems (priority order, high first).
@@ -180,7 +179,7 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
     // deliberately gets a chip in every one of them, not just one "fold"
     // week; the point is "what's active this week", not "who owns this week".
     const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
-    const { fraction, hasData } = fractionOfGoals(cascadeGoals, goals, tasks);
+    const { fraction, hasData } = fractionOfTasks(tasksInRange(cascadeGoals, tasks, weekKey, sunday));
     const items = goalItems(cascadeGoals, goals, tasks);
 
     return {
@@ -210,7 +209,10 @@ function buildYearStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
     // during this month gets its own chip here, including a year-long goal
     // reaching down into several months at once.
     const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "month", monthKey));
-    const { fraction, hasData } = fractionOfGoals(cascadeGoals, goals, tasks);
+    const { start, end } = periodRange("month", monthKey);
+    const { fraction, hasData } = fractionOfTasks(
+      tasksInRange(cascadeGoals, tasks, toISODate(start), toISODate(end))
+    );
     const items = goalItems(cascadeGoals, goals, tasks);
 
     return {

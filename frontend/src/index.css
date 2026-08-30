@@ -66,6 +66,11 @@
      reaching for red, green, or the gold already spoken for by
      GOAL_PRIORITY_COLOR's "medium" (goalPriority.ts). */
   --path-today: #8b3cc7;
+  /* A past stop with something still left undone (PeriodOverview's
+     "partial" state) — amber rather than red, so it reads as "needs a
+     look" rather than "failed." Distinct enough from GOAL_PRIORITY_COLOR's
+     "medium" gold (#ffb443, goalPriority.ts) to not be mistaken for it. */
+  --path-missed: #f97316;
 }
 
 [data-theme="dark"] {
@@ -103,6 +108,7 @@
   --path-accent: #818cf8;
   --path-ink: #c7c9fa;
   --path-today: #a855f7;
+  --path-missed: #fb923c;
 }
 
 /* ── SIGMA MODE ────────────────────────────────────────────────────────

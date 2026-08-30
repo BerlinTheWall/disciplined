@@ -492,13 +492,13 @@ function PathDot({
             className="goal-path-pulse"
             cx={0}
             cy={0}
-            r={16}
+            r={14}
             fill="none"
             stroke={todayColor}
             strokeWidth={2}
           />
-          <circle cx={0} cy={0} r={13} fill={todayColor} />
-          <circle cx={0} cy={0} r={13} fill="none" stroke="var(--surface)" strokeWidth={2.5} />
+          <circle cx={0} cy={0} r={R} fill={todayColor} />
+          <circle cx={0} cy={0} r={R} fill="none" stroke="var(--surface)" strokeWidth={2.5} />
         </>
       )}
 
@@ -549,6 +549,20 @@ function PathDot({
             transform="rotate(-90)"
             style={{ transition: "stroke-dasharray 0.6s ease" }}
           />
+          {/* A past stop still has something undone — the counterpart to
+            "done"'s tick, so a glance at the rail tells you not just how
+            far along a day got but whether it actually finished. An
+            exclamation mark reads as "needs a look" rather than "failed". */}
+          <line
+            x1={0}
+            y1={-4.5}
+            x2={0}
+            y2={0.5}
+            stroke="var(--path-missed)"
+            strokeWidth={2.25}
+            strokeLinecap="round"
+          />
+          <circle cx={0} cy={4} r={1.2} fill="var(--path-missed)" />
         </>
       )}
     </motion.g>
