@@ -124,8 +124,8 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="h-dvh overflow-y-auto flex flex-col items-center justify-center px-6 py-10">
-      <div className="w-full max-w-sm">
+    <div className="h-screen overflow-y-auto px-6 py-10">
+      <div className="w-full max-w-sm mx-auto">
         {/* Hero */}
         <div className="flex justify-center mb-6">
           <div className="relative flex items-center justify-center">
