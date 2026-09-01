@@ -81,18 +81,18 @@ function PeriodToggle({
   onChange: (p: ComparePeriod) => void;
 }) {
   return (
-    <div className="flex items-center bg-surface-raised rounded-xl p-1 mb-4">
+    <div className="flex items-center bg-surface-toggle-track rounded-full p-1 mb-4 overflow-hidden">
       {PERIODS.map((p) => (
         <button
           key={p.key}
           onClick={() => onChange(p.key)}
-          className="relative flex-1 h-9 rounded-lg text-sm font-medium"
+          className="relative flex-1 h-9 rounded-full text-sm font-medium"
         >
           {value === p.key && (
             <motion.span
               layoutId="profileDetailPeriod"
               transition={spring.snappy}
-              className="absolute inset-0 bg-surface rounded-lg shadow-sm"
+              className="absolute inset-0 bg-surface rounded-full shadow-sm"
             />
           )}
           <span className={`relative z-10 ${value === p.key ? "text-fg" : "text-fg-muted"}`}>

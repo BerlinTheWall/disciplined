@@ -199,7 +199,7 @@ export default function SideMenu({
                               className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
                             >
                               <Sparkles size={20} className="text-fg-muted" strokeWidth={1.8} />
-                              <span className="font-medium text-fg-muted">Plan my week</span>
+                              <span className="font-medium text-fg-muted">Plan My Week</span>
                             </motion.button>
                             <motion.button
                               onClick={() => {
@@ -210,7 +210,7 @@ export default function SideMenu({
                               className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
                             >
                               <Heart size={20} className="text-fg-muted" strokeWidth={1.8} />
-                              <span className="font-medium text-fg-muted">Make time for</span>
+                              <span className="font-medium text-fg-muted">Make Time For</span>
                             </motion.button>
                           </>
                         )}
