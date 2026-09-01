@@ -244,15 +244,18 @@ export function MonthBars<T extends { key: string; label: string }>({
             style={{ bottom: (goal / max) * height }}
           />
         )}
-        <div className="absolute inset-0 flex items-end gap-2">
+        <div className="absolute inset-0 flex items-end gap-2.5">
           {points.map((p, i) => {
             const v = value(p);
             const isHighlighted = i === highlightIdx;
-            const h = Math.max((v / max) * height, v > 0 ? 3 : 0);
+            const h = Math.max((v / max) * height, 4);
             const bar = (
               <div
-                className="w-full rounded-t-md"
-                style={{ height: h, backgroundColor: isHighlighted ? accent : `${accent}55` }}
+                className="w-full max-w-5.5 mx-auto rounded-full"
+                style={{
+                  height: h,
+                  backgroundColor: isHighlighted ? accent : `${accent}55`,
+                }}
               />
             );
             return (
@@ -275,21 +278,30 @@ export function MonthBars<T extends { key: string; label: string }>({
           })}
         </div>
       </div>
-      <div className="flex gap-2 mt-2">
+      <div className="flex gap-2.5 mt-2.5">
         {points.map((p, i) => {
           const isHighlighted = i === highlightIdx;
-          return (
-            <div key={p.key} className="flex-1 text-center">
+          const labels = (
+            <>
               <p
-                className={`text-[10px] font-medium tabular-nums ${isHighlighted ? "text-fg" : "text-fg-faint"}`}
+                className={`text-[10px] font-medium tabular-nums whitespace-nowrap ${isHighlighted ? "text-fg" : "text-fg-faint"}`}
               >
                 {format(value(p))}
               </p>
               <p
-                className={`text-[10px] mt-0.5 ${isHighlighted ? "font-bold text-fg" : "text-fg-faint"}`}
+                className={`text-[10px] mt-0.5 whitespace-nowrap ${isHighlighted ? "font-bold text-fg" : "text-fg-faint"}`}
               >
                 {p.label}
               </p>
+            </>
+          );
+          return onSelect ? (
+            <button key={p.key} onClick={() => onSelect(i)} className="flex-1 text-center">
+              {labels}
+            </button>
+          ) : (
+            <div key={p.key} className="flex-1 text-center">
+              {labels}
             </div>
           );
         })}

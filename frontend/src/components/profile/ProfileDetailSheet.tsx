@@ -373,7 +373,7 @@ export default function ProfileDetailSheet({
             <Analysis text={summarizeConsistency(consistencyPoints, period)} />
             <div className="h-4" />
             <Section title={`Last ${count} ${period}s`}>
-              <div className="rounded-2xl bg-surface p-4">
+              <div className="rounded-3xl bg-surface p-5 shadow-card">
                 <MonthBars
                   points={consistencyPoints}
                   value={(p) => p.pct}
@@ -382,7 +382,7 @@ export default function ProfileDetailSheet({
                   onSelect={period === "week" ? setSelectedWeekIdx : undefined}
                 />
                 {period === "week" && (
-                  <p className="text-[11px] text-fg-faint text-center mt-2">
+                  <p className="text-[11px] text-fg-faint text-center mt-4 pt-3 border-t border-border">
                     Tap a bar to see that week's days
                   </p>
                 )}
@@ -391,7 +391,7 @@ export default function ProfileDetailSheet({
 
             {period === "week" && (
               <Section title="Week detail">
-                <div className="rounded-2xl bg-surface p-4">
+                <div className="rounded-3xl bg-surface p-5 shadow-card">
                   <div className="flex items-center justify-between mb-5">
                     <motion.button
                       onClick={() => setSelectedWeekIdx(Math.max(0, effectiveWeekIdx - 1))}
@@ -415,31 +415,46 @@ export default function ProfileDetailSheet({
                       <ChevronRight size={18} />
                     </motion.button>
                   </div>
-                  <div className="flex items-end gap-2 h-20">
+                  <div className="flex gap-2">
                     {weekDayScores.map((d, i) => {
                       const date = addDays(new Date(selectedWeek.start + "T00:00:00"), i);
                       const hasData = d !== null && d.total > 0;
+                      const pct = hasData ? (d.score ?? 0) * 100 : 0;
+                      const r = 15;
+                      const circumference = 2 * Math.PI * r;
+                      const offset = circumference * (1 - pct / 100);
                       return (
-                        <div
-                          key={i}
-                          className="flex-1 flex flex-col items-center justify-end gap-1"
-                        >
-                          <div className="w-full h-14 rounded-md bg-surface-subtle flex items-end overflow-hidden">
-                            {hasData && (
-                              <div
-                                className="w-full rounded-md"
-                                style={{
-                                  height: `${Math.max((d.score ?? 0) * 100, 6)}%`,
-                                  backgroundColor: "#9ec06a",
-                                }}
-                                title={`${d.done}/${d.total}`}
-                              />
-                            )}
-                          </div>
-                          <p className="text-[10px] text-fg-faint">
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                          <p className="text-[10px] font-medium text-fg-faint">
                             {WEEKDAY_LABELS[date.getDay()]}
                           </p>
-                          <p className="text-[10px] font-medium text-fg tabular-nums">
+                          <svg width={36} height={36} viewBox="0 0 36 36" className="shrink-0">
+                            {hasData && <title>{`${d.done}/${d.total}`}</title>}
+                            <circle
+                              cx={18}
+                              cy={18}
+                              r={r}
+                              fill="none"
+                              stroke="var(--surface-subtle)"
+                              strokeWidth={4}
+                            />
+                            {hasData && (
+                              <circle
+                                cx={18}
+                                cy={18}
+                                r={r}
+                                fill="none"
+                                stroke="#9ec06a"
+                                strokeWidth={4}
+                                strokeLinecap="round"
+                                strokeDasharray={circumference}
+                                strokeDashoffset={offset}
+                                transform="rotate(-90 18 18)"
+                                style={{ transition: "stroke-dashoffset 0.4s ease" }}
+                              />
+                            )}
+                          </svg>
+                          <p className="text-[11px] font-semibold text-fg tabular-nums">
                             {date.getDate()}
                           </p>
                         </div>
@@ -450,58 +465,62 @@ export default function ProfileDetailSheet({
               </Section>
             )}
 
-            <Section title="Full year">
-              <div className="rounded-2xl bg-surface p-4">
-                <Heatmap weeks={heat} />
-                <div className="flex items-center justify-end gap-1.5 mt-3 text-[11px] text-fg-faint">
-                  <span>Less</span>
-                  {[0.15, 0.4, 0.6, 0.8, 1].map((a) => (
-                    <span
-                      key={a}
-                      className="w-[11px] h-[11px] rounded-[3px]"
-                      style={{ backgroundColor: `rgba(158,192,106,${a})` }}
-                    />
-                  ))}
-                  <span>More</span>
+            {period === "year" && (
+              <Section title="Full year">
+                <div className="rounded-2xl bg-surface p-4">
+                  <Heatmap weeks={heat} />
+                  <div className="flex items-center justify-end gap-1.5 mt-3 text-[11px] text-fg-faint">
+                    <span>Less</span>
+                    {[0.15, 0.4, 0.6, 0.8, 1].map((a) => (
+                      <span
+                        key={a}
+                        className="w-[11px] h-[11px] rounded-[3px]"
+                        style={{ backgroundColor: `rgba(158,192,106,${a})` }}
+                      />
+                    ))}
+                    <span>More</span>
+                  </div>
                 </div>
-              </div>
-            </Section>
-            <Section title="By day of week (last 90 days)">
-              <div className="rounded-2xl bg-surface p-4">
-                <div className="flex items-end gap-2 h-20">
-                  {weekdays.map((w) => (
-                    <div
-                      key={w.day}
-                      className="flex-1 flex flex-col items-center justify-end gap-1"
-                    >
-                      <div className="w-full h-14 rounded-md bg-surface-subtle flex items-end overflow-hidden">
-                        <div
-                          className="w-full rounded-md"
-                          style={{
-                            height: w.total ? `${Math.max(w.pct, 6)}%` : 0,
-                            backgroundColor:
-                              w.total === 0
-                                ? "transparent"
-                                : w.day === bestWeekday.day
-                                  ? "#9ec06a"
-                                  : "#9ec06a88",
-                          }}
-                        />
+              </Section>
+            )}
+            {period === "week" && (
+              <Section title="By day of week (last 90 days)">
+                <div className="rounded-2xl bg-surface p-4">
+                  <div className="flex items-end gap-2 h-20">
+                    {weekdays.map((w) => (
+                      <div
+                        key={w.day}
+                        className="flex-1 flex flex-col items-center justify-end gap-1"
+                      >
+                        <div className="w-full h-14 rounded-md bg-surface-subtle flex items-end overflow-hidden">
+                          <div
+                            className="w-full rounded-md"
+                            style={{
+                              height: w.total ? `${Math.max(w.pct, 6)}%` : 0,
+                              backgroundColor:
+                                w.total === 0
+                                  ? "transparent"
+                                  : w.day === bestWeekday.day
+                                    ? "#9ec06a"
+                                    : "#9ec06a88",
+                            }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-fg-faint">{WEEKDAY_LABELS[w.day]}</p>
                       </div>
-                      <p className="text-[10px] text-fg-faint">{WEEKDAY_LABELS[w.day]}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  {bestWeekday.total > 0 && (
+                    <p className="text-xs text-fg-muted mt-3">
+                      Best: <span className="text-fg font-medium">{dayName(bestWeekday.day)}</span>{" "}
+                      ({bestWeekday.pct}%) · Toughest:{" "}
+                      <span className="text-fg font-medium">{dayName(worstWeekday.day)}</span> (
+                      {worstWeekday.pct}%)
+                    </p>
+                  )}
                 </div>
-                {bestWeekday.total > 0 && (
-                  <p className="text-xs text-fg-muted mt-3">
-                    Best: <span className="text-fg font-medium">{dayName(bestWeekday.day)}</span> (
-                    {bestWeekday.pct}%) · Toughest:{" "}
-                    <span className="text-fg font-medium">{dayName(worstWeekday.day)}</span> (
-                    {worstWeekday.pct}%)
-                  </p>
-                )}
-              </div>
-            </Section>
+              </Section>
+            )}
           </>
         )}
 
