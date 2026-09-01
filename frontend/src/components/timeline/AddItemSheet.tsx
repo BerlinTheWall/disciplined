@@ -11,8 +11,6 @@ import {
   ChefHat,
   ChevronRight,
   Clock,
-  Copy,
-  Dumbbell,
   Flag,
   Link2,
   MoreHorizontal,
@@ -39,7 +37,7 @@ import CalendarMonth from "./CalendarMonth";
 import { findTimeConflicts } from "./dayRows";
 import { FieldPanel, FieldRow, type EditRowKey } from "./FieldPanel";
 import { GoalLinkSection } from "./GoalLinkSection";
-import { RecipeLinkSection, WorkoutLinkSection } from "./LinkSections";
+import { RecipeLinkSection } from "./LinkSections";
 import type { EditItem } from "./Timeline";
 import TimeWheel from "./TimeWheel";
 import NumberWheel from "@/components/NumberWheel";
@@ -64,7 +62,6 @@ import {
   rangeLabel,
   timeStringToMinutes,
 } from "@/lib/time";
-import { WORKOUT_TYPE_META } from "@/lib/workout";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import type { PendingMilestoneLink } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
@@ -73,7 +70,6 @@ import { usePresetStore } from "@/store/presetStore";
 import { useRecipeStore } from "@/store/recipeStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
-import { useWorkoutStore } from "@/store/workoutStore";
 import type { Priority } from "@/types/task";
 import BottomSheet from "../BottomSheet";
 import Collapse from "../Collapse";
@@ -137,7 +133,6 @@ export default function AddItemSheet({
   // task/habit mutation above goes through the store actions directly.
   const allTasks = useTaskStore((s) => s.tasks);
   const allHabits = useHabitStore((s) => s.habits);
-  const workoutSessions = useWorkoutStore((s) => s.sessions);
   const recipes = useRecipeStore((s) => s.recipes);
   const addPreset = usePresetStore((s) => s.addPreset);
   const confirm = useConfirm();
@@ -299,19 +294,6 @@ export default function AddItemSheet({
     if (value !== null && notifyPermission() === "default") {
       void requestNotifyPermission();
     }
-  }
-
-  function linkWorkout(sessionId: string | undefined) {
-    setWorkoutSessionId(sessionId);
-    if (!sessionId) return;
-    // A task is one thing — linking a workout clears any recipe link.
-    setRecipeId(undefined);
-    const session = workoutSessions.find((s) => s.id === sessionId);
-    if (!session) return;
-    // Adopt the session's color and a dumbbell icon for a clear at-a-glance link,
-    // unless the user has already personalised the icon.
-    setColor(session.color);
-    if (!iconTouched) setIcon("workout");
   }
 
   function linkRecipe(id: string | undefined) {
@@ -607,29 +589,6 @@ export default function AddItemSheet({
     onClose();
   }
 
-  // Copies the task as currently shown in the form — including unsaved edits —
-  // as a new, uncompleted task. The editor stays open (so several copies can
-  // be made in a row); the original keeps its saved state (the user chose
-  // Duplicate, not Update).
-  function handleDuplicate() {
-    if (!editItem || editItem.type !== "task" || mode !== "task") return;
-    if (!title.trim() || duration < 1) return;
-    const startMinutes = timeStringToMinutes(time);
-    if (startMinutes + duration > MINUTES_PER_DAY) return;
-    addTask({
-      title: title.trim(),
-      startMinutes,
-      durationMinutes: duration,
-      color,
-      icon,
-      date,
-      priority,
-      reminderMinutesBefore: reminder,
-      workoutSessionId,
-      recipeId,
-    });
-  }
-
   async function handleDelete() {
     if (!editItem) return;
 
@@ -685,18 +644,13 @@ export default function AddItemSheet({
   const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : formatTimeLabel(endMin);
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
-  const linkedSession = workoutSessions.find((s) => s.id === workoutSessionId);
   const linkedRecipe = recipes.find((r) => r.id === recipeId);
 
-  // Title/icon smells like a workout or a meal but nothing is linked yet —
-  // offer a one-tap link without making the user dig into Advanced settings.
+  // Title/icon smells like a meal but nothing is linked yet — offer a
+  // one-tap link without making the user dig into Advanced settings.
   const guessedKind = guessLinkKind(title, icon);
   const linkSuggestion =
-    mode !== "task" && guessedKind === "workout" && !workoutSessionId && workoutSessions.length > 0
-      ? ("workout" as const)
-      : guessedKind === "meal" && !recipeId && recipes.length > 0
-        ? ("meal" as const)
-        : null;
+    guessedKind === "meal" && !recipeId && recipes.length > 0 ? ("meal" as const) : null;
 
   /* ---- field sections — shared by the wizard (create) and the single
      scrollable form (edit) ----------------------------------------- */
@@ -1132,16 +1086,6 @@ export default function AddItemSheet({
           {priorityButtons}
         </div>
       </Collapse>
-      {mode !== "task" && workoutSessions.length > 0 && (
-        <div className="mt-4">
-          <WorkoutLinkSection
-            workoutSessionId={workoutSessionId}
-            onLink={linkWorkout}
-            color={color}
-            onSheetClose={onClose}
-          />
-        </div>
-      )}
       {recipes.length > 0 && (
         <div className="mt-4">
           <RecipeLinkSection
@@ -1199,6 +1143,20 @@ export default function AddItemSheet({
             >
               <X size={20} />
             </motion.button>
+            {isEditing && (
+              <motion.button
+                onClick={handleDelete}
+                whileTap={tap}
+                aria-label={mode === "task" ? "Delete task" : "Delete habit"}
+                className="w-9 h-9 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor: isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)",
+                  color: onColor,
+                }}
+              >
+                <Trash2 size={18} />
+              </motion.button>
+            )}
           </div>
 
           <div className="flex items-center gap-4 mt-3">
@@ -1346,7 +1304,7 @@ export default function AddItemSheet({
               </div>
 
               {/* Extras */}
-              {(mode === "task" || workoutSessions.length > 0 || recipes.length > 0) && (
+              {(mode === "task" || recipes.length > 0) && (
                 <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
                   {mode === "task" && (
                     <FieldRow
@@ -1356,22 +1314,12 @@ export default function AddItemSheet({
                       onPress={() => setOpenRow("priority")}
                     />
                   )}
-                  {((mode !== "task" && workoutSessions.length > 0) || recipes.length > 0) && (
+                  {recipes.length > 0 && (
                     <FieldRow
                       icon={Link2}
-                      value={
-                        (mode !== "task" ? linkedSession?.name : undefined) ??
-                        linkedRecipe?.name ??
-                        "No link"
-                      }
-                      hint={
-                        mode !== "task" && linkedSession
-                          ? "Workout"
-                          : linkedRecipe
-                            ? "Recipe"
-                            : undefined
-                      }
-                      muted={!(mode !== "task" && linkedSession) && !linkedRecipe}
+                      value={linkedRecipe?.name ?? "No link"}
+                      hint={linkedRecipe ? "Recipe" : undefined}
+                      muted={!linkedRecipe}
                       onPress={() => setOpenRow("links")}
                     />
                   )}
@@ -1388,14 +1336,8 @@ export default function AddItemSheet({
                 <div className="rounded-2xl bg-surface-alt p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
-                      {linkSuggestion === "workout" ? (
-                        <Dumbbell size={13} />
-                      ) : (
-                        <ChefHat size={13} />
-                      )}
-                      {linkSuggestion === "workout"
-                        ? "This looks like a workout — link a session?"
-                        : "This looks like a meal — link a recipe?"}
+                      <ChefHat size={13} />
+                      This looks like a meal — link a recipe?
                     </p>
                     <motion.button
                       onClick={() => setSuggestDismissed(true)}
@@ -1409,32 +1351,17 @@ export default function AddItemSheet({
                     className="wheel-col flex gap-2 overflow-x-auto"
                     style={{ scrollbarWidth: "none" }}
                   >
-                    {linkSuggestion === "workout"
-                      ? workoutSessions.map((s) => {
-                          const SIcon = WORKOUT_TYPE_META[s.type].icon;
-                          return (
-                            <motion.button
-                              key={s.id}
-                              onClick={() => linkWorkout(s.id)}
-                              whileTap={tap}
-                              className={`flex items-center gap-1.5 ${chipCls(false)}`}
-                            >
-                              <SIcon size={14} />
-                              {s.name}
-                            </motion.button>
-                          );
-                        })
-                      : recipes.map((r) => (
-                          <motion.button
-                            key={r.id}
-                            onClick={() => linkRecipe(r.id)}
-                            whileTap={tap}
-                            className={`flex items-center gap-1.5 ${chipCls(false)}`}
-                          >
-                            <ChefHat size={14} />
-                            {r.name}
-                          </motion.button>
-                        ))}
+                    {recipes.map((r) => (
+                      <motion.button
+                        key={r.id}
+                        onClick={() => linkRecipe(r.id)}
+                        whileTap={tap}
+                        className={`flex items-center gap-1.5 ${chipCls(false)}`}
+                      >
+                        <ChefHat size={14} />
+                        {r.name}
+                      </motion.button>
+                    ))}
                   </div>
                 </div>
               </Collapse>
@@ -1448,28 +1375,6 @@ export default function AddItemSheet({
               >
                 {mode === "task" ? "Update Task" : "Update Habit"}
               </motion.button>
-
-              <div className="flex items-center justify-center gap-6">
-                {editItem?.type === "task" && mode === "task" && (
-                  <motion.button
-                    onClick={handleDuplicate}
-                    whileTap={tap}
-                    disabled={saveDisabled}
-                    className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-fg-muted disabled:opacity-40"
-                  >
-                    <Copy size={15} />
-                    Duplicate
-                  </motion.button>
-                )}
-                <motion.button
-                  onClick={handleDelete}
-                  whileTap={tap}
-                  className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-red-400"
-                >
-                  <Trash2 size={15} />
-                  Delete
-                </motion.button>
-              </div>
             </div>
           ) : (
             /* ---- CREATE — guided 3-step wizard ---- */
@@ -1669,14 +1574,6 @@ export default function AddItemSheet({
         {openRow === "priority" && priorityButtons}
         {openRow === "links" && (
           <div className="flex flex-col gap-4">
-            {mode !== "task" && (
-              <WorkoutLinkSection
-                workoutSessionId={workoutSessionId}
-                onLink={linkWorkout}
-                color={color}
-                onSheetClose={onClose}
-              />
-            )}
             <RecipeLinkSection
               recipeId={recipeId}
               onLink={linkRecipe}

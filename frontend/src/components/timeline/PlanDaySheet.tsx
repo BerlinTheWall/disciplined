@@ -142,21 +142,20 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     };
   }, [isOpen, briefing]);
 
-  // Next free start = end of the latest item on this day (tasks and habit
-  // occurrences alike), else default.
-  function nextStartMinutes() {
-    if (dayItems.length === 0) return DEFAULT_START;
-    const end = Math.max(...dayItems.map(({ item }) => item.startMinutes + item.durationMinutes));
-    return Math.min(end, MINUTES_PER_DAY - 15);
+  // Now, rounded up to the next 5-minute mark — the default start time.
+  function roundedNowMinutes() {
+    const now = new Date();
+    const rounded = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 5) * 5;
+    return Math.min(rounded, MINUTES_PER_DAY - 15);
   }
 
-  // When the sheet opens, seed the start time from the day's current end.
+  // When the sheet opens, seed the start time from the current time.
   useEffect(() => {
     if (!isOpen) return;
     setTitle("");
     setDuration(30);
     setColorIndex(0);
-    setTime(formatTimeLabel(nextStartMinutes()));
+    setTime(formatTimeLabel(roundedNowMinutes()));
   }, [isOpen, selectedDate]);
 
   const startMin = timeStringToMinutes(time);
@@ -182,23 +181,23 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     inputRef.current?.focus();
   }
 
-  // One-tap add for a fully-configured recurring task (see lib/presets) —
-  // no title/time/duration decisions left. Chains after whatever's already
-  // planned, same as handleAdd, so the composer's own next start time (and a
-  // manually typed task right after) picks up where the preset left off.
+  // One-tap add for a preset — title/color/icon come from the preset, but
+  // start time and duration come from the composer row below (same as a
+  // manually typed task), so the user dials those in once and every preset
+  // tap respects them.
   function addPresetTask(preset: TaskPreset) {
-    const presetStart = nextStartMinutes();
     addTask({
       title: preset.title,
-      startMinutes: presetStart,
-      durationMinutes: preset.durationMinutes,
+      startMinutes: startMin,
+      durationMinutes: duration,
       color: preset.color,
       icon: preset.icon,
       date: selectedDate,
       priority: preset.priority,
       reminderMinutesBefore: preset.reminderMinutesBefore,
     });
-    setTime(formatTimeLabel(Math.min(presetStart + preset.durationMinutes, MINUTES_PER_DAY - 15)));
+    // Chain the next task right after this one, same as handleAdd.
+    setTime(formatTimeLabel(Math.min(startMin + duration, MINUTES_PER_DAY - 15)));
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -219,8 +218,8 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-fg">Plan Your Day</h2>
           <p className="text-sm text-fg-faint">
-            <span className="capitalize">{relativeDayLabel(selectedDate)}</span> · {dayTasks.length}{" "}
-            {dayTasks.length === 1 ? "task" : "tasks"}
+            <span className="capitalize">{relativeDayLabel(selectedDate)}</span> · {dayItems.length}{" "}
+            {dayItems.length === 1 ? "item" : "items"}
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
