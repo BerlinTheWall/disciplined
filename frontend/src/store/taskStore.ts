@@ -34,10 +34,6 @@ interface Actions {
   toggleTaskCompleted: (id: string) => void;
   deleteTask: (id: string) => void;
   updateTask: (id: string, changes: Partial<Omit<Task, "id">>) => void;
-  // Replaces the target day's tasks with clones of the source day's tasks (same
-  // titles/times/durations), as fresh, uncompleted tasks. Returns how many were
-  // copied.
-  copyTasksToDate: (fromDate: string, toDate: string) => number;
 }
 
 export const useTaskStore = create<State & Actions>()(
@@ -110,27 +106,6 @@ export const useTaskStore = create<State & Actions>()(
           // recorded, not the moment this reconciliation pass happened to run.
           if (task) Object.assign(task, { updatedAt: new Date().toISOString() }, changes);
         }),
-
-      copyTasksToDate: (fromDate, toDate) => {
-        const source = useTaskStore.getState().tasks.filter((t) => t.date === fromDate);
-        if (source.length === 0) return 0;
-        const clones: Task[] = source.map((t) => ({
-          id: crypto.randomUUID(),
-          title: t.title,
-          startMinutes: t.startMinutes,
-          durationMinutes: t.durationMinutes,
-          color: t.color,
-          icon: t.icon,
-          completed: false,
-          date: toDate,
-          updatedAt: new Date().toISOString(),
-        }));
-        set((state) => {
-          state.tasks = state.tasks.filter((t) => t.date !== toDate);
-          state.tasks.push(...clones);
-        });
-        return clones.length;
-      },
     })),
 
     {

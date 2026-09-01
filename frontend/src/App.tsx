@@ -403,10 +403,10 @@ function App() {
                   <motion.button
                     onClick={() => setIsPlanOpen(true)}
                     whileTap={tap}
-                    className="flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-surface shadow-card rounded-lg h-10 px-3 text-base font-medium text-fg"
+                    aria-label="Plan Your Day"
+                    className="flex items-center justify-center shrink-0 bg-surface shadow-card rounded-lg h-10 w-10 text-fg"
                   >
                     <CalendarPlus size={18} />
-                    Day Plan
                   </motion.button>
                   <div className="flex items-center bg-surface-toggle-track rounded-lg h-10 p-1">
                     {(["daily", "weekly"] as const).map((m) => (
