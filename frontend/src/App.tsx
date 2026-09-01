@@ -41,7 +41,6 @@ import { useGoalFocusStore } from "./store/goalFocusStore";
 import { useGoalsViewStore } from "./store/goalsViewStore";
 import { useNotificationHistoryStore } from "./store/notificationHistoryStore";
 import { useOnboardingStore } from "./store/onboardingStore";
-import { useProfileStore } from "./store/profileStore";
 import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useSyncStatusStore } from "./store/syncStatusStore";
@@ -183,10 +182,8 @@ function App() {
           </span>
         ));
 
-  // Avatar in the home header — the way into the profile page. Shows the
-  // profile photo when one is set, the initial letter otherwise.
+  // Avatar in the home header — the way into the profile page.
   const profileName = useAuthStore((s) => s.user?.displayName ?? "");
-  const profileAvatar = useProfileStore((s) => s.avatar);
   const profileInitial = profileName.trim().charAt(0).toUpperCase() || "?";
 
   function go(p: Page) {
@@ -383,17 +380,9 @@ function App() {
                   <span className="text-base font-semibold text-fg max-w-36 truncate">
                     {profileName}
                   </span>
-                  {profileAvatar ? (
-                    <img
-                      src={profileAvatar}
-                      alt=""
-                      className="w-10 h-10 rounded-full object-cover shrink-0"
-                    />
-                  ) : (
-                    <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
-                    </span>
-                  )}
+                  <span className="w-10 h-10 rounded-full bg-fg flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-fg-inverse">{profileInitial}</span>
+                  </span>
                 </motion.button>
               )}
               {activePage === "schedule" && (
