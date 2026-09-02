@@ -28,19 +28,25 @@ def normalize_database_url(url: str) -> str:
     sslmode = params.get("sslmode")
     for key in _LIBPQ_ONLY_PARAMS:
         params.pop(key, None)
-    # asyncpg spells it `ssl`; anything short of `require` is its default anyway.
-    if sslmode in _SSLMODE_REQUIRES_TLS:
-        params["ssl"] = "true"
-    # Belt and suspenders: don't just forward whatever sslmode (or lack of
-    # one) the URL happened to carry. Any non-loopback host defaults to
-    # requiring TLS on its own — a provider URL with no sslmode at all (or
-    # "prefer"/"allow", which silently accept plaintext) would otherwise
-    # connect unencrypted with nothing surfacing that. An explicit
-    # sslmode=disable is still honored as a deliberate, informed opt-out
-    # (e.g. a known-private network) rather than overridden.
+
     host = (parts.hostname or "").lower()
-    if host not in _LOOPBACK_HOSTS and sslmode != "disable":
-        params["ssl"] = "true"
+    # asyncpg's `ssl` param, when given a string, validates it against
+    # libpq's own sslmode enum (disable/allow/prefer/require/verify-ca/
+    # verify-full) — passing anything else (e.g. the literal string "true")
+    # raises ClientConfigurationError. "require" encrypts without demanding
+    # a CA-trusted certificate, which is what a hosted provider's internal
+    # network needs (its cert is typically self-signed/internal, not from a
+    # public CA). Requested when the URL already said so explicitly, or —
+    # belt and suspenders — whenever the host isn't loopback: a provider URL
+    # with no sslmode at all, or "prefer"/"allow" (which silently accept
+    # plaintext), would otherwise connect unencrypted with nothing surfacing
+    # that. An explicit sslmode=disable is still honored as a deliberate,
+    # informed opt-out (e.g. a known-private network) rather than overridden.
+    wants_tls = sslmode in _SSLMODE_REQUIRES_TLS or (
+        host not in _LOOPBACK_HOSTS and sslmode != "disable"
+    )
+    if wants_tls:
+        params["ssl"] = "require"
 
     return urlunsplit(
         ("postgresql+asyncpg", parts.netloc, parts.path, urlencode(params), parts.fragment)
