@@ -126,11 +126,3 @@ export function guessIcon(title: string): IconKey | null {
   }
   return null;
 }
-
-// Whether a task/habit plausibly wants a recipe link, judged from its title
-// keywords or the icon the user picked. Used to suggest linking a recipe.
-export function guessLinkKind(title: string, icon: IconKey): "meal" | null {
-  const guessed = guessIcon(title);
-  if (guessed === "meal" || icon === "meal") return "meal";
-  return null;
-}

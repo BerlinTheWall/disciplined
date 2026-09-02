@@ -4,15 +4,11 @@ import { api, type ApiResource } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
-import { useMealStore } from "@/store/mealStore";
 import { useSyncStatusStore } from "@/store/syncStatusStore";
 import { useTaskStore } from "@/store/taskStore";
-import { useWorkoutStore } from "@/store/workoutStore";
 import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
-import type { Meal } from "@/types/meal";
 import type { Task } from "@/types/task";
-import type { WorkoutSession } from "@/types/workout";
 
 // Write-through sync between the zustand stores and the backend.
 //
@@ -279,26 +275,6 @@ const syncers = {
     subscribe: (onChange) =>
       useHabitStore.subscribe((state, prev) => {
         if (state.habits !== prev.habits) onChange();
-      }),
-  }),
-  workouts: createSyncer<WorkoutSession>({
-    label: "workouts",
-    api: api.workouts,
-    getItems: () => useWorkoutStore.getState().sessions,
-    setItems: (sessions) => useWorkoutStore.setState({ sessions }),
-    subscribe: (onChange) =>
-      useWorkoutStore.subscribe((state, prev) => {
-        if (state.sessions !== prev.sessions) onChange();
-      }),
-  }),
-  meals: createSyncer<Meal>({
-    label: "meals",
-    api: api.meals,
-    getItems: () => useMealStore.getState().meals,
-    setItems: (meals) => useMealStore.setState({ meals }),
-    subscribe: (onChange) =>
-      useMealStore.subscribe((state, prev) => {
-        if (state.meals !== prev.meals) onChange();
       }),
   }),
   goals: createSyncer<Goal>({

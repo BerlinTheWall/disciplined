@@ -30,9 +30,8 @@ import { useThemeStore } from "@/store/themeStore";
 import { useWeekPlanStore } from "@/store/weekPlanStore";
 
 // Pages reachable from the bottom nav (Home/Calendar/Profile), so they're left
-// out of the side menu. Meals, workout, and expenses are hidden too — locked,
-// not ready to surface yet. Everything else — recipes, food, habits — lives here.
-const HIDDEN_FROM_MENU: Page[] = ["schedule", "kitchen", "workout", "expenses"];
+// out of the side menu. Everything else — habits, goals — lives here.
+const HIDDEN_FROM_MENU: Page[] = ["schedule"];
 
 // w-72. Drag distance/constraints are in px, not %, so they line up with the
 // drawer's actual on-screen width.

@@ -19,12 +19,10 @@ from app.routers import (
     google_calendar,
     habits,
     interests,
-    meals,
     nudges,
     outlook,
     tts,
     week_plan,
-    workouts,
 )
 
 # uvicorn configures its own loggers and leaves the root alone, so without this
@@ -60,8 +58,6 @@ app.include_router(goal_milestones.router)
 app.include_router(goal_schedule.router)
 app.include_router(habits.router)
 app.include_router(interests.router)
-app.include_router(workouts.router)
-app.include_router(meals.router)
 app.include_router(chat.router)
 app.include_router(tts.router)
 app.include_router(briefing.router)

@@ -15,8 +15,8 @@ export interface PendingMilestoneLink {
 //   route to different places on the goal: a plain goal-level link vs.
 //   linkTasksToMilestones, which a milestoned goal's progress actually reads.
 // - pendingViewGoalId: "jump to the Goals page and open this goal's detail
-//   screen" — set from a linked task (mirrors workoutFocusStore/recipeFocusStore).
-//   App.tsx navigates on it; GoalsPage consumes it and clears it.
+//   screen" — set from a linked task. App.tsx navigates on it; GoalsPage
+//   consumes it and clears it.
 interface GoalFocusState {
   pendingLinkGoalId: string | null;
   pendingLinkMilestone: PendingMilestoneLink | null;

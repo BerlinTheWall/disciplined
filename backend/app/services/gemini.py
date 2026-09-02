@@ -284,11 +284,6 @@ def _describe_candidate(candidate: NudgeCandidate) -> list[str]:
     """The metric-specific lines shared by write_nudge_prompt and
     write_coach_prompt — kept in one place so the two surfaces never
     describe the same signal differently."""
-    if candidate.type == "workout_gap":
-        return [
-            f"Days since the last completed workout: {candidate.metric['gap_days']}",
-            "Proposed action: offer to schedule one, at the slot below if given.",
-        ]
     if candidate.type == "habit_gap":
         return [
             f"Consecutive missed days for this habit: {candidate.metric['miss_streak']}",
@@ -320,13 +315,6 @@ def _describe_candidate(candidate: NudgeCandidate) -> list[str]:
             f"The event \"{candidate.subject_title}\" now overlaps the habit "
             f"\"{candidate.metric['habit_title']}\" (usually at {habit_time}).",
             "Proposed action: offer to move the event to the free slot below, if given.",
-        ]
-    if candidate.type == "workout_variety":
-        return [
-            f"The last {candidate.metric['count']} completed workouts were all "
-            f"\"{candidate.metric['repeated_type']}\" sessions.",
-            "Proposed action: none — just point out the pattern and suggest mixing it up "
-            "in conversation.",
         ]
     if candidate.type == "tasks_overdue":
         return [
@@ -408,8 +396,8 @@ Rules:
 "Hi" or the person's name.
 - Reference only the specific facts given to you. Never invent details.
 - Because this may be read well after it's written, phrase anything uncertain as a question or \
-open-ended check-in rather than a flat claim — e.g. "How did the workout go today?" not "You \
-still haven't worked out." Never assert something that could have already changed by the time \
+open-ended check-in rather than a flat claim — e.g. "Did you get to that habit today?" not "You \
+still haven't done it." Never assert something that could have already changed by the time \
 this is read.
 - If the signal is a win (a streak milestone or comfortably ahead of pace on a goal), be \
 genuinely warm and celebratory — this is encouragement, not a status report.
@@ -421,7 +409,6 @@ system."""
 
 
 _SLOT_SEEKING_TYPES = (
-    "workout_gap",
     "habit_gap",
     "streak_risk_today",
     "habit_event_conflict",

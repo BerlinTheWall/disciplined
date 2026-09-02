@@ -4,7 +4,6 @@ import { AlignLeft, CalendarPlus, LayoutGrid, List, Menu, Waypoints } from "luci
 
 import BottomNav from "./components/BottomNav";
 import ChatSheet from "./components/chat/ChatSheet";
-import AddGroceryItemSheet from "./components/expenses/AddGroceryItemSheet";
 import NotificationBell from "./components/NotificationBell";
 import NudgeHost from "./components/NudgeHost";
 import OnboardingWizard from "./components/onboarding/OnboardingWizard";
@@ -29,35 +28,27 @@ import { addDays, relativeDayName, toISODate } from "./lib/date";
 import { spring, tap } from "./lib/motion";
 import { PAGE_ORDER, type Page } from "./lib/pages";
 import { reloadAll } from "./lib/sync";
-import ExpensesPage from "./pages/ExpensesPage";
 import GoalsPage from "./pages/GoalsPage";
 import HabitsPage from "./pages/HabitsPage";
 import HomePage from "./pages/HomePage";
-import KitchenPage from "./pages/KitchenPage";
 import ProfilePage from "./pages/ProfilePage";
-import WorkoutPage from "./pages/WorkoutPage";
 import { useAuthStore } from "./store/authStore";
 import { useGoalFocusStore } from "./store/goalFocusStore";
 import { useGoalsViewStore } from "./store/goalsViewStore";
 import { useNotificationHistoryStore } from "./store/notificationHistoryStore";
 import { useOnboardingStore } from "./store/onboardingStore";
-import { useRecipeFocusStore } from "./store/recipeFocusStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useSyncStatusStore } from "./store/syncStatusStore";
 import { useTaskStore } from "./store/taskStore";
 import { useThemeStore } from "./store/themeStore";
 import { useToastStore } from "./store/toastStore";
-import { useWorkoutFocusStore } from "./store/workoutFocusStore";
 
 const PAGE_TITLES: Record<Page, string> = {
   home: "", // the Home page shows its own greeting header
 
   goals: "Goals & Plans",
-  kitchen: "Kitchen",
-  workout: "Workout",
   schedule: "Today",
   habits: "Habits",
-  expenses: "Expenses",
   profile: "Profile",
 };
 
@@ -90,7 +81,6 @@ function App() {
   }, []);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isPlanOpen, setIsPlanOpen] = useState(false);
-  const [isGroceryAddOpen, setIsGroceryAddOpen] = useState(false);
   // Schedule view style (daily timeline vs weekly grid) is a persisted setting,
   // toggled from the header and the Settings sheet.
   const viewMode = useSettingsStore((s) => s.scheduleView) as ViewMode;
@@ -129,7 +119,7 @@ function App() {
 
   // Swiping in from the very left edge opens the side menu (standard drawer
   // gesture). Off while the menu or any sheet is already up, or during setup.
-  const anySheetOpen = isAddOpen || isPlanOpen || isGroceryAddOpen || isSettingsOpen;
+  const anySheetOpen = isAddOpen || isPlanOpen || isSettingsOpen;
   useLeftEdgeSwipe(() => setIsSideMenuOpen(true), {
     enabled: onboardingDone && !isSideMenuOpen && !anySheetOpen,
   });
@@ -192,34 +182,6 @@ function App() {
     setPage([p, PAGE_ORDER.indexOf(p) > from ? 1 : -1]);
   }
 
-  // A linked task asked to open a workout — jump to the Workout page; the page
-  // itself consumes the pending id and opens that session's detail. Driven off
-  // the store subscription (an external event) so we don't setState during render.
-  useEffect(() => {
-    return useWorkoutFocusStore.subscribe((state, prev) => {
-      if (state.pendingSessionId && state.pendingSessionId !== prev.pendingSessionId) {
-        setPage(([curr]) => {
-          if (curr === "workout") return [curr, 0];
-          const from = PAGE_ORDER.indexOf(curr);
-          return ["workout", PAGE_ORDER.indexOf("workout") > from ? 1 : -1];
-        });
-      }
-    });
-  }, []);
-
-  // Same pattern for a linked task asking to open a recipe.
-  useEffect(() => {
-    return useRecipeFocusStore.subscribe((state, prev) => {
-      if (state.pendingRecipeId && state.pendingRecipeId !== prev.pendingRecipeId) {
-        setPage(([curr]) => {
-          if (curr === "kitchen") return [curr, 0];
-          const from = PAGE_ORDER.indexOf(curr);
-          return ["kitchen", PAGE_ORDER.indexOf("kitchen") > from ? 1 : -1];
-        });
-      }
-    });
-  }, []);
-
   // "Add task" from a goal opens the add sheet; AddItemSheet consumes the
   // pending goal id on open and links the new task back to it.
   useEffect(() => {
@@ -239,8 +201,8 @@ function App() {
     });
   }, []);
 
-  // Same pattern as the workout/recipe focus stores: a linked task asking to
-  // open its goal jumps to the Goals page, which consumes the pending id.
+  // A linked task asking to open its goal jumps to the Goals page, which
+  // consumes the pending id.
   useEffect(() => {
     return useGoalFocusStore.subscribe((state, prev) => {
       if (state.pendingViewGoalId && state.pendingViewGoalId !== prev.pendingViewGoalId) {
@@ -259,11 +221,10 @@ function App() {
   }
 
   function openFab() {
-    if (activePage === "expenses") setIsGroceryAddOpen(true);
-    else setIsAddOpen(true);
+    setIsAddOpen(true);
   }
 
-  const fabOpen = activePage === "expenses" ? isGroceryAddOpen : isAddOpen;
+  const fabOpen = isAddOpen;
 
   function renderPage() {
     switch (activePage) {
@@ -280,14 +241,8 @@ function App() {
             <Timeline viewMode={viewMode} />
           </WeekSwipeContext.Provider>
         );
-      case "kitchen":
-        return <KitchenPage />;
-      case "workout":
-        return <WorkoutPage />;
       case "habits":
         return <HabitsPage />;
-      case "expenses":
-        return <ExpensesPage />;
       case "profile":
         return <ProfilePage />;
     }
@@ -525,7 +480,6 @@ function App() {
 
       <AddItemSheet isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
       <PlanDaySheet isOpen={isPlanOpen} onClose={() => setIsPlanOpen(false)} />
-      <AddGroceryItemSheet isOpen={isGroceryAddOpen} onClose={() => setIsGroceryAddOpen(false)} />
       <ChatSheet />
       <WeekPlanSheet />
 

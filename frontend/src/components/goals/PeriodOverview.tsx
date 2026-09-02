@@ -220,11 +220,11 @@ export default function PeriodOverview({
                 the rail (the page's real vertical scroller) so it must claim
                 a fixed, compact height of its own rather than growing with
                 however many goals the period has. Scrollbar hidden the same
-                way every other horizontal slider in the app is (see e.g.
-                WorkoutSessionSheet, RecipeSheet) — a bare native scrollbar
-                reads as a broken widget, not a carousel. No edge-to-edge
-                bleed trick here — it stays inside the box's own p-3 padding
-                on both ends, same as every other side of the box. */}
+                way every other horizontal slider in the app is — a bare
+                native scrollbar reads as a broken widget, not a carousel.
+                No edge-to-edge bleed trick here — it stays inside the box's
+                own p-3 padding on both ends, same as every other side of
+                the box. */}
             <div
               className="flex gap-3 overflow-x-auto snap-x snap-mandatory"
               style={{ scrollbarWidth: "none" }}

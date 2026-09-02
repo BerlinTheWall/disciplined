@@ -13,9 +13,6 @@ export interface Task {
   date: string; // ISO date, e.g. "2026-06-17"
   priority?: Priority | null; // importance; optional — explicit null clears it on the server
   reminderMinutesBefore?: number | null; // minutes before start to notify; null/unset = no reminder
-  shoppingListId?: string; // set when this task is a grocery run
-  workoutSessionId?: string | null; // set when this task is linked to a workout plan; explicit null clears it on the server
-  recipeId?: string | null; // set when this task is linked to a recipe (cooking / meal prep); explicit null clears it on the server
   // ISO UTC datetime, stamped on every local edit — drives the most-recent-
   // edit-wins calendar reconciliation (backend outlook_graph.py/google_calendar.py,
   // frontend lib/deviceCalendarSync.ts).

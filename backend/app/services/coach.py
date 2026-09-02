@@ -34,12 +34,10 @@ DEFAULT_TIER = "plus"
 _TITLES = {
     "streak_milestone": "Streak milestone",
     "goal_ahead": "Ahead of pace",
-    "workout_gap": "Workout check-in",
     "habit_gap": "Habit check-in",
     "goal_pacing": "Goal check-in",
     "streak_risk_today": "Streak at risk",
     "habit_event_conflict": "Schedule conflict",
-    "workout_variety": "Mix it up",
     "tasks_overdue": "Overdue tasks",
     "habit_weekday_pattern": "Pattern noticed",
     "interest_gap": "Activity check-in",

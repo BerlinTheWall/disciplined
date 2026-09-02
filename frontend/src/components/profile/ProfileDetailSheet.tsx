@@ -1,22 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Flame, Lightbulb, Loader2, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
-import {
-  CalorieBars,
-  Heatmap,
-  MacroBar,
-  MonthBars,
-  Stat,
-} from "@/components/profile/ProfileCharts";
+import { Heatmap, MonthBars } from "@/components/profile/ProfileCharts";
 import { primeAudioChannel, speakAssistant, stopSpeaking, wordTokens } from "@/hooks/useSpeech";
-import { CATEGORIES, type CategoryKey } from "@/lib/categories";
 import { addDays, todayISODate, toISODate } from "@/lib/date";
-import { CALORIE_GOAL, MACRO_GOALS } from "@/lib/goals";
-import { money } from "@/lib/grocery";
 import { ICONS } from "@/lib/icons";
 import {
   consistencyByPeriod,
@@ -26,32 +16,18 @@ import {
   habitStats,
   heatmapWeeks,
   lastPeriods,
-  nutritionByPeriod,
-  recentNutrition,
-  spendByPeriod,
-  spendInRange,
   summarizeConsistency,
   summarizeHabits,
-  summarizeNutrition,
-  summarizeSpending,
-  summarizeWorkouts,
   weekdayBreakdown,
-  workoutsByPeriod,
-  workoutStats,
   type ComparePeriod,
   type PeriodRange,
 } from "@/lib/insights";
 import { spring, tap } from "@/lib/motion";
-import { WORKOUT_TYPE_META } from "@/lib/workout";
-import { useExpenseStore } from "@/store/expenseStore";
-import { useGroceryStore } from "@/store/groceryStore";
 import { useHabitStore } from "@/store/habitStore";
-import { useMealStore } from "@/store/mealStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
-import { useWorkoutStore } from "@/store/workoutStore";
 
-export type ProfileDetailKind = "consistency" | "habits" | "workouts" | "nutrition" | "spending";
+export type ProfileDetailKind = "consistency" | "habits";
 
 // How many bars to show per granularity — enough to actually compare against
 // each other without the chart turning into a wall of slivers.
@@ -66,9 +42,6 @@ const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 const TITLES: Record<ProfileDetailKind, string> = {
   consistency: "Consistency",
   habits: "Habit Streaks",
-  workouts: "Workouts",
-  nutrition: "Nutrition",
-  spending: "Spending",
 };
 
 // Week/Month/Year switcher for the comparison chart — the same segmented
@@ -252,13 +225,7 @@ export default function ProfileDetailSheet({
 }) {
   const tasks = useTaskStore((s) => s.tasks);
   const habits = useHabitStore((s) => s.habits);
-  const meals = useMealStore((s) => s.meals);
-  const groceryItems = useGroceryStore((s) => s.groceryItems);
-  const sessions = useWorkoutStore((s) => s.sessions);
-  const expenses = useExpenseStore((s) => s.expenses);
-  const monthlyBudget = useExpenseStore((s) => s.monthlyBudget);
 
-  const today = todayISODate();
   const todayObj = useMemo(() => new Date(), []);
 
   // Chart granularity — shared across whichever card's sheet is open.
@@ -313,42 +280,6 @@ export default function ProfileDetailSheet({
     () => habitConsistencyByPeriod(period, count, habits, todayObj),
     [period, count, habits, todayObj]
   );
-
-  // Workouts
-  const workoutPoints = useMemo(
-    () => workoutsByPeriod(period, count, tasks, sessions, todayObj),
-    [period, count, tasks, sessions, todayObj]
-  );
-  const woOverall = useMemo(
-    () => workoutStats(tasks, sessions, "0000-01-01", today, todayObj),
-    [tasks, sessions, today, todayObj]
-  );
-  const currentWorkoutPeriod = workoutPoints[workoutPoints.length - 1];
-  const prevWorkoutPeriod = workoutPoints[workoutPoints.length - 2];
-
-  // Nutrition
-  const nutrition14 = useMemo(
-    () => recentNutrition(14, meals, groceryItems),
-    [meals, groceryItems]
-  );
-  const nutritionPoints = useMemo(
-    () => nutritionByPeriod(period, count, meals, groceryItems, todayObj),
-    [period, count, meals, groceryItems, todayObj]
-  );
-  const currentNutritionPeriod = nutritionPoints[nutritionPoints.length - 1];
-
-  // Spending
-  const spendPoints = useMemo(
-    () => spendByPeriod(period, count, expenses, todayObj),
-    [period, count, expenses, todayObj]
-  );
-  const currentSpendPeriod = spendPoints[spendPoints.length - 1];
-  const currentSpendDetail = useMemo(() => {
-    const range = lastPeriods(period, 1, todayObj)[0];
-    return spendInRange(expenses, range.start, range.endISO);
-  }, [period, expenses, todayObj]);
-  const topCategories = Object.entries(currentSpendDetail.byCategory).sort((a, b) => b[1] - a[1]);
-  const maxCat = topCategories.length ? topCategories[0][1] : 1;
 
   if (!kind) return null;
 
@@ -573,167 +504,6 @@ export default function ProfileDetailSheet({
                 )}
               </div>
             </Section>
-          </>
-        )}
-
-        {kind === "workouts" && (
-          <>
-            <Analysis text={summarizeWorkouts(workoutPoints, woOverall.daysSince, period)} />
-            <div className="h-4" />
-            <Section title={`Sessions per ${period}, last ${count} ${period}s`}>
-              <div className="rounded-2xl bg-surface p-4">
-                <MonthBars points={workoutPoints} value={(p) => p.total} />
-              </div>
-            </Section>
-            <Section title="Snapshot">
-              <div className="grid grid-cols-3 gap-3">
-                <Stat value={currentWorkoutPeriod?.total ?? 0} label={`this ${period}`} />
-                <Stat value={prevWorkoutPeriod?.total ?? 0} label={`last ${period}`} />
-                <Stat
-                  value={woOverall.daysSince ?? "—"}
-                  label={woOverall.daysSince === null ? "none yet" : "days since last"}
-                />
-              </div>
-            </Section>
-            <Section title={`This ${period} by type`}>
-              {currentWorkoutPeriod && Object.keys(currentWorkoutPeriod.byType).length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(currentWorkoutPeriod.byType).map(([type, count]) => {
-                    const meta = WORKOUT_TYPE_META[type as keyof typeof WORKOUT_TYPE_META];
-                    const TypeIcon = meta.icon as LucideIcon;
-                    return (
-                      <span
-                        key={type}
-                        className="flex items-center gap-1.5 rounded-full pl-2 pr-3 py-1 text-xs font-medium"
-                        style={{ backgroundColor: `${meta.color}1f`, color: meta.color }}
-                      >
-                        <TypeIcon size={13} />
-                        {meta.label}
-                        <span className="text-fg tabular-nums">{count}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-fg-faint">No workouts completed this {period} yet.</p>
-              )}
-            </Section>
-          </>
-        )}
-
-        {kind === "nutrition" && (
-          <>
-            <Analysis text={summarizeNutrition(nutritionPoints, CALORIE_GOAL, period)} />
-            <div className="h-4" />
-            <Section title={`Avg daily calories, last ${count} ${period}s`}>
-              <div className="rounded-2xl bg-surface p-4">
-                <MonthBars
-                  points={nutritionPoints}
-                  value={(p) => p.avg.calories}
-                  goal={CALORIE_GOAL}
-                />
-              </div>
-            </Section>
-            <Section title="Last 14 days">
-              <div className="rounded-2xl bg-surface p-4">
-                <CalorieBars
-                  days={nutrition14.map((d) => ({
-                    date: d.date,
-                    calories: d.nutrition.calories,
-                    logged: d.logged,
-                  }))}
-                  goal={CALORIE_GOAL}
-                />
-              </div>
-            </Section>
-            <Section title={`This ${period}'s average macros`}>
-              <div className="rounded-2xl bg-surface p-4 space-y-2.5">
-                <MacroBar
-                  label="Protein"
-                  value={currentNutritionPeriod?.avg.protein ?? 0}
-                  goal={MACRO_GOALS.protein}
-                  color="#f87171"
-                />
-                <MacroBar
-                  label="Carbs"
-                  value={currentNutritionPeriod?.avg.carbs ?? 0}
-                  goal={MACRO_GOALS.carbs}
-                  color="#fbbf24"
-                />
-                <MacroBar
-                  label="Fat"
-                  value={currentNutritionPeriod?.avg.fat ?? 0}
-                  goal={MACRO_GOALS.fat}
-                  color="#60a5fa"
-                />
-              </div>
-            </Section>
-          </>
-        )}
-
-        {kind === "spending" && (
-          <>
-            <Analysis text={summarizeSpending(spendPoints, monthlyBudget, period)} />
-            <div className="h-4" />
-            <Section title={`Total per ${period}, last ${count} ${period}s`}>
-              <div className="rounded-2xl bg-surface p-4">
-                <MonthBars
-                  points={spendPoints}
-                  value={(p) => p.total}
-                  format={(v) => money(v)}
-                  goal={period === "month" ? monthlyBudget || undefined : undefined}
-                />
-              </div>
-            </Section>
-            <Section title={`This ${period} by category`}>
-              <div className="rounded-2xl bg-surface p-4">
-                {topCategories.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {topCategories.map(([cat, amount]) => {
-                      const meta = CATEGORIES[cat as CategoryKey] ?? CATEGORIES.other;
-                      const CatIcon = meta.icon as LucideIcon;
-                      return (
-                        <div key={cat} className="flex items-center gap-3">
-                          <span
-                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: `${meta.color}22`, color: meta.color }}
-                          >
-                            <CatIcon size={15} />
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-fg-muted">{meta.label}</span>
-                              <span className="text-fg font-medium tabular-nums">
-                                {money(amount)}
-                              </span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${(amount / maxCat) * 100}%`,
-                                  backgroundColor: meta.color,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-fg-faint">No spending logged this {period}.</p>
-                )}
-              </div>
-            </Section>
-            {currentSpendPeriod && (
-              <Section title="Snapshot">
-                <div className="grid grid-cols-2 gap-3">
-                  <Stat value={money(currentSpendPeriod.total)} label={`this ${period}`} />
-                  <Stat value={money(monthlyBudget)} label="monthly budget" />
-                </div>
-              </Section>
-            )}
           </>
         )}
       </div>

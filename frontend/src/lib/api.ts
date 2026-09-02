@@ -2,9 +2,7 @@ import { todayISODate } from "@/lib/date";
 import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
 import type { Interest } from "@/types/interest";
-import type { Meal } from "@/types/meal";
 import type { Task } from "@/types/task";
-import type { WorkoutSession } from "@/types/workout";
 
 // The backend speaks the same camelCase shapes as the types in src/types/.
 // 127.0.0.1 rather than "localhost": uvicorn binds IPv4 only, and resolving
@@ -294,13 +292,11 @@ export interface NudgeSuggestedSlot {
 
 export type NudgeType =
   | "habit_gap"
-  | "workout_gap"
   | "goal_pacing"
   | "streak_milestone"
   | "goal_ahead"
   | "streak_risk_today"
   | "habit_event_conflict"
-  | "workout_variety"
   | "tasks_overdue"
   | "habit_weekday_pattern"
   | "interest_gap"
@@ -420,8 +416,6 @@ export const api = {
   events: resource<Task>("events"),
   goals: resource<Goal>("goals"),
   habits: resource<Habit>("habits"),
-  workouts: resource<WorkoutSession>("workouts"),
-  meals: resource<Meal>("meals"),
   // Hand-rolled rather than resource<Interest>(): there's nothing to PATCH,
   // just create-or-remove.
   interests: {

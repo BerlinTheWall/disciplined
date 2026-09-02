@@ -4,8 +4,6 @@ import {
   Bell,
   Calendar,
   CheckCircle2,
-  ChefHat,
-  Dumbbell,
   Flame,
   Pencil,
   Repeat,
@@ -26,10 +24,6 @@ import { reminderLabel } from "@/lib/reminders";
 import { durationWords, formatTimeLabel } from "@/lib/time";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
-import { useRecipeFocusStore } from "@/store/recipeFocusStore";
-import { useRecipeStore } from "@/store/recipeStore";
-import { useWorkoutFocusStore } from "@/store/workoutFocusStore";
-import { useWorkoutStore } from "@/store/workoutStore";
 import BottomSheet from "../BottomSheet";
 import { AppleLogo, GoogleLogo, MicrosoftLogo } from "../icons/ProviderLogos";
 
@@ -55,10 +49,6 @@ export default function TaskDetailSheet({
   onEdit,
   onShowOnCalendar,
 }: TaskDetailSheetProps) {
-  const workoutSessions = useWorkoutStore((s) => s.sessions);
-  const openWorkoutSession = useWorkoutFocusStore((s) => s.openSession);
-  const recipes = useRecipeStore((s) => s.recipes);
-  const openRecipe = useRecipeFocusStore((s) => s.openRecipe);
   const goals = useGoalStore((s) => s.goals);
   const openGoal = useGoalFocusStore((s) => s.openGoal);
 
@@ -68,8 +58,6 @@ export default function TaskDetailSheet({
   const headerBtnBg = isLightColor(color) ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.25)";
   const Icon = data ? (ICONS[data.icon] ?? ICONS.default) : ICONS.default;
 
-  const linkedSession = workoutSessions.find((s) => s.id === data?.workoutSessionId);
-  const linkedRecipe = recipes.find((r) => r.id === data?.recipeId);
   const linkedGoal =
     item?.type === "task"
       ? goals.find(
@@ -294,56 +282,6 @@ export default function TaskDetailSheet({
                 <span className="flex-1 text-sm text-fg-muted">Synced with</span>
                 <span className="text-sm font-medium text-fg">{syncedProvider.name}</span>
               </div>
-            )}
-
-            {item.type === "habit" && linkedSession && (
-              <motion.button
-                onClick={() => {
-                  openWorkoutSession(linkedSession.id);
-                  onClose();
-                }}
-                whileTap={tap}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-alt text-left"
-              >
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
-                  style={{ backgroundColor: linkedSession.color }}
-                >
-                  <Dumbbell size={15} />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-xs text-fg-faint">Linked workout</span>
-                  <span className="block text-sm font-medium text-fg truncate">
-                    {linkedSession.name}
-                  </span>
-                </span>
-                <ArrowUpRight size={16} className="text-fg-faint shrink-0" />
-              </motion.button>
-            )}
-
-            {linkedRecipe && (
-              <motion.button
-                onClick={() => {
-                  openRecipe(linkedRecipe.id);
-                  onClose();
-                }}
-                whileTap={tap}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-surface-alt text-left"
-              >
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
-                  style={{ backgroundColor: linkedRecipe.color }}
-                >
-                  <ChefHat size={15} />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-xs text-fg-faint">Linked recipe</span>
-                  <span className="block text-sm font-medium text-fg truncate">
-                    {linkedRecipe.name}
-                  </span>
-                </span>
-                <ArrowUpRight size={16} className="text-fg-faint shrink-0" />
-              </motion.button>
             )}
 
             {linkedGoal && (

@@ -4,15 +4,15 @@ import { guessIcon, ICONS, type IconKey } from "./icons";
 // Deterministic command grammar for the Schedule quick-add bar. Turns sentences
 // like "move my gym session tonight at 10 to 11", "change the name of standup to
 // daily sync", "make workout blue", "push lunch to tomorrow", "set gym to 1h",
-// "mark read done", "link lunch to the pasta recipe" or "make gym a habit on mon
-// wed fri" into a structured Command operating on an existing task/habit.
+// "mark read done" or "make gym a habit on mon wed fri" into a structured
+// Command operating on an existing task/habit.
 //
 // Two pure pieces, both testable without React/stores:
 //   parseCommand(text)            -> intent + a fuzzy target description
 //   resolveTarget(target, items)  -> the matching item(s), ranked
-// The UI runs them, resolves any extra references (workout/recipe), then ALWAYS
-// confirms before applying. A command only "wins" when a verb/cue is recognised;
-// plain text with no command cue is left for the create parser (quickAdd.ts).
+// The UI runs them, then ALWAYS confirms before applying. A command only
+// "wins" when a verb/cue is recognised; plain text with no command cue is
+// left for the create parser (quickAdd.ts).
 //
 // This covers the *common phrasings* of each operation, not arbitrary English —
 // that ceiling is inherent to a rule-based parser (an LLM would be the next step,
@@ -47,8 +47,6 @@ export type Command =
   | { action: "recolor"; target: TargetHint; color: string; colorName: string }
   | { action: "icon"; target: TargetHint; icon: IconKey }
   | { action: "complete"; target: TargetHint; completed: boolean }
-  | { action: "linkWorkout"; target: TargetHint; query: string }
-  | { action: "linkRecipe"; target: TargetHint; query: string }
   | { action: "toHabit"; target: TargetHint; daysOfWeek: number[] }
   | { action: "toTask"; target: TargetHint; date?: string };
 
@@ -360,35 +358,6 @@ export function parseCommand(input: string, now: Date = new Date()): Command | n
     return { action: "complete", target: parseTarget(t, now), completed: true };
   }
 
-  // LINK WORKOUT ------------------------------------------------------------
-  const linkVerb = /\b(?:link|attach|connect|assign|hook up)\b/.test(text);
-  if ((linkVerb || /\badd\b/.test(text)) && /\b(?:workout|training|gym session)\b/.test(text)) {
-    const split = splitOnTo(text);
-    if (split) {
-      const query = cleanTitle(
-        split.after.replace(/\b(?:workout|training|session|my|the|a|an)\b/g, " ")
-      );
-      const targetText = split.before.replace(
-        /\b(?:link|attach|connect|assign|add|hook|up|workout|training)\b/g,
-        " "
-      );
-      if (query) return { action: "linkWorkout", target: parseTarget(targetText, now), query };
-    }
-  }
-
-  // LINK RECIPE / MEAL ------------------------------------------------------
-  if ((linkVerb || /\badd\b/.test(text)) && /\b(?:recipe|meal|dish)\b/.test(text)) {
-    const split = splitOnTo(text);
-    if (split) {
-      const query = cleanTitle(split.after.replace(/\b(?:recipe|meal|dish|my|the|a|an)\b/g, " "));
-      const targetText = split.before.replace(
-        /\b(?:link|attach|connect|assign|add|hook|up|recipe|meal|dish)\b/g,
-        " "
-      );
-      if (query) return { action: "linkRecipe", target: parseTarget(targetText, now), query };
-    }
-  }
-
   // ICON --------------------------------------------------------------------
   if (/\bicon\b/.test(text)) {
     const [before, after = ""] = text.split(/\bicon\b/);
@@ -545,25 +514,4 @@ function rank(target: TargetHint, items: CommandItem[], scopeDate: string | null
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.map((s) => s.item);
-}
-
-// Ranks named references (workout sessions / recipes) by title-word overlap with
-// the query. Used by the UI to resolve "link lunch to <query>".
-export function resolveByName<T extends { id: string; name: string }>(
-  query: string,
-  options: T[]
-): T[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const scored: { opt: T; score: number }[] = [];
-  for (const opt of options) {
-    const name = opt.name.toLowerCase();
-    const hits = words.filter((w) => name.includes(w)).length;
-    if (hits) scored.push({ opt, score: hits });
-  }
-  if (!scored.length) return [];
-  // Keep only the best-scoring matches, so a clear winner ("push day" → "Push
-  // day", not also "Pull day") isn't dragged into a needless disambiguation.
-  const best = Math.max(...scored.map((s) => s.score));
-  return scored.filter((s) => s.score === best).map((s) => s.opt);
 }

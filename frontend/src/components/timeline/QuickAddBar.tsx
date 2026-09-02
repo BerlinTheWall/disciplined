@@ -10,7 +10,6 @@ import {
   parseCommand,
   parseDateInput,
   parseTimeInput,
-  resolveByName,
   resolveTarget,
   type Command,
   type CommandItem,
@@ -22,9 +21,7 @@ import { parseQuickAdd } from "@/lib/quickAdd";
 import { formatDuration, formatTimeLabel, formatTimeRange } from "@/lib/time";
 import { useChatStore } from "@/store/chatStore";
 import { useHabitStore } from "@/store/habitStore";
-import { useRecipeStore } from "@/store/recipeStore";
 import { useTaskStore } from "@/store/taskStore";
-import { useWorkoutStore } from "@/store/workoutStore";
 import { useChoose, useConfirm, usePrompt, type ConfirmOptions } from "../ConfirmDialog";
 
 // Color a quick-added item gets until the user opens "edit details" to pick one.
@@ -40,8 +37,6 @@ const ACTION_VERB: Record<Command["action"], string> = {
   recolor: "recolor",
   icon: "change",
   complete: "update",
-  linkWorkout: "link",
-  linkRecipe: "link",
   toHabit: "convert",
   toTask: "convert",
 };
@@ -86,8 +81,6 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
       state.toggleHabitCompleted,
     ])
   );
-  const sessions = useWorkoutStore((s) => s.sessions);
-  const recipes = useRecipeStore((s) => s.recipes);
   const confirm = useConfirm();
   const choose = useChoose();
   const prompt = usePrompt();
@@ -169,7 +162,6 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
   }
 
   // Builds the confirm prompt + deferred apply for a command on a resolved item.
-  // May prompt (choose) to resolve a workout/recipe reference.
   async function planCommand(cmd: Command, item: CommandItem): Promise<Plan> {
     const isTask = item.kind === "task";
     const ok = (c: ConfirmOptions, run: () => Confirmation): Plan => ({ confirm: c, run });
@@ -332,60 +324,6 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         );
       }
 
-      case "linkWorkout": {
-        if (!isTask) return { error: "Only tasks can link to a workout." };
-        const session = await pickByName(cmd.query, sessions, "workout");
-        if (!session) return { error: `No workout matching "${cmd.query}".` };
-        return ok(
-          {
-            title: "Link workout?",
-            message: `Link "${item.title}" to the "${session.name}" workout.`,
-            confirmLabel: "Link",
-          },
-          () => {
-            updateTask(item.id, {
-              workoutSessionId: session.id,
-              recipeId: undefined,
-              color: session.color,
-              icon: "workout",
-            });
-            return {
-              icon: "workout",
-              color: session.color,
-              title: `Linked ${item.title}`,
-              context: `→ ${session.name}`,
-            };
-          }
-        );
-      }
-
-      case "linkRecipe": {
-        if (!isTask) return { error: "Only tasks can link to a recipe." };
-        const recipe = await pickByName(cmd.query, recipes, "recipe");
-        if (!recipe) return { error: `No recipe matching "${cmd.query}".` };
-        return ok(
-          {
-            title: "Link recipe?",
-            message: `Link "${item.title}" to the "${recipe.name}" recipe.`,
-            confirmLabel: "Link",
-          },
-          () => {
-            updateTask(item.id, {
-              recipeId: recipe.id,
-              workoutSessionId: undefined,
-              color: recipe.color,
-              icon: "meal",
-            });
-            return {
-              icon: "meal",
-              color: recipe.color,
-              title: `Linked ${item.title}`,
-              context: `→ ${recipe.name}`,
-            };
-          }
-        );
-      }
-
       case "toHabit": {
         if (!isTask) return { error: `"${item.title}" is already a habit.` };
         const daysLabel =
@@ -449,22 +387,6 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
         );
       }
     }
-  }
-
-  // Resolves a name reference (workout/recipe), prompting to disambiguate.
-  async function pickByName<T extends { id: string; name: string }>(
-    query: string,
-    options: T[],
-    kind: string
-  ): Promise<T | null> {
-    const matches = resolveByName(query, options);
-    if (matches.length === 0) return null;
-    if (matches.length === 1) return matches[0];
-    const id = await choose({
-      title: `Which ${kind}?`,
-      options: matches.slice(0, 4).map((m) => ({ label: m.name, value: m.id })),
-    });
-    return matches.find((m) => m.id === id) ?? null;
   }
 
   // Returns true if the input was handled as a command (resolved or not).

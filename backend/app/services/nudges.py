@@ -9,7 +9,7 @@ from typing import Any, Literal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Goal, Habit, Interest, WorkoutSession
+from app.models import Event, Goal, Habit, Interest
 from app.services.tools import (
     _overlapping,
     current_period_keys,
@@ -20,13 +20,11 @@ from app.services.tools import (
 
 NudgeType = Literal[
     "habit_gap",
-    "workout_gap",
     "goal_pacing",
     "streak_milestone",
     "goal_ahead",
     "streak_risk_today",
     "habit_event_conflict",
-    "workout_variety",
     "tasks_overdue",
     "habit_weekday_pattern",
     "interest_gap",
@@ -52,13 +50,11 @@ _PRIORITY_ORDER: tuple[NudgeType, ...] = (
     "goal_ahead",
     "streak_risk_today",
     "habit_event_conflict",
-    "workout_gap",
     "habit_gap",
     "interest_gap",
     "goal_pacing",
     "habit_weekday_pattern",
     "tasks_overdue",
-    "workout_variety",
     "interest_not_started",
 )
 
@@ -81,7 +77,6 @@ def candidate_priority(c: NudgeCandidate) -> tuple[int, float]:
         "streak_milestone": -c.metric.get("streak", 0),
         "goal_ahead": -c.metric.get("lead", 1 - c.metric.get("elapsed", 0)),
         "streak_risk_today": -c.metric.get("streak", 0),
-        "workout_gap": -c.metric.get("gap_days", 0),
         "habit_gap": -c.metric.get("miss_streak", 0),
         "interest_gap": -c.metric.get("gap_days", 0),
         "goal_pacing": -c.metric.get("margin", 0),
@@ -145,32 +140,6 @@ def _habit_hit_streak(habit: Habit, today: date) -> int:
     return streak
 
 
-async def workout_gap_candidate(
-    db: AsyncSession, user_id: str, today: date
-) -> NudgeCandidate | None:
-    last = await db.scalar(
-        select(Event.date)
-        .where(
-            Event.user_id == user_id,
-            Event.workout_session_id.is_not(None),
-            Event.completed.is_(True),
-        )
-        .order_by(Event.date.desc())
-        .limit(1)
-    )
-    if last is None:
-        return None  # no workout history yet — never a "gap" on a fresh account
-    gap_days = (today - date.fromisoformat(last)).days
-    if gap_days < 4:
-        return None
-    return NudgeCandidate(
-        type="workout_gap",
-        subject_id="workout",
-        subject_title="a workout",
-        metric={"gap_days": gap_days, "last_date": last},
-    )
-
-
 async def habit_gap_candidates(
     db: AsyncSession, user_id: str, today: date
 ) -> list[NudgeCandidate]:
@@ -194,11 +163,11 @@ async def habit_gap_candidates(
 
 async def _last_completed_interest_date(db: AsyncSession, user_id: str, title: str) -> str | None:
     """Most recent date a completed Event's title matches this interest,
-    case-insensitively — deliberately not a linked-id column (like
-    workout_session_id): any completed event titled "Reading", whether made
-    via this nudge's own one-tap action, through chat, or typed by hand on
-    the Schedule tab, counts. Mirrors how the chat assistant already resolves
-    events by title rather than requiring an explicit link."""
+    case-insensitively — deliberately not a linked-id column: any completed
+    event titled "Reading", whether made via this nudge's own one-tap action,
+    through chat, or typed by hand on the Schedule tab, counts. Mirrors how
+    the chat assistant already resolves events by title rather than
+    requiring an explicit link."""
     return await db.scalar(
         select(Event.date)
         .where(
@@ -427,43 +396,6 @@ async def habit_event_conflict_candidates(
     return out
 
 
-async def workout_variety_candidate(
-    db: AsyncSession, user_id: str, today: date
-) -> NudgeCandidate | None:
-    """The last 4 completed workout-linked events were all the same
-    WorkoutSession.type — an imbalance, not a deficit (workout_gap already
-    covers "not working out at all")."""
-    events = (
-        await db.scalars(
-            select(Event)
-            .where(
-                Event.user_id == user_id,
-                Event.workout_session_id.is_not(None),
-                Event.completed.is_(True),
-            )
-            .order_by(Event.date.desc())
-            .limit(4)
-        )
-    ).all()
-    if len(events) < 4:
-        return None
-    session_ids = [e.workout_session_id for e in events]
-    sessions = (
-        await db.scalars(select(WorkoutSession).where(WorkoutSession.id.in_(session_ids)))
-    ).all()
-    if len(sessions) < 4:
-        return None
-    types = {s.type for s in sessions}
-    if len(types) != 1:
-        return None
-    return NudgeCandidate(
-        type="workout_variety",
-        subject_id="workout_variety",
-        subject_title="your workouts",
-        metric={"repeated_type": types.pop(), "count": len(events)},
-    )
-
-
 async def tasks_overdue_candidate(
     db: AsyncSession, user_id: str, today: date
 ) -> NudgeCandidate | None:
@@ -551,9 +483,6 @@ async def all_candidates(
     multi-window planner (several winners, one per window), so both surfaces
     draw from one pool instead of drifting apart."""
     out: list[NudgeCandidate] = []
-    workout = await workout_gap_candidate(db, user_id, today)
-    if workout is not None:
-        out.append(workout)
     out += await habit_gap_candidates(db, user_id, today)
     out += await interest_gap_candidates(db, user_id, today)
     out += await interest_not_started_candidates(db, user_id, today)
@@ -563,9 +492,6 @@ async def all_candidates(
     out += await streak_risk_today_candidates(db, user_id, today, now_minutes)
     out += await habit_event_conflict_candidates(db, user_id, today)
     out += await habit_weekday_pattern_candidates(db, user_id, today)
-    variety = await workout_variety_candidate(db, user_id, today)
-    if variety is not None:
-        out.append(variety)
     overdue = await tasks_overdue_candidate(db, user_id, today)
     if overdue is not None:
         out.append(overdue)
@@ -595,7 +521,7 @@ async def suggest_evening_slot(
     that window has effectively passed, else tomorrow. Reuses _overlapping —
     the same conflict check create_event uses — scanning in 15-minute steps.
     Only a sensible fallback when there's no natural time of day to anchor
-    to (workout_gap has no single habit row to read a schedule from)."""
+    to (interest_gap has no single habit row to read a schedule from)."""
     window_start, window_end = 18 * 60, 21 * 60
     target_date = today
     if now_minutes is not None and now_minutes > window_end - duration:
@@ -617,7 +543,7 @@ async def suggest_habit_slot(
     """The habit's own scheduled time, today, if nothing else occupies it. A
     habit already has a designated time of day (e.g. a wake-up routine at
     6am) — suggesting some unrelated evening slot for it doesn't make sense,
-    unlike workout_gap which has no single row to anchor a "usual time" to.
+    unlike interest_gap which has no single row to anchor a "usual time" to.
 
     `now_minutes`, when given, is the time this suggestion will actually be
     read at (not necessarily when this function runs) — the coach plans
@@ -705,7 +631,7 @@ async def suggest_slot_for_candidate(
         if habit is None or habit.user_id != user_id:
             return None
         return await suggest_habit_slot(db, user_id, habit, today, now_minutes)
-    if candidate.type in ("workout_gap", "interest_gap", "interest_not_started"):
+    if candidate.type in ("interest_gap", "interest_not_started"):
         return await suggest_evening_slot(db, user_id, today, now_minutes)
     if candidate.type == "streak_risk_today":
         habit = await db.get(Habit, candidate.subject_id)
@@ -729,7 +655,6 @@ def build_pending_action(
     found), in which case the UI falls back to build_action_phrase or a
     plain "View" action."""
     if candidate.type in (
-        "workout_gap",
         "habit_gap",
         "streak_risk_today",
         "interest_gap",
@@ -737,7 +662,7 @@ def build_pending_action(
     ):
         if slot is None:
             return None
-        title = "Workout" if candidate.type == "workout_gap" else candidate.subject_title
+        title = candidate.subject_title
         return {
             "tool": "create_event",
             "args": {
@@ -766,7 +691,7 @@ def build_pending_action(
                 "days_of_week": candidate.metric["new_days_of_week"],
             },
         }
-    return None  # goal_pacing, streak_milestone, goal_ahead, workout_variety, tasks_overdue
+    return None  # goal_pacing, streak_milestone, goal_ahead, tasks_overdue
 
 
 def build_action_phrase(
@@ -778,6 +703,4 @@ def build_action_phrase(
     there's no one correct mutation, just a conversation worth starting."""
     if candidate.type == "tasks_overdue":
         return "Help me deal with my overdue tasks"
-    if candidate.type == "workout_variety":
-        return "Suggest a different kind of workout to mix things up"
     return None

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.database import get_db
-from app.models import Event, Habit, Meal, User, WorkoutSession
+from app.models import Event, Habit, User
 from app.schemas import (
     AuthResponse,
     ForgotPasswordRequest,
@@ -39,7 +39,7 @@ def _minutes_label(seconds: float) -> str:
 async def _adopt_orphan_rows(db: AsyncSession, user_id: str) -> None:
     """Data created before accounts existed has no owner; hand it to the first
     registered user so nothing disappears on upgrade."""
-    for model in (Event, Habit, WorkoutSession, Meal):
+    for model in (Event, Habit):
         await db.execute(update(model).where(model.user_id.is_(None)).values(user_id=user_id))
 
 

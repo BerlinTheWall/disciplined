@@ -188,7 +188,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const detailGoal = goals.find((g) => g.id === detailGoalId) ?? null;
 
   // Consume a "jump to this goal" intent from a linked task: open its detail
-  // screen (mirrors WorkoutPage's pendingSessionId handling).
+  // screen.
   const pendingViewGoalId = useGoalFocusStore((s) => s.pendingViewGoalId);
   const clearViewGoal = useGoalFocusStore((s) => s.clearViewGoal);
   useEffect(() => {

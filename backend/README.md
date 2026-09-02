@@ -47,8 +47,6 @@ add, which silently destroys the data in that column).
 - `GET/POST /api/events`, `GET/PATCH/DELETE /api/events/{id}` — schedule blocks
   (`?start=&end=` ISO-date range filter on the list route)
 - `GET/POST /api/habits`, `GET/PATCH/DELETE /api/habits/{id}`
-- `GET/POST /api/workouts`, `GET/PATCH/DELETE /api/workouts/{id}`
-- `GET/POST /api/meals`, `GET/PATCH/DELETE /api/meals/{id}` (`?start=&end=`)
 - `POST /api/chat` — conversational scheduling assistant
 
 All JSON is camelCase, matching the frontend types in `src/types/`.
@@ -58,7 +56,7 @@ All JSON is camelCase, matching the frontend types in `src/types/`.
 ```json
 POST /api/chat
 {
-  "message": "Move my workout to 6pm tomorrow",
+  "message": "Move my dentist appointment to 6pm tomorrow",
   "history": [
     { "role": "user", "content": "..." },
     { "role": "model", "content": "..." }

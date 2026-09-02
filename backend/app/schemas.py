@@ -131,9 +131,6 @@ class EventBase(CamelModel):
     completed: bool = False
     priority: Priority | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
-    shopping_list_id: str | None = None
-    workout_session_id: str | None = None
-    recipe_id: str | None = None
     # ISO UTC datetime, stamped by the client on every local edit — drives
     # the most-recent-edit-wins calendar reconciliation (see
     # app.services.calendar_time / outlook_graph.py / google_calendar.py).
@@ -156,9 +153,6 @@ class EventUpdate(CamelModel):
     completed: bool | None = None
     priority: Priority | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
-    shopping_list_id: str | None = None
-    workout_session_id: str | None = None
-    recipe_id: str | None = None
     updated_at: str | None = None
 
 
@@ -185,8 +179,6 @@ class HabitBase(CamelModel):
     completed_dates: list[str] = []
     skipped_dates: list[str] = []
     reminder_minutes_before: int | None = Field(default=None, ge=0)
-    workout_session_id: str | None = None
-    recipe_id: str | None = None
     freq: Literal["weekly", "monthly"] = "weekly"
     interval: int = Field(default=1, ge=1, le=24)
     # The cycle's first occurrence — only load-bearing when interval>1 or
@@ -242,8 +234,6 @@ class HabitUpdate(CamelModel):
     completed_dates: list[str] | None = None
     skipped_dates: list[str] | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
-    workout_session_id: str | None = None
-    recipe_id: str | None = None
     freq: Literal["weekly", "monthly"] | None = None
     interval: int | None = Field(default=None, ge=1, le=24)
     anchor_date: str | None = None
@@ -432,83 +422,6 @@ class GoalScheduleResponse(CamelModel):
     proposals: list[ScheduledTaskProposal] = []
 
 
-# ---- Workouts ----
-
-WorkoutType = Literal["gym", "running", "cycling", "swimming", "yoga", "other"]
-
-
-class WorkoutExercise(CamelModel):
-    id: str
-    name: str
-    sets: int | None = None
-    reps: int | None = None
-    weight: float | None = None
-    rest_sec: int | None = None
-    distance: float | None = None
-    duration_min: float | None = None
-    pace: str | None = None
-    incline: float | None = None
-    notes: str | None = None
-
-
-class WorkoutSessionBase(CamelModel):
-    name: str
-    type: WorkoutType = "gym"
-    color: str = "#6366f1"
-    exercises: list[WorkoutExercise] = []
-
-
-class WorkoutSessionCreate(WorkoutSessionBase):
-    id: str | None = None
-
-
-class WorkoutSessionUpdate(CamelModel):
-    name: str | None = None
-    type: WorkoutType | None = None
-    color: str | None = None
-    exercises: list[WorkoutExercise] | None = None
-
-
-class WorkoutSessionOut(WorkoutSessionBase):
-    id: str
-
-
-# ---- Meals ----
-
-MealType = Literal["breakfast", "lunch", "dinner", "snack"]
-
-
-class MealComponent(CamelModel):
-    item_id: str
-    servings: float
-
-
-class MealBase(CamelModel):
-    name: str
-    type: MealType
-    date: str
-    components: list[MealComponent] = []
-    recipe_id: str | None = None
-    servings_eaten: float | None = None
-
-
-class MealCreate(MealBase):
-    id: str | None = None
-
-
-class MealUpdate(CamelModel):
-    name: str | None = None
-    type: MealType | None = None
-    date: str | None = None
-    components: list[MealComponent] | None = None
-    recipe_id: str | None = None
-    servings_eaten: float | None = None
-
-
-class MealOut(MealBase):
-    id: str
-
-
 # ---- Chat ----
 
 
@@ -619,13 +532,11 @@ class NudgeSuggestedSlot(CamelModel):
 
 NudgeTypeLiteral = Literal[
     "habit_gap",
-    "workout_gap",
     "goal_pacing",
     "streak_milestone",
     "goal_ahead",
     "streak_risk_today",
     "habit_event_conflict",
-    "workout_variety",
     "tasks_overdue",
     "habit_weekday_pattern",
     "interest_gap",

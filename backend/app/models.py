@@ -1,6 +1,6 @@
 ﻿from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, Float, Integer, String
+from sqlalchemy import BigInteger, Boolean, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -92,9 +92,6 @@ class Event(Base):
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
     priority: Mapped[str | None] = mapped_column(String, nullable=True)  # low|medium|high
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    shopping_list_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
     # Set when this Task is linked (either direction) to the user's connected
     # Outlook calendar (see app.services.outlook_graph.reconcile_outlook_events)
     # — the Microsoft Graph event id. Unrelated to the Apple write path
@@ -152,19 +149,6 @@ class Habit(Base):
     # Last day this habit is active; NULL means it never ends.
     end_date: Mapped[str | None] = mapped_column(String, nullable=True)
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    workout_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
-
-
-class WorkoutSession(Base):
-    __tablename__ = "workout_sessions"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
-    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    name: Mapped[str] = mapped_column(String)
-    type: Mapped[str] = mapped_column(String, default="gym")  # gym|running|cycling|swimming|yoga|other
-    color: Mapped[str] = mapped_column(String, default="#6366f1")
-    exercises: Mapped[list] = mapped_column(JSONB, default=list)  # list of WorkoutExercise dicts
 
 
 class Interest(Base):
@@ -278,16 +262,3 @@ class GoogleCalendarConnection(Base):
     connected_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
     # See OutlookConnection.last_synced_at — same purpose, for Google.
     last_synced_at: Mapped[str | None] = mapped_column(String, nullable=True)
-
-
-class Meal(Base):
-    __tablename__ = "meals"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
-    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    name: Mapped[str] = mapped_column(String)
-    type: Mapped[str] = mapped_column(String)  # breakfast|lunch|dinner|snack
-    date: Mapped[str] = mapped_column(String, index=True)
-    components: Mapped[list] = mapped_column(JSONB, default=list)  # [{itemId, servings}]
-    recipe_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    servings_eaten: Mapped[float | None] = mapped_column(Float, nullable=True)

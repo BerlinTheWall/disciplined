@@ -48,7 +48,7 @@ const STEPS: Array<{
   {
     mode: "spotlight",
     selector: '[data-tour="menu"]',
-    text: "Everything else — meals, recipes, workouts, habits, expenses — lives in this menu. Open it.",
+    text: "Everything else — habits, goals — lives in this menu. Open it.",
   },
   {
     mode: "banner",

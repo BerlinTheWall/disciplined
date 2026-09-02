@@ -8,7 +8,6 @@ import {
   Calendar,
   Check,
   CheckCircle2,
-  ChefHat,
   ChevronRight,
   Clock,
   Flag,
@@ -37,7 +36,6 @@ import CalendarMonth from "./CalendarMonth";
 import { findTimeConflicts } from "./dayRows";
 import { FieldPanel, FieldRow, type EditRowKey } from "./FieldPanel";
 import { GoalLinkSection } from "./GoalLinkSection";
-import { RecipeLinkSection } from "./LinkSections";
 import type { EditItem } from "./Timeline";
 import TimeWheel from "./TimeWheel";
 import NumberWheel from "@/components/NumberWheel";
@@ -46,7 +44,7 @@ import { deleteSyncWarning } from "@/lib/calendarSync";
 import { isLightColor } from "@/lib/color";
 import { addDaysISO, formatFullDate, formatShortDate, relativeDayLabel } from "@/lib/date";
 import { anchorDay } from "@/lib/habits";
-import { guessIcon, guessLinkKind, ICONS } from "@/lib/icons";
+import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
 import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
 import {
@@ -67,7 +65,6 @@ import type { PendingMilestoneLink } from "@/store/goalFocusStore";
 import { useGoalStore } from "@/store/goalStore";
 import { useHabitStore } from "@/store/habitStore";
 import { usePresetStore } from "@/store/presetStore";
-import { useRecipeStore } from "@/store/recipeStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTaskStore } from "@/store/taskStore";
 import type { Priority } from "@/types/task";
@@ -133,7 +130,7 @@ export default function AddItemSheet({
   // task/habit mutation above goes through the store actions directly.
   const allTasks = useTaskStore((s) => s.tasks);
   const allHabits = useHabitStore((s) => s.habits);
-  const recipes = useRecipeStore((s) => s.recipes);
+  const goals = useGoalStore((s) => s.goals);
   const addPreset = usePresetStore((s) => s.addPreset);
   const confirm = useConfirm();
   const choose = useChoose();
@@ -163,8 +160,6 @@ export default function AddItemSheet({
   const [repeatInterval, setRepeatInterval] = useState(1);
   const [dayOfMonth, setDayOfMonth] = useState(1);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [workoutSessionId, setWorkoutSessionId] = useState<string | undefined>(undefined);
-  const [recipeId, setRecipeId] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<Priority | null>(null);
   const [goalLink, setGoalLink] = useState<string | null>(null);
   const [goalWeight, setGoalWeight] = useState<number | null>(null);
@@ -187,7 +182,6 @@ export default function AddItemSheet({
   const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
   const [done, setDone] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
-  const [suggestDismissed, setSuggestDismissed] = useState(false);
   const [saveAsPreset, setSaveAsPreset] = useState(false);
 
   useEffect(() => {
@@ -196,7 +190,6 @@ export default function AddItemSheet({
     setDir(1);
     setOpenRow(null);
     setStyleOpen(false);
-    setSuggestDismissed(false);
     setSaveAsPreset(false);
     if (editItem) {
       setDone(
@@ -230,8 +223,6 @@ export default function AddItemSheet({
         )
       );
       setEndDate(editItem.type === "habit" ? (editItem.data.endDate ?? null) : null);
-      setWorkoutSessionId(editItem.data.workoutSessionId ?? undefined);
-      setRecipeId(editItem.data.recipeId ?? undefined);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
       const linkedGoal =
         editItem.type === "task"
@@ -270,8 +261,6 @@ export default function AddItemSheet({
     setFreq("weekly");
     setRepeatInterval(1);
     setEndDate(null);
-    setWorkoutSessionId(undefined);
-    setRecipeId(undefined);
     setPriority(null);
     // Pre-link when the sheet was opened from a milestone's own "+ Add task"
     // — takes priority over a plain goal-level link, since the two are
@@ -294,16 +283,6 @@ export default function AddItemSheet({
     if (value !== null && notifyPermission() === "default") {
       void requestNotifyPermission();
     }
-  }
-
-  function linkRecipe(id: string | undefined) {
-    setRecipeId(id);
-    if (!id) return;
-    setWorkoutSessionId(undefined);
-    const recipe = recipes.find((r) => r.id === id);
-    if (!recipe) return;
-    setColor(recipe.color);
-    if (!iconTouched) setIcon("meal");
   }
 
   function handleTitleChange(value: string) {
@@ -470,8 +449,6 @@ export default function AddItemSheet({
           anchorDate,
           endDate: finalEndDate,
           reminderMinutesBefore: reminder,
-          workoutSessionId,
-          recipeId,
         });
         deleteTask(editItem!.data.id);
       } else {
@@ -490,8 +467,6 @@ export default function AddItemSheet({
           date,
           priority,
           reminderMinutesBefore: reminder,
-          workoutSessionId,
-          recipeId,
         });
         deleteHabit(editItem!.data.id);
       }
@@ -511,8 +486,6 @@ export default function AddItemSheet({
           date,
           priority,
           reminderMinutesBefore: reminder,
-          workoutSessionId: workoutSessionId ?? null,
-          recipeId: recipeId ?? null,
         });
         useGoalStore.getState().linkTask(goalLink, editItem!.data.id);
         if (goalLink) useGoalStore.getState().setWeight(goalLink, editItem!.data.id, goalWeight);
@@ -529,8 +502,6 @@ export default function AddItemSheet({
           anchorDate,
           endDate: finalEndDate,
           reminderMinutesBefore: reminder,
-          workoutSessionId: workoutSessionId ?? null,
-          recipeId: recipeId ?? null,
         });
       }
     } else {
@@ -544,8 +515,6 @@ export default function AddItemSheet({
           date,
           priority,
           reminderMinutesBefore: reminder,
-          workoutSessionId,
-          recipeId,
         });
         if (pendingMilestone) {
           useGoalStore
@@ -581,8 +550,6 @@ export default function AddItemSheet({
           anchorDate,
           endDate: finalEndDate,
           reminderMinutesBefore: reminder,
-          workoutSessionId,
-          recipeId,
         });
       }
     }
@@ -644,13 +611,7 @@ export default function AddItemSheet({
   const endLabel = endMin >= MINUTES_PER_DAY ? "midnight" : formatTimeLabel(endMin);
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
-  const linkedRecipe = recipes.find((r) => r.id === recipeId);
-
-  // Title/icon smells like a meal but nothing is linked yet — offer a
-  // one-tap link without making the user dig into Advanced settings.
-  const guessedKind = guessLinkKind(title, icon);
-  const linkSuggestion =
-    guessedKind === "meal" && !recipeId && recipes.length > 0 ? ("meal" as const) : null;
+  const linkedGoal = goals.find((g) => g.id === goalLink);
 
   /* ---- field sections — shared by the wizard (create) and the single
      scrollable form (edit) ----------------------------------------- */
@@ -1086,16 +1047,6 @@ export default function AddItemSheet({
           {priorityButtons}
         </div>
       </Collapse>
-      {recipes.length > 0 && (
-        <div className="mt-4">
-          <RecipeLinkSection
-            recipeId={recipeId}
-            onLink={linkRecipe}
-            color={color}
-            onSheetClose={onClose}
-          />
-        </div>
-      )}
       {mode === "task" && !pendingMilestone && (
         <div className="mt-4">
           <GoalLinkSection
@@ -1304,67 +1255,25 @@ export default function AddItemSheet({
               </div>
 
               {/* Extras */}
-              {(mode === "task" || recipes.length > 0) && (
+              {mode === "task" && (
                 <div className="rounded-2xl bg-surface-alt divide-y divide-border-strong overflow-hidden">
-                  {mode === "task" && (
-                    <FieldRow
-                      icon={Flag}
-                      value={priority ? `${PRIORITY_META[priority].label} priority` : "No priority"}
-                      muted={!priority}
-                      onPress={() => setOpenRow("priority")}
-                    />
-                  )}
-                  {recipes.length > 0 && (
+                  <FieldRow
+                    icon={Flag}
+                    value={priority ? `${PRIORITY_META[priority].label} priority` : "No priority"}
+                    muted={!priority}
+                    onPress={() => setOpenRow("priority")}
+                  />
+                  {!pendingMilestone && (
                     <FieldRow
                       icon={Link2}
-                      value={linkedRecipe?.name ?? "No link"}
-                      hint={linkedRecipe ? "Recipe" : undefined}
-                      muted={!linkedRecipe}
+                      value={linkedGoal?.title ?? "No link"}
+                      hint={linkedGoal ? "Goal" : undefined}
+                      muted={!linkedGoal}
                       onPress={() => setOpenRow("links")}
                     />
                   )}
                 </div>
               )}
-
-              {/* -mb-4/pb-4 cancel the stack's gap while collapsed so the
-                      card's disappearance doesn't end with a spacing jump. */}
-              <Collapse
-                open={!!linkSuggestion && !suggestDismissed}
-                outerClassName="-mb-4"
-                className="pb-4"
-              >
-                <div className="rounded-2xl bg-surface-alt p-3">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
-                      <ChefHat size={13} />
-                      This looks like a meal — link a recipe?
-                    </p>
-                    <motion.button
-                      onClick={() => setSuggestDismissed(true)}
-                      whileTap={tap}
-                      className="shrink-0 text-fg-faint"
-                    >
-                      <X size={15} />
-                    </motion.button>
-                  </div>
-                  <div
-                    className="wheel-col flex gap-2 overflow-x-auto"
-                    style={{ scrollbarWidth: "none" }}
-                  >
-                    {recipes.map((r) => (
-                      <motion.button
-                        key={r.id}
-                        onClick={() => linkRecipe(r.id)}
-                        whileTap={tap}
-                        className={`flex items-center gap-1.5 ${chipCls(false)}`}
-                      >
-                        <ChefHat size={14} />
-                        {r.name}
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-              </Collapse>
 
               <motion.button
                 onClick={handleSubmit}
@@ -1574,12 +1483,6 @@ export default function AddItemSheet({
         {openRow === "priority" && priorityButtons}
         {openRow === "links" && (
           <div className="flex flex-col gap-4">
-            <RecipeLinkSection
-              recipeId={recipeId}
-              onLink={linkRecipe}
-              color={color}
-              onSheetClose={onClose}
-            />
             {mode === "task" && !pendingMilestone && (
               <GoalLinkSection
                 goalId={goalLink}

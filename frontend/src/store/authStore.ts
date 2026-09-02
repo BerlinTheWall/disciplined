@@ -39,15 +39,8 @@ const USER_DATA_STORE_KEYS = [
   // synced with the backend
   "disciplined-tasks",
   "disciplined-habits",
-  "disciplined-workouts",
-  "disciplined-meals",
   "disciplined-goals",
   // device-local user content
-  "disciplined-grocery",
-  "disciplined-expenses",
-  "disciplined-recipes",
-  "disciplined-shopping",
-  "disciplined-preferences",
   "disciplined-profile",
   "disciplined-reminders",
   "disciplined-presets",
