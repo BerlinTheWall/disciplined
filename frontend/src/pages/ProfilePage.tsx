@@ -9,9 +9,11 @@ import {
   LoaderCircle,
   LogOut,
   Pencil,
+  ShieldOff,
 } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Heatmap, Ring } from "@/components/profile/ProfileCharts";
 import ProfileDetailSheet, {
   type ProfileDetailKind,
@@ -31,6 +33,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useHabitStore } from "@/store/habitStore";
 import { useProfileStore } from "@/store/profileStore";
 import { useTaskStore } from "@/store/taskStore";
+import { useToastStore } from "@/store/toastStore";
 
 const ACCENT = "#9ec06a"; // the app's soft-green progress accent
 
@@ -153,11 +156,33 @@ export default function ProfilePage() {
   );
   const account = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const logoutOtherDevices = useAuthStore((s) => s.logoutOtherDevices);
   const updateDisplayName = useAuthStore((s) => s.updateDisplayName);
+  const confirm = useConfirm();
   const name = account?.displayName ?? "";
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loggingOutOthers, setLoggingOutOthers] = useState(false);
+
+  async function handleLogoutOtherDevices() {
+    const ok = await confirm({
+      title: "Log out of other devices?",
+      message:
+        "This device stays signed in. Any other device signed into this account will be signed out.",
+      confirmLabel: "Log out others",
+    });
+    if (!ok) return;
+    setLoggingOutOthers(true);
+    try {
+      await logoutOtherDevices();
+      useToastStore.getState().show("Other devices signed out");
+    } catch {
+      useToastStore.getState().show("Couldn't do that — try again", "error");
+    } finally {
+      setLoggingOutOthers(false);
+    }
+  }
   // Which card's full-detail sheet is open — every showcase card below opens
   // one (see ProfileDetailSheet: month-over-month charts + a written summary).
   const [detail, setDetail] = useState<ProfileDetailKind | null>(null);
@@ -450,6 +475,19 @@ export default function ProfilePage() {
             Log out
           </motion.button>
         </div>
+        <motion.button
+          whileTap={tap}
+          onClick={handleLogoutOtherDevices}
+          disabled={loggingOutOthers}
+          className="mt-3 flex w-full items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-2 text-sm font-medium text-fg-muted disabled:opacity-60"
+        >
+          {loggingOutOthers ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <ShieldOff size={15} />
+          )}
+          Log out of other devices
+        </motion.button>
       </Card>
 
       <ProfileDetailSheet kind={detail} onClose={() => setDetail(null)} />

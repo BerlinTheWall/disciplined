@@ -50,6 +50,12 @@ class User(Base):
     # as a segmentation signal. Nullable: optional question, skippable, and
     # every account created before this existed has none.
     segment: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Stamped into every access token's "tv" claim (see app.auth) and checked
+    # on every request — bumping this instantly invalidates every token
+    # issued before the bump, without touching JWT_SECRET (which would log
+    # out every user on the platform, not just this one). Incremented on
+    # password reset and by POST /api/auth/logout-everywhere.
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class EmailCode(Base):

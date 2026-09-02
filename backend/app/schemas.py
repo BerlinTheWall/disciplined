@@ -122,7 +122,7 @@ Priority = Literal["low", "medium", "high"]
 
 
 class EventBase(CamelModel):
-    title: str
+    title: str = Field(max_length=200)
     date: str  # ISO date, e.g. "2026-07-05"
     start_minutes: int = Field(ge=0, lt=24 * 60)
     duration_minutes: int = Field(gt=0)
@@ -144,7 +144,7 @@ class EventCreate(EventBase):
 
 
 class EventUpdate(CamelModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=200)
     date: str | None = None
     start_minutes: int | None = Field(default=None, ge=0, lt=24 * 60)
     duration_minutes: int | None = Field(default=None, gt=0)
@@ -170,7 +170,7 @@ class EventOut(EventBase):
 
 
 class HabitBase(CamelModel):
-    title: str
+    title: str = Field(max_length=200)
     start_minutes: int = Field(ge=0, lt=24 * 60)
     duration_minutes: int = Field(gt=0)
     color: str = "#6366f1"
@@ -225,7 +225,7 @@ class HabitCreate(HabitBase):
 
 
 class HabitUpdate(CamelModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=200)
     start_minutes: int | None = Field(default=None, ge=0, lt=24 * 60)
     duration_minutes: int | None = Field(default=None, gt=0)
     color: str | None = None
@@ -276,7 +276,7 @@ GoalPeriod = Literal["week", "month", "year"]
 
 class GoalMilestone(CamelModel):
     id: str
-    label: str
+    label: str = Field(max_length=200)
     done: bool = False
     # Percent of the goal this milestone is worth. Optional — omitted
     # milestones split whatever's left of 100 evenly (see goalProgress.ts).
@@ -290,23 +290,23 @@ class GoalMilestone(CamelModel):
 class GoalBase(CamelModel):
     period: GoalPeriod
     period_key: str
-    title: str
-    note: str | None = None
+    title: str = Field(max_length=200)
+    note: str | None = Field(default=None, max_length=2000)
     done: bool = False
     target: int | None = Field(default=None, ge=1)
     progress: int = Field(default=0, ge=0)
     priority: Priority | None = None
-    category: str | None = None
+    category: str | None = Field(default=None, max_length=100)
     # A short, public blurb of what the goal is — distinct from `note`, the
     # private "why". Set at creation time, optionally AI-drafted.
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=500)
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
     order: int = 0
     linked_task_ids: list[str] = []
     linked_goal_ids: list[str] = []
     weights: dict[str, int] = {}
-    milestones: list[GoalMilestone] = []
+    milestones: list[GoalMilestone] = Field(default=[], max_length=50)
     created_at: int = 0
 
 
@@ -317,21 +317,21 @@ class GoalCreate(GoalBase):
 class GoalUpdate(CamelModel):
     period: GoalPeriod | None = None
     period_key: str | None = None
-    title: str | None = None
-    note: str | None = None
+    title: str | None = Field(default=None, max_length=200)
+    note: str | None = Field(default=None, max_length=2000)
     done: bool | None = None
     target: int | None = Field(default=None, ge=1)
     progress: int | None = Field(default=None, ge=0)
     priority: Priority | None = None
-    category: str | None = None
-    description: str | None = None
+    category: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
     order: int | None = None
     linked_task_ids: list[str] | None = None
     linked_goal_ids: list[str] | None = None
     weights: dict[str, int] | None = None
-    milestones: list[GoalMilestone] | None = None
+    milestones: list[GoalMilestone] | None = Field(default=None, max_length=50)
     created_at: int | None = None
 
 
@@ -347,10 +347,10 @@ class GoalOut(GoalBase):
 
 
 class MilestoneSuggestRequest(CamelModel):
-    title: str
-    description: str | None = None
-    category: str | None = None
-    note: str | None = None
+    title: str = Field(max_length=200)
+    description: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=100)
+    note: str | None = Field(default=None, max_length=2000)
     period: GoalPeriod
     duration_count: int | None = Field(default=None, ge=1)
 
@@ -375,8 +375,8 @@ class MilestoneSuggestResponse(CamelModel):
 
 
 class GoalDescriptionRequest(CamelModel):
-    title: str
-    category: str | None = None
+    title: str = Field(max_length=200)
+    category: str | None = Field(default=None, max_length=100)
     period: GoalPeriod
     duration_count: int | None = Field(default=None, ge=1)
 
@@ -396,7 +396,7 @@ class GoalDescriptionResponse(CamelModel):
 
 class MilestoneWindow(CamelModel):
     id: str
-    label: str
+    label: str = Field(max_length=200)
     # The slice of the goal's own timeline this milestone gets — computed
     # client-side from its weight (goalProgress.ts's autoSplitWeights), so
     # the model only ever proposes sessions inside where they actually
@@ -406,8 +406,8 @@ class MilestoneWindow(CamelModel):
 
 
 class GoalScheduleRequest(CamelModel):
-    goal_title: str
-    milestones: list[MilestoneWindow]
+    goal_title: str = Field(max_length=200)
+    milestones: list[MilestoneWindow] = Field(max_length=50)
     client_date: str | None = None
 
 
@@ -427,12 +427,15 @@ class GoalScheduleResponse(CamelModel):
 
 class ChatMessage(CamelModel):
     role: Literal["user", "model"]
-    content: str
+    content: str = Field(max_length=4000)
 
 
 class ChatRequest(CamelModel):
-    message: str
-    history: list[ChatMessage] = []
+    message: str = Field(max_length=4000)
+    # Generous enough for a real back-and-forth; bounds how much a single
+    # request can force through the tool-calling loop and bill against the
+    # Gemini key (see services/gemini.py's run_chat).
+    history: list[ChatMessage] = Field(default=[], max_length=60)
     # The client's local calendar date ("2026-07-07"). The server may be in a
     # different timezone (e.g. UTC on Railway), so "today"/"tomorrow" must be
     # resolved against the user's clock, not the server's.
@@ -481,14 +484,14 @@ class WeekPlanPreference(CamelModel):
 
     kind: Literal["interest", "goal"]
     id: str
-    title: str
-    times_per_week: int
+    title: str = Field(max_length=200)
+    times_per_week: int = Field(ge=1, le=14)
     time_of_day: WeekPlanTimeOfDay = "any"
 
 
 class WeekPlanRequest(CamelModel):
     client_date: str | None = None
-    preferences: list[WeekPlanPreference] = []
+    preferences: list[WeekPlanPreference] = Field(default=[], max_length=30)
 
 
 class WeekPlanResponse(CamelModel):
@@ -500,7 +503,7 @@ class WeekPlanResponse(CamelModel):
 
 
 class InterestBase(CamelModel):
-    title: str
+    title: str = Field(max_length=200)
     icon: str = "default"
     created_at: int = 0
 

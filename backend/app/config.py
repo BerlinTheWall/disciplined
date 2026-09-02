@@ -1,3 +1,4 @@
+import os
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import field_validator
@@ -8,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # one that carries meaning (sslmode) into asyncpg's own `ssl` param.
 _LIBPQ_ONLY_PARAMS = {"sslmode", "target_session_attrs", "channel_binding", "gssencmode"}
 _SSLMODE_REQUIRES_TLS = {"require", "verify-ca", "verify-full"}
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def normalize_database_url(url: str) -> str:
@@ -28,6 +30,16 @@ def normalize_database_url(url: str) -> str:
         params.pop(key, None)
     # asyncpg spells it `ssl`; anything short of `require` is its default anyway.
     if sslmode in _SSLMODE_REQUIRES_TLS:
+        params["ssl"] = "true"
+    # Belt and suspenders: don't just forward whatever sslmode (or lack of
+    # one) the URL happened to carry. Any non-loopback host defaults to
+    # requiring TLS on its own — a provider URL with no sslmode at all (or
+    # "prefer"/"allow", which silently accept plaintext) would otherwise
+    # connect unencrypted with nothing surfacing that. An explicit
+    # sslmode=disable is still honored as a deliberate, informed opt-out
+    # (e.g. a known-private network) rather than overridden.
+    host = (parts.hostname or "").lower()
+    if host not in _LOOPBACK_HOSTS and sslmode != "disable":
         params["ssl"] = "true"
 
     return urlunsplit(
@@ -108,3 +120,17 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+_DEFAULT_JWT_SECRET = "dev-secret-change-me"
+# RAILWAY_ENVIRONMENT_NAME is auto-injected by Railway on every deployed
+# service — a reliable "this isn't someone's laptop" signal with zero extra
+# config. Local dev (where that var is absent) can still run with the
+# built-in default; a real deploy can't, so a forgotten JWT_SECRET fails
+# loudly at boot instead of quietly shipping a forgeable signing key.
+if settings.jwt_secret == _DEFAULT_JWT_SECRET and os.environ.get("RAILWAY_ENVIRONMENT_NAME"):
+    raise RuntimeError(
+        "JWT_SECRET is still the built-in default while running on Railway "
+        "(RAILWAY_ENVIRONMENT_NAME is set) — refusing to start with a forgeable "
+        "signing key. Set a real JWT_SECRET in this service's environment variables "
+        '(generate one with: python -c "import secrets; print(secrets.token_hex(32))").'
+    )

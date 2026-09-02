@@ -38,6 +38,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Disciplined API", lifespan=lifespan)
 
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Baseline hardening headers on every response. Cheap and harmless even
+    where they don't fully apply (HSTS on a local http:// dev server, say) —
+    browsers/clients simply ignore what doesn't apply to their connection."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

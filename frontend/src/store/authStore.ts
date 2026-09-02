@@ -4,8 +4,10 @@ import { persist } from "zustand/middleware";
 import { api, setToken, type AuthUser, type UserSegment } from "@/lib/api";
 import { deviceTimezone } from "@/lib/timezone";
 
-// The signed-in account. The JWT itself lives in localStorage via api.ts
-// (setToken); this store holds who is logged in and drives the auth gate.
+// The signed-in account. The JWT itself lives in lib/tokenStorage.ts
+// (Keychain/Keystore on iOS/Android, localStorage on web) via api.ts's
+// re-exported setToken; this store holds who is logged in and drives the
+// auth gate.
 interface State {
   user: AuthUser | null;
 }
@@ -16,7 +18,10 @@ interface Actions {
   // succeeds (see routers/auth.py). Callers should follow this with the
   // verify-code step, not treat it like login/verifyEmail.
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  // Signs out every other device signed into this account, without signing
+  // this one out too — see api.ts's logoutEverywhere.
+  logoutOtherDevices: () => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendVerification: (email: string) => Promise<string>;
   forgotPassword: (email: string) => Promise<string>;
@@ -59,14 +64,17 @@ export const useAuthStore = create<State & Actions>()(
       user: null,
       login: async (email, password) => {
         const { token, user } = await api.auth.login(email, password);
-        setToken(token);
+        // Awaited: a store update fires effects (startSync, etc.) that
+        // immediately call the API and read the token back — it has to be
+        // written before `user` changes, not just kicked off.
+        await setToken(token);
         set({ user });
       },
       register: async (email, password, firstName, lastName) => {
         await api.auth.register(email, password, firstName, lastName, deviceTimezone());
       },
-      logout: () => {
-        setToken(null);
+      logout: async () => {
+        await setToken(null);
         for (const key of USER_DATA_STORE_KEYS) localStorage.removeItem(key);
         // Clear the persisted auth directly rather than set({ user: null }) —
         // a store update would re-render the app to the login page right
@@ -76,9 +84,16 @@ export const useAuthStore = create<State & Actions>()(
         localStorage.removeItem("disciplined-auth");
         window.location.reload();
       },
+      logoutOtherDevices: async () => {
+        const { token, user } = await api.auth.logoutEverywhere();
+        // This device gets the freshly reissued token so it stays signed
+        // in — every other device holding an old token is now logged out.
+        await setToken(token);
+        set({ user });
+      },
       verifyEmail: async (email, code) => {
         const { token, user } = await api.auth.verifyEmail(email, code);
-        setToken(token);
+        await setToken(token);
         set({ user });
       },
       resendVerification: async (email) => {
@@ -91,7 +106,7 @@ export const useAuthStore = create<State & Actions>()(
       },
       resetPassword: async (email, code, newPassword) => {
         const { token, user } = await api.auth.resetPassword(email, code, newPassword);
-        setToken(token);
+        await setToken(token);
         set({ user });
       },
       syncTimezone: async () => {

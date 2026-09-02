@@ -1,4 +1,5 @@
 import { todayISODate } from "@/lib/date";
+import { getToken, setToken } from "@/lib/tokenStorage";
 import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
 import type { Interest } from "@/types/interest";
@@ -56,21 +57,14 @@ function errorMessageFromBody(body: unknown): string | null {
   return null;
 }
 
-// Login token, kept as a plain localStorage entry (not in a zustand store) so
-// it is readable here without importing any store and before stores hydrate.
-const TOKEN_KEY = "disciplined-token";
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string | null): void {
-  if (token === null) localStorage.removeItem(TOKEN_KEY);
-  else localStorage.setItem(TOKEN_KEY, token);
-}
+// Login token — Keychain/Keystore-backed on iOS/Android, localStorage on web.
+// See lib/tokenStorage.ts for why (not a store: readable here without
+// importing one, and before stores hydrate). Re-exported so existing callers
+// (authStore.ts) don't need to know it moved.
+export { getToken, setToken };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
+  const token = await getToken();
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
@@ -381,6 +375,12 @@ export const api = {
         body: JSON.stringify({ email, password }),
       }),
     me: (): Promise<AuthUser> => request("/api/auth/me"),
+    // Invalidates every access token issued before this call, including the
+    // one used to make it — the server reissues a fresh one (returned here)
+    // so this device stays signed in while every other one is logged out on
+    // its next request. See backend/app/routers/auth.py's logout_everywhere.
+    logoutEverywhere: (): Promise<AuthResponse> =>
+      request("/api/auth/logout-everywhere", { method: "POST" }),
     // Public (email + code, not the bearer token) — this is the only way in
     // for an unverified account, so it can't require the session it grants.
     verifyEmail: (email: string, code: string): Promise<AuthResponse> =>
@@ -520,7 +520,7 @@ export const api = {
   // longer, user-initiated reads (day briefings) pass a more patient timeout,
   // since synthesis time grows with text length.
   tts: async (text: string, timeoutMs = 10_000, voice?: string): Promise<Blob> => {
-    const token = getToken();
+    const token = await getToken();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {

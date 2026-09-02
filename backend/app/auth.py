@@ -29,9 +29,10 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str) -> str:
+def create_access_token(user: User) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    return jwt.encode({"sub": user_id, "exp": expires}, settings.jwt_secret, algorithm=_ALGORITHM)
+    payload = {"sub": user.id, "tv": user.token_version, "exp": expires}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=_ALGORITHM)
 
 
 def _unauthorized(detail: str) -> HTTPException:
@@ -53,4 +54,11 @@ async def get_current_user(
     user = await db.get(User, payload.get("sub"))
     if user is None:
         raise _unauthorized("User no longer exists")
+    # "tv" is absent on tokens minted before this claim existed — those still
+    # carry token_version 0 implicitly, which matches every account's
+    # starting value, so nothing already-issued breaks. A mismatch means
+    # token_version has since been bumped (password reset, logout-everywhere)
+    # — this token was live at the time and is being deliberately killed.
+    if payload.get("tv", 0) != user.token_version:
+        raise _unauthorized("Session expired — please log in again")
     return user

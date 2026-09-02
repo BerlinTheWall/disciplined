@@ -135,12 +135,27 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         # usable yet — the frontend uses this status to route straight to the
         # verify-code sheet instead of showing a generic error.
         raise HTTPException(status_code=403, detail="Verify your email before logging in.")
-    return AuthResponse(token=create_access_token(user.id), user=UserOut.model_validate(user))
+    return AuthResponse(token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/logout-everywhere", response_model=AuthResponse)
+async def logout_everywhere(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Invalidates every access token issued before this call, including the
+    one used to make it (see auth.py's "tv" check) — the right response to
+    "I think my session/token leaked." Returns a fresh token for this device
+    so the caller stays signed in; every other device holding an old token
+    gets logged out on its next request."""
+    user.token_version += 1
+    await db.commit()
+    return AuthResponse(token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @router.post("/verify-email", response_model=AuthResponse)
@@ -158,7 +173,7 @@ async def verify_email(body: VerifyEmailRequest, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=400, detail="Incorrect or expired code")
     user.email_verified = True
     await db.commit()
-    return AuthResponse(token=create_access_token(user.id), user=UserOut.model_validate(user))
+    return AuthResponse(token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
@@ -184,16 +199,20 @@ async def resend_verification(
 async def forgot_password(
     body: ForgotPasswordRequest, background: BackgroundTasks, db: AsyncSession = Depends(get_db)
 ):
+    # Same response regardless of whether the email exists — don't let this
+    # endpoint be used to enumerate which addresses have accounts (matches
+    # resend_verification's pattern above).
+    generic = MessageResponse(message="If that email has an account, a reset code is on its way.")
     user = await db.scalar(select(User).where(User.email == body.email.lower()))
     if user is None:
-        raise HTTPException(status_code=404, detail="No account found with that email.")
+        return generic
     if await seconds_until_resend(db, user.id, "reset") > 0:
-        return MessageResponse(message="A reset code was already sent — check your email.")
+        return generic
     await _send_code(
         db, background, user, "reset", "Reset your password",
         "Enter this code in Disciplined to reset your password:",
     )
-    return MessageResponse(message="A reset code has been sent to your email.")
+    return generic
 
 
 @router.post("/reset-password", response_model=AuthResponse)
@@ -209,8 +228,14 @@ async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(
     # Successfully using a code mailed to this address is itself proof of
     # ownership — piggyback the verification instead of making them do both.
     user.email_verified = True
+    # A reset is exactly the moment an account may have been compromised —
+    # kill every token issued before now (see auth.py's "tv" check) so a
+    # stolen session doesn't survive the very fix meant to lock it out.
+    # The token below is minted after this bump, so it carries the new
+    # version and stays valid.
+    user.token_version += 1
     await db.commit()
-    return AuthResponse(token=create_access_token(user.id), user=UserOut.model_validate(user))
+    return AuthResponse(token=create_access_token(user), user=UserOut.model_validate(user))
 
 
 @router.patch("/timezone", response_model=UserOut)
