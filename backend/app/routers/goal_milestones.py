@@ -3,10 +3,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from google.genai import errors as genai_errors
 
-from app.auth import get_current_user
 from app.models import User
 from app.schemas import MilestoneSuggestRequest, MilestoneSuggestResponse
 from app.services.goal_milestones import suggest_milestones
+from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/goal-milestones", tags=["goal-milestones"])
 logger = logging.getLogger("uvicorn.error")
@@ -15,7 +15,7 @@ logger = logging.getLogger("uvicorn.error")
 @router.post("/suggest", response_model=MilestoneSuggestResponse)
 async def suggest(
     body: MilestoneSuggestRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_tier("plus")),
 ):
     """Proposes milestones for a goal. Nothing is written here — the client
     adds whatever the user accepts through the normal goal endpoints, same

@@ -40,11 +40,14 @@ class User(Base):
     # passes — a lockout always grants a clean slate rather than stacking.
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     login_locked_until: Mapped[str | None] = mapped_column(String, nullable=True)  # ISO datetime, UTC
-    # Caps how many proactive coach check-ins fire per day (see
-    # services/coach.py's TIER_BUDGET). No billing exists yet, so this
-    # defaults everyone to the top tier; wiring real subscriptions later is
-    # just writing to this column instead of building the budget logic.
-    coach_tier: Mapped[str] = mapped_column(String, default="plus")  # "free" | "plus"
+    # The one source of truth for which subscription tier this account is on
+    # — gates entire features (see app.tiers.require_tier, used across
+    # chat/tts/nudges/week_plan/goal_* routers) and sizes budgets within them
+    # (services/coach.py's TIER_BUDGET, routers/tts.py's quota). No billing
+    # exists yet, so this defaults everyone to "pro"; wiring real
+    # subscriptions later is just writing to this column per account instead
+    # of building the gating logic.
+    subscription_tier: Mapped[str] = mapped_column(String, default="pro")  # "free" | "plus" | "pro"
     # Self-reported during onboarding (see OnboardingWizard.tsx's "what best
     # describes you" step) — picks which fake-week demo they see and doubles
     # as a segmentation signal. Nullable: optional question, skippable, and
@@ -268,3 +271,47 @@ class GoogleCalendarConnection(Base):
     connected_at: Mapped[str] = mapped_column(String)  # ISO datetime, UTC
     # See OutlookConnection.last_synced_at — same purpose, for Google.
     last_synced_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class TtsUsage(Base):
+    """Characters spent on the "routine" TTS bucket (reminders, chat replies,
+    weekly/monthly recaps — see routers/tts.py) per user per calendar month.
+    Deliberately excludes the daily briefing, which has its own separate,
+    guaranteed allowance (BriefingUsage below) precisely so heavy routine
+    usage can never crowd it out — see that class's docstring. Persisted
+    (not in-memory) so a redeploy can't silently reset an over-quota user's
+    count. Only rows for months with any usage exist; a missing row means 0.
+    """
+
+    __tablename__ = "tts_usage"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    year_month: Mapped[str] = mapped_column(String, primary_key=True)  # "2026-09"
+    chars_used: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class BriefingUsage(Base):
+    """The guaranteed daily-briefing allowance (see routers/tts.py) — kept
+    entirely separate from TtsUsage's routine pool so a heavy chat/reminder
+    month can never crowd out the one feature someone specifically pays to
+    have every day. A user replaying the exact same briefing text hits the
+    synthesis cache and never reaches this counter at all; this only counts
+    genuinely new syntheses, which realistically happens once a day."""
+
+    __tablename__ = "briefing_usage"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[str] = mapped_column(String, primary_key=True)  # "2026-09-03"
+    count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ChatUsage(Base):
+    """Chat turns actually sent to Gemini per user per day (see
+    routers/chat.py) — H3's rate limit, closing the gap where /api/chat had
+    no throttling at all despite being the single largest AI cost driver."""
+
+    __tablename__ = "chat_usage"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[str] = mapped_column(String, primary_key=True)  # "2026-09-03"
+    count: Mapped[int] = mapped_column(Integer, default=0)

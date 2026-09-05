@@ -25,11 +25,12 @@ from app.services.nudges import (
 
 logger = logging.getLogger("uvicorn.error")
 
-# No billing exists yet (see User.coach_tier); this is the whole seam real
-# subscriptions will plug into later — upgrading a user is just changing
-# their column, not touching this budget map.
-TIER_BUDGET = {"free": 1, "plus": 3}
-DEFAULT_TIER = "plus"
+# The proactive coach itself is Pro-only (see routers/coach.py's
+# require_tier("pro")), so in practice this only ever sees "pro" accounts —
+# free/plus are kept here anyway so the budget stays sane if that gate is
+# ever loosened, without needing to touch this map again.
+TIER_BUDGET = {"free": 1, "plus": 2, "pro": 3}
+DEFAULT_TIER = "pro"
 
 _TITLES = {
     "streak_milestone": "Streak milestone",
@@ -70,7 +71,7 @@ async def plan_checkpoints(
     now_minutes: int,
     windows: list[CoachWindowInput],
 ) -> list[CoachCheckpointResult]:
-    budget = TIER_BUDGET.get(user.coach_tier, TIER_BUDGET[DEFAULT_TIER])
+    budget = TIER_BUDGET.get(user.subscription_tier, TIER_BUDGET[DEFAULT_TIER])
     open_windows = [w for w in windows if w.end_minutes > now_minutes][:budget]
     if not open_windows:
         return []

@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from google.genai import errors as genai_errors
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import GoalScheduleRequest, GoalScheduleResponse
 from app.services.goal_schedule import schedule_goal_milestones
+from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/goal-schedule", tags=["goal-schedule"])
 logger = logging.getLogger("uvicorn.error")
@@ -18,7 +18,7 @@ logger = logging.getLogger("uvicorn.error")
 async def goal_schedule(
     body: GoalScheduleRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_tier("pro")),
 ):
     """Drafts calendar sessions for a goal's milestones. Nothing is written
     here — the client sends the returned proposals' actions to

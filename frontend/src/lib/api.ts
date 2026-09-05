@@ -519,7 +519,18 @@ export const api = {
   // device voice". The abort keeps a slow server from stalling a reminder —
   // longer, user-initiated reads (day briefings) pass a more patient timeout,
   // since synthesis time grows with text length.
-  tts: async (text: string, timeoutMs = 10_000, voice?: string): Promise<Blob> => {
+  // purpose "briefing" draws from the backend's small guaranteed daily
+  // allowance on the premium voice (never crowded out by reminder/chat
+  // usage); "routine" (the default) shares the larger monthly budget on the
+  // cheaper voice instead — see routers/tts.py. The backend decides the
+  // actual voice for "routine" regardless of `voice`; it's only honored for
+  // "briefing".
+  tts: async (
+    text: string,
+    timeoutMs = 10_000,
+    voice?: string,
+    purpose: "briefing" | "routine" = "routine"
+  ): Promise<Blob> => {
     const token = await getToken();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -530,7 +541,7 @@ export const api = {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ text, voice }),
+        body: JSON.stringify({ text, voice, purpose }),
         signal: controller.signal,
       });
       if (!res.ok) throw new ApiError(res.status, "text-to-speech failed");

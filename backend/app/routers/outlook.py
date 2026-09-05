@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models import User
 from app.schemas import OutlookConnectResponse, OutlookReconcileResponse, OutlookStatusResponse
 from app.services import oauth_state, outlook_graph
+from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/outlook", tags=["outlook"])
 logger = logging.getLogger("uvicorn.error")
@@ -41,7 +42,7 @@ def _error_reason(exc: Exception) -> str:
 
 
 @router.get("/connect", response_model=OutlookConnectResponse)
-async def connect(return_to: str | None = None, user: User = Depends(get_current_user)):
+async def connect(return_to: str | None = None, user: User = Depends(require_tier("plus"))):
     try:
         authorize_url = outlook_graph.build_authorize_url(
             user.id, return_to=oauth_state.sanitize_return_to(return_to)
@@ -90,7 +91,7 @@ async def disconnect(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 async def reconcile(
     is_write_target: bool = False,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_tier("plus")),
 ):
     counts = await outlook_graph.reconcile_outlook_events(db, user.id, is_write_target=is_write_target)
     if counts is None:

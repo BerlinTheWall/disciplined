@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 *.db
 *.db-journal
+scripts/tts_samples/

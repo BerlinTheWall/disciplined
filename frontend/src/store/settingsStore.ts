@@ -29,7 +29,7 @@ interface SettingsState {
   // Master switch for every spoken voice in the app — reminders firing,
   // assistant chat replies, and read-aloud summaries/briefings. Opt-in —
   // unexpected audio is worse than none. The only voice used is the natural
-  // AI voice (see googleVoiceStore); there is no device-voice fallback.
+  // AI voice (see azureVoiceStore); there is no device-voice fallback.
   voiceEnabled: boolean;
   setVoiceEnabled: (on: boolean) => void;
   // Personality of spoken reminder lines (see assistantSpeech.ts) — warm and

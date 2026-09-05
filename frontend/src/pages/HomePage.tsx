@@ -259,7 +259,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
       );
       if (cancelled) return;
       setScript(s);
-      prefetchAssistantVoice(s ?? briefing);
+      prefetchAssistantVoice(s ?? briefing, 30_000, "briefing");
 
       // Morning ritual: on the first open of the day, speak the briefing —
       // or, when the browser blocks gesture-less audio, invite the tap.
@@ -272,7 +272,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
         document.visibilityState === "visible"
       ) {
         setLastMorningBriefingDate(today);
-        const played = await tryAutoPlay(s ?? briefing);
+        const played = await tryAutoPlay(s ?? briefing, "briefing");
         if (!played && !cancelled) setBriefingPrompt(true);
       }
     }, 800);
@@ -375,7 +375,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
         <motion.button
           onClick={() => {
             setBriefingPrompt(false);
-            toggleRead(script ?? briefing);
+            toggleRead(script ?? briefing, "briefing");
           }}
           whileTap={tap}
           animate={briefingPrompt && !reading && !loading ? { scale: [1, 1.06, 1] } : { scale: 1 }}

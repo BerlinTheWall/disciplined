@@ -1,7 +1,7 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 
 import { api } from "./api";
-import { useGoogleVoiceStore } from "@/store/googleVoiceStore";
+import { useAzureVoiceStore } from "@/store/azureVoiceStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
 // Spoken notification sounds for the packaged iOS app.
@@ -9,7 +9,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 // iOS never runs app code when a notification is delivered, so live TTS is
 // impossible with the app closed. Instead, while the app is open, each
 // upcoming reminder's spoken line is synthesized ahead of time (the natural
-// AI voice — see googleVoiceStore — via the backend, WAV) and saved under the
+// AI voice — see azureVoiceStore — via the backend, WAV) and saved under the
 // app's Library/Sounds directory, which is exactly where iOS resolves
 // notification sound names. The notification is then scheduled with that
 // file as its sound: when it fires, the phone speaks the reminder through the
@@ -41,7 +41,7 @@ async function naturalWav(text: string): Promise<Blob | null> {
   if (!useSettingsStore.getState().voiceEnabled) return null;
   if (Date.now() - naturalFailedAt < NATURAL_RETRY_COOLDOWN_MS) return null;
   try {
-    return await api.tts(text, 20_000, useGoogleVoiceStore.getState().voice);
+    return await api.tts(text, 20_000, useAzureVoiceStore.getState().voice);
   } catch (e) {
     naturalFailedAt = Date.now();
     console.warn("[reminders] natural voice unavailable, skipping spoken sound", e);
@@ -55,7 +55,7 @@ function textHash(text: string): string {
   return h.toString(16);
 }
 
-// The chosen Google voice folded into the cache key (same fix as
+// The chosen Azure voice folded into the cache key (same fix as
 // useSpeech.ts's fetchSpeech) — otherwise a line synthesized once under the
 // first-ever voice (Amy, the store's default) would look "already cached"
 // forever, and switching to Frank in Settings would never resynthesize it.
@@ -64,7 +64,7 @@ function textHash(text: string): string {
 // actually closed — while it's open, reminders speak via useSpeech's live,
 // already voice-scoped cache instead.
 function soundHash(text: string): string {
-  return textHash(`${useGoogleVoiceStore.getState().voice}:${text}`);
+  return textHash(`${useAzureVoiceStore.getState().voice}:${text}`);
 }
 
 type SoundIndex = Record<string, string>;

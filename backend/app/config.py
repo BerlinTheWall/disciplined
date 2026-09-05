@@ -64,15 +64,22 @@ class Settings(BaseSettings):
     # this tool-calling workload it adds cost, not quality. 0 disables; raise
     # (or set -1 for dynamic) if scheduling answers ever get noticeably worse.
     gemini_thinking_budget: int = 0
-    # Natural-voice reminders, via Google Cloud Text-to-Speech (a dedicated TTS
-    # API — far lower latency and cost than routing audio through a generative
-    # model). API key from a Google Cloud project with the "Cloud Text-to-Speech
-    # API" enabled: https://console.cloud.google.com/apis/library/texttospeech.googleapis.com
-    google_tts_api_key: str = ""
-    # Any Neural2/Chirp3-HD voice name works; the language code is derived
-    # from it (e.g. "en-US-Chirp3-HD-Aoede" -> "en-US"). Full list:
-    # https://cloud.google.com/text-to-speech/docs/voices
-    google_tts_voice: str = "en-US-Chirp3-HD-Aoede"
+    # Natural-voice reminders, via Azure AI Speech (a dedicated TTS API — far
+    # lower latency and cost than routing audio through a generative model).
+    # Create a Speech resource in the Azure portal (Free F0 tier covers this
+    # comfortably), then use its key and region here.
+    azure_speech_key: str = ""
+    azure_speech_region: str = ""
+    # Any Neural/HD voice name works; the language code is derived from it
+    # (e.g. "en-US-Ava:DragonHDLatestNeural" -> "en-US"). Full list:
+    # https://speech.microsoft.com/portal/voicegallery
+    azure_tts_voice: str = "en-US-Ava:DragonHDLatestNeural"
+    # The cheaper Standard-tier voice ($16/1M chars vs. HD's $22/1M) used for
+    # routine TTS (reminders, chat replies, weekly/monthly recaps — see
+    # routers/tts.py's purpose split) — high-volume utility speech doesn't
+    # need HD's expressiveness, and it's not user-selectable like the HD
+    # voice is (Settings > Voice), so there's no personality to preserve.
+    azure_tts_voice_standard: str = "en-US-AriaNeural"
     # Transactional email (verification codes, password reset) via Resend's
     # HTTP API. Blank in dev is fine — services/email.py falls back to
     # logging the email instead of sending it, so signup/reset stay testable

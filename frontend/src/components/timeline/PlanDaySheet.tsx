@@ -116,7 +116,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [script, setScript] = useState<string | null>(null);
 
   function toggleRead() {
-    toggle(script ?? briefing);
+    toggle(script ?? briefing, "briefing");
   }
 
   // Note: closing the sheet does NOT stop an in-progress reading — the
@@ -134,7 +134,7 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
       );
       if (cancelled) return;
       setScript(s);
-      prefetchAssistantVoice(s ?? briefing);
+      prefetchAssistantVoice(s ?? briefing, 30_000, "briefing");
     }, 500);
     return () => {
       cancelled = true;

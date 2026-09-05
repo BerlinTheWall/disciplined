@@ -15,6 +15,7 @@ from app.schemas import (
     GoogleCalendarStatusResponse,
 )
 from app.services import google_calendar, oauth_state
+from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/google-calendar", tags=["google-calendar"])
 logger = logging.getLogger("uvicorn.error")
@@ -46,7 +47,7 @@ def _error_reason(exc: Exception) -> str:
 
 
 @router.get("/connect", response_model=GoogleCalendarConnectResponse)
-async def connect(return_to: str | None = None, user: User = Depends(get_current_user)):
+async def connect(return_to: str | None = None, user: User = Depends(require_tier("plus"))):
     try:
         authorize_url = google_calendar.build_authorize_url(
             user.id, return_to=oauth_state.sanitize_return_to(return_to)
@@ -93,7 +94,7 @@ async def disconnect(db: AsyncSession = Depends(get_db), user: User = Depends(ge
 async def reconcile(
     is_write_target: bool = False,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_tier("plus")),
 ):
     counts = await google_calendar.reconcile_google_calendar(db, user.id, is_write_target=is_write_target)
     if counts is None:

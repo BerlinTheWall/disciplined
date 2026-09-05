@@ -16,8 +16,11 @@ const setRead = (value: ReadState) => useReadState.setState({ value });
 
 // toggle() starts reading the given text with the assistant voice — or stops,
 // when a reading is already active. `loading` covers the stretch between the
-// tap and the first audible word (synthesis + network).
-function toggle(text: string) {
+// tap and the first audible word (synthesis + network). `purpose` should be
+// "briefing" when reading the day briefing (its own guaranteed daily
+// allowance on the backend, see routers/tts.py) — every other caller leaves
+// it as the "routine" default.
+function toggle(text: string, purpose: "briefing" | "routine" = "routine") {
   if (useReadState.getState().value !== "idle") {
     stopSpeaking();
     setRead("idle");
@@ -31,11 +34,15 @@ function toggle(text: string) {
   setRead("loading");
   // Briefings are long — give synthesis more room than a one-line reminder
   // before falling back to the device voice.
-  void speakAssistant(text, {
-    onStart: () => setRead("reading"),
-    onDone: () => setRead("idle"),
-    timeoutMs: 30_000,
-  });
+  void speakAssistant(
+    text,
+    {
+      onStart: () => setRead("reading"),
+      onDone: () => setRead("idle"),
+      timeoutMs: 30_000,
+    },
+    purpose
+  );
 }
 
 function stop() {
@@ -46,9 +53,14 @@ function stop() {
 
 // Gesture-less playback attempt (morning briefing). Resolves false when the
 // browser blocks it — the caller then shows a tap-to-listen prompt instead.
-async function tryAutoPlay(text: string): Promise<boolean> {
+// Only ever called for the day briefing today, but takes `purpose` for the
+// same reason toggle() does.
+async function tryAutoPlay(
+  text: string,
+  purpose: "briefing" | "routine" = "routine"
+): Promise<boolean> {
   if (useReadState.getState().value !== "idle") return true;
-  const ok = await speakNaturalOnly(text, () => setRead("idle"));
+  const ok = await speakNaturalOnly(text, () => setRead("idle"), purpose);
   if (ok) setRead("reading");
   return ok;
 }

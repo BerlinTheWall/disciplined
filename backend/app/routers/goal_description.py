@@ -3,10 +3,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from google.genai import errors as genai_errors
 
-from app.auth import get_current_user
 from app.models import User
 from app.schemas import GoalDescriptionRequest, GoalDescriptionResponse
 from app.services.goal_description import generate_description
+from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/goal-description", tags=["goal-description"])
 logger = logging.getLogger("uvicorn.error")
@@ -15,7 +15,7 @@ logger = logging.getLogger("uvicorn.error")
 @router.post("/generate", response_model=GoalDescriptionResponse)
 async def generate(
     body: GoalDescriptionRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_tier("plus")),
 ):
     """Drafts a description for a goal. Nothing is written here — the client
     keeps whatever the user accepts through the normal goal endpoints, same

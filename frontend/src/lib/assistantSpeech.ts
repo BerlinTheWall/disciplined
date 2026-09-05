@@ -322,8 +322,11 @@ export function assistantDayBriefing(
         : i === upcoming.length - 1
           ? `And finally at ${spokenTime(t.startMinutes)}, ${t.title}, ${spokenDuration(t.durationMinutes)}. `
           : `Then at ${spokenTime(t.startMinutes)}, ${t.title}, ${spokenDuration(t.durationMinutes)}. `;
-    // Leave room for the summary tail when the day is packed.
-    if (text.length + piece.length > 1200) {
+    // Leave room for the summary tail plus the trailing "That's your day."
+    // (~50 chars) — must stay safely under the backend's 800-char TTS cap
+    // (see routers/tts.py's TTSRequest.text), or a packed day's briefing
+    // gets silently rejected instead of spoken.
+    if (text.length + piece.length > 700) {
       text += `Plus ${upcoming.length - i} more after that. `;
       break;
     }

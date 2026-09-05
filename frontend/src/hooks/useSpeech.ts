@@ -7,14 +7,14 @@ import { SpeechRecognition as NativeSpeechRecognition } from "@capgo/capacitor-s
 import { create } from "zustand";
 
 import { api } from "@/lib/api";
-import { useGoogleVoiceStore } from "@/store/googleVoiceStore";
+import { useAzureVoiceStore } from "@/store/azureVoiceStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
 // Voice input/output. Speech-to-text has two implementations behind one hook:
 // the browser's SpeechRecognition API (Chrome/Edge/Safari; Firefox lacks it),
 // and — in the packaged iOS app, where WKWebView has no Web Speech API at
 // all — the OS speech recognizer via @capacitor-community/speech-recognition.
-// Text-to-speech is the natural AI voice only (see googleVoiceStore) — audio
+// Text-to-speech is the natural AI voice only (see azureVoiceStore) — audio
 // fetched from the backend and played back; there is no device-voice
 // fallback. SpeechRecognition is missing from TypeScript's DOM lib, so the
 // minimal surface we use is declared here.
@@ -290,18 +290,27 @@ const ttsCache = new Map<string, Blob>();
 const ttsInFlight = new Map<string, Promise<Blob | null>>();
 const TTS_CACHE_MAX = 8;
 
-async function fetchSpeech(text: string, timeoutMs?: number): Promise<Blob | null> {
-  // The chosen Google voice folded into the cache key so switching it in
-  // Settings doesn't serve back audio synthesized with the other voice.
-  const voice = useGoogleVoiceStore.getState().voice;
-  const key = `${voice}:${text}`;
+type SpeechPurpose = "briefing" | "routine";
+
+async function fetchSpeech(
+  text: string,
+  timeoutMs?: number,
+  purpose: SpeechPurpose = "routine"
+): Promise<Blob | null> {
+  // The chosen Azure voice AND purpose folded into the cache key: the
+  // backend only honors the caller's voice choice for "briefing" (see
+  // routers/tts.py) — a "routine" request always gets the cheaper Standard
+  // voice regardless — so the two purposes must never share a cache entry
+  // for the same text, or one would serve back audio in the wrong voice.
+  const voice = useAzureVoiceStore.getState().voice;
+  const key = `${purpose}:${voice}:${text}`;
   const cached = ttsCache.get(key);
   if (cached) return cached;
   const inFlight = ttsInFlight.get(key);
   if (inFlight) return inFlight;
 
   const promise = api
-    .tts(text, timeoutMs, voice)
+    .tts(text, timeoutMs, voice, purpose)
     .then((blob) => {
       ttsCache.set(key, blob);
       // Evict oldest entries; Maps iterate in insertion order.
@@ -322,9 +331,13 @@ async function fetchSpeech(text: string, timeoutMs?: number): Promise<Blob | nul
 // Warm the cache for text that's about to be spoken (e.g. the day briefing,
 // generated while the page is still being looked at). No-op when voice is off
 // or the audio is already cached/being fetched.
-export function prefetchAssistantVoice(text: string, timeoutMs = 30_000) {
+export function prefetchAssistantVoice(
+  text: string,
+  timeoutMs = 30_000,
+  purpose: SpeechPurpose = "routine"
+) {
   if (!useSettingsStore.getState().voiceEnabled) return;
-  void fetchSpeech(text, timeoutMs);
+  void fetchSpeech(text, timeoutMs, purpose);
 }
 
 interface SpeakCallbacks {
@@ -408,26 +421,38 @@ function playAudioBlob(
 // blocked autoplay) resolves false so the caller can fall back.
 async function playNaturalVoice(
   text: string,
-  { onStart, onDone, onWord, timeoutMs }: SpeakCallbacks = {}
+  { onStart, onDone, onWord, timeoutMs }: SpeakCallbacks = {},
+  purpose: SpeechPurpose = "routine"
 ): Promise<boolean> {
-  const blob = await fetchSpeech(text, timeoutMs);
+  const blob = await fetchSpeech(text, timeoutMs, purpose);
   if (!blob) return false;
   return playAudioBlob(blob, text, { onStart, onDone, onWord });
 }
 
 // Reporting whether audio actually started. Auto-play attempts (no user
 // gesture) need this: Audio.play() rejects when the browser blocks unprompted
-// sound. No-ops when the voice master switch is off.
-export function speakNaturalOnly(text: string, onDone?: () => void): Promise<boolean> {
+// sound. No-ops when the voice master switch is off. `purpose` should be
+// "briefing" for the day briefing (its own guaranteed daily allowance on the
+// backend) — every other caller leaves it as the "routine" default.
+export function speakNaturalOnly(
+  text: string,
+  onDone?: () => void,
+  purpose: SpeechPurpose = "routine"
+): Promise<boolean> {
   if (!useSettingsStore.getState().voiceEnabled) return Promise.resolve(false);
-  return playNaturalVoice(text, { onDone, timeoutMs: 30_000 });
+  return playNaturalVoice(text, { onDone, timeoutMs: 30_000 }, purpose);
 }
 
 // Assistant speech (reminders, chat replies, read-aloud summaries) — the only
-// voice is the natural one (see googleVoiceStore); there is no fallback.
+// voice is the natural one (see azureVoiceStore); there is no fallback.
 // No-ops when the voice master switch is off. Updates useSpeechState so UIs
-// can show "preparing voice" / "speaking".
-export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {}) {
+// can show "preparing voice" / "speaking". `purpose` should be "briefing"
+// only for the day briefing — see speakNaturalOnly.
+export async function speakAssistant(
+  text: string,
+  callbacks: SpeakCallbacks = {},
+  purpose: SpeechPurpose = "routine"
+) {
   const { onStart, onDone, onWord, timeoutMs } = callbacks;
   if (!useSettingsStore.getState().voiceEnabled) {
     onDone?.();
@@ -442,11 +467,15 @@ export async function speakAssistant(text: string, callbacks: SpeakCallbacks = {
     useSpeechState.setState({ pending: false, speaking: false });
     onDone?.();
   };
-  const played = await playNaturalVoice(text, {
-    onStart: wrapStart,
-    onDone: wrapDone,
-    onWord,
-    timeoutMs,
-  });
+  const played = await playNaturalVoice(
+    text,
+    {
+      onStart: wrapStart,
+      onDone: wrapDone,
+      onWord,
+      timeoutMs,
+    },
+    purpose
+  );
   if (!played) wrapDone();
 }

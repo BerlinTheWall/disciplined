@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from google.genai import errors as genai_errors
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
 from app.schemas import NudgeRequest, NudgeResponse, NudgeSuggestedSlot, PendingAction
@@ -15,6 +14,7 @@ from app.services.nudges import (
     evaluate,
     suggest_slot_for_candidate,
 )
+from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/nudges", tags=["nudges"])
 logger = logging.getLogger("uvicorn.error")
@@ -24,7 +24,7 @@ logger = logging.getLogger("uvicorn.error")
 async def check_nudge(
     body: NudgeRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_tier("pro")),
 ):
     """Deterministic signal check first (cheap) — only calls Gemini if a
     candidate is actually found, so a quiet day costs nothing."""

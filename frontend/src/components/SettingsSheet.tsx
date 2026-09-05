@@ -11,7 +11,7 @@ import { BACKGROUNDS } from "@/lib/backgrounds";
 import { tap } from "@/lib/motion";
 import { isNativeReminderPlatform } from "@/lib/nativeReminders";
 import { notifyPermission, REMINDER_OPTIONS, requestNotifyPermission } from "@/lib/reminders";
-import { GOOGLE_VOICES, useGoogleVoiceStore } from "@/store/googleVoiceStore";
+import { AZURE_VOICES, useAzureVoiceStore } from "@/store/azureVoiceStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useSettingsStore, type VoiceTone } from "@/store/settingsStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -155,7 +155,7 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
       state.setVoiceTone,
     ])
   );
-  const [googleVoice, setGoogleVoice] = useGoogleVoiceStore(
+  const [azureVoice, setAzureVoice] = useAzureVoiceStore(
     useShallow((state) => [state.voice, state.setVoice])
   );
   const [
@@ -172,8 +172,8 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
     ])
   );
 
-  function pickGoogleVoice(voice: string) {
-    setGoogleVoice(voice);
+  function pickAzureVoice(voice: string) {
+    setAzureVoice(voice);
     // Cut off whatever preview (this voice or the other one) is still
     // playing — previews shouldn't overlap.
     stopSpeaking();
@@ -269,11 +269,11 @@ export default function SettingsSheet({ isOpen, onClose }: SettingsSheetProps) {
           <Collapse open={voiceEnabled}>
             <ChipRow
               title="Voice"
-              options={GOOGLE_VOICES}
+              options={AZURE_VOICES}
               keyOf={(v) => v.id}
               labelOf={(v) => v.label}
-              selected={(v) => googleVoice === v.id}
-              onSelect={(v) => pickGoogleVoice(v.id)}
+              selected={(v) => azureVoice === v.id}
+              onSelect={(v) => pickAzureVoice(v.id)}
             />
           </Collapse>
           <Collapse open={voiceEnabled}>
