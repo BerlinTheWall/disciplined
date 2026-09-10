@@ -1,4 +1,5 @@
 import { todayISODate } from "@/lib/date";
+import { reportError } from "@/lib/observability";
 import { getToken, setToken } from "@/lib/tokenStorage";
 import type { Goal } from "@/types/goals";
 import type { Habit } from "@/types/habits";
@@ -104,6 +105,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       detail = errorMessageFromBody(await res.json()) ?? detail;
     } catch {
       // no JSON body — keep the status-based fallback
+    }
+    // A 5xx is a bug on our side and nobody is watching the server logs for
+    // it; a 4xx is the API working as designed (wrong password, over quota)
+    // and a status of 0 is the user's connection, so neither is reported.
+    if (res.status >= 500) {
+      reportError(new Error(`${init?.method ?? "GET"} ${path} failed with ${res.status}`), {
+        path,
+        status: res.status,
+        // `detail` is the backend's own message, not user input.
+        detail,
+      });
     }
     throw new ApiError(res.status, detail);
   }

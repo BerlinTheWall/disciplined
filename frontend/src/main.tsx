@@ -10,15 +10,21 @@ import "./index.css";
 
 import App from "./App.tsx";
 import { ConfirmProvider } from "./components/ConfirmDialog.tsx";
+import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import SplashScreen from "./components/SplashScreen.tsx";
 import { todayISODate } from "./lib/date.ts";
 import { initDeviceCalendarSync } from "./lib/deviceCalendarSync.ts";
 import { initGoogleCalendarAuth } from "./lib/googleCalendarAuth.ts";
+import { initErrorReporting, setReportingUser } from "./lib/observability.ts";
 import { initOutlookAuth } from "./lib/outlookAuth.ts";
 import { startSync } from "./lib/sync.ts";
 import AuthPage from "./pages/AuthPage.tsx";
 import { useAuthStore } from "./store/authStore.ts";
 import { useTaskStore } from "./store/taskStore.ts";
+
+// Before anything else, so an error thrown during the very first render is
+// still reported. No-ops without VITE_SENTRY_DSN.
+initErrorReporting();
 
 // Apply persisted theme before first render to avoid flash
 try {
@@ -98,6 +104,13 @@ function Root() {
     }
   }, [userId]);
 
+  // Attribute errors to the account (opaque id only, never an email) so one
+  // user hitting the same crash fifty times is distinguishable from fifty
+  // users hitting it once. Cleared on logout.
+  useEffect(() => {
+    setReportingUser(userId ?? null);
+  }, [userId]);
+
   // api.ts announces a rejected token (expired, or the user was deleted) —
   // drop back to the login page instead of silently failing every request.
   useEffect(() => {
@@ -125,10 +138,12 @@ if ("serviceWorker" in navigator) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <MotionConfig reducedMotion="user">
-      <ConfirmProvider>
-        <Root />
-      </ConfirmProvider>
-    </MotionConfig>
+    <ErrorBoundary>
+      <MotionConfig reducedMotion="user">
+        <ConfirmProvider>
+          <Root />
+        </ConfirmProvider>
+      </MotionConfig>
+    </ErrorBoundary>
   </StrictMode>
 );
