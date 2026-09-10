@@ -22,7 +22,9 @@ export default defineConfig({
   workers: 1,
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  // The html report is what CI uploads on failure; without it the artifact is
+  // empty and the traces are unreachable.
+  reporter: process.env.CI ? [["github"], ["list"], ["html", { open: "never" }]] : [["list"]],
   forbidOnly: !!process.env.CI,
 
   use: {

@@ -13,6 +13,33 @@ import { expect, test, type Page } from "@playwright/test";
 const EMAIL = process.env.E2E_EMAIL ?? "e2e@example.com";
 const PASSWORD = process.env.E2E_PASSWORD ?? "e2e-test-password";
 
+/** Zustand's persist middleware reads this shape out of localStorage. */
+const persisted = (state: Record<string, unknown>) => JSON.stringify({ state, version: 0 });
+
+/**
+ * Skip the first-run experience.
+ *
+ * The onboarding wizard and the spotlight tutorial are gated on persisted
+ * localStorage flags that default to false, and App.tsx renders the wizard
+ * *instead of* the timeline until onboarding is done — so a fresh browser
+ * context never reaches the app itself. Marking them complete is setup, not
+ * cheating: these tests are about the core loop, and the first-run flow
+ * deserves its own test rather than being crossed on the way to every other
+ * one.
+ *
+ * addInitScript runs before any page script, so the stores read the flag on
+ * their very first hydration.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(
+    ([onboarding, tutorial]) => {
+      localStorage.setItem("disciplined-onboarding", onboarding);
+      localStorage.setItem("disciplined-tutorial", tutorial);
+    },
+    [persisted({ done: true }), persisted({ done: true, step: 0 })]
+  );
+});
+
 async function login(page: Page) {
   await page.goto("/");
   await page.getByPlaceholder("you@example.com").fill(EMAIL);
