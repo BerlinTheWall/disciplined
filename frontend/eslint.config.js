@@ -7,7 +7,10 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  // Build output and native shells. `android/` and `ios/` hold generated
+  // Capacitor/Gradle assets (native-bridge.js and friends) that are not ours to
+  // lint; `vendor/` is third-party, `_shots/` is screenshot scratch.
+  globalIgnores(["dist", "android", "ios", "vendor", "_shots", "public"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
@@ -20,5 +23,11 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+  },
+  {
+    // The Vite entry point renders into the DOM rather than exporting a
+    // component, so react-refresh's export rule has nothing to bind to here.
+    files: ["src/main.tsx"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
 ]);
