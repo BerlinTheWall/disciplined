@@ -136,7 +136,18 @@ TEST_DATABASE_URL=postgresql+asyncpg://disciplined:disciplined@localhost:5432/di
 
 CI runs exactly these on every pull request. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit format and what
-"done" means.
+"done" means, and [docs/CI.md](docs/CI.md) for what the pipeline checks and why.
+
+## Documentation
+
+| Where | What |
+|---|---|
+| [docs/CI.md](docs/CI.md) | The pipeline: every check, why it exists, how to reproduce a failure |
+| [docs/adr/](docs/adr/) | Decisions that were non-obvious and are expensive to revisit |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Branch naming, commit format, definition of done, how to write tests |
+| [CHANGELOG.md](CHANGELOG.md) | What has changed |
+| [docs/APP_STORE.md](docs/APP_STORE.md) | Store submission status and what is outstanding |
+| [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
 
 ## Observability
 
