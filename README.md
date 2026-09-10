@@ -181,8 +181,11 @@ with request-id log correlation.
 but no billing is connected, so `User.subscription_tier` defaults to `pro` for
 everyone.
 
-**Next** — billing, and the App Store prerequisites (privacy policy, terms,
-in-app account deletion).
+**Next** — billing, and publishing the store-required documents. In-app
+account deletion is done; the privacy policy and terms are drafted in
+[docs/](docs/) and need their placeholders filled, a legal review and a public
+URL before submission. See [docs/APP_STORE.md](docs/APP_STORE.md) for what
+remains.
 
 **Out of scope for now** — standalone Meals, Workout and Expenses sections;
 they remain useful only as passive signals for nudges and the digest.
