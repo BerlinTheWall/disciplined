@@ -7,13 +7,18 @@
 > CCPA and the App Store / Play Store policies all impose specific wording and
 > rights you may need beyond this).
 >
-> Before publishing, replace every `[BRACKETED]` value, delete this block, and
-> host the result at a stable public URL — App Store Connect and the Play
-> Console both require a link, not a file.
+> **Four values still need filling** — they are marked in capitals inside square brackets below:
+> the postal address, the contact email, the governing jurisdiction and the
+> liability cap. The Pages workflow refuses to publish while any of them
+> remain, so this cannot reach a public URL half-finished.
+
+> Once a lawyer has read it and the values are in, delete this block. That is
+> the switch that publishes it to
+> `https://berlinthewall.github.io/disciplined/privacy`.
 
 # Privacy Policy for Disciplined
 
-**Last updated: [DATE]**
+**Last updated: 10 September 2026**
 
 Disciplined is a personal scheduling assistant. This policy explains what it
 collects, why, who else sees it, and how to get rid of it.
@@ -25,7 +30,7 @@ app at any time.
 
 ## Who we are
 
-Disciplined is operated by **[LEGAL ENTITY OR YOUR NAME]**,
+Disciplined is operated by **Hooman Shahidi**,
 **[POSTAL ADDRESS]**. For any privacy question, or to exercise the rights
 below, contact **[PRIVACY CONTACT EMAIL]**.
 

@@ -16,6 +16,9 @@ lerna-debug.log*
 !.env.example
 !*.env.example
 
+# GitHub Pages build output (scripts/build_pages.py)
+_site
+
 # Playwright output
 playwright-report
 test-results

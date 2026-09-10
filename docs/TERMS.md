@@ -5,14 +5,20 @@
 > your jurisdiction and your app-store obligations before you rely on it,
 > particularly the liability, subscription and governing-law sections.
 >
-> Before publishing, replace every `[BRACKETED]` value, delete this block, and
-> host the result at a stable public URL.
+> **Four values still need filling** — they are marked in capitals inside square brackets below:
+> the postal address, the contact email, the governing jurisdiction and the
+> liability cap. The Pages workflow refuses to publish while any of them
+> remain, so this cannot reach a public URL half-finished.
+
+> Once a lawyer has read it and the values are in, delete this block. That is
+> the switch that publishes it to
+> `https://berlinthewall.github.io/disciplined/terms`.
 
 # Terms of Service for Disciplined
 
-**Last updated: [DATE]**
+**Last updated: 10 September 2026**
 
-These terms are the agreement between you and **[LEGAL ENTITY OR YOUR NAME]**
+These terms are the agreement between you and **Hooman Shahidi**
 ("we", "us") for use of the Disciplined app and service. By creating an
 account you accept them. If you do not accept them, do not use the app.
 
@@ -31,7 +37,7 @@ under your account. Tell us promptly at **[SUPPORT EMAIL]** if you think
 someone else has access; you can also sign every other device out from
 **Profile → Account → Log out of other devices**.
 
-You must be at least **[13 / 16 — CHECK YOUR JURISDICTION]** years old.
+You must be at least **13** years old.
 
 ## What you may not do
 
@@ -98,7 +104,7 @@ reliance on AI-generated suggestions. Nothing here limits liability that cannot
 lawfully be limited — including for death or personal injury caused by
 negligence, or for fraud. Where liability cannot be excluded, it is limited to
 the greater of the amount you paid us in the previous twelve months or
-**[AMOUNT, e.g. USD 50]**.
+**[LIABILITY CAP]**.
 
 Some jurisdictions do not allow these exclusions, in which case they apply only
 so far as permitted, and your statutory consumer rights are unaffected.

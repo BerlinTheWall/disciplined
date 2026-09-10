@@ -11,6 +11,13 @@ not shipped to a store, so everything so far sits under Unreleased. The first
 
 ### Added
 
+- **A licence.** The repository is public and carried none, which meant default
+  copyright by accident rather than by choice. Now explicitly proprietary, all
+  rights reserved ([LICENSE](LICENSE)).
+- **Published policies.** The privacy policy and terms are rendered to GitHub
+  Pages by `scripts/build_pages.py`, which refuses to publish while any
+  placeholder or the draft banner remains — the stores need a public URL, and
+  an unfinished policy must not become one.
 - **Continuous integration.** Every pull request runs lint, formatting,
   typecheck, both test suites and a production build, plus an import smoke test
   and a guard against two Alembic migration heads. See [docs/CI.md](docs/CI.md).

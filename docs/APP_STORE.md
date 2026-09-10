@@ -8,8 +8,10 @@ the code, so the privacy answers below match what the app actually does.
 | Requirement | Status |
 |---|---|
 | In-app account deletion | **Done** — Profile → Account → Delete account (`POST /api/auth/delete-account`) |
-| Privacy policy at a public URL | **Drafted**, not published — [PRIVACY.md](PRIVACY.md) |
-| Terms of service at a public URL | **Drafted**, not published — [TERMS.md](TERMS.md) |
+| Privacy policy at a public URL | **Drafted**, hosting ready — [PRIVACY.md](PRIVACY.md) |
+| Terms of service at a public URL | **Drafted**, hosting ready — [TERMS.md](TERMS.md) |
+| Licence | **Done** — proprietary, all rights reserved ([LICENSE](../LICENSE)) |
+| Minimum age | **Done** — 13; the age rating must match |
 | Privacy questionnaire answers | Prepared below |
 | iOS permission purpose strings | **Blocked** — no `ios/` project generated yet |
 | Play restricted-permission declarations | **Needed** — see below |
@@ -21,29 +23,47 @@ is a common rejection. That part is now implemented and tested.
 
 ## Still on you
 
-1. **Publish the two documents** at stable URLs (GitHub Pages, or your
-   marketing site) and paste the links into App Store Connect and the Play
-   Console. A file in this repository is not a URL the reviewer can open.
-2. **Fill in every `[BRACKETED]` placeholder** in both documents: legal
-   entity, address, contact email, minimum age, jurisdiction, liability cap.
-3. **Have a lawyer read them.** They were written from the code, so the facts
-   are right; the legal sufficiency for your jurisdiction is not something
-   this repository can settle.
-4. **Generate the iOS project and write its purpose strings.** There is no
+1. **Fill the five remaining values.** They are marked in capitals inside
+   square brackets:
+
+   | Document | Value |
+   |---|---|
+   | PRIVACY.md | `[POSTAL ADDRESS]`, `[PRIVACY CONTACT EMAIL]` |
+   | TERMS.md | `[SUPPORT EMAIL]`, `[JURISDICTION]`, `[LIABILITY CAP]` |
+
+   A dedicated address (`privacy@…`) ages better than a personal one — it is
+   printed on a public page and survives you changing email provider.
+
+2. **Have a lawyer read them.** They were written from the code, so the facts
+   are right; legal sufficiency in your jurisdiction is not something this
+   repository can settle.
+
+3. **Delete the draft banner at the top of each.** That is the switch: the
+   Pages workflow refuses to publish while the banner or any placeholder
+   remains, so nothing half-finished can reach a public URL. Once both are
+   clean, merging to `main` publishes them to
+   `https://berlinthewall.github.io/disciplined/privacy` and `/terms`.
+
+   Check locally first: `python scripts/build_pages.py --check`
+
+4. **Enable Pages once**, if it is not already on: Settings → Pages → Source →
+   **GitHub Actions**. Then paste the two URLs into App Store Connect and the
+   Play Console.
+5. **Generate the iOS project and write its purpose strings.** There is no
    `ios/` directory in this repository yet — it is created by `npx cap add ios`
    on a Mac. Once it exists, `ios/App/App/Info.plist` needs
    `NSCalendarsUsageDescription`, `NSMicrophoneUsageDescription` and
    `NSSpeechRecognitionUsageDescription`. iOS rejects builds where these are
    missing, and reviewers reject generic ones — say what the app does with each
    and why, in a sentence a user would understand.
-5. **Declare the restricted Android permissions** in the Play Console. The
+6. **Declare the restricted Android permissions** in the Play Console. The
    merged manifest requests two that Google gates behind a declaration form,
    and an undeclared one is a rejection:
    - `SCHEDULE_EXACT_ALARM` — justified here by reminders that must fire at the
      exact minute the user set.
    - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — Google scrutinises this one
      closely; be ready to justify it or drop it.
-6. **Decide the age rating** consistent with the minimum age in the policy.
+7. **Set the age rating** to match the minimum age of 13 in the policies.
 
 ### Android permissions, as actually requested
 

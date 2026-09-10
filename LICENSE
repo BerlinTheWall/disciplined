@@ -1,0 +1,43 @@
+Copyright (c) 2026 Hooman Shahidi. All rights reserved.
+
+Disciplined — including its source code, design, documentation and assets — is
+proprietary. It is published here so it can be read, reviewed and referenced.
+Publishing it does not place it in the public domain and does not grant a
+licence to it.
+
+You may:
+
+  - View and read this source code.
+  - Fork the repository on GitHub for the sole purpose of proposing a change
+    back to it, and clone it locally for that purpose.
+  - Quote short excerpts with attribution, for commentary, review or teaching.
+
+You may not, without prior written permission from the copyright holder:
+
+  - Use this software or any part of it in any product or service, commercial
+    or otherwise.
+  - Copy, modify, merge, publish, distribute, sublicense or sell copies of it.
+  - Deploy or host it, publicly or privately, beyond running it locally to
+    evaluate a contribution.
+  - Train a machine learning model on it, or otherwise incorporate it into a
+    dataset offered to others.
+
+Contributions submitted to this repository are licensed to the copyright
+holder for use in this project without restriction, and without obligation on
+the copyright holder's part.
+
+The trade name "Disciplined", the logo and other brand assets are not covered
+by any permission above and may not be used to identify any other product.
+
+Third-party dependencies retain their own licences, which are unaffected by
+this file. See the dependency manifests for details.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For permissions beyond the scope of this licence, contact the copyright
+holder.
