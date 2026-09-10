@@ -11,4 +11,6 @@ pyjwt>=2.9
 bcrypt>=4.2
 cryptography>=43.0
 email-validator>=2.2
+sentry-sdk[fastapi]>=2.69
+
 pytest>=8.3

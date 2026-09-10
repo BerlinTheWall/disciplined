@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
+from app.observability import RequestIdMiddleware, configure_logging, init_sentry
 from app.routers import (
     auth,
     briefing,
@@ -25,9 +25,10 @@ from app.routers import (
     week_plan,
 )
 
-# uvicorn configures its own loggers and leaves the root alone, so without this
-# nothing the app itself logs during startup ever reaches the deploy log.
-logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
+# Logging first, so anything the Sentry setup itself reports is readable, then
+# Sentry before the app is constructed so its integrations can instrument it.
+configure_logging()
+init_sentry()
 
 
 @asynccontextmanager
@@ -62,6 +63,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added last, so it runs first: Starlette applies middleware in reverse, and
+# the request id has to exist before anything downstream logs or raises.
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(auth.router)
 app.include_router(events.router)

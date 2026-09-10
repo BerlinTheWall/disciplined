@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     # (services/crypto.py), shared across both providers.
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str = ""
+    # Error reporting. Blank disables Sentry entirely, which is what local
+    # development and CI run with. Create a project at sentry.io and paste its
+    # DSN here to turn it on for a deploy.
+    sentry_dsn: str = ""
+    # Fraction of requests traced for performance, 0.0-1.0. Separate from
+    # error reporting and billed per transaction, so off unless there is a
+    # latency question worth paying to answer.
+    sentry_traces_sample_rate: float = 0.0
     # Vite dev server origins, plus the deployed web frontend (Railway) for
     # testing the OAuth calendar connections end-to-end without a native build.
     cors_origins: list[str] = [
