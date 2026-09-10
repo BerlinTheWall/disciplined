@@ -1,16 +1,21 @@
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type Transition } from "framer-motion";
 import { Bell, Sparkles, X } from "lucide-react";
 
 import BottomSheet from "./BottomSheet";
 import { addDaysISO, todayISODate } from "@/lib/date";
-import { spring, tap } from "@/lib/motion";
+import { tap } from "@/lib/motion";
 import { isPendingActionStale, runPendingAction } from "@/lib/pendingAction";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationHistoryStore, type HistoryEntry } from "@/store/notificationHistoryStore";
 import { DISMISS_COOLDOWN_DAYS, useNudgeStore } from "@/store/nudgeStore";
 import { useScheduleFocusStore } from "@/store/scheduleFocusStore";
 import { useToastStore } from "@/store/toastStore";
+
+// Height collapses read better as a tween than a spring: a spring on height
+// overshoots past zero and clamps, which is the jitter it's meant to avoid.
+// Same timing as Collapse.tsx, so list rows and disclosures feel alike.
+const collapse = { duration: 0.2, ease: "easeOut" } satisfies Transition;
 
 interface Props {
   onOpenSchedule: (date: string) => void;
@@ -95,6 +100,92 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
     useNotificationHistoryStore.getState().discardEntry(entry.id);
   }
 
+  // A fired reminder: the whole row jumps to the day it belongs to, with an
+  // X to drop it from the history.
+  function renderReminder(entry: HistoryEntry) {
+    return (
+      <div className="flex items-start gap-3 p-3 rounded-2xl bg-surface">
+        <button
+          onClick={() => handleTap(entry)}
+          className="flex flex-1 min-w-0 items-start gap-3 text-left"
+        >
+          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
+            <Bell size={16} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
+            <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+          </div>
+        </button>
+        <motion.button
+          onClick={() => removeEntry(entry.id)}
+          whileTap={tap}
+          aria-label="Remove notification"
+          className="p-1 -m-1 text-fg-faint shrink-0"
+        >
+          <X size={16} />
+        </motion.button>
+      </div>
+    );
+  }
+
+  // Nudges/coach check-ins are the AI's proactive suggestions — they get a
+  // firing date and an explicit Agree/Disagree response instead of
+  // reminders' plain tap-to-jump.
+  function renderProactive(entry: HistoryEntry) {
+    const dateLabel = new Date(entry.firedAt).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+    return (
+      <div className="flex items-start gap-3 p-3 rounded-2xl bg-surface">
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
+          <Sparkles size={16} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
+            <span className="text-[11px] text-fg-faint shrink-0">{dateLabel}</span>
+          </div>
+          <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+          {entry.response ? (
+            <p className="text-xs text-fg-faint mt-2 italic">
+              {/* "Discarded" only ever reaches entries persisted before a
+                  discard started deleting them outright; those age out
+                  within the week. */}
+              {entry.response === "agreed" ? "Confirmed" : "Discarded"}
+            </p>
+          ) : (
+            <div className="flex gap-2 mt-2">
+              <motion.button
+                onClick={() => respondAgree(entry)}
+                whileTap={tap}
+                className="h-7 px-3 rounded-full bg-fg text-fg-inverse text-xs font-semibold"
+              >
+                Yes
+              </motion.button>
+              <motion.button
+                onClick={() => respondDisagree(entry)}
+                whileTap={tap}
+                className="h-7 px-3 rounded-full bg-surface-raised text-fg text-xs font-medium"
+              >
+                Dismiss
+              </motion.button>
+            </div>
+          )}
+        </div>
+        <motion.button
+          onClick={() => removeEntry(entry.id)}
+          whileTap={tap}
+          aria-label="Remove notification"
+          className="p-1 -m-1 text-fg-faint shrink-0"
+        >
+          <X size={16} />
+        </motion.button>
+      </div>
+    );
+  }
+
   return (
     <>
       <motion.button
@@ -123,118 +214,42 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
           className="flex-1 overflow-y-auto px-5 pb-4"
           style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}
         >
-          {entries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-2">
-              <Bell size={22} className="text-fg-faint" />
-              <p className="text-sm text-fg-faint">No notifications yet</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {/* Rows leave the list often now that a discard deletes one, so
-                  they collapse out instead of the list snapping shut. */}
-              <AnimatePresence initial={false}>
-                {entries.map((entry) => {
-                  // Nudges/coach check-ins are the AI's proactive suggestions —
-                  // they get a firing date and an explicit Agree/Disagree
-                  // response instead of reminders' plain tap-to-jump.
-                  if (entry.kind !== "nudge" && entry.kind !== "coach") {
-                    return (
-                      <motion.div
-                        key={entry.id}
-                        layout
-                        exit={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                        transition={spring.gentle}
-                        className="flex items-start gap-3 p-3 rounded-2xl bg-surface overflow-hidden"
-                      >
-                        <button
-                          onClick={() => handleTap(entry)}
-                          className="flex flex-1 min-w-0 items-start gap-3 text-left"
-                        >
-                          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                            <Bell size={16} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-fg text-sm leading-tight">
-                              {entry.title}
-                            </p>
-                            <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
-                          </div>
-                        </button>
-                        <motion.button
-                          onClick={() => removeEntry(entry.id)}
-                          whileTap={tap}
-                          aria-label="Remove notification"
-                          className="p-1 -m-1 text-fg-faint shrink-0"
-                        >
-                          <X size={16} />
-                        </motion.button>
-                      </motion.div>
-                    );
-                  }
-
-                  const dateLabel = new Date(entry.firedAt).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                  });
-                  return (
-                    <motion.div
-                      key={entry.id}
-                      layout
-                      exit={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                      transition={spring.gentle}
-                      className="flex items-start gap-3 p-3 rounded-2xl bg-surface overflow-hidden"
-                    >
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                        <Sparkles size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className="font-semibold text-fg text-sm leading-tight">
-                            {entry.title}
-                          </p>
-                          <span className="text-[11px] text-fg-faint shrink-0">{dateLabel}</span>
-                        </div>
-                        <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
-                        {entry.response ? (
-                          <p className="text-xs text-fg-faint mt-2 italic">
-                            {/* "Discarded" only ever reaches entries persisted
-                              before a discard started deleting them outright;
-                              those age out within the week. */}
-                            {entry.response === "agreed" ? "Confirmed" : "Discarded"}
-                          </p>
-                        ) : (
-                          <div className="flex gap-2 mt-2">
-                            <motion.button
-                              onClick={() => respondAgree(entry)}
-                              whileTap={tap}
-                              className="h-7 px-3 rounded-full bg-fg text-fg-inverse text-xs font-semibold"
-                            >
-                              Yes
-                            </motion.button>
-                            <motion.button
-                              onClick={() => respondDisagree(entry)}
-                              whileTap={tap}
-                              className="h-7 px-3 rounded-full bg-surface-raised text-fg text-xs font-medium"
-                            >
-                              Dismiss
-                            </motion.button>
-                          </div>
-                        )}
-                      </div>
-                      <motion.button
-                        onClick={() => removeEntry(entry.id)}
-                        whileTap={tap}
-                        aria-label="Remove notification"
-                        className="p-1 -m-1 text-fg-faint shrink-0"
-                      >
-                        <X size={16} />
-                      </motion.button>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          )}
+          <AnimatePresence initial={false}>
+            {entries.map((entry) => (
+              // Rows collapse out rather than vanishing: the sheet is
+              // bottom-anchored, so a row disappearing instantly shoves the
+              // "Notifications" header down by its height. The spacing lives
+              // in each row's own margin, not a container gap, because a gap
+              // can't animate away with the row it belongs to.
+              <motion.div
+                key={entry.id}
+                exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                transition={collapse}
+                className="mb-2 overflow-hidden"
+              >
+                {entry.kind === "nudge" || entry.kind === "coach"
+                  ? renderProactive(entry)
+                  : renderReminder(entry)}
+              </motion.div>
+            ))}
+            {entries.length === 0 && (
+              // Grows in on the same clock the last row shrinks out on, so
+              // emptying the list is one continuous movement.
+              <motion.div
+                key="empty"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={collapse}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <Bell size={22} className="text-fg-faint" />
+                  <p className="text-sm text-fg-faint">No notifications yet</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </BottomSheet>
     </>
