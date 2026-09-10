@@ -1,2 +1,7 @@
 node_modules
 dist
+android
+ios
+vendor
+_shots
+public

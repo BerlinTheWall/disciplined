@@ -1,0 +1,31 @@
+# Normalise line endings. The index stores LF for every text file; `eol=lf`
+# makes the working tree match on Windows too, overriding a global
+# core.autocrlf=true. Without this, Windows checkouts get CRLF while Linux CI
+# gets LF, and Prettier cannot be satisfied on both at once.
+* text=auto eol=lf
+
+# Windows-only tooling that genuinely requires CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary — never touch, never diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.svg  text
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.mp3  binary
+*.wav  binary
+*.jar  binary
+*.keystore binary
+
+# Generated — collapse in diffs and exclude from language stats.
+package-lock.json linguist-generated=true -diff
+frontend/dist/**  linguist-generated=true

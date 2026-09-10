@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff, LoaderCircle } from "lucide-react";

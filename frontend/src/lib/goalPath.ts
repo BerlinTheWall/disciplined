@@ -179,7 +179,9 @@ function buildMonthStops(activeKey: string, goals: Goal[], tasks: Task[]): Perio
     // deliberately gets a chip in every one of them, not just one "fold"
     // week; the point is "what's active this week", not "who owns this week".
     const cascadeGoals = goals.filter((g) => goalOverlapsPeriod(g, "week", weekKey));
-    const { fraction, hasData } = fractionOfTasks(tasksInRange(cascadeGoals, tasks, weekKey, sunday));
+    const { fraction, hasData } = fractionOfTasks(
+      tasksInRange(cascadeGoals, tasks, weekKey, sunday)
+    );
     const items = goalItems(cascadeGoals, goals, tasks);
 
     return {
