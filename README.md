@@ -61,7 +61,8 @@ Recognition plugins.
 PostgreSQL, with Alembic handling migrations. Authentication via JWT and
 bcrypt. LLM calls through `google-genai`, text-to-speech through Azure AI
 Speech, transactional email through Resend. Settings validated with Pydantic.
-Stored OAuth tokens are encrypted at rest with Fernet.
+Stored OAuth tokens are encrypted at rest with Fernet. Errors report to Sentry
+and every request carries an id — see [Observability](#observability).
 
 **Testing** — pytest on the backend. There is no end-to-end suite yet; see
 [Project status](#project-status).
@@ -127,21 +128,52 @@ CI runs exactly these on every pull request. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit format and what
 "done" means.
 
+## Observability
+
+Both halves report errors to [Sentry](https://sentry.io), and both are
+disabled by default: with no DSN configured there is no init, no network call,
+and on the frontend no SDK in the bundle at all (the guard folds to a constant
+and the whole thing is tree-shaken out).
+
+Turn it on by setting `SENTRY_DSN` in the backend environment and
+`VITE_SENTRY_DSN` for the frontend. **The frontend DSN must be set when the
+bundle is built, not when it is deployed** — Vite inlines it at build time, so
+setting it afterwards produces an app with no reporting in it.
+
+Both are configured to keep user data out of error reports, because this
+service holds people's calendars, goals, chat messages and OAuth refresh
+tokens:
+
+- Request bodies are never captured on either side.
+- Auth headers, cookies and query strings are scrubbed (an OAuth callback
+  carries its `code` in the URL).
+- No PII: users are identified by opaque account id, never email or IP.
+- No Session Replay — it records the DOM, and the DOM here is the user's
+  schedule.
+
+Every backend request gets an id, returned as `X-Request-ID` and printed on
+every log line it produces, so a report of "it broke at 3pm" can be traced to
+the exact request. An inbound `X-Request-ID` is honoured, so a trace survives
+a proxy hop. Builds are stamped with their commit, so an error names the code
+that caused it.
+
 ## Project status
 
 **Working** — auth with email verification and password reset, the schedule
 timeline, goals with AI-assisted milestones and scheduling, habits, the chat
 assistant with tool-calling, week planning, daily briefing, nudges, coach,
 device calendar sync, Google Calendar and Outlook connections, text-to-speech,
-onboarding, and per-tier rate limiting on the AI endpoints.
+onboarding, per-tier rate limiting on the AI endpoints, and error reporting
+with request-id log correlation.
 
 **In progress** — subscription tiers. The gating dependency
 (`app/tiers.py`) and the Free/Plus/Pro split exist and are enforced on routes,
 but no billing is connected, so `User.subscription_tier` defaults to `pro` for
 everyone.
 
-**Next** — billing, an end-to-end test suite, crash reporting, and the App
-Store prerequisites (privacy policy, terms, in-app account deletion).
+**Next** — billing, a real test suite (the backend has one, the frontend has
+no test runner yet), and the App Store prerequisites (privacy policy, terms,
+in-app account deletion).
 
 **Out of scope for now** — standalone Meals, Workout and Expenses sections;
 they remain useful only as passive signals for nudges and the digest.
