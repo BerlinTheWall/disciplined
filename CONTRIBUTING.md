@@ -72,7 +72,8 @@ red build.
 
 ## Tests
 
-Neither suite needs anything running.
+Three suites. The two unit suites need nothing running; the end-to-end one
+needs a backend and a database, which is why it is kept small.
 
 **Backend** — pytest, with fixtures in `tests/conftest.py`: `client` (the real
 app over ASGI), `user` and `auth_headers` (a signed-in account), `make_user`
@@ -97,6 +98,24 @@ TEST_DATABASE_URL=postgresql+asyncpg://disciplined:disciplined@localhost:5432/di
 
 **Frontend** — Vitest with Testing Library, `npm run test` (or `test:watch`).
 Test files live next to what they cover, in `__tests__/`.
+
+**End-to-end** — Playwright, `npm run test:e2e`, in `frontend/e2e/`. These need
+a real backend and database, so they are the one suite that is not
+self-contained:
+
+```bash
+cd backend
+docker compose up -d
+uvicorn app.main:app --port 8000          # in one terminal
+python scripts/seed_e2e_user.py           # once the API is up
+cd ../frontend && npm run test:e2e
+```
+
+Keep this suite small. Each test crosses React, the API and Postgres, so these
+catch a broken deployment — and they are also the slowest and the first to go
+flaky. Detail belongs in the unit suites. They run the web build, so they cover
+the app's own logic but not the Capacitor plugin paths (notifications, speech,
+device calendar), which still need a real device.
 
 What is worth testing here, in rough order: anything where a bug is a security
 bug (auth, tier gating, one account reading another's rows), the pure logic
