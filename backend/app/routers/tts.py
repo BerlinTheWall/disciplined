@@ -3,11 +3,11 @@ import logging
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Literal
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -17,6 +17,21 @@ from app.tiers import require_tier
 
 router = APIRouter(prefix="/api/tts", tags=["tts"])
 logger = logging.getLogger("uvicorn.error")
+
+# The only two voices this app actually offers (see frontend's AZURE_VOICES
+# in store/azureVoiceStore.ts) — `voice` used to accept an arbitrary
+# client-supplied string with no length limit, which combined with
+# _language_code's naive splitting and escape()'s well-known gap (it never
+# escapes `"`, so it's unsafe inside an attribute value) let a crafted voice
+# string inject an entirely new <voice> element into the SSML sent to
+# Azure — attacker-chosen voice, attacker-chosen length, no relationship to
+# the 800-char cap on `text` at all. Found and fixed 2026-09-05. Rejecting
+# anything outside this allowlist closes it at the source, independent of
+# whatever escaping is (or isn't) applied downstream.
+_ALLOWED_VOICES = {
+    "en-US-Ava:DragonHDLatestNeural",
+    "en-US-Andrew:DragonHDLatestNeural",
+}
 
 _TIMEOUT = httpx.Timeout(10.0)
 # Azure's WAV output format — real RIFF/PCM straight off the wire, which is
@@ -89,11 +104,20 @@ class TTSRequest(BaseModel):
     # settings.azure_tts_voice. Ignored for "routine": that bucket always
     # uses the cheaper Standard voice regardless of what's passed here, since
     # letting the caller pick would defeat the whole point of the split.
+    # Validated against _ALLOWED_VOICES below — never passed to Azure
+    # unchecked (see that constant's comment for why).
     voice: str | None = None
     # "briefing" draws from the small guaranteed daily allowance on the
     # premium HD voice; "routine" (the default — reminders, chat replies,
     # weekly/monthly recaps) shares the larger monthly Standard-voice budget.
     purpose: Literal["briefing", "routine"] = "routine"
+
+    @field_validator("voice")
+    @classmethod
+    def _validate_voice(cls, value: str | None) -> str | None:
+        if value is not None and value not in _ALLOWED_VOICES:
+            raise ValueError(f"voice must be one of: {', '.join(sorted(_ALLOWED_VOICES))}")
+        return value
 
 
 # Synthesized audio, keyed by (voice, text). Repeat requests — page reloads,
@@ -108,12 +132,6 @@ def _cache_key(voice: str, text: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _language_code(voice: str) -> str:
-    """"en-US-Ava:DragonHDLatestNeural" -> "en-US"."""
-    parts = voice.split("-")
-    return "-".join(parts[:2]) if len(parts) >= 2 else "en-US"
-
-
 async def _synthesize_azure(text: str, voice: str | None) -> bytes:
     if not settings.azure_speech_key or not settings.azure_speech_region:
         raise HTTPException(
@@ -121,10 +139,21 @@ async def _synthesize_azure(text: str, voice: str | None) -> bytes:
             detail="AZURE_SPEECH_KEY / AZURE_SPEECH_REGION is not set (see backend/.env.example)",
         )
     voice_name = voice or settings.azure_tts_voice
-    lang = _language_code(voice_name)
+    # Both allowed voices are en-US (see _ALLOWED_VOICES) — hardcoded rather
+    # than derived from `voice_name`, so this stays correct even if that
+    # assumption is ever revisited, instead of re-deriving it from a string
+    # that (before 2026-09-05) was attacker-controlled.
+    #
+    # quoteattr(), not escape() + manual quotes: escape() alone never
+    # escapes `"`, which is exactly what let a crafted `voice` value break
+    # out of an attribute and inject a whole new <voice> element (see
+    # _ALLOWED_VOICES's comment). quoteattr() is the correct primitive for
+    # an XML attribute value — kept here as defense in depth even though
+    # voice_name is now allowlisted upstream and text never sits in an
+    # attribute position at all.
     ssml = (
-        f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{lang}">'
-        f'<voice name="{escape(voice_name)}">{escape(text)}</voice></speak>'
+        f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">'
+        f"<voice name={quoteattr(voice_name)}>{escape(text)}</voice></speak>"
     )
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:

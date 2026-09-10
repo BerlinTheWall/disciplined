@@ -6,7 +6,7 @@ const config = {
   semi: true,
   tabWidth: 2,
   trailingComma: "es5",
-  endOfLine: "crlf",
+  endOfLine: "lf",
   plugins: ["@ianvs/prettier-plugin-sort-imports"],
   importOrder: [
     "^react$",
