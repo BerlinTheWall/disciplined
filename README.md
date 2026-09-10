@@ -2,28 +2,35 @@
 
 An AI personal assistant and scheduler, built as a cross-platform mobile app.
 Plan your day by talking to it, and let it handle the structure — tasks,
-calendar, and reminders in one place.
+calendar, goals and reminders in one place.
 
-> In active development. **[FILL: one sentence on where it is — private beta,
-> pre-release, targeting an App Store submission, whatever is true]**
+> In active development, pre-release. The app runs end to end on iOS and
+> Android; subscription tiers are wired up but billing is not, so every account
+> currently runs with all features unlocked.
 
 ## What it does
 
-**[FILL: 4–6 bullets of actual capabilities, written as what a user does, not
-what the code contains. Some of these are implied by the dependencies — keep
-only what is genuinely built:]**
-
-- Capture tasks by voice, using on-device speech recognition
-- Read and write to the device calendar so scheduling stays in one place
-- Reorder and reschedule by dragging
-- Local notifications for reminders that work without a server round-trip
-- **[FILL: what the AI actually does — plan the day? break tasks down? re-prioritise? summarise? Be specific, this is the part people care about]**
-
-## Screenshots
-
-**[FILL: add two or three. A mobile app with no screenshots in its README loses
-most of its readers before they scroll. Drop images in `docs/` and reference
-them here.]**
+- **Plan a day by talking to it.** A chat assistant with tool access creates,
+  moves, reschedules and deletes real schedule blocks, habits and goals —
+  "move my dentist appointment to 6pm tomorrow" edits the calendar rather than
+  replying with advice.
+- **Capture by voice.** On-device speech recognition turns a spoken sentence
+  into a scheduled item.
+- **Break a goal into a plan.** A goal gets an AI-drafted description,
+  suggested milestones, and a proposed schedule you can accept or edit; goals
+  track progress, weighting and streaks.
+- **Plan the week in one pass.** A guided week-plan flow picks up habits and
+  goal work and lays them across the coming week.
+- **Keep one calendar.** Two-way pull-and-push against the device's own
+  calendars (Apple, Google, Outlook) through a native bridge, plus direct
+  Google Calendar and Microsoft Graph account connections.
+- **Get nudged, not nagged.** A daily briefing, contextual nudges and a coach
+  surface what matters next; reminders fire as local notifications, so they
+  work without a server round-trip.
+- **Hear it.** Reminders and assistant replies can be read aloud in a natural
+  voice (Azure AI Speech), split across a cheaper standard voice for routine
+  speech and an HD voice for the assistant.
+- **Drag to reschedule.** Reorder and re-time the day directly on the timeline.
 
 ## Architecture
 
@@ -38,7 +45,7 @@ React 19 + TypeScript (Vite)
         │  local notifications · calendar · speech recognition · filesystem
         │
         ▼
-FastAPI (async)  ──  Google Gemini
+FastAPI (async)  ──  Google Gemini · Azure AI Speech
         │
         ▼
 PostgreSQL (SQLAlchemy async + Alembic)
@@ -47,14 +54,17 @@ PostgreSQL (SQLAlchemy async + Alembic)
 **Frontend** — React 19, TypeScript, Vite, Tailwind CSS 4. State in Zustand
 with Immer. Animation with Framer Motion, drag-and-drop with dnd-kit, icons
 from Lucide. Packaged for iOS and Android through Capacitor, using its App,
-Browser, Filesystem, Local Notifications, Calendar and Speech Recognition
-plugins.
+Browser, Filesystem, Local Notifications, Calendar, Secure Storage and Speech
+Recognition plugins.
 
 **Backend** — FastAPI on Uvicorn. Async SQLAlchemy over asyncpg against
 PostgreSQL, with Alembic handling migrations. Authentication via JWT and
-bcrypt. LLM calls through `google-genai`. Settings validated with Pydantic.
+bcrypt. LLM calls through `google-genai`, text-to-speech through Azure AI
+Speech, transactional email through Resend. Settings validated with Pydantic.
+Stored OAuth tokens are encrypted at rest with Fernet.
 
-**Testing** — pytest on the backend, Playwright for end-to-end browser tests.
+**Testing** — pytest on the backend. There is no end-to-end suite yet; see
+[Project status](#project-status).
 
 ## Running it locally
 
@@ -62,12 +72,19 @@ bcrypt. LLM calls through `google-genai`. Settings validated with Pydantic.
 
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # [FILL: add a .env.example — list every variable, no values]
-alembic upgrade head
-uvicorn main:app --reload   # [FILL: correct the module path if it differs]
+cp .env.example .env             # then fill in the values it describes
+docker compose up -d             # Postgres on localhost:5432
+uvicorn app.main:app --reload --port 8000
 ```
+
+Interactive API docs at http://localhost:8000/docs. Migrations run on startup,
+so the schema is created on first boot.
+
+See [backend/README.md](backend/README.md) for the migration workflow and API
+reference.
 
 ### Frontend
 
@@ -80,24 +97,59 @@ npm run dev
 ### Mobile builds
 
 ```bash
-npm run build
-npx cap sync
-npx cap open ios        # requires Xcode
-npx cap open android    # requires Android Studio
+cd frontend
+npm run ios         # builds, syncs, opens Xcode (macOS only)
+npm run android     # builds, syncs, opens Android Studio
 ```
 
 ## Configuration
 
-**[FILL: list every environment variable the backend needs — database URL,
-JWT secret, Gemini API key — with a one-line description each and NO values.]**
+The backend reads its configuration from environment variables, all of them
+defined with defaults in `app/config.py` and documented — with links to where
+each credential is issued — in [backend/.env.example](backend/.env.example).
+Copy that file to `.env` and fill it in; nothing is required to boot, and each
+unset key disables its feature with a clear error rather than a broken flow.
+
+The keys that matter most: `GEMINI_API_KEY` (the assistant), `JWT_SECRET`
+(never deploy with the built-in default), `DATABASE_URL`, and
+`TOKEN_ENCRYPTION_KEY` (encrypts stored calendar OAuth tokens).
+
+## Development
+
+Before opening a pull request:
+
+```bash
+cd frontend && npm run ci     # format check, lint, types, build
+cd backend  && python -m pytest -q
+```
+
+CI runs exactly these on every pull request. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit format and what
+"done" means.
 
 ## Project status
 
-**[FILL: what's done, what's in progress, what's planned. Honest is better than
-impressive here — a clear roadmap reads as a real project, a vague one reads
-like a template.]**
+**Working** — auth with email verification and password reset, the schedule
+timeline, goals with AI-assisted milestones and scheduling, habits, the chat
+assistant with tool-calling, week planning, daily briefing, nudges, coach,
+device calendar sync, Google Calendar and Outlook connections, text-to-speech,
+onboarding, and per-tier rate limiting on the AI endpoints.
+
+**In progress** — subscription tiers. The gating dependency
+(`app/tiers.py`) and the Free/Plus/Pro split exist and are enforced on routes,
+but no billing is connected, so `User.subscription_tier` defaults to `pro` for
+everyone.
+
+**Next** — billing, an end-to-end test suite, crash reporting, and the App
+Store prerequisites (privacy policy, terms, in-app account deletion).
+
+**Out of scope for now** — standalone Meals, Workout and Expenses sections;
+they remain useful only as passive signals for nudges and the digest.
 
 ## Why I built it
 
-**[FILL: two or three sentences. Every good side project has a reason someone
-started it, and it's usually the most memorable thing in the README.]**
+Every scheduling app I tried made me do the scheduling. They were good at
+storing a plan and useless at making one — so the hard part, deciding what
+actually goes where in a finite day, stayed manual. Disciplined starts from the
+opposite end: you say what you want out of the week, and the assistant does the
+placing, the moving and the re-planning when the day inevitably goes sideways.
