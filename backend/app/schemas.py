@@ -53,6 +53,12 @@ class MessageResponse(CamelModel):
     message: str
 
 
+class DeleteAccountRequest(CamelModel):
+    # Re-entering the password is the confirmation for an irreversible action:
+    # a token alone is enough for an unlocked, borrowed or stolen phone.
+    password: str
+
+
 class VerifyEmailRequest(CamelModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6)

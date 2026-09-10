@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models import Event, Habit, User
 from app.schemas import (
     AuthResponse,
+    DeleteAccountRequest,
     ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
@@ -22,6 +23,7 @@ from app.schemas import (
     UserOut,
     VerifyEmailRequest,
 )
+from app.services.account_deletion import delete_account
 from app.services.codes import consume_code, issue_code, seconds_until_resend
 from app.services.email import code_email_html, send_email
 
@@ -136,6 +138,29 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         # verify-code sheet instead of showing a generic error.
         raise HTTPException(status_code=403, detail="Verify your email before logging in.")
     return AuthResponse(token=create_access_token(user), user=UserOut.model_validate(user))
+
+
+# POST, not DELETE: the password travels in the body, and a DELETE carrying a
+# body is stripped by enough proxies and HTTP clients to be a real risk for an
+# operation that must not silently half-happen.
+@router.post("/delete-account", status_code=204)
+async def delete_account_route(
+    body: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete the account and every row belonging to it.
+
+    Required by the App Store and Play Store for any app offering account
+    creation, and the only truthful response to "delete my data".
+    """
+    if not verify_password(body.password, user.hashed_password):
+        # Deliberately not counted toward the login lockout: this is an
+        # authenticated user confirming an action, not someone guessing their
+        # way in, and locking them out of their own account here would be a
+        # denial of service on the delete button.
+        raise HTTPException(status_code=403, detail="That password is incorrect.")
+    await delete_account(db, user)
 
 
 @router.get("/me", response_model=UserOut)
