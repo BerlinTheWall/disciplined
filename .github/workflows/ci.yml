@@ -173,7 +173,7 @@ jobs:
       - name: Start the API
         working-directory: backend
         run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level warning &
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level info > /tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
           for i in $(seq 1 45); do
             if curl -fsS --max-time 2 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
@@ -223,6 +223,12 @@ jobs:
       - name: Run end-to-end tests
         working-directory: frontend
         run: npm run test:e2e
+
+      # The API's own view of what the browser asked it, which is the other
+      # half of any e2e failure that looks like a UI problem.
+      - name: API log
+        if: failure()
+        run: tail -100 /tmp/api.log || true
 
       - name: Upload the report
         if: failure()

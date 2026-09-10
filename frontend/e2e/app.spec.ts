@@ -44,7 +44,24 @@ async function login(page: Page) {
   await page.goto("/");
   await page.getByPlaceholder("you@example.com").fill(EMAIL);
   await page.getByPlaceholder("Your password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Login", exact: true }).click();
+
+  // Watch the actual call rather than inferring from the UI. When this breaks,
+  // "the API returned 401 saying X, having been sent Y" is a diagnosis;
+  // "element not found" is the start of one.
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/auth/login") && r.request().method() === "POST"
+    ),
+    page.getByRole("button", { name: "Login", exact: true }).click(),
+  ]);
+
+  if (!response.ok()) {
+    throw new Error(
+      `login failed: ${response.status()} ${await response.text()}\n` +
+        `  requested: ${response.url()}\n` +
+        `  sent: ${response.request().postData()}`
+    );
+  }
   // The bottom nav only exists inside the authenticated shell, so it is the
   // signal that login completed. Deliberately not the quick-add bar: that
   // lives in the Timeline, which only renders on the schedule page, and a
