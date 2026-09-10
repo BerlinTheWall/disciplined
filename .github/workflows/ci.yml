@@ -189,6 +189,26 @@ jobs:
         working-directory: backend
         run: python scripts/seed_e2e_user.py
 
+      # Log in through the API before the browser gets involved. If this fails,
+      # the problem is the account or the database and there is no point
+      # reading a Playwright trace; if it passes, any browser failure is the
+      # frontend's.
+      - name: Check the seeded account can log in
+        run: |
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:8000/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$E2E_EMAIL\",\"password\":\"$E2E_PASSWORD\"}")
+          echo "login -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::The seeded account cannot log in through the API ($code)."
+            # The body carries the reason (wrong password, unverified, locked)
+            # and contains no token on a failure.
+            cat /tmp/login.json
+            exit 1
+          fi
+          echo "token received, account is usable"
+
       - name: Install frontend
         working-directory: frontend
         run: npm ci

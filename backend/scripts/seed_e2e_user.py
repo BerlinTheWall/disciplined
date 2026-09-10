@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.auth import hash_password  # noqa: E402
+from app.auth import hash_password, verify_password  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.database import Base, engine  # noqa: E402
 from app.models import User  # noqa: E402
@@ -29,6 +29,11 @@ EMAIL = os.environ.get("E2E_EMAIL", "e2e@example.com")
 PASSWORD = os.environ.get("E2E_PASSWORD", "e2e-test-password")
 
 _SAFE_HOSTS = ("localhost", "127.0.0.1", "postgres", "::1")
+
+
+def _where() -> str:
+    """host/dbname, with any credentials stripped — safe to print in a log."""
+    return settings.database_url.rsplit("@", 1)[-1]
 
 
 def _refuse_if_not_local() -> None:
@@ -66,8 +71,19 @@ async def main() -> None:
         user.login_locked_until = None
         await db.commit()
 
+        # Prove the write landed and the password actually verifies, rather
+        # than trusting that it did. A seed that silently produces an account
+        # nobody can log into costs far more to diagnose from the browser end.
+        check = await db.scalar(select(User).where(User.email == EMAIL))
+        if check is None:
+            raise SystemExit(f"seed wrote nothing: {EMAIL} is not in the database")
+        if not verify_password(PASSWORD, check.hashed_password):
+            raise SystemExit("seed wrote a password that does not verify")
+        if not check.email_verified:
+            raise SystemExit("seed left the account unverified; it could not log in")
+
     await engine.dispose()
-    print(f"seeded {EMAIL}")
+    print(f"seeded {EMAIL} (verified, tier={check.subscription_tier}) into {_where()}")
 
 
 if __name__ == "__main__":
