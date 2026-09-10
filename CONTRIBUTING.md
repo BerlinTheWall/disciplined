@@ -62,13 +62,48 @@ the body with `Closes #123`.
 ## Before you open a pull request
 
 ```bash
-cd frontend && npm run ci      # format check, lint, types, build
+cd frontend && npm run ci      # format check, lint, types, tests, build
 cd backend  && python -m pytest -q
 ```
 
 CI runs exactly these, plus an import smoke test and a check that Alembic has a
 single migration head. Running them locally first is faster than waiting for a
 red build.
+
+## Tests
+
+Neither suite needs anything running.
+
+**Backend** — pytest, with fixtures in `tests/conftest.py`: `client` (the real
+app over ASGI), `user` and `auth_headers` (a signed-in account), `make_user`
+(more accounts, any tier) and `db`. Async tests need no decorator;
+`asyncio_mode = auto` is set in `pytest.ini`.
+
+```python
+async def test_cannot_read_another_users_event(client, auth_headers, make_user):
+    ...
+```
+
+The database is in-memory SQLite by default so the suite runs in seconds.
+CI additionally runs it against a real Postgres via `TEST_DATABASE_URL`, so
+the Postgres-only bits (the models' JSONB columns) are genuinely exercised
+rather than standing in as SQLite JSON. If you write a test that depends on
+Postgres behaviour, run it that way locally too:
+
+```bash
+docker compose up -d
+TEST_DATABASE_URL=postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined_test   python -m pytest -q
+```
+
+**Frontend** — Vitest with Testing Library, `npm run test` (or `test:watch`).
+Test files live next to what they cover, in `__tests__/`.
+
+What is worth testing here, in rough order: anything where a bug is a security
+bug (auth, tier gating, one account reading another's rows), the pure logic
+that is painful to verify by hand (`lib/quickAdd.ts`, `lib/date.ts`, the
+calendar time conversions), and components whose whole job is to appear when
+something has gone wrong. Rendering-only components are usually not worth a
+test; a snapshot of a div rarely fails for a reason anyone cares about.
 
 ## Definition of done
 

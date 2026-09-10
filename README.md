@@ -64,8 +64,9 @@ Speech, transactional email through Resend. Settings validated with Pydantic.
 Stored OAuth tokens are encrypted at rest with Fernet. Errors report to Sentry
 and every request carries an id — see [Observability](#observability).
 
-**Testing** — pytest on the backend. There is no end-to-end suite yet; see
-[Project status](#project-status).
+**Testing** — pytest on the backend (against in-memory SQLite locally and real
+Postgres in CI), Vitest with Testing Library on the frontend. No end-to-end
+suite driving a real device yet; see [Project status](#project-status).
 
 ## Running it locally
 
@@ -120,8 +121,17 @@ The keys that matter most: `GEMINI_API_KEY` (the assistant), `JWT_SECRET`
 Before opening a pull request:
 
 ```bash
-cd frontend && npm run ci     # format check, lint, types, build
+cd frontend && npm run ci     # format check, lint, types, tests, build
 cd backend  && python -m pytest -q
+```
+
+The backend suite needs nothing running — it uses in-memory SQLite by default.
+Set `TEST_DATABASE_URL` to run it against a real Postgres instead, which is
+what CI does:
+
+```bash
+docker compose up -d
+TEST_DATABASE_URL=postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined_test   python -m pytest -q
 ```
 
 CI runs exactly these on every pull request. See
@@ -171,8 +181,7 @@ with request-id log correlation.
 but no billing is connected, so `User.subscription_tier` defaults to `pro` for
 everyone.
 
-**Next** — billing, a real test suite (the backend has one, the frontend has
-no test runner yet), and the App Store prerequisites (privacy policy, terms,
+**Next** — billing, and the App Store prerequisites (privacy policy, terms,
 in-app account deletion).
 
 **Out of scope for now** — standalone Meals, Workout and Expenses sections;
