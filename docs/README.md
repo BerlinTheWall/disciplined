@@ -3,6 +3,7 @@
 | Document | What it is for |
 |---|---|
 | [CI.md](CI.md) | What the pipeline runs, why each check exists, and how to reproduce a failure locally |
+| [RUNBOOK.md](RUNBOOK.md) | Deploy, roll back, rotate a secret, and what to do when production is broken |
 | [adr/](adr/) | Decisions that were non-obvious and are expensive to revisit, and the reasoning behind them |
 | [APP_STORE.md](APP_STORE.md) | Store submission requirements: what is done, what is still outstanding |
 | [PRIVACY.md](PRIVACY.md) | Privacy policy — **draft**, needs placeholders filled, legal review, and hosting |

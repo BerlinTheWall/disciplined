@@ -1,0 +1,106 @@
+name: Pages
+
+# Publishes the privacy policy and terms to
+# https://berlinthewall.github.io/disciplined/ — both stores require a public
+# URL a reviewer can open, and a markdown file in a repository is not one.
+#
+# It will not publish an unfinished document. scripts/build_pages.py refuses
+# while any placeholder or the draft banner remains, and this workflow *skips*
+# rather than fails in that case: a check that is permanently red teaches
+# people to ignore red, which is the opposite of the point.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/PRIVACY.md"
+      - "docs/TERMS.md"
+      - "scripts/build_pages.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one midway — a half-replaced set of
+# legal pages is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Ready to publish?
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - run: pip install markdown
+
+      - name: Check the documents
+        id: gate
+        run: |
+          python scripts/build_pages.py --check | tee /tmp/readiness.txt
+          if grep -q "^READY" /tmp/readiness.txt; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Policies not published"
+              echo ""
+              echo "Publishing is intentionally blocked until these are resolved:"
+              echo ""
+              sed -n 's/^  - /- /p' /tmp/readiness.txt
+              echo ""
+              echo "Fill the values and delete the draft banner in each document."
+              echo "Deleting the banner is the switch: it means a lawyer has read it."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::Policies are not ready to publish — see the job summary. This is expected, not a failure."
+          fi
+
+  deploy:
+    name: Publish
+    needs: check
+    if: needs.check.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - run: pip install markdown
+
+      - name: Build
+        run: python scripts/build_pages.py
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Summary
+        run: |
+          {
+            echo "### Policies published"
+            echo ""
+            echo "- Privacy: ${{ steps.deployment.outputs.page_url }}privacy/"
+            echo "- Terms: ${{ steps.deployment.outputs.page_url }}terms/"
+            echo ""
+            echo "Paste these into App Store Connect and the Play Console."
+          } >> "$GITHUB_STEP_SUMMARY"
