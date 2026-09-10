@@ -34,9 +34,12 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    // node_modules aside, `android`/`ios` contain a copy of the built web
-    // assets after `cap sync`, which would otherwise be collected twice.
-    exclude: ["node_modules", "dist", "android", "ios", "vendor"],
+    // Scoped to src explicitly. Vitest's default include matches *.spec.ts
+    // anywhere, which swallows the Playwright suite in e2e/ and fails with
+    // "Playwright Test did not expect test() to be called here".
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // `android`/`ios` hold a copy of the built web assets after `cap sync`.
+    exclude: ["node_modules", "dist", "android", "ios", "vendor", "e2e"],
   },
   define: {
     // Inlined at build time rather than read from import.meta.env, so it works

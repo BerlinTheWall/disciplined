@@ -9,8 +9,14 @@ Every pull request, and every push to `main`. Pushing again to the same branch
 cancels the previous run — there is no point paying for a build of a commit
 nobody will look at.
 
-Nothing is a *required* check today, because `main` has no branch protection.
-That is a deliberate gap, not an oversight: see [Gaps](#known-gaps).
+`main` is protected. **`Frontend` and `Backend` are required**: a red build
+physically blocks the merge. The branch must also be up to date with `main`
+before merging, so the checks that passed are the checks against what will
+actually land — expect an **Update branch** step on a pull request that has sat
+while something else merged.
+
+`End-to-end` runs on every pull request but is **not** required yet. Approvals
+are set to zero deliberately; see [CONTRIBUTING](../CONTRIBUTING.md) for why.
 
 ## Frontend job
 
@@ -111,16 +117,61 @@ done.
 Never squash-merge the base of a stack — it rewrites the commits the PRs above
 it are built on.
 
+## End-to-end job
+
+Playwright, against the built app talking to a real API and Postgres, both
+started by the job. Four tests: the login page, a refused password, a
+successful sign-in, and an event created through the API appearing on the
+schedule.
+
+Two details that are load-bearing rather than incidental:
+
+- **The API starts before the account is seeded.** Startup runs
+  `alembic upgrade head`; seeding first would create the schema out from under
+  Alembic.
+- **`VITE_API_URL` is set explicitly.** `frontend/.env.production` is committed
+  and points at the deployed Railway backend, and `vite build` runs in
+  production mode and loads it — so without an override the suite silently
+  tests *production*. The suite now refuses to start unless that variable is a
+  localhost origin.
+
+Not required to merge yet: a browser test crossing the whole stack earns that
+only once it has proved it is not flaky.
+
+## Deploy check
+
+Railway rebuilds on every push to `main`. `deploy-check.yml` then polls
+`/api/health/ready` until the reported release matches the pushed commit —
+rather than sleeping and hoping — and asserts the backend reaches its database,
+that an unknown API route 404s, and that the frontend serves its shell.
+
+The 404 assertion is not padding: the frontend service answers *every* path
+with its SPA shell and a `200`, so a smoke test aimed at the wrong host, or one
+that reads status codes instead of response bodies, passes against a completely
+dead backend.
+
+## Release
+
+Pushing a `v*` tag publishes a GitHub Release with notes taken from
+`CHANGELOG.md`. It refuses to publish if the tag is not an ancestor of `main`,
+or if the changelog has no section for that version, so a release cannot ship
+unreviewed code or empty notes. See [CONTRIBUTING](../CONTRIBUTING.md) for the
+steps to cut one.
+
 ## Known gaps
 
-- **No required checks.** `main` has no branch protection, so a red build does
-  not physically prevent a merge. Turning on protection with both jobs required
-  is a one-time settings change and the natural next step.
-- **No deploy verification.** CI proves the code builds; nothing checks that
-  the deployed service is healthy afterwards. `/api/health` exists and is
-  unused by any automation.
-- **No end-to-end tests.** Nothing drives a real device or the packaged app,
-  so the Capacitor plugin paths (notifications, speech, calendar) are only ever
-  verified by hand.
+- **The end-to-end suite is not a required check**, and one of its tests has
+  been seen to pass only on retry. Promote it once it has been boring for a
+  couple of weeks — and fix that flake first.
+- **No test drives the packaged app.** The suite runs the web build, so the
+  Capacitor plugin paths (notifications, speech, device calendar) are still
+  only ever verified by hand on a device.
+- **The quick-add bar is untested end to end.** It routes everything through
+  the Gemini assistant, so testing it needs the assistant stubbed.
+- **No staging environment.** `main` deploys straight to production.
+- **No alerting.** Sentry records errors; nothing pages anyone.
 - **The Netlify preview is failing** and the cause is unresolved — it succeeded
-  on PRs #1–3 in June/July and failed on #4 in September.
+  on PRs #1–3 in June/July and has failed since #4 in September. The site it
+  deploys serves a build that predates authentication, and duplicates the
+  frontend Railway already hosts, so the open question is whether to fix it or
+  disconnect it.

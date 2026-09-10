@@ -117,3 +117,133 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined_test
         run: python -m pytest -q
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    # Not gating merges yet: this suite is new, and a browser test that crosses
+    # the whole stack earns the right to block a merge only once it has proved
+    # it is not flaky. Promote it to a required check after it has been boring
+    # for a couple of weeks.
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: disciplined
+          POSTGRES_PASSWORD: disciplined
+          POSTGRES_DB: disciplined_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U disciplined -d disciplined_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined_e2e
+      JWT_SECRET: e2e-only-not-a-real-secret
+      E2E_EMAIL: e2e@example.com
+      E2E_PASSWORD: e2e-test-password
+      # Point the build at the API started below. Without this the browser
+      # talks to *production*: frontend/.env.production is tracked and sets
+      # VITE_API_URL to the live Railway backend, and `vite build` runs in
+      # production mode, so it loads that file. An explicit environment
+      # variable takes precedence over it.
+      VITE_API_URL: http://127.0.0.1:8000
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      # Start the API before seeding: startup runs `alembic upgrade head`, and
+      # seeding into a database Alembic has not migrated yet would create the
+      # schema out from under it.
+      - name: Start the API
+        working-directory: backend
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level info > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 45); do
+            if curl -fsS --max-time 2 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+              echo "api up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not come up within 45s"
+          exit 1
+
+      - name: Seed the test account
+        working-directory: backend
+        run: python scripts/seed_e2e_user.py
+
+      # Log in through the API before the browser gets involved. If this fails,
+      # the problem is the account or the database and there is no point
+      # reading a Playwright trace; if it passes, any browser failure is the
+      # frontend's.
+      - name: Check the seeded account can log in
+        run: |
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:8000/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$E2E_EMAIL\",\"password\":\"$E2E_PASSWORD\"}")
+          echo "login -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::The seeded account cannot log in through the API ($code)."
+            # The body carries the reason (wrong password, unverified, locked)
+            # and contains no token on a failure.
+            cat /tmp/login.json
+            exit 1
+          fi
+          echo "token received, account is usable"
+
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # Playwright builds the app and serves it with `vite preview` itself
+      # (see the webServer block in playwright.config.ts). VITE_API_URL is left
+      # at its default, which is already the API started above.
+      - name: Run end-to-end tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      # The API's own view of what the browser asked it, which is the other
+      # half of any e2e failure that looks like a UI problem.
+      - name: API log
+        if: failure()
+        run: tail -100 /tmp/api.log || true
+
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Stop the API
+        if: always()
+        run: kill "$(cat /tmp/api.pid)" 2>/dev/null || true

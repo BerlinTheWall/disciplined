@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Sparkles, X } from "lucide-react";
 
 import BottomSheet from "./BottomSheet";
 import { addDaysISO, todayISODate } from "@/lib/date";
-import { tap } from "@/lib/motion";
+import { spring, tap } from "@/lib/motion";
 import { isPendingActionStale, runPendingAction } from "@/lib/pendingAction";
 import { useChatStore } from "@/store/chatStore";
 import { useNotificationHistoryStore, type HistoryEntry } from "@/store/notificationHistoryStore";
@@ -84,13 +84,15 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
 
   // "Disagree" mirrors NudgeHost's "Not now" — for nudges (not coach
   // check-ins, which are server-planned per day and have no cooldown key)
-  // this also suppresses that exact subject for a few days.
+  // this also suppresses that exact subject for a few days. Discarding is
+  // the user closing the question for good, so the entry goes away rather
+  // than sitting there as a "Discarded" record they'd have to X out too.
   function respondDisagree(entry: HistoryEntry) {
-    useNotificationHistoryStore.getState().setResponse(entry.id, "disagreed");
     if (entry.kind === "nudge" && entry.nudgeType && entry.subjectId) {
       const key = `${entry.nudgeType}:${entry.subjectId}`;
       useNudgeStore.getState().dismiss(key, addDaysISO(todayISODate(), DISMISS_COOLDOWN_DAYS));
     }
+    useNotificationHistoryStore.getState().discardEntry(entry.id);
   }
 
   return (
@@ -128,30 +130,97 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {entries.map((entry) => {
-                // Nudges/coach check-ins are the AI's proactive suggestions —
-                // they get a firing date and an explicit Agree/Disagree
-                // response instead of reminders' plain tap-to-jump.
-                if (entry.kind !== "nudge" && entry.kind !== "coach") {
-                  return (
-                    <div
-                      key={entry.id}
-                      className="flex items-start gap-3 p-3 rounded-2xl bg-surface"
-                    >
-                      <button
-                        onClick={() => handleTap(entry)}
-                        className="flex flex-1 min-w-0 items-start gap-3 text-left"
+              {/* Rows leave the list often now that a discard deletes one, so
+                  they collapse out instead of the list snapping shut. */}
+              <AnimatePresence initial={false}>
+                {entries.map((entry) => {
+                  // Nudges/coach check-ins are the AI's proactive suggestions —
+                  // they get a firing date and an explicit Agree/Disagree
+                  // response instead of reminders' plain tap-to-jump.
+                  if (entry.kind !== "nudge" && entry.kind !== "coach") {
+                    return (
+                      <motion.div
+                        key={entry.id}
+                        layout
+                        exit={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
+                        transition={spring.gentle}
+                        className="flex items-start gap-3 p-3 rounded-2xl bg-surface overflow-hidden"
                       >
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                          <Bell size={16} />
-                        </div>
-                        <div className="flex-1 min-w-0">
+                        <button
+                          onClick={() => handleTap(entry)}
+                          className="flex flex-1 min-w-0 items-start gap-3 text-left"
+                        >
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
+                            <Bell size={16} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-fg text-sm leading-tight">
+                              {entry.title}
+                            </p>
+                            <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+                          </div>
+                        </button>
+                        <motion.button
+                          onClick={() => removeEntry(entry.id)}
+                          whileTap={tap}
+                          aria-label="Remove notification"
+                          className="p-1 -m-1 text-fg-faint shrink-0"
+                        >
+                          <X size={16} />
+                        </motion.button>
+                      </motion.div>
+                    );
+                  }
+
+                  const dateLabel = new Date(entry.firedAt).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  });
+                  return (
+                    <motion.div
+                      key={entry.id}
+                      layout
+                      exit={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
+                      transition={spring.gentle}
+                      className="flex items-start gap-3 p-3 rounded-2xl bg-surface overflow-hidden"
+                    >
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
+                        <Sparkles size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
                           <p className="font-semibold text-fg text-sm leading-tight">
                             {entry.title}
                           </p>
-                          <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+                          <span className="text-[11px] text-fg-faint shrink-0">{dateLabel}</span>
                         </div>
-                      </button>
+                        <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
+                        {entry.response ? (
+                          <p className="text-xs text-fg-faint mt-2 italic">
+                            {/* "Discarded" only ever reaches entries persisted
+                              before a discard started deleting them outright;
+                              those age out within the week. */}
+                            {entry.response === "agreed" ? "Confirmed" : "Discarded"}
+                          </p>
+                        ) : (
+                          <div className="flex gap-2 mt-2">
+                            <motion.button
+                              onClick={() => respondAgree(entry)}
+                              whileTap={tap}
+                              className="h-7 px-3 rounded-full bg-fg text-fg-inverse text-xs font-semibold"
+                            >
+                              Yes
+                            </motion.button>
+                            <motion.button
+                              onClick={() => respondDisagree(entry)}
+                              whileTap={tap}
+                              className="h-7 px-3 rounded-full bg-surface-raised text-fg text-xs font-medium"
+                            >
+                              Dismiss
+                            </motion.button>
+                          </div>
+                        )}
+                      </div>
                       <motion.button
                         onClick={() => removeEntry(entry.id)}
                         whileTap={tap}
@@ -160,59 +229,10 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
                       >
                         <X size={16} />
                       </motion.button>
-                    </div>
+                    </motion.div>
                   );
-                }
-
-                const dateLabel = new Date(entry.firedAt).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                });
-                return (
-                  <div key={entry.id} className="flex items-start gap-3 p-3 rounded-2xl bg-surface">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-surface-raised text-fg-muted">
-                      <Sparkles size={16} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="font-semibold text-fg text-sm leading-tight">{entry.title}</p>
-                        <span className="text-[11px] text-fg-faint shrink-0">{dateLabel}</span>
-                      </div>
-                      <p className="text-sm text-fg-muted mt-0.5">{entry.body}</p>
-                      {entry.response ? (
-                        <p className="text-xs text-fg-faint mt-2 italic">
-                          {entry.response === "agreed" ? "Confirmed" : "Discarded"}
-                        </p>
-                      ) : (
-                        <div className="flex gap-2 mt-2">
-                          <motion.button
-                            onClick={() => respondAgree(entry)}
-                            whileTap={tap}
-                            className="h-7 px-3 rounded-full bg-fg text-fg-inverse text-xs font-semibold"
-                          >
-                            Yes
-                          </motion.button>
-                          <motion.button
-                            onClick={() => respondDisagree(entry)}
-                            whileTap={tap}
-                            className="h-7 px-3 rounded-full bg-surface-raised text-fg text-xs font-medium"
-                          >
-                            Dismiss
-                          </motion.button>
-                        </div>
-                      )}
-                    </div>
-                    <motion.button
-                      onClick={() => removeEntry(entry.id)}
-                      whileTap={tap}
-                      aria-label="Remove notification"
-                      className="p-1 -m-1 text-fg-faint shrink-0"
-                    >
-                      <X size={16} />
-                    </motion.button>
-                  </div>
-                );
-              })}
+                })}
+              </AnimatePresence>
             </div>
           )}
         </div>
