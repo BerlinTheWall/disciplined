@@ -147,22 +147,22 @@ function RingStat({
   );
 }
 
-function Chip({ count, label, active }: { count: number; label: string; active?: boolean }) {
+// Status dots for the To Do / In Progress / Done counts — grey for not
+// started, amber for underway, and the tasks-ring green for finished.
+const STATUS_TODO = "var(--fg-faint)";
+const STATUS_IN_PROGRESS = "#eab464";
+const STATUS_DONE = "#9ec06a";
+
+// A read-only status count. All three share one neutral style — nothing here
+// is tappable, so no pill should look selected; the dot carries the status.
+// Pills grow to share the row but never shrink below their content — "In
+// Progress" is too wide for an equal third on a phone.
+function Chip({ count, label, color }: { count: number; label: string; color: string }) {
   return (
-    <div
-      className={`flex items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 shrink-0 border ${
-        active ? "border-transparent" : "border-border-strong bg-surface"
-      }`}
-      style={active ? { backgroundColor: "rgba(158, 192, 106, 0.22)" } : undefined}
-    >
-      <span
-        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold tabular-nums ${
-          active ? "bg-surface text-fg" : "bg-surface-raised text-fg-muted"
-        }`}
-      >
-        {count}
-      </span>
-      <span className={`text-sm font-medium ${active ? "text-fg" : "text-fg-muted"}`}>{label}</span>
+    <div className="grow shrink-0 flex items-center justify-center gap-2 rounded-full px-3.5 py-2.5 border border-border-strong bg-surface-card">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+      <span className="text-[15px] font-medium text-fg-muted">{label}</span>
+      <span className="text-[15px] font-bold text-fg tabular-nums">{count}</span>
     </div>
   );
 }
@@ -521,9 +521,9 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: "none" }}>
-          <Chip count={todo} label="To Do" active />
-          <Chip count={inProgress} label="In Progress" />
-          <Chip count={done} label="Done" />
+          <Chip count={todo} label="To Do" color={STATUS_TODO} />
+          <Chip count={inProgress} label="In Progress" color={STATUS_IN_PROGRESS} />
+          <Chip count={done} label="Done" color={STATUS_DONE} />
         </div>
 
         {focus && fStart && fEnd ? (
