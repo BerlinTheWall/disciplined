@@ -1,0 +1,97 @@
+name: Deploy check
+
+# Railway rebuilds and deploys on every push to main, and until now nothing
+# checked whether that deploy actually worked — Railway reports "deployed",
+# and a broken service was found out about from a user.
+#
+# This waits for the new release to appear and then asserts it can serve.
+on:
+  push:
+    branches: [main]
+  # So you can re-check the current deploy without pushing anything.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Two separate Railway services. The frontend answers *every* path with its
+  # SPA shell, so hitting /api/health on the frontend host returns 200 and
+  # tells you nothing — the backend host is the one that matters.
+  BACKEND: https://disciplined-production-807b.up.railway.app
+  FRONTEND: https://disciplined-production.up.railway.app
+
+jobs:
+  verify:
+    name: Verify deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the new release to go live
+        id: wait
+        run: |
+          want="${GITHUB_SHA:0:12}"
+          echo "waiting for release $want at $BACKEND"
+          deadline=$(( SECONDS + 600 ))
+
+          while [ $SECONDS -lt $deadline ]; do
+            body=$(curl -fsS --max-time 10 "$BACKEND/api/health/ready" 2>/dev/null || echo '')
+            got=$(printf '%s' "$body" | jq -r '.release // empty' 2>/dev/null || echo '')
+
+            if [ -n "$body" ] && [ "$got" = "$want" ]; then
+              echo "matched=true" >> "$GITHUB_OUTPUT"
+              echo "live: $body"
+              exit 0
+            fi
+
+            # Railway injects RAILWAY_GIT_COMMIT_SHA on its own services; if it
+            # ever stops, `release` is empty and matching would never succeed.
+            # Rather than fail forever on a missing variable, accept a healthy
+            # response and say plainly that the commit could not be confirmed.
+            if [ -n "$body" ] && [ -z "$got" ]; then
+              echo "::warning::Service is healthy but reports no release — cannot confirm this commit is the one deployed."
+              echo "matched=false" >> "$GITHUB_OUTPUT"
+              echo "live: $body"
+              exit 0
+            fi
+
+            echo "  not yet (reported '${got:-unreachable}') — retrying in 15s"
+            sleep 15
+          done
+
+          echo "::error::Timed out after 10 minutes waiting for $want to go live. The deploy did not land, or it is failing to start — check Railway's deploy log."
+          exit 1
+
+      - name: Backend serves and reaches its database
+        run: |
+          body=$(curl -fsS --max-time 15 "$BACKEND/api/health/ready")
+          echo "$body"
+          # Assert the body, never just the status code: the frontend service
+          # answers this path with HTML and a 200.
+          [ "$(printf '%s' "$body" | jq -r .status)" = "ok" ] || { echo "::error::Backend not ready"; exit 1; }
+          [ "$(printf '%s' "$body" | jq -r .database)" = "ok" ] || { echo "::error::Backend cannot reach its database"; exit 1; }
+
+      - name: Backend rejects unknown routes
+        run: |
+          # Proves we are talking to the API and not to something that answers
+          # everything with a 200 — the exact failure this job exists to avoid.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BACKEND/api/__does_not_exist__")
+          echo "unknown route -> $code"
+          [ "$code" = "404" ] || { echo "::error::Expected 404 from the API, got $code — is BACKEND pointing at the frontend service?"; exit 1; }
+
+      - name: Frontend serves the app shell
+        run: |
+          html=$(curl -fsS --max-time 15 "$FRONTEND/")
+          printf '%s' "$html" | grep -q 'id="root"' || { echo "::error::Frontend did not return the app shell"; exit 1; }
+          echo "frontend shell ok"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy check"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA:0:12}\`"
+            echo "- Release confirmed: \`${{ steps.wait.outputs.matched }}\`"
+            echo "- Backend: $BACKEND"
+            echo "- Frontend: $FRONTEND"
+          } >> "$GITHUB_STEP_SUMMARY"
