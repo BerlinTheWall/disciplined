@@ -147,6 +147,12 @@ jobs:
       JWT_SECRET: e2e-only-not-a-real-secret
       E2E_EMAIL: e2e@example.com
       E2E_PASSWORD: e2e-test-password
+      # Point the build at the API started below. Without this the browser
+      # talks to *production*: frontend/.env.production is tracked and sets
+      # VITE_API_URL to the live Railway backend, and `vite build` runs in
+      # production mode, so it loads that file. An explicit environment
+      # variable takes precedence over it.
+      VITE_API_URL: http://127.0.0.1:8000
 
     steps:
       - uses: actions/checkout@v7

@@ -13,6 +13,26 @@ import { expect, test, type Page } from "@playwright/test";
 const EMAIL = process.env.E2E_EMAIL ?? "e2e@example.com";
 const PASSWORD = process.env.E2E_PASSWORD ?? "e2e-test-password";
 
+/**
+ * These tests sign in and create data, so they must never point at production.
+ *
+ * That is a live risk rather than a theoretical one: `frontend/.env.production`
+ * is committed and sets VITE_API_URL to the deployed Railway backend, and
+ * `vite build` runs in production mode and loads it. Without an explicit
+ * override the suite silently tests production — which is how it was
+ * behaving until this check existed.
+ */
+test.beforeAll(() => {
+  const api = process.env.VITE_API_URL ?? "";
+  const local = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(api);
+  if (!local) {
+    throw new Error(
+      `Refusing to run against "${api || "(unset — .env.production wins)"}". ` +
+        "Set VITE_API_URL to a local API, e.g. http://127.0.0.1:8000."
+    );
+  }
+});
+
 /** Zustand's persist middleware reads this shape out of localStorage. */
 const persisted = (state: Record<string, unknown>) => JSON.stringify({ state, version: 0 });
 
