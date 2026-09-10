@@ -14,3 +14,7 @@ email-validator>=2.2
 sentry-sdk[fastapi]>=2.69
 
 pytest>=8.3
+pytest-asyncio>=1.0
+# In-memory database for the test suite; CI also runs it against real Postgres
+# (TEST_DATABASE_URL). See tests/conftest.py.
+aiosqlite>=0.20
