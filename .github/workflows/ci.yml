@@ -46,6 +46,9 @@ jobs:
       - name: Types
         run: npm run typecheck
 
+      - name: Tests
+        run: npm run test
+
       - name: Build
         run: npm run build
 
@@ -55,6 +58,29 @@ jobs:
     defaults:
       run:
         working-directory: backend
+
+    # The suite defaults to in-memory SQLite so `pytest` works locally with
+    # nothing running. CI points it at a real Postgres -- same major version
+    # as docker-compose uses in dev -- so the tests also run against the
+    # engine production uses, and the models' JSONB columns are exercised as
+    # JSONB rather than as SQLite's JSON stand-in.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: disciplined
+          POSTGRES_PASSWORD: disciplined
+          POSTGRES_DB: disciplined_test
+        ports:
+          - 5432:5432
+        # Postgres accepts and drops connections while starting, so without a
+        # healthcheck the first test can race the server.
+        options: >-
+          --health-cmd "pg_isready -U disciplined -d disciplined_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v7
 
@@ -85,4 +111,6 @@ jobs:
           test "$heads" -eq 1
 
       - name: Tests
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://disciplined:disciplined@localhost:5432/disciplined_test
         run: python -m pytest -q
