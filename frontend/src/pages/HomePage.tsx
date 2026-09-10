@@ -557,14 +557,6 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
                 <p className="text-xl font-bold text-fg leading-snug flex-1 min-w-0 truncate">
                   {focus.title}
                 </p>
-                <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
-              </div>
-
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-1.5 text-sm text-fg-faint">
-                  <Clock size={15} />
-                  {fStart.time} – {fEnd.time} {fEnd.period}
-                </div>
                 <motion.span
                   onClick={(ev) => {
                     ev.stopPropagation();
@@ -595,6 +587,14 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
                     </motion.span>
                   )}
                 </motion.span>
+              </div>
+
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center gap-1.5 text-sm text-fg-faint pl-2.5">
+                  <Clock size={15} />
+                  {fStart.time} – {fEnd.time} {fEnd.period}
+                </div>
+                <ArrowUpRight size={18} className="text-fg-faint shrink-0 mr-1.75" />
               </div>
             </motion.button>
           </>
