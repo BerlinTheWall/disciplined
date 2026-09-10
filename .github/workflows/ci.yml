@@ -1,0 +1,88 @@
+name: CI
+
+# Every push to main and every pull request. `concurrency` cancels the previous
+# run when you push again to the same branch — no point paying for a build of
+# a commit nobody will look at.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (lint · types · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` (not `install`) — installs exactly what package-lock.json
+      # pins and fails if the lockfile is out of sync with package.json.
+      - run: npm ci
+
+      # Split into separate steps rather than one `npm run ci` so a failure
+      # names itself in the job summary instead of hiding behind "&&".
+      - name: Formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend (tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      # Import the whole app before running tests. Every setting in config.py
+      # has a default, so this needs no .env and no database — but it does
+      # execute every router and service import, which is what actually breaks
+      # a deploy (a bad import never shows up in a unit test that only touches
+      # one pure module).
+      - name: Import smoke test
+        run: python -c "import app.main"
+
+      # Alembic resolves migration scripts from disk, so this needs no
+      # database connection. Two heads means two branches each added a
+      # migration from the same parent — caught here rather than at deploy,
+      # where `alembic upgrade head` aborts and takes the release with it.
+      - name: Single migration head
+        run: |
+          heads=$(python -m alembic heads | grep -c '(head)')
+          echo "alembic heads: $heads"
+          test "$heads" -eq 1
+
+      - name: Tests
+        run: python -m pytest -q

@@ -10,6 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "typecheck": "tsc -b --force",
+    "ci": "npm run format:check && npm run lint && npm run typecheck && npm run build",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
     "android": "npm run build && npx cap sync android && npx cap open android"
   },
