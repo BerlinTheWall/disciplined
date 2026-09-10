@@ -153,11 +153,63 @@ explain *why*, not *what* — a comment that restates the line below it is noise
 and a comment recording the reason a non-obvious choice was made is the most
 valuable thing in the file. Match the density of the code you are editing.
 
-## Reviews
+## Reviews and merging
 
-Every pull request needs one approval before merge. Squash-merge, and make the
-squashed subject a proper Conventional Commit — it becomes the permanent
-history and the source for release notes.
+`main` is protected. Everything goes through a pull request, both CI jobs
+(`Frontend` and `Backend`) must be green, and force-pushes and deletions are
+refused. A red build blocks the merge rather than merely embarrassing it.
+
+**Approvals are set to zero, deliberately.** You cannot approve your own pull
+request, so any higher number would make merging impossible for a single
+maintainer. Zero still forces the work through a pull request, which is where
+CI runs — that is the part doing the work. Raise it to one the day there is a
+second person who can review.
+
+That places the burden on self-review: read your own diff on the pull request
+page before merging it. It is a different reading from the one you get in your
+editor, and it catches things.
+
+Admins can bypass protection in an emergency (`enforce_admins` is off, so you
+are never locked out mid-incident). Treat every bypass as an incident worth
+explaining in the commit message.
+
+Squash-merge for ordinary work, and make the squashed subject a proper
+Conventional Commit — it becomes the permanent history and the source for
+release notes. **Never squash the base of a stack of pull requests**: it
+rewrites the commits the ones above are built on.
+
+## Releases
+
+Nothing has shipped yet, so there are no tags. When the first build goes to
+review, cut a release from `main`:
+
+1. Move the accumulated `## [Unreleased]` entries in `CHANGELOG.md` under a new
+   `## [0.1.0]` heading, with the date.
+2. Set the same version in `frontend/package.json`.
+3. Merge that through a pull request like anything else.
+4. Tag the merged commit and push the tag:
+
+   ```bash
+   git checkout main && git pull
+   git tag -a v0.1.0 -m "v0.1.0"
+   git push origin v0.1.0
+   ```
+
+The Release workflow turns the tag into a GitHub Release, taking the notes
+from the changelog section for that version. It refuses to publish if the tag
+is not an ancestor of `main`, or if the changelog has no section for it — so a
+release cannot quietly ship unreviewed code or empty notes.
+
+## Operations
+
+Deploys are automatic: Railway rebuilds both services on every push to `main`,
+and the **Deploy check** workflow then polls readiness until the running
+release matches the commit and asserts the backend can reach its database.
+
+For rollbacks, secret rotation and what to do when something is broken in
+production, see the runbook in `docs/RUNBOOK.md`. Read the secret-rotation
+table before rotating anything: two of those keys have consequences that cannot
+be undone.
 
 ## Security
 

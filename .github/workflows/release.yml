@@ -1,0 +1,64 @@
+name: Release
+
+# Cutting a release is: bump the version, move the Unreleased notes under it,
+# tag, push the tag. This turns that tag into a GitHub Release with the notes
+# already written, so nobody retypes a changelog into a text box at midnight.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag points at main
+        run: |
+          # A tag on a branch that never merged would publish code nobody
+          # reviewed and CI never gated.
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not an ancestor of main. Tag a commit that is on main."
+            exit 1
+          fi
+          echo "tagged commit is on main"
+
+      - name: Extract this version's notes from the changelog
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Literal prefix matching, not a regex: a version built into a dynamic
+          # awk regex turns "[0.1.0]" into a character class, which silently
+          # matches nothing and yields empty release notes.
+          notes=$(awk -v heading="## [$version]" '
+            index($0, heading) == 1        { grab = 1; next }
+            grab && index($0, "## [") == 1 { exit }
+            grab                           { print }
+          ' CHANGELOG.md)
+
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            echo "::error::No section for [$version] in CHANGELOG.md. Add one (move the Unreleased items under it) before tagging."
+            exit 1
+          fi
+
+          {
+            echo "body<<NOTES_EOF"
+            printf '%s\n' "$notes"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "${{ steps.notes.outputs.body }}" \
+            --verify-tag
