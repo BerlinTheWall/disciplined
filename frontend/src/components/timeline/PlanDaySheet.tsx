@@ -1,8 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Loader2, Plus, Repeat, Square, Volume2, X } from "lucide-react";
+import { Clock, Info, Loader2, Plus, Repeat, Square, Volume2, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useShallow } from "zustand/shallow";
 
 import { useReadAloud } from "@/hooks/useReadAloud";
@@ -44,6 +45,102 @@ interface PlanDaySheetProps {
   onClose: () => void;
 }
 
+// A small ⓘ that opens a short explanation in a floating popup. The popup is
+// portalled to <body> and positioned from the icon's screen rect: the sheet
+// panel is transformed (it springs up), which would otherwise make `fixed`
+// relative to the panel and let its scroll areas clip the popup. It opens
+// below the icon, flipping above when there's no room, and closes on any tap
+// outside or Escape.
+function InfoPopover({
+  open,
+  onOpenChange,
+  title,
+  size = 16,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  size?: number;
+  children: React.ReactNode;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; above: boolean } | null>(null);
+  const width = Math.min(280, window.innerWidth - 32);
+
+  // Measure before paint, so the popup never flashes at a stale position.
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current || !popRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const h = popRef.current.offsetHeight;
+    const left = Math.min(Math.max(16, r.left - 8), window.innerWidth - 16 - width);
+    const above = r.bottom + 8 + h > window.innerHeight - 16;
+    setPos({ top: above ? r.top - 8 - h : r.bottom + 8, left, above });
+  }, [open, width]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => onOpenChange(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <motion.button
+        ref={btnRef}
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        whileTap={tap}
+        aria-label={`About ${title}`}
+        aria-expanded={open}
+        className={`w-7 h-7 -my-1 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+          open ? "text-fg" : "text-fg-faint"
+        }`}
+      >
+        <Info size={size} />
+      </motion.button>
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            // Transparent catcher: a tap anywhere outside closes the popup.
+            <motion.div className="fixed inset-0 z-60" onClick={() => onOpenChange(false)}>
+              <motion.div
+                ref={popRef}
+                role="dialog"
+                aria-label={title}
+                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="fixed rounded-2xl bg-surface-card border border-border-strong shadow-card px-4 py-3"
+                style={{
+                  top: pos?.top ?? 0,
+                  left: pos?.left ?? 0,
+                  width,
+                  visibility: pos ? "visible" : "hidden",
+                  transformOrigin: pos?.above ? "bottom left" : "top left",
+                }}
+              >
+                <p className="text-sm font-semibold text-fg mb-1">{title}</p>
+                <p className="text-sm text-fg-muted leading-snug">{children}</p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
+  );
+}
+
 export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [tasks, selectedDate, addTask, deleteTask] = useTaskStore(
     useShallow((state) => [state.tasks, state.selectedDate, state.addTask, state.deleteTask])
@@ -62,8 +159,11 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   const [time, setTime] = useState(formatTimeLabel(DEFAULT_START));
   const [duration, setDuration] = useState(30);
   const [colorIndex, setColorIndex] = useState(0);
+  const [planInfo, setPlanInfo] = useState(false);
+  const [presetInfo, setPresetInfo] = useState(false);
   const { reading, loading, toggle } = useReadAloud();
   const inputRef = useRef<HTMLInputElement>(null);
+  const timeInputRef = useRef<HTMLInputElement>(null);
 
   // Tasks already on this day, sorted — the live plan.
   const dayTasks = tasks
@@ -155,6 +255,8 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     setTitle("");
     setDuration(30);
     setColorIndex(0);
+    setPlanInfo(false);
+    setPresetInfo(false);
     setTime(formatTimeLabel(roundedNowMinutes()));
   }, [isOpen, selectedDate]);
 
@@ -200,6 +302,19 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
     setTime(formatTimeLabel(Math.min(startMin + duration, MINUTES_PER_DAY - 15)));
   }
 
+  // showPicker() is missing or throws on older WebViews — there, focusing the
+  // input is what opens the native picker (e.g. the iOS time wheel).
+  function openTimePicker(e: React.MouseEvent) {
+    e.preventDefault();
+    const input = timeInputRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      input.focus();
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -216,7 +331,14 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-fg">Plan Your Day</h2>
+          <div className="flex items-center gap-1">
+            <h2 className="text-xl font-bold text-fg">Plan Your Day</h2>
+            {/* Gated on isOpen too, so a popup left open can't outlive the sheet. */}
+            <InfoPopover open={planInfo && isOpen} onOpenChange={setPlanInfo} title="Plan Your Day">
+              Line up the whole day in one go. Type a task and hit Enter, or tap a preset — each new
+              item starts where the last one ended. This day's habits show up in the list too.
+            </InfoPopover>
+          </div>
           <p className="text-sm text-fg-faint">
             <span className="capitalize">{relativeDayLabel(selectedDate)}</span> · {dayItems.length}{" "}
             {dayItems.length === 1 ? "item" : "items"}
@@ -335,17 +457,48 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
         )}
       </div>
 
-      {/* Composer */}
+      {/* Composer — its own tinted panel, so it reads as the place to add
+          things rather than a continuation of the plan list above. */}
       <div
-        className="border-t border-border-strong bg-surface px-4 pt-3"
+        className="mt-2 rounded-t-3xl border-t border-border-strong bg-surface-alt px-4 pt-4"
         style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}
       >
-        {/* One-tap presets — added straight to the running list above */}
+        {/* One-tap presets — added straight to the running list above, at the
+            time and duration picked in the row below (hence the hint). */}
+        {presets.length > 0 && (
+          <>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-0.5 shrink-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Presets
+                </p>
+                <InfoPopover
+                  open={presetInfo && isOpen}
+                  onOpenChange={setPresetInfo}
+                  title="Presets"
+                  size={14}
+                >
+                  Ready-made tasks you use often. Tap one to add it at the time and duration set
+                  below. To save your own, tap the star when you create a task; remove one with its
+                  ×.
+                </InfoPopover>
+              </div>
+              <p className="text-xs text-fg-faint truncate">
+                Tap to add at <span className="tabular-nums">{formatTimeLabel(startMin)}</span> for{" "}
+                {formatDuration(duration)}
+              </p>
+            </div>
+          </>
+        )}
         {presets.length > 0 && (
           <div
             className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1"
             style={{ scrollbarWidth: "none" }}
           >
+            {/* Each control type in the composer reads differently: presets are
+                content, tinted with their own task colour; the title field and
+                time picker are inputs (solid field + border); durations are
+                options (outline, filled when selected). */}
             {presets.map((preset) => {
               const Icon = ICONS[preset.icon] ?? ICONS.default;
               const isCustom = !preset.id.startsWith("builtin-");
@@ -355,7 +508,8 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                   type="button"
                   onClick={() => addPresetTask(preset)}
                   whileTap={tap}
-                  className="relative flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-full bg-surface-raised shrink-0"
+                  className="relative flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-full shrink-0"
+                  style={{ backgroundColor: `${preset.color}2e` }}
                 >
                   <span
                     className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
@@ -395,17 +549,13 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add a task…"
-            className="flex-1 bg-surface-raised rounded-2xl px-4 py-3 text-base text-fg placeholder-fg-faint focus:outline-none"
+            className="flex-1 min-w-0 h-12 bg-surface border border-transparent rounded-full px-5 text-base text-fg placeholder-fg-faint focus:outline-none focus:border-border-focus transition-colors"
           />
           <motion.button
             onClick={handleAdd}
             whileTap={canAdd ? tap : undefined}
             disabled={!canAdd}
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 disabled:opacity-40"
-            style={{
-              backgroundColor: color,
-              color: isLightColor(color) ? "#111827" : "#fff",
-            }}
+            className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 disabled:opacity-40 bg-surface-inverse text-fg-inverse"
           >
             <Plus size={24} strokeWidth={2.5} />
           </motion.button>
@@ -416,18 +566,28 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
           className="flex items-center gap-2 overflow-x-auto pb-1"
           style={{ scrollbarWidth: "none" }}
         >
-          <label className="relative flex items-center gap-1.5 bg-surface-raised rounded-full pl-3 pr-2 py-2 shrink-0">
+          {/* The whole pill opens the time picker. The native input stays
+              hidden and click-through: tapped directly, Chromium only focuses
+              an hour/minute segment (the picker opens from its own tiny clock
+              glyph), so the pill opens it explicitly via showPicker(). */}
+          <motion.label
+            onClick={openTimePicker}
+            whileTap={tap}
+            className="relative flex items-center gap-1.5 bg-surface border border-transparent rounded-full pl-3 pr-2.5 py-2 shrink-0 cursor-pointer"
+          >
             <Clock size={15} className="text-fg-faint" />
             <span className="text-sm font-medium text-fg tabular-nums">
               {formatTimeLabel(startMin)}
             </span>
             <input
+              ref={timeInputRef}
               type="time"
               value={time}
               onChange={(e) => e.target.value && setTime(e.target.value)}
-              className="absolute inset-0 opacity-0 w-full h-full"
+              aria-label="Start time"
+              className="absolute inset-0 opacity-0 w-full h-full pointer-events-none"
             />
-          </label>
+          </motion.label>
           <span className="text-fg-faint shrink-0">·</span>
           {DURATION_OPTIONS.map((d) => {
             const tooLong = d > maxDuration;
@@ -438,10 +598,10 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                 onClick={() => !tooLong && setDuration(d)}
                 whileTap={tooLong ? undefined : tap}
                 disabled={tooLong}
-                className={`px-3.5 py-2 rounded-full text-sm font-medium shrink-0 disabled:opacity-30 ${
+                className={`px-3.5 py-2 rounded-full border text-sm font-medium shrink-0 disabled:opacity-30 transition-colors ${
                   selected
-                    ? "bg-surface-inverse text-fg-inverse"
-                    : "bg-surface-raised text-fg-muted"
+                    ? "bg-surface-inverse border-transparent text-fg-inverse"
+                    : "border-border-strong text-fg-muted"
                 }`}
               >
                 {formatDuration(d)}
