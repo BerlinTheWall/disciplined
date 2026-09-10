@@ -63,15 +63,17 @@ function ActivityRings({
   data,
   centerLabel,
   perfect,
-  size = 104,
+  size = 124,
 }: {
   data: { pct: number; color: string; active: boolean }[];
   centerLabel: number;
   perfect: boolean;
   size?: number;
 }) {
-  const stroke = 10;
-  const gap = 4;
+  // Sized so the innermost ring leaves a ~50px hole — room for "100%" without
+  // the label touching the ring.
+  const stroke = 9;
+  const gap = 5;
   const c = size / 2;
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -145,22 +147,22 @@ function RingStat({
   );
 }
 
-function Chip({ count, label, active }: { count: number; label: string; active?: boolean }) {
+// Status dots for the To Do / In Progress / Done counts — grey for not
+// started, amber for underway, and the tasks-ring green for finished.
+const STATUS_TODO = "var(--fg-faint)";
+const STATUS_IN_PROGRESS = "#eab464";
+const STATUS_DONE = "#9ec06a";
+
+// A read-only status count. All three share one neutral style — nothing here
+// is tappable, so no pill should look selected; the dot carries the status.
+// Pills grow to share the row but never shrink below their content — "In
+// Progress" is too wide for an equal third on a phone.
+function Chip({ count, label, color }: { count: number; label: string; color: string }) {
   return (
-    <div
-      className={`flex items-center gap-2 rounded-full pl-1.5 pr-4 py-1.5 shrink-0 border ${
-        active ? "border-transparent" : "border-border-strong bg-surface"
-      }`}
-      style={active ? { backgroundColor: "rgba(158, 192, 106, 0.22)" } : undefined}
-    >
-      <span
-        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold tabular-nums ${
-          active ? "bg-surface text-fg" : "bg-surface-raised text-fg-muted"
-        }`}
-      >
-        {count}
-      </span>
-      <span className={`text-sm font-medium ${active ? "text-fg" : "text-fg-muted"}`}>{label}</span>
+    <div className="grow shrink-0 flex items-center justify-center gap-2 rounded-full px-3.5 py-2.5 border border-border-strong bg-surface-card">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+      <span className="text-[15px] font-medium text-fg-muted">{label}</span>
+      <span className="text-[15px] font-bold text-fg tabular-nums">{count}</span>
     </div>
   );
 }
@@ -385,7 +387,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
           className={`shrink-0 mt-1 flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-medium ${
             reading || loading || briefingPrompt
               ? "bg-surface-inverse text-fg-inverse"
-              : "bg-surface-alt border border-border-strong text-fg"
+              : "bg-surface-card border border-border-strong text-fg"
           }`}
         >
           {loading ? (
@@ -407,7 +409,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
 
       {/* Today's rings — tasks, habits, and movement, each filling with today's
           completion. Close every ring that has something planned for a perfect day. */}
-      <div className="rounded-3xl bg-surface-alt border border-border-strong text-fg p-5 shadow-soft">
+      <div className="rounded-3xl bg-surface-card border border-border-strong text-fg p-5 shadow-soft">
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-medium text-fg-muted">Today's Progress</p>
           <p className="text-xs font-medium text-fg-faint">
@@ -519,9 +521,9 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: "none" }}>
-          <Chip count={todo} label="To Do" active />
-          <Chip count={inProgress} label="In Progress" />
-          <Chip count={done} label="Done" />
+          <Chip count={todo} label="To Do" color={STATUS_TODO} />
+          <Chip count={inProgress} label="In Progress" color={STATUS_IN_PROGRESS} />
+          <Chip count={done} label="Done" color={STATUS_DONE} />
         </div>
 
         {focus && fStart && fEnd ? (
@@ -530,72 +532,76 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
             <motion.button
               onClick={() => openInSchedule(focus)}
               whileTap={press}
-              className="w-full text-left bg-surface-alt border border-border-strong rounded-3xl shadow-soft p-5"
+              className="relative w-full text-left bg-surface-card border border-border-strong rounded-3xl shadow-soft p-5 flex items-center gap-4"
             >
-              {fPrio && (
-                <div className="mb-3">
-                  <span
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1"
-                    style={{ color: fPrio.color, backgroundColor: `${fPrio.color}1f` }}
-                  >
+              <ArrowUpRight size={18} className="absolute top-3 right-3 text-fg-faint" />
+
+              <div className="flex-1 min-w-0">
+                {fPrio && (
+                  <div className="mb-3">
                     <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: fPrio.color }}
-                    />
-                    {fPrio.label} Priority
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1"
+                      style={{ color: fPrio.color, backgroundColor: `${fPrio.color}1f` }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: fPrio.color }}
+                      />
+                      {fPrio.label} Priority
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${focus.color}1f` }}
+                  >
+                    {FocusIcon && <FocusIcon size={18} style={{ color: focus.color }} />}
                   </span>
+                  <p className="text-xl font-bold text-fg leading-snug flex-1 min-w-0 truncate">
+                    {focus.title}
+                  </p>
                 </div>
-              )}
 
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: `${focus.color}1f` }}
-                >
-                  {FocusIcon && <FocusIcon size={18} style={{ color: focus.color }} />}
-                </span>
-                <p className="text-xl font-bold text-fg leading-snug flex-1 min-w-0 truncate">
-                  {focus.title}
-                </p>
-                <ArrowUpRight size={18} className="text-fg-faint shrink-0" />
-              </div>
-
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-1.5 text-sm text-fg-faint">
+                <div className="flex items-center gap-1.5 text-sm text-fg-faint mt-3 pl-2.5">
                   <Clock size={15} />
                   {fStart.time} – {fEnd.time} {fEnd.period}
                 </div>
-                <motion.span
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    const item = focus;
-                    if (checkingId === item.id) return;
-                    setCheckingId(item.id);
-                    window.setTimeout(() => {
-                      toggle(item);
-                      setCheckingId((cur) => (cur === item.id ? null : cur));
-                    }, 500);
-                  }}
-                  whileTap={tap}
-                  className="w-8 h-8 rounded-full border-2 shrink-0 flex items-center justify-center"
-                  style={{
-                    borderColor: focus.color,
-                    backgroundColor: checkingId === focus.id ? focus.color : "transparent",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  {checkingId === focus.id && (
-                    <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 22 }}
-                      className="flex"
-                    >
-                      <Check size={16} className="text-white" strokeWidth={3} />
-                    </motion.span>
-                  )}
-                </motion.span>
               </div>
+
+              {/* Its own column, so the check stays vertically centered on the
+                  card whether or not the priority pill is shown. */}
+              <motion.span
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  const item = focus;
+                  if (checkingId === item.id) return;
+                  setCheckingId(item.id);
+                  window.setTimeout(() => {
+                    toggle(item);
+                    setCheckingId((cur) => (cur === item.id ? null : cur));
+                  }, 500);
+                }}
+                whileTap={tap}
+                className="w-8 h-8 rounded-full border-2 shrink-0 flex items-center justify-center"
+                style={{
+                  borderColor: focus.color,
+                  backgroundColor: checkingId === focus.id ? focus.color : "transparent",
+                  transition: "background-color 0.2s ease",
+                }}
+              >
+                {checkingId === focus.id && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                    className="flex"
+                  >
+                    <Check size={16} className="text-white" strokeWidth={3} />
+                  </motion.span>
+                )}
+              </motion.span>
             </motion.button>
           </>
         ) : (
