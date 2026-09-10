@@ -17,7 +17,10 @@ permissions:
 
 jobs:
   frontend:
-    name: Frontend (lint · types · build)
+    # Kept to plain ASCII on purpose: this string is what you type into
+    # the required-status-checks box in branch protection, and a name
+    # containing a middle dot is effectively unsearchable there.
+    name: Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -53,7 +56,7 @@ jobs:
         run: npm run build
 
   backend:
-    name: Backend (tests)
+    name: Backend
     runs-on: ubuntu-latest
     defaults:
       run:
