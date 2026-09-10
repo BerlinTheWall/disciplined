@@ -115,25 +115,49 @@ test("signing in reaches the app", async ({ page }) => {
   await login(page);
 });
 
-test("a task added by voice-style text survives a reload", async ({ page }) => {
+/**
+ * Deliberately created through the API rather than through the quick-add bar.
+ *
+ * Quick-add is not a local parser with an AI garnish — `handleSubmit` sends
+ * everything to the Gemini assistant and treats the local parsers only as an
+ * offline fallback, and focusing the input opens the chat sheet. Driving it
+ * would make this test depend on a paid third-party service being reachable
+ * and on what a language model decided to do that day, which is the opposite
+ * of what an end-to-end smoke test is for.
+ *
+ * What is worth asserting is the integration underneath: something in the
+ * database reaches the screen. The quick-add flow itself belongs in a test
+ * that stubs the assistant.
+ */
+test("an event in the database is rendered on the schedule", async ({ page, request }) => {
+  const api = process.env.VITE_API_URL;
+
+  const auth = await request.post(`${api}/api/auth/login`, {
+    data: { email: EMAIL, password: PASSWORD },
+  });
+  expect(auth.ok(), `login for setup failed: ${auth.status()}`).toBeTruthy();
+  const { token } = await auth.json();
+
+  // Unique per run: the suite shares one account and one database, so a fixed
+  // title would match a previous run's leftovers and pass for the wrong reason.
+  const title = `e2e event ${Date.now()}`;
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  const created = await request.post(`${api}/api/events`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { title, date: today, startMinutes: 15 * 60, durationMinutes: 30 },
+  });
+  expect(created.ok(), `creating the event failed: ${created.status()}`).toBeTruthy();
+
   await login(page);
   await goToSchedule(page);
 
-  // A unique title per run: these tests share one seeded account and one
-  // database, so a fixed title would collide with earlier runs' leftovers.
-  const title = `e2e task ${Date.now()}`;
-
-  const quickAdd = page.getByPlaceholder(/Add, command or ask/);
-  await quickAdd.click();
-  // An explicit date and time so the parser has everything it needs and does
-  // not stop to ask — see parseQuickAdd's `timeGiven` / `dateGiven`.
-  await quickAdd.fill(`${title} today 3pm`);
-  await quickAdd.press("Enter");
-
-  await expect(page.getByText(title)).toBeVisible();
-
-  // The real assertion. Local state would show the task either way; only a
-  // successful round trip to the API and back survives a reload.
-  await page.reload();
+  // Reaching the screen means the app hydrated from the API rather than from
+  // whatever happened to be in local storage.
   await expect(page.getByText(title)).toBeVisible();
 });
