@@ -7,6 +7,15 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Secrets. backend/.gitignore covers the backend's own .env; this catches
+# every other one (frontend/.env carries VITE_ vars, which are baked into the
+# bundle and must never be a real secret, but the file still should not be
+# committed). The .example files are the documented templates and stay.
+.env
+.env.*
+!.env.example
+!*.env.example
+
 node_modules
 dist
 dist-ssr
