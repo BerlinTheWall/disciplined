@@ -36,6 +36,11 @@ export interface PromptOptions {
   defaultValue?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  // Masks the input and keeps it out of autocomplete/password managers'
+  // save prompts — for confirming an action with a password, not signing in.
+  secret?: boolean;
+  // Styles the confirm button as a red, irreversible action.
+  destructive?: boolean;
 }
 
 interface ConfirmApi {
@@ -196,7 +201,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                       }}
                     >
                       <input
-                        type="text"
+                        type={pending.options.secret ? "password" : "text"}
+                        autoComplete={pending.options.secret ? "current-password" : undefined}
                         value={promptText}
                         onChange={(e) => setPromptText(e.target.value)}
                         placeholder={pending.options.placeholder}
@@ -211,7 +217,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                         >
                           {pending.options.cancelLabel ?? "Cancel"}
                         </motion.button>
-                        <motion.button type="submit" whileTap={tap} className={PRIMARY_BTN}>
+                        <motion.button
+                          type="submit"
+                          whileTap={tap}
+                          className={pending.options.destructive ? DESTRUCTIVE_BTN : PRIMARY_BTN}
+                        >
                           {pending.options.confirmLabel ?? "OK"}
                         </motion.button>
                       </div>

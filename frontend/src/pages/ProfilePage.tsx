@@ -10,10 +10,11 @@ import {
   LogOut,
   Pencil,
   ShieldOff,
+  Trash2,
 } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
-import { useConfirm } from "@/components/ConfirmDialog";
+import { useConfirm, usePrompt } from "@/components/ConfirmDialog";
 import { Heatmap, Ring } from "@/components/profile/ProfileCharts";
 import ProfileDetailSheet, {
   type ProfileDetailKind,
@@ -157,13 +158,16 @@ export default function ProfilePage() {
   const account = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const logoutOtherDevices = useAuthStore((s) => s.logoutOtherDevices);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const updateDisplayName = useAuthStore((s) => s.updateDisplayName);
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const name = account?.displayName ?? "";
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loggingOutOthers, setLoggingOutOthers] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleLogoutOtherDevices() {
     const ok = await confirm({
@@ -183,6 +187,41 @@ export default function ProfilePage() {
       setLoggingOutOthers(false);
     }
   }
+  async function handleDeleteAccount() {
+    // Two steps on purpose. The first states plainly what is about to happen;
+    // the second asks for the password, so an unlocked phone left on a table
+    // is not one tap away from erasing someone's account.
+    const ok = await confirm({
+      title: "Delete your account?",
+      message:
+        "This permanently deletes your account and everything in it — your schedule, goals, habits and connected calendars. It cannot be undone.",
+      confirmLabel: "Continue",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    const password = await prompt({
+      title: "Confirm your password",
+      message: "Enter your password to permanently delete this account.",
+      placeholder: "Password",
+      confirmLabel: "Delete account",
+      secret: true,
+      destructive: true,
+    });
+    if (!password) return;
+
+    setDeleting(true);
+    try {
+      // On success this wipes local data and reloads, so nothing after it runs.
+      await deleteAccount(password);
+    } catch (e) {
+      useToastStore
+        .getState()
+        .show(e instanceof ApiError ? e.message : "Couldn't delete your account", "error");
+      setDeleting(false);
+    }
+  }
+
   // Which card's full-detail sheet is open — every showcase card below opens
   // one (see ProfileDetailSheet: month-over-month charts + a written summary).
   const [detail, setDetail] = useState<ProfileDetailKind | null>(null);
@@ -488,6 +527,18 @@ export default function ProfilePage() {
           )}
           Log out of other devices
         </motion.button>
+        <motion.button
+          whileTap={tap}
+          onClick={handleDeleteAccount}
+          disabled={deleting}
+          className="mt-3 flex w-full items-center gap-1.5 rounded-xl bg-surface-subtle px-3 py-2 text-sm font-medium text-red-400 disabled:opacity-60"
+        >
+          {deleting ? <LoaderCircle size={15} className="animate-spin" /> : <Trash2 size={15} />}
+          Delete account
+        </motion.button>
+        <p className="mt-2 text-[11px] text-fg-faint">
+          Deleting removes your account and all of its data permanently.
+        </p>
       </Card>
 
       <ProfileDetailSheet kind={detail} onClose={() => setDetail(null)} />

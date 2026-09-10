@@ -22,6 +22,7 @@ interface Actions {
   // Signs out every other device signed into this account, without signing
   // this one out too — see api.ts's logoutEverywhere.
   logoutOtherDevices: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendVerification: (email: string) => Promise<string>;
   forgotPassword: (email: string) => Promise<string>;
@@ -83,6 +84,14 @@ export const useAuthStore = create<State & Actions>()(
         // then the login page, exactly once.
         localStorage.removeItem("disciplined-auth");
         window.location.reload();
+      },
+      deleteAccount: async (password) => {
+        // Server first: if it refuses (wrong password), nothing local is
+        // touched and the caller can show the error. Only once the account
+        // is genuinely gone do we wipe this device, reusing logout's
+        // clear-then-reload so there is no flash of the logged-in app.
+        await api.auth.deleteAccount(password);
+        await get().logout();
       },
       logoutOtherDevices: async () => {
         const { token, user } = await api.auth.logoutEverywhere();

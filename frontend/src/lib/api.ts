@@ -393,6 +393,13 @@ export const api = {
     // its next request. See backend/app/routers/auth.py's logout_everywhere.
     logoutEverywhere: (): Promise<AuthResponse> =>
       request("/api/auth/logout-everywhere", { method: "POST" }),
+    // Permanently deletes the account and everything in it. POST rather than
+    // DELETE because the password travels in the body — see the route.
+    deleteAccount: (password: string): Promise<void> =>
+      request("/api/auth/delete-account", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      }),
     // Public (email + code, not the bearer token) — this is the only way in
     // for an unverified account, so it can't require the session it grants.
     verifyEmail: (email: string, code: string): Promise<AuthResponse> =>
