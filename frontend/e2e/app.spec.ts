@@ -45,8 +45,16 @@ async function login(page: Page) {
   await page.getByPlaceholder("you@example.com").fill(EMAIL);
   await page.getByPlaceholder("Your password").fill(PASSWORD);
   await page.getByRole("button", { name: "Login", exact: true }).click();
-  // The quick-add bar only exists inside the authenticated shell, so its
-  // presence is the signal that login actually completed.
+  // The bottom nav only exists inside the authenticated shell, so it is the
+  // signal that login completed. Deliberately not the quick-add bar: that
+  // lives in the Timeline, which only renders on the schedule page, and a
+  // fresh browser lands on home.
+  await expect(page.getByRole("button", { name: "Calendar" })).toBeVisible();
+}
+
+/** The quick-add bar lives on the schedule page. Get there the way a user does. */
+async function goToSchedule(page: Page) {
+  await page.getByRole("button", { name: "Calendar" }).click();
   await expect(page.getByPlaceholder(/Add, command or ask/)).toBeVisible();
 }
 
@@ -72,6 +80,7 @@ test("signing in reaches the app", async ({ page }) => {
 
 test("a task added by voice-style text survives a reload", async ({ page }) => {
   await login(page);
+  await goToSchedule(page);
 
   // A unique title per run: these tests share one seeded account and one
   // database, so a fixed title would collide with earlier runs' leftovers.
