@@ -2,7 +2,7 @@ import { execSync } from "child_process";
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 // Stamp the build with the commit it came from, so a Sentry error points at
 // the exact code that produced it instead of "some version of main". Railway
@@ -27,6 +27,16 @@ export default defineConfig({
     alias: {
       "@": path.join(__dirname, "src"),
     },
+  },
+  test: {
+    // Component tests need a DOM; the pure-logic tests do not care, and the
+    // cost of jsdom for all of them is not worth splitting environments over.
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    // node_modules aside, `android`/`ios` contain a copy of the built web
+    // assets after `cap sync`, which would otherwise be collected twice.
+    exclude: ["node_modules", "dist", "android", "ios", "vendor"],
   },
   define: {
     // Inlined at build time rather than read from import.meta.env, so it works
