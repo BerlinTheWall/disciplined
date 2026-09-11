@@ -195,7 +195,7 @@ export default function DayScheduleCards({ date, active, onDetail }: DaySchedule
         animate={{ opacity: item.completed ? 0.6 : 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.25, ease: "easeOut" } }}
         transition={{ type: "spring", stiffness: 500, damping: 34, mass: 0.4 }}
-        className="relative overflow-hidden block w-full bg-surface-alt border border-border-strong rounded-3xl shadow-soft text-left"
+        className="relative overflow-hidden block w-full bg-surface-card border border-border-strong rounded-3xl shadow-soft text-left"
       >
         {/* "Happening now" cue: a faint wash of the task's color that gently breathes. */}
         {isCurrent && (

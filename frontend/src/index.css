@@ -30,9 +30,10 @@
      pages did. Its own token rather than reusing surface-raised since that
      one's now a much bluer tint than this neutral light grey. */
   --surface-toggle-track: #dde0ed;
-  /* Home's floating cards and Day Summary pill: pure white on the light
-     theme's tinted app background, but kept at surface-alt in dark mode —
-     plain surface there would be the same colour as the page behind them. */
+  /* Floating cards on the app background (Home's cards and Day Summary pill,
+     the schedule's day cards, ...): pure white on the light theme's tinted
+     background, but kept at surface-alt in dark mode — plain surface there
+     would be the same colour as the page behind them. */
   --surface-card: var(--surface);
 
   --fg: #111827;
