@@ -192,7 +192,7 @@ export default function NotificationBell({ onOpenSchedule, onOpenGoals }: Props)
         onClick={open}
         whileTap={tap}
         aria-label="Notifications"
-        className="relative w-10 h-10 rounded-full bg-surface-subtle text-fg-muted flex items-center justify-center shrink-0"
+        className="relative w-10 h-10 rounded-full bg-surface-tint text-fg-muted flex items-center justify-center shrink-0"
       >
         <Bell size={18} />
         {unreadCount > 0 && (

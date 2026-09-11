@@ -35,6 +35,10 @@
      background, but kept at surface-alt in dark mode — plain surface there
      would be the same colour as the page behind them. */
   --surface-card: var(--surface);
+  /* Soft grey chip fill for header icon buttons (notification bell, edit
+     name) and the Free plan pill — a translucent gray-400. Stronger in light
+     mode: at dark mode's 15% it all but vanishes on a white card. */
+  --surface-tint: rgba(156, 163, 175, 0.3);
 
   --fg: #111827;
   --fg-muted: #6b7280;
@@ -92,6 +96,7 @@
   --surface-feature-alt: #2a3552;
   --surface-toggle-track: #2c3752;
   --surface-card: var(--surface-alt);
+  --surface-tint: rgba(156, 163, 175, 0.15);
 
   --fg: #f4f6fa;
   --fg-muted: #9aa4b8;
@@ -139,6 +144,7 @@
   --color-surface-feature-alt: var(--surface-feature-alt);
   --color-surface-toggle-track: var(--surface-toggle-track);
   --color-surface-card: var(--surface-card);
+  --color-surface-tint: var(--surface-tint);
 
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
