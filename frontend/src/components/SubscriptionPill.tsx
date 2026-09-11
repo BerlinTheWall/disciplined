@@ -89,7 +89,12 @@ export default function SubscriptionPill() {
         whileTap={tap}
         aria-label={`Your plan: ${info.label}. See plans`}
         className="h-10 pl-3 pr-3.5 rounded-full flex items-center gap-1.5 shrink-0 text-sm font-semibold text-fg"
-        style={{ backgroundColor: `${info.color}26` }}
+        // Free's grey uses the theme-aware tint token (shared with the bell and
+        // edit buttons beside it) — a flat 15% grey is near-invisible in light
+        // mode. The coloured plans read fine at 15% in both themes.
+        style={{
+          backgroundColor: current === "free" ? "var(--surface-tint)" : `${info.color}26`,
+        }}
       >
         <Icon size={16} style={{ color: info.color }} />
         {info.label}

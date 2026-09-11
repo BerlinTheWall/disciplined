@@ -355,7 +355,7 @@ export default function ProfilePage() {
             onClick={() => (editing ? void saveProfile() : startEditing())}
             disabled={saving}
             className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors duration-200 disabled:opacity-60 ${
-              editing ? "bg-fg text-fg-inverse" : "bg-surface-subtle text-fg-muted"
+              editing ? "bg-fg text-fg-inverse" : "bg-surface-tint text-fg-muted"
             }`}
             aria-label={editing ? "Save name" : "Edit name"}
           >
