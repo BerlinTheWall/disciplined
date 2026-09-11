@@ -45,6 +45,16 @@ const DRAWER_WIDTH = 288;
 // distance, commits the close; anything short of that springs back open.
 const CLOSE_DISTANCE = 80;
 const CLOSE_VELOCITY = 500;
+// Where the drawer sits when hidden: past its own width by enough to take the
+// shadow-2xl (which spills ~40px beyond the right edge) off-screen too.
+// Stopping at exactly -DRAWER_WIDTH left that shadow on the screen's left edge
+// until unmount, where it vanished in a visible flash.
+const HIDDEN_X = -(DRAWER_WIDTH + 56);
+// Closing is a tween, not a spring: a spring overshoots and then creeps back
+// toward the edge while settling (dragging the shadow back into view), and
+// it takes far longer to settle, keeping the drawer mounted after the next
+// page is already showing.
+const CLOSE_TRANSITION = { type: "tween", ease: [0.32, 0.72, 0, 1], duration: 0.26 } as const;
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -108,7 +118,7 @@ export default function SideMenu({
               className="fixed inset-0 bg-black/40 z-40"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, transition: CLOSE_TRANSITION }}
               onClick={onClose}
             />
 
@@ -116,9 +126,9 @@ export default function SideMenu({
             <motion.div
               className="fixed top-0 left-0 bottom-0 w-72 bg-surface z-50 flex flex-col overflow-y-auto shadow-2xl"
               style={{ x }}
-              initial={{ x: -DRAWER_WIDTH }}
+              initial={{ x: HIDDEN_X }}
               animate={{ x: 0 }}
-              exit={{ x: -DRAWER_WIDTH }}
+              exit={{ x: HIDDEN_X, transition: CLOSE_TRANSITION }}
               transition={{
                 type: "spring",
                 damping: 28,
