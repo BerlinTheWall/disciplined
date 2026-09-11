@@ -35,6 +35,10 @@ interface Actions {
   // on in the wizard over a self-reported, non-essential field.
   setSegment: (segment: UserSegment) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
+  // Re-reads the account from the server (launch + foreground, see main.tsx)
+  // so server-side changes — notably the subscription tier — reach a device
+  // that stays signed in. Failure (offline) keeps the cached user.
+  refreshUser: () => Promise<void>;
 }
 
 // Keys of the stores holding user content. Cleared on logout so the next
@@ -132,6 +136,12 @@ export const useAuthStore = create<State & Actions>()(
       updateDisplayName: async (displayName) => {
         const updated = await api.auth.updateDisplayName(displayName);
         set({ user: updated });
+      },
+      refreshUser: async () => {
+        if (!get().user) return;
+        const fresh = await api.auth.me().catch(() => null);
+        // Re-check: a logout can land while the request is in flight.
+        if (fresh && get().user) set({ user: fresh });
       },
     }),
     { name: "disciplined-auth" }

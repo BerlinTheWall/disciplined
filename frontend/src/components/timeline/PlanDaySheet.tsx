@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Info, Loader2, Plus, Repeat, Square, Volume2, X } from "lucide-react";
+import { Clock, Info, Loader2, Lock, Plus, Repeat, Square, Star, Volume2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useShallow } from "zustand/shallow";
 
@@ -16,7 +16,13 @@ import { parseISODate, relativeDayLabel, todayISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
-import { BUILTIN_PRESETS, type TaskPreset } from "@/lib/presets";
+import {
+  MAX_PRESETS,
+  PRESETS_LOCKED_DIALOG,
+  PRESETS_MIN_TIER,
+  type TaskPreset,
+} from "@/lib/presets";
+import { useHasTier } from "@/lib/tiers";
 import { formatDuration, formatTimeLabel, rangeLabel, timeStringToMinutes } from "@/lib/time";
 import { useHabitStore } from "@/store/habitStore";
 import { usePresetStore } from "@/store/presetStore";
@@ -147,10 +153,10 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
   );
 
   const confirm = useConfirm();
-  const [userPresets, removePreset] = usePresetStore(
+  const [presets, removePreset] = usePresetStore(
     useShallow((state) => [state.presets, state.removePreset])
   );
-  const presets = [...BUILTIN_PRESETS, ...userPresets];
+  const canUsePresets = useHasTier(PRESETS_MIN_TIER);
   const [habits, skipHabitOccurrence] = useHabitStore(
     useShallow((state) => [state.habits, state.skipHabitOccurrence])
   );
@@ -464,33 +470,54 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
         style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}
       >
         {/* One-tap presets — added straight to the running list above, at the
-            time and duration picked in the row below (hence the hint). */}
-        {presets.length > 0 && (
-          <>
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="flex items-center gap-0.5 shrink-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  Presets
-                </p>
-                <InfoPopover
-                  open={presetInfo && isOpen}
-                  onOpenChange={setPresetInfo}
-                  title="Presets"
-                  size={14}
-                >
-                  Ready-made tasks you use often. Tap one to add it at the time and duration set
-                  below. To save your own, tap the star when you create a task; remove one with its
-                  ×.
-                </InfoPopover>
-              </div>
-              <p className="text-xs text-fg-faint truncate">
-                Tap to add at <span className="tabular-nums">{formatTimeLabel(startMin)}</span> for{" "}
-                {formatDuration(duration)}
-              </p>
+            time and duration picked in the row below (hence the hint). The
+            section stays even with no presets, so it's discoverable. */}
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-0.5 shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Presets</p>
+            <InfoPopover
+              open={presetInfo && isOpen}
+              onOpenChange={setPresetInfo}
+              title="Presets"
+              size={14}
+            >
+              Your go-to tasks, one tap away. Tap one to add it at the time and duration set below.
+              Save up to {MAX_PRESETS} by tapping the star when you create a task; remove one with
+              its ×.
+            </InfoPopover>
+          </div>
+          {canUsePresets && presets.length > 0 && (
+            <p className="text-xs text-fg-faint truncate">
+              Tap to add at <span className="tabular-nums">{formatTimeLabel(startMin)}</span> for{" "}
+              {formatDuration(duration)}
+            </p>
+          )}
+        </div>
+        {!canUsePresets ? (
+          // Plus/Pro only: below that the section stays (so it's known to
+          // exist) but its row is a padlocked pill explaining the plan. Same
+          // 40px height as a chip, so the composer doesn't shift either way.
+          <div className="pb-2">
+            <motion.button
+              type="button"
+              onClick={() => void confirm(PRESETS_LOCKED_DIALOG)}
+              whileTap={tap}
+              className="w-full h-10 flex items-center gap-2 px-3.5 rounded-full border border-dashed border-border-strong text-fg-faint text-left"
+            >
+              <Lock size={14} className="shrink-0" />
+              <span className="text-sm truncate">Available on the Plus and Pro plans</span>
+            </motion.button>
+          </div>
+        ) : presets.length === 0 ? (
+          // Same 40px height as a preset chip, so saving the first one
+          // doesn't shift the composer.
+          <div className="pb-2">
+            <div className="h-10 flex items-center gap-2 px-3.5 rounded-full border border-dashed border-border-strong text-fg-faint">
+              <Star size={14} className="shrink-0" />
+              <span className="text-sm truncate">No presets yet — star a task to save one</span>
             </div>
-          </>
-        )}
-        {presets.length > 0 && (
+          </div>
+        ) : (
           <div
             className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1"
             style={{ scrollbarWidth: "none" }}
@@ -501,7 +528,6 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                 options (outline, filled when selected). */}
             {presets.map((preset) => {
               const Icon = ICONS[preset.icon] ?? ICONS.default;
-              const isCustom = !preset.id.startsWith("builtin-");
               return (
                 <motion.button
                   key={preset.id}
@@ -520,20 +546,18 @@ export default function PlanDaySheet({ isOpen, onClose }: PlanDaySheetProps) {
                   <span className="text-sm font-medium text-fg whitespace-nowrap">
                     {preset.title}
                   </span>
-                  {isCustom && (
-                    <motion.span
-                      role="button"
-                      aria-label={`Remove ${preset.title} preset`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removePreset(preset.id);
-                      }}
-                      whileTap={tap}
-                      className="ml-0.5 w-4 h-4 rounded-full bg-fg/10 flex items-center justify-center shrink-0 text-fg-faint"
-                    >
-                      <X size={10} />
-                    </motion.span>
-                  )}
+                  <motion.span
+                    role="button"
+                    aria-label={`Remove ${preset.title} preset`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removePreset(preset.id);
+                    }}
+                    whileTap={tap}
+                    className="ml-0.5 w-4 h-4 rounded-full bg-fg/10 flex items-center justify-center shrink-0 text-fg-faint"
+                  >
+                    <X size={10} />
+                  </motion.span>
                 </motion.button>
               );
             })}
