@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDown,
   ArrowUp,
@@ -12,8 +12,8 @@ import {
   ShieldOff,
   Trash2,
 } from "lucide-react";
-import { useShallow } from "zustand/shallow";
 
+import Collapse from "@/components/Collapse";
 import { useConfirm, usePrompt } from "@/components/ConfirmDialog";
 import { Heatmap, Ring } from "@/components/profile/ProfileCharts";
 import ProfileDetailSheet, {
@@ -152,9 +152,7 @@ function Card({
 export default function ProfilePage() {
   const tasks = useTaskStore((s) => s.tasks);
   const habits = useHabitStore((s) => s.habits);
-  const [tagline, setTagline] = useProfileStore(
-    useShallow((state) => [state.tagline, state.setTagline])
-  );
+  const tagline = useProfileStore((s) => s.tagline);
   const account = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const logoutOtherDevices = useAuthStore((s) => s.logoutOtherDevices);
@@ -226,10 +224,8 @@ export default function ProfilePage() {
   // one (see ProfileDetailSheet: month-over-month charts + a written summary).
   const [detail, setDetail] = useState<ProfileDetailKind | null>(null);
   const [draftName, setDraftName] = useState(name);
-  const [draftTagline, setDraftTagline] = useState(tagline);
 
   const initial = name.trim().charAt(0).toUpperCase() || "?";
-
   const todayObj = useMemo(() => new Date(), []);
 
   const scores7 = useMemo(() => recentScores(7, tasks, habits), [tasks, habits]);
@@ -270,9 +266,20 @@ export default function ProfilePage() {
 
   const habitRows = useMemo(() => habitStats(habits), [habits]);
 
+  function startEditing() {
+    setDraftName(name);
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    if (saving) return;
+    setSaveError(null);
+    setEditing(false);
+  }
+
   async function saveProfile() {
     const trimmedName = draftName.trim();
-    setTagline(draftTagline.trim());
     if (trimmedName === name) {
       setEditing(false);
       return;
@@ -297,55 +304,80 @@ export default function ProfilePage() {
           <div className="w-16 h-16 rounded-full bg-fg flex items-center justify-center shrink-0">
             <span className="text-2xl font-bold text-fg-inverse">{initial}</span>
           </div>
-          {editing ? (
-            <div className="flex-1 space-y-2">
-              <input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                placeholder="Your name"
-                disabled={saving}
-                className="w-full bg-surface-subtle rounded-xl px-3 py-2 text-fg font-semibold outline-none disabled:opacity-60"
-              />
-              <input
-                value={draftTagline}
-                onChange={(e) => setDraftTagline(e.target.value)}
-                placeholder="A short tagline"
-                disabled={saving}
-                className="w-full bg-surface-subtle rounded-xl px-3 py-2 text-sm text-fg-muted outline-none disabled:opacity-60"
-              />
-              {saveError && <p className="text-xs text-red-400 px-1">{saveError}</p>}
+          <div className="flex-1 min-w-0">
+            {/* Only the name is editable. Name text and field share one
+                fixed-height slot and crossfade in place — the field is
+                outset by its own padding so the text doesn't shift when it
+                appears — so toggling never moves the layout. */}
+            <div className="relative h-9">
+              <AnimatePresence initial={false}>
+                {editing ? (
+                  <motion.input
+                    key="field"
+                    autoFocus
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveProfile();
+                      else if (e.key === "Escape") cancelEditing();
+                    }}
+                    placeholder="Your name"
+                    disabled={saving}
+                    aria-label="Your name"
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="absolute inset-y-0 -left-2.5 w-[calc(100%+0.625rem)] px-2.5 rounded-xl bg-surface-subtle text-xl font-bold text-fg placeholder-fg-faint outline-none disabled:opacity-60"
+                  />
+                ) : (
+                  <motion.p
+                    key="name"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="absolute inset-0 text-xl font-bold leading-9 text-fg truncate"
+                  >
+                    {name}
+                  </motion.p>
+                )}
+              </AnimatePresence>
             </div>
-          ) : (
-            <div className="flex-1 min-w-0">
-              <p className="text-xl font-bold text-fg truncate">{name}</p>
-              <p className="text-sm text-fg-faint truncate">{tagline}</p>
-            </div>
-          )}
-          {editing ? (
-            <motion.button
-              whileTap={tap}
-              onClick={() => void saveProfile()}
-              disabled={saving}
-              className="w-10 h-10 rounded-full bg-fg text-fg-inverse flex items-center justify-center shrink-0 disabled:opacity-60"
-              aria-label="Save profile"
-            >
-              {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={18} />}
-            </motion.button>
-          ) : (
-            <motion.button
-              whileTap={tap}
-              onClick={() => {
-                setDraftName(name);
-                setDraftTagline(tagline);
-                setSaveError(null);
-                setEditing(true);
-              }}
-              className="w-10 h-10 rounded-full bg-surface-subtle text-fg-muted flex items-center justify-center shrink-0"
-              aria-label="Edit profile"
-            >
-              <Pencil size={16} />
-            </motion.button>
-          )}
+            <p className="text-sm text-fg-faint truncate">{tagline}</p>
+            <Collapse open={editing && !!saveError}>
+              <p className="text-xs text-red-400 pt-1">{saveError}</p>
+            </Collapse>
+          </div>
+          {/* One button that morphs: pencil → check (→ spinner while saving). */}
+          <motion.button
+            whileTap={tap}
+            onClick={() => (editing ? void saveProfile() : startEditing())}
+            disabled={saving}
+            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors duration-200 disabled:opacity-60 ${
+              editing ? "bg-fg text-fg-inverse" : "bg-surface-subtle text-fg-muted"
+            }`}
+            aria-label={editing ? "Save name" : "Edit name"}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={saving ? "saving" : editing ? "check" : "pencil"}
+                initial={{ opacity: 0, scale: 0.5, rotate: -45 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 0.5, rotate: 45 }}
+                transition={{ duration: 0.15 }}
+                className="flex"
+              >
+                {saving ? (
+                  <LoaderCircle size={16} className="animate-spin" />
+                ) : editing ? (
+                  <Check size={18} />
+                ) : (
+                  <Pencil size={16} />
+                )}
+              </motion.span>
+            </AnimatePresence>
+          </motion.button>
         </div>
       </section>
 

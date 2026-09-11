@@ -105,6 +105,17 @@ async def test_plus_account_is_refused_from_pro_routes(client, make_user, method
     assert res.status_code == 403, f"{method.upper()} {path} returned {res.status_code}"
 
 
+@pytest.mark.parametrize("tier", ["free", "plus", "pro"])
+async def test_me_exposes_the_tier(client, make_user, tier):
+    """Device-local features (task presets) are gated in the frontend, which
+    can only do that if the account's tier reaches it."""
+    user = await make_user(f"{tier}-me@example.com", tier=tier)
+    headers = {"Authorization": f"Bearer {create_access_token(user)}"}
+    res = await client.get("/api/auth/me", headers=headers)
+    assert res.status_code == 200
+    assert res.json()["subscriptionTier"] == tier
+
+
 @pytest.mark.parametrize("method,path", PLUS_ROUTES + PRO_ROUTES)
 async def test_gated_routes_still_require_authentication(client, method, path):
     """The tier gate must not have replaced the auth check."""

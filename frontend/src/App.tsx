@@ -11,6 +11,7 @@ import PullToRefreshIndicator from "./components/PullToRefreshIndicator";
 import ReminderHost from "./components/ReminderHost";
 import SettingsSheet from "./components/SettingsSheet";
 import SideMenu from "./components/SideMenu";
+import SubscriptionPill from "./components/SubscriptionPill";
 import AddItemSheet from "./components/timeline/AddItemSheet";
 import PlanDaySheet from "./components/timeline/PlanDaySheet";
 import { useSwipeController, WeekSwipeContext } from "./components/timeline/swipeController";
@@ -440,7 +441,13 @@ function App() {
                   exit={{ opacity: 0, transition: { duration: 0 } }}
                   transition={spring.snappy}
                 >
-                  <NotificationBell onOpenSchedule={goToSchedule} onOpenGoals={() => go("goals")} />
+                  <div className="flex items-center gap-2">
+                    <SubscriptionPill />
+                    <NotificationBell
+                      onOpenSchedule={goToSchedule}
+                      onOpenGoals={() => go("goals")}
+                    />
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

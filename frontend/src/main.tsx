@@ -78,11 +78,19 @@ function Root() {
   // every launch and every foreground (backgrounding a WKWebView doesn't
   // reload the page, so a tab/app switch is the only signal a real trip
   // gets); syncTimezone itself no-ops when nothing's actually changed.
+  // The same moments refresh the account itself first (sequentially, so the
+  // refreshed copy can't land on top of the timezone update), which is how a
+  // subscription-tier change reaches a device that never signs out.
   useEffect(() => {
     if (!userId) return;
-    void useAuthStore.getState().syncTimezone();
+    const refresh = async () => {
+      const auth = useAuthStore.getState();
+      await auth.refreshUser();
+      await auth.syncTimezone();
+    };
+    void refresh();
     const onVisible = () => {
-      if (document.visibilityState === "visible") void useAuthStore.getState().syncTimezone();
+      if (document.visibilityState === "visible") void refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);

@@ -46,6 +46,7 @@ import { addDaysISO, formatFullDate, formatShortDate, relativeDayLabel } from "@
 import { anchorDay } from "@/lib/habits";
 import { guessIcon, ICONS } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
+import { MAX_PRESETS, PRESETS_LOCKED_DIALOG, PRESETS_MIN_TIER } from "@/lib/presets";
 import { PRIORITIES, PRIORITY_META } from "@/lib/priority";
 import {
   notifyPermission,
@@ -53,6 +54,7 @@ import {
   reminderLabel,
   requestNotifyPermission,
 } from "@/lib/reminders";
+import { useHasTier } from "@/lib/tiers";
 import {
   durationWords,
   formatDuration,
@@ -132,6 +134,10 @@ export default function AddItemSheet({
   const allHabits = useHabitStore((s) => s.habits);
   const goals = useGoalStore((s) => s.goals);
   const addPreset = usePresetStore((s) => s.addPreset);
+  // At the cap, the star can't be switched on — its hint says why instead.
+  // Below Plus it still shows but explains the plan when tapped.
+  const presetsFull = usePresetStore((s) => s.presets.length >= MAX_PRESETS);
+  const canUsePresets = useHasTier(PRESETS_MIN_TIER);
   const confirm = useConfirm();
   const choose = useChoose();
 
@@ -1389,12 +1395,16 @@ export default function AddItemSheet({
                       {mode === "task" && !isEditing && (
                         <motion.button
                           type="button"
-                          onClick={() => setSaveAsPreset((v) => !v)}
-                          whileTap={tap}
+                          onClick={() => {
+                            if (!canUsePresets) void confirm(PRESETS_LOCKED_DIALOG);
+                            else setSaveAsPreset((v) => !v);
+                          }}
+                          whileTap={canUsePresets && presetsFull ? undefined : tap}
+                          disabled={canUsePresets && presetsFull}
                           aria-label={
                             saveAsPreset ? "Remove from one-tap presets" : "Save as one-tap preset"
                           }
-                          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 disabled:opacity-40 ${
                             saveAsPreset
                               ? "bg-surface-inverse text-fg-inverse"
                               : "bg-surface text-fg-faint"
@@ -1410,9 +1420,13 @@ export default function AddItemSheet({
                       guess. */}
                     {mode === "task" && !isEditing && (
                       <p className="text-[11px] text-fg-faint -mt-3 mb-5 px-1">
-                        {saveAsPreset
-                          ? "Starred — this will be saved as a one-tap preset for next time."
-                          : "Tap the star to save this as a one-tap preset you can reuse later."}
+                        {!canUsePresets
+                          ? "Saving tasks as one-tap presets is available on the Plus and Pro plans."
+                          : presetsFull
+                            ? `You have ${MAX_PRESETS} presets, the most you can keep. Remove one from Preset Tasks in the menu to save this one.`
+                            : saveAsPreset
+                              ? "Starred — this will be saved as a one-tap preset for next time."
+                              : "Tap the star to save this as a one-tap preset you can reuse later."}
                       </p>
                     )}
 

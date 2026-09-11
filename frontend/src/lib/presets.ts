@@ -1,11 +1,12 @@
-import { COLOR_OPTIONS } from "@/components/timeline/addItemOptions";
+import type { ConfirmOptions } from "@/components/ConfirmDialog";
+import type { SubscriptionTier } from "@/lib/api";
 import type { IconKey } from "@/lib/icons";
 import type { Priority } from "@/types/task";
 
 // A fully-configured task, one tap away from being added to the schedule —
-// no title/time/duration decisions left for the user to make. Built-ins ship
-// with the app; users can also turn any task they create into one of these
-// (see AddItemSheet's "Save as preset" toggle).
+// no title/time/duration decisions left for the user to make. Users create
+// these from any task they add (see AddItemSheet's "Save as preset" star);
+// there are no built-in ones.
 export interface TaskPreset {
   id: string;
   title: string;
@@ -16,115 +17,21 @@ export interface TaskPreset {
   priority: Priority | null;
 }
 
-// Ids are stable strings (not crypto.randomUUID()) since these are static and
-// never change identity across app versions.
-export const BUILTIN_PRESETS: TaskPreset[] = [
-  {
-    id: "builtin-morning-workout",
-    title: "Morning workout",
-    icon: "workout",
-    color: COLOR_OPTIONS[0],
-    durationMinutes: 45,
-    reminderMinutesBefore: 10,
-    priority: null,
-  },
-  {
-    id: "builtin-drink-water",
-    title: "Drink water",
-    icon: "health",
-    color: COLOR_OPTIONS[6],
-    durationMinutes: 5,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-read",
-    title: "Read 20 min",
-    icon: "reading",
-    color: COLOR_OPTIONS[7],
-    durationMinutes: 20,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-meditate",
-    title: "Meditate",
-    icon: "health",
-    color: COLOR_OPTIONS[4],
-    durationMinutes: 10,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-walk",
-    title: "Walk",
-    icon: "bike",
-    color: COLOR_OPTIONS[2],
-    durationMinutes: 20,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-meal-prep",
-    title: "Meal prep",
-    icon: "meal",
-    color: COLOR_OPTIONS[3],
-    durationMinutes: 60,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-deep-work",
-    title: "Deep work block",
-    icon: "work",
-    color: COLOR_OPTIONS[5],
-    durationMinutes: 90,
-    reminderMinutesBefore: 5,
-    priority: "high",
-  },
-  {
-    id: "builtin-inbox-zero",
-    title: "Inbox zero",
-    icon: "work",
-    color: COLOR_OPTIONS[8],
-    durationMinutes: 20,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-stretch",
-    title: "Stretch",
-    icon: "health",
-    color: COLOR_OPTIONS[9],
-    durationMinutes: 10,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-plan-tomorrow",
-    title: "Plan tomorrow",
-    icon: "default",
-    color: COLOR_OPTIONS[1],
-    durationMinutes: 10,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-journal",
-    title: "Journal",
-    icon: "default",
-    color: COLOR_OPTIONS[7],
-    durationMinutes: 10,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-  {
-    id: "builtin-tidy-up",
-    title: "Tidy up",
-    icon: "default",
-    color: COLOR_OPTIONS[4],
-    durationMinutes: 15,
-    reminderMinutesBefore: null,
-    priority: null,
-  },
-];
+// Presets are meant to be a short, hand-picked set of go-to tasks, not a
+// second task list — a cap keeps Plan Your Day's one-tap row scannable.
+export const MAX_PRESETS = 5;
+
+// Presets are a Plus/Pro feature. They're device-local (never sent to the
+// backend), so this is enforced in the UI and in presetStore.addPreset —
+// check it with lib/tiers.ts's hasTier/useHasTier.
+export const PRESETS_MIN_TIER: SubscriptionTier = "plus";
+
+// What a free user sees when they reach for a preset (a star, the menu entry).
+// Billing doesn't exist yet, so this explains rather than links to a purchase.
+export const PRESETS_LOCKED_DIALOG: ConfirmOptions = {
+  title: "Presets are a Plus feature",
+  message:
+    "Save your go-to tasks and habits and add them to your day in one tap. Available on the Plus and Pro plans.",
+  confirmLabel: "Got it",
+  hideCancel: true,
+};

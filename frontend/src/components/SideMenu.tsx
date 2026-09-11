@@ -10,17 +10,22 @@ import {
   RefreshCw,
   Settings,
   Sparkles,
+  Star,
   X,
 } from "lucide-react";
 
 import CalendarSheet from "./CalendarSheet";
+import { useConfirm } from "./ConfirmDialog";
 import { AppleLogo, GoogleLogo, MicrosoftLogo } from "./icons/ProviderLogos";
 import InterestsSheet from "./InterestsSheet";
+import PresetsSheet from "./PresetsSheet";
 import Switch from "./Switch";
 import logo from "@/assets/logo.svg";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { spring, tap } from "@/lib/motion";
 import { ALL_TABS, type Page } from "@/lib/pages";
+import { PRESETS_LOCKED_DIALOG, PRESETS_MIN_TIER } from "@/lib/presets";
+import { useHasTier } from "@/lib/tiers";
 import { useAuthStore } from "@/store/authStore";
 import { useCalendarStore } from "@/store/calendarStore";
 import { useGoogleCalendarStore } from "@/store/googleCalendarStore";
@@ -63,6 +68,9 @@ export default function SideMenu({
 
   const [showCalendars, setShowCalendars] = useState(false);
   const [showInterests, setShowInterests] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+  const canUsePresets = useHasTier(PRESETS_MIN_TIER);
+  const confirm = useConfirm();
   const appleCalendarId = useCalendarStore((s) => s.appleCalendarId);
   const outlookConnected = useOutlookStore((s) => s.connected);
   const googleConnected = useGoogleCalendarStore((s) => s.connected);
@@ -106,7 +114,7 @@ export default function SideMenu({
 
             {/* Drawer */}
             <motion.div
-              className="fixed top-0 left-0 bottom-0 w-72 bg-surface z-50 flex flex-col shadow-2xl"
+              className="fixed top-0 left-0 bottom-0 w-72 bg-surface z-50 flex flex-col overflow-y-auto shadow-2xl"
               style={{ x }}
               initial={{ x: -DRAWER_WIDTH }}
               animate={{ x: 0 }}
@@ -211,6 +219,23 @@ export default function SideMenu({
                               <Heart size={20} className="text-fg-muted" strokeWidth={1.8} />
                               <span className="font-medium text-fg-muted">Make Time For</span>
                             </motion.button>
+                            {/* Plus/Pro only. Below that it still shows, padlocked,
+                                and explains the plan instead of opening. */}
+                            <motion.button
+                              onClick={() => {
+                                onClose();
+                                if (canUsePresets) setShowPresets(true);
+                                else void confirm(PRESETS_LOCKED_DIALOG);
+                              }}
+                              whileTap={tap}
+                              className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl mb-1 hover:bg-fg/5 transition-colors"
+                            >
+                              <Star size={20} className="text-fg-muted" strokeWidth={1.8} />
+                              <span className="font-medium text-fg-muted flex-1 text-left">
+                                Preset Tasks
+                              </span>
+                              {!canUsePresets && <Lock size={15} className="text-fg-faint" />}
+                            </motion.button>
                           </>
                         )}
                       </Fragment>
@@ -305,6 +330,7 @@ export default function SideMenu({
       </AnimatePresence>
       <CalendarSheet isOpen={showCalendars} onClose={() => setShowCalendars(false)} />
       <InterestsSheet isOpen={showInterests} onClose={() => setShowInterests(false)} />
+      <PresetsSheet isOpen={showPresets} onClose={() => setShowPresets(false)} />
     </>
   );
 }

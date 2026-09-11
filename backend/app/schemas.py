@@ -42,6 +42,10 @@ class UserOut(CamelModel):
     email_verified: bool
     timezone: str | None = None
     segment: str | None = None
+    # "free" | "plus" | "pro". Server-backed features are gated server-side
+    # (app.tiers.require_tier); this is exposed for the device-local ones the
+    # backend never sees (e.g. task presets), which can only be gated in the UI.
+    subscription_tier: str = "pro"
 
 
 class AuthResponse(CamelModel):

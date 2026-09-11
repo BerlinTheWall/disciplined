@@ -149,7 +149,13 @@ export interface AuthUser {
   emailVerified: boolean;
   timezone?: string;
   segment?: UserSegment;
+  // Optional only because a user cached before this field existed won't have
+  // it until the launch-time refresh (authStore.refreshUser) — see
+  // lib/tiers.ts, which treats a missing tier as "free".
+  subscriptionTier?: SubscriptionTier;
 }
+
+export type SubscriptionTier = "free" | "plus" | "pro";
 
 // Self-reported during onboarding — picks which fake-week demo is shown
 // (see components/onboarding/FakeWeekPreview.tsx) and doubles as a
