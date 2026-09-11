@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { AuthUser, SubscriptionTier } from "@/lib/api";
 import { MAX_PRESETS, type TaskPreset } from "@/lib/presets";
-import { hasTier } from "@/lib/tiers";
+import { hasTier, tierOf } from "@/lib/tiers";
 import { useAuthStore } from "@/store/authStore";
 import { usePresetStore } from "@/store/presetStore";
 
@@ -37,6 +37,8 @@ describe("hasTier", () => {
     expect(hasTier(null, "plus")).toBe(false);
     expect(hasTier(account(undefined), "plus")).toBe(false);
     expect(hasTier(account("platinum" as SubscriptionTier), "plus")).toBe(false);
+    expect(hasTier(account("toString" as SubscriptionTier), "free")).toBe(true);
+    expect(tierOf(account("toString" as SubscriptionTier))).toBe("free");
     expect(hasTier(account(undefined), "free")).toBe(true);
   });
 });

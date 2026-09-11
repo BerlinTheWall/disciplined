@@ -226,7 +226,6 @@ export default function ProfilePage() {
   const [draftName, setDraftName] = useState(name);
 
   const initial = name.trim().charAt(0).toUpperCase() || "?";
-
   const todayObj = useMemo(() => new Date(), []);
 
   const scores7 = useMemo(() => recentScores(7, tasks, habits), [tasks, habits]);
