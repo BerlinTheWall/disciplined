@@ -10,7 +10,7 @@ interface State {
 }
 
 const initialState: State = {
-  tagline: "Staying disciplined",
+  tagline: "Stay Disciplined",
 };
 
 interface Actions {

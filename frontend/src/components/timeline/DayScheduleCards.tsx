@@ -249,16 +249,24 @@ export default function DayScheduleCards({ date, active, onDetail }: DaySchedule
                 <Icon size={20} style={{ color: item.color }} />
               </motion.span>
 
+              {/* Not flex-1: the streak sits right after the title text, and
+                  the title truncates first so the streak always stays visible. */}
               <p
-                className={`flex-1 min-w-0 truncate text-lg font-bold leading-snug ${
+                className={`min-w-0 truncate text-lg font-bold leading-snug ${
                   item.completed ? "text-fg-faint line-through" : "text-fg"
                 }`}
               >
                 {item.title}
               </p>
+              {item.streak ? (
+                <span className="flex items-center gap-0.5 shrink-0 text-sm font-semibold text-[#b5895f]">
+                  <Flame size={14} className="fill-[#b5895f]" />
+                  {item.streak}
+                </span>
+              ) : null}
             </div>
 
-            {/* Meta row: duration, priority, streak */}
+            {/* Meta row: duration, priority */}
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-sm font-medium text-fg-faint">{dur}</span>
               {item.priority && (
@@ -276,12 +284,6 @@ export default function DayScheduleCards({ date, active, onDetail }: DaySchedule
                   {PRIORITY_META[item.priority].label} priority
                 </span>
               )}
-              {item.streak ? (
-                <span className="flex items-center gap-0.5 text-sm font-medium text-[#b5895f]">
-                  <Flame size={13} className="fill-[#b5895f]" />
-                  {item.streak}
-                </span>
-              ) : null}
             </div>
           </div>
 
