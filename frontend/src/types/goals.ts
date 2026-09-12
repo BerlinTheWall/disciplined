@@ -53,6 +53,9 @@ export interface Goal {
   // period it starts in for tab/browsing purposes.
   startDate: string | null;
   durationCount: number | null;
+  // User-picked accent (#rrggbb). Null on goals created before colors were
+  // pickable — those fall back to their priority color (see goalAccent).
+  color: string | null;
   // Manual sort position within its period (lower = higher in the list).
   order: number;
   // Ids of tasks whose completion drives this goal's progress.

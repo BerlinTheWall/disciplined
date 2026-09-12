@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Calendar, Target, Trash2, X } from "lucide-react";
 
 import BottomSheet from "@/components/BottomSheet";
+import GoalColorPicker from "@/components/goals/GoalColorPicker";
 import CalendarMonth from "@/components/timeline/CalendarMonth";
 import { FieldPanel, FieldRow } from "@/components/timeline/FieldPanel";
 import { isLightColor } from "@/lib/color";
@@ -13,7 +14,7 @@ import {
   periodKeyFor,
   periodStartDate,
 } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent, goalColor } from "@/lib/goalPriority";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import type { Goal } from "@/types/goals";
@@ -26,7 +27,8 @@ const PRIORITY_LEVELS: { key: Priority; label: string }[] = [
 ];
 
 // Full edit of the fields set once at creation (GoalsPage's add-goal sheet)
-// but never revisited since: title, description, priority, start/end date.
+// but never revisited since: title, description, color, priority, start/end
+// date.
 // Same colored-header-plus-tappable-rows language as that sheet (and the
 // task editor) — see the Structured design-reference memory — rather than
 // a plain form, so it reads as the same sheet family. Milestones/links/
@@ -68,6 +70,7 @@ function GoalEditForm({
   const [title, setTitle] = useState(goal.title);
   const [description, setDescription] = useState(goal.description ?? "");
   const [priority, setPriority] = useState<Priority | null>(goal.priority);
+  const [color, setColor] = useState<string | null>(goal.color);
   const [startDate, setStartDate] = useState(
     goal.startDate ?? periodStartDate(goal.period, goal.periodKey)
   );
@@ -77,7 +80,7 @@ function GoalEditForm({
   const [dateOpen, setDateOpen] = useState(false);
   const [endDateOpen, setEndDateOpen] = useState(false);
 
-  const accent = goalColor(priority);
+  const accent = goalAccent({ color, priority });
   const onAccent = isLightColor(accent) ? "#111827" : "#ffffff";
 
   function save() {
@@ -90,6 +93,7 @@ function GoalEditForm({
       startDate,
       durationCount: durationCountFromEndDate(goal.period, startDate, effectiveEnd),
       periodKey: periodKeyFor(goal.period, parseISODate(startDate)),
+      color,
     });
     if (priority !== goal.priority) useGoalStore.getState().setPriority(goal.id, priority);
     onClose();
@@ -100,7 +104,7 @@ function GoalEditForm({
       <div className="overflow-y-auto">
         <div
           style={{ backgroundColor: accent }}
-          className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
+          className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6 transition-colors duration-200"
         >
           <div className="flex items-center mb-4">
             <motion.button
@@ -165,6 +169,11 @@ function GoalEditForm({
             hint={relativeDayLabel(endDate)}
             onPress={() => setEndDateOpen(true)}
           />
+
+          <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+            Color
+          </label>
+          <GoalColorPicker value={color} onChange={setColor} />
 
           <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
             Priority

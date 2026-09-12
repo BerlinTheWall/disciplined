@@ -44,20 +44,14 @@ export default function AllGoalsList({
             <p className="text-[11px] font-extrabold uppercase tracking-wide text-fg-faint mb-2 px-0.5">
               {label} · {group.length}
             </p>
-            {/* Same horizontal slider of achievement cards as PeriodOverview's
-                "this week's goals" strip — a group here can span every
-                instance of its period at once, so each card carries its own
-                period label (see AchievementGoalCard's `meta`) instead of one
-                shared heading the way PeriodOverview's single-instance strip
-                can get away with. Scrollbar hidden the same way every other
-                horizontal slider in the app is — a bare native scrollbar
-                reads as a broken widget, not a carousel. No edge-to-edge
-                bleed trick here — it stays inside the box's own p-3 padding
-                on both ends, same as every other side of the box. */}
-            <div
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-0.5"
-              style={{ scrollbarWidth: "none" }}
-            >
+            {/* A plain vertical stack of full-width cards (every card is
+                `solo` in its own row) — this view is for scanning every goal
+                at once, which a sideways slider hides behind swipes.
+                PeriodOverview's single-period strip keeps the slider. A group
+                here can span every instance of its period at once, so each
+                card carries its own period label (AchievementGoalCard's
+                `meta`) instead of one shared heading. */}
+            <div className="flex flex-col gap-2">
               {group.map((g) => (
                 <AchievementGoalCard
                   key={g.id}
@@ -68,7 +62,7 @@ export default function AllGoalsList({
                   meta={
                     relativePeriodName(g.period, g.periodKey) ?? periodLabel(g.period, g.periodKey)
                   }
-                  solo={group.length === 1}
+                  solo
                 />
               ))}
             </div>

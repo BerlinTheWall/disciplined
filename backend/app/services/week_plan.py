@@ -23,7 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.schemas import PendingAction, WeekPlanPreference, WeekPlanResponse
 from app.services.gemini import build_chat_context, get_client, resolve_today
-from app.services.tools import FUNCTION_DECLARATIONS, MUTATING_TOOLS, execute_tool
+from app.services.tools import (
+    FUNCTION_DECLARATIONS,
+    MUTATING_TOOLS,
+    execute_tool,
+    validate_tool_args,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -137,7 +142,13 @@ async def generate_week_plan(
         for call in response.function_calls:
             args = dict(call.args or {})
             if call.name in MUTATING_TOOLS:
-                if len(pending_actions) >= WEEK_PLAN_MAX_ACTIONS:
+                # Same reason as chat's: confirming a proposal runs its args
+                # verbatim, so a call with fields create_event doesn't take
+                # has to be rejected while the model can still fix it.
+                bad_call = validate_tool_args(call.name, args)
+                if bad_call is not None:
+                    result = bad_call
+                elif len(pending_actions) >= WEEK_PLAN_MAX_ACTIONS:
                     result = {
                         "error": "too_many_actions",
                         "message": (

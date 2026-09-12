@@ -360,6 +360,7 @@ export interface BriefingPayload {
 // needs refreshing from the server after a chat turn ran them.
 export const CHAT_TOOL_DOMAIN: Record<string, "events" | "habits" | "goals"> = {
   create_event: "events",
+  update_event: "events",
   move_event: "events",
   delete_event: "events",
   swap_events: "events",

@@ -210,6 +210,9 @@ class Goal(Base):
     # goal under the period it starts in.
     start_date: Mapped[str | None] = mapped_column(String, nullable=True)
     duration_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # User-picked accent (#rrggbb). Null on goals created before it existed —
+    # those fall back to their priority color (frontend goalAccent()).
+    color: Mapped[str | None] = mapped_column(String, nullable=True)
     # "order" is a reserved word in SQL — store it under a safe column name.
     order: Mapped[int] = mapped_column("sort_order", Integer, default=0)
     linked_task_ids: Mapped[list] = mapped_column(JSONB, default=list)

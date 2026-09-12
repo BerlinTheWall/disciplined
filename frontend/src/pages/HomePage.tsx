@@ -9,7 +9,7 @@ import { assistantDayBriefing } from "@/lib/assistantSpeech";
 import { fetchBriefingScript } from "@/lib/briefing";
 import { todayISODate } from "@/lib/date";
 import { currentPeriodKey } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent } from "@/lib/goalPriority";
 import { goalProgress } from "@/lib/goalProgress";
 import { getHabitStreak, isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
@@ -456,7 +456,7 @@ export default function HomePage({ onViewAll, onOpenGoals }: HomePageProps) {
             >
               {weekGoals.slice(0, 3).map((g) => {
                 const gp = goalProgress(g, tasks, allGoals);
-                const accent = goalColor(g.priority);
+                const accent = goalAccent(g);
                 return (
                   <div key={g.id} className="flex items-center gap-2.5">
                     <span

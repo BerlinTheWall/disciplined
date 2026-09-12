@@ -39,14 +39,15 @@ interface GoalState {
     description?: string | null;
     startDate?: string | null;
     durationCount?: number | null;
+    color?: string | null;
   }) => string;
   toggleDone: (id: string) => void;
   addProgress: (id: string, delta: number) => void;
   setPriority: (id: string, priority: Priority | null) => void;
   setNote: (id: string, note: string) => void;
-  // Title/description/dates edited together from the detail sheet's Edit
-  // screen. Priority is deliberately not here — it goes through setPriority
-  // so an edit that changes it still re-slots the goal by rank.
+  // Title/description/dates/color edited together from the detail sheet's
+  // Edit screen. Priority is deliberately not here — it goes through
+  // setPriority so an edit that changes it still re-slots the goal by rank.
   updateGoal: (
     id: string,
     updates: {
@@ -55,6 +56,7 @@ interface GoalState {
       startDate: string | null;
       durationCount: number | null;
       periodKey: string;
+      color: string | null;
     }
   ) => void;
   // Weight a linked task or goal as a percent of the parent; null reverts it
@@ -114,6 +116,7 @@ export const useGoalStore = create<GoalState>()(
         description = null,
         startDate = null,
         durationCount = null,
+        color = null,
       }) => {
         const id = crypto.randomUUID();
         set((state) => ({
@@ -134,6 +137,7 @@ export const useGoalStore = create<GoalState>()(
                 description,
                 startDate,
                 durationCount: durationCount && durationCount > 0 ? durationCount : null,
+                color,
                 order: Number.MAX_SAFE_INTEGER,
                 linkedTaskIds: [],
                 linkedGoalIds: [],
@@ -397,11 +401,11 @@ export const useGoalStore = create<GoalState>()(
     }),
     {
       name: "disciplined-goals",
-      version: 5,
+      version: 6,
       // Backfill fields added over time: priority/order/taskIds (v1),
       // taskWeights (v2), the v3 rebuild — taskIds/taskWeights renamed to
       // linkedTaskIds/weights, plus new linkedGoalIds/milestones — v4's
-      // category/startDate/durationCount, and v5's description. Reads
+      // category/startDate/durationCount, v5's description, and v6's color. Reads
       // straight off whatever old field names are present regardless of the
       // stored version, so it's safe no matter which version a device is
       // migrating up from.
@@ -422,6 +426,7 @@ export const useGoalStore = create<GoalState>()(
             startDate: g.startDate ?? null,
             durationCount: g.durationCount ?? null,
             description: g.description ?? null,
+            color: g.color ?? null,
           }));
         }
         return state as GoalState;
