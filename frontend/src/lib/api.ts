@@ -206,11 +206,25 @@ export interface WeekPlanPreference {
   title: string;
   timesPerWeek: number;
   timeOfDay: WeekPlanTimeOfDay;
+  // Goal-only planning context. Goals are device-local, so the server can't
+  // look any of this up — without it a goal reaches the model as a bare
+  // title. Interests leave it all unset. See weekPlanStore.generate.
+  deadline?: string | null;
+  progressLabel?: string | null;
+  openMilestones?: string[];
+  scheduledThisWeek?: string[];
+}
+
+// A proposed event plus which wizard item asked for it — `sourceId` is what
+// lets a goal's confirmed sessions be linked back to that goal.
+export interface WeekPlanProposal extends PendingAction {
+  sourceKind?: "interest" | "goal" | null;
+  sourceId?: string | null;
 }
 
 export interface WeekPlanResponse {
   message: string;
-  pendingActions: PendingAction[];
+  pendingActions: WeekPlanProposal[];
 }
 
 // AI-suggested milestones for a goal (see backend/app/services/goal_milestones.py).

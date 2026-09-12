@@ -1,5 +1,5 @@
 from datetime import date as _date
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
@@ -492,17 +492,49 @@ class ConfirmResponse(CamelModel):
 WeekPlanTimeOfDay = Literal["morning", "afternoon", "evening", "any"]
 
 
+_ShortLine = Annotated[str, Field(max_length=200)]
+
+
+class WeekPlanMilestone(CamelModel):
+    """One still-open milestone of a picked goal. Its id travels so a session
+    proposed for it can be linked back to the milestone rather than to the
+    goal: a goal's progress mode is implicit in what's set on it (linked
+    tasks > milestones > manual target > check-off, see the frontend's
+    goalProgress), so attaching a task at goal level would silently switch a
+    milestone-tracked goal into linked-task mode and drop the milestone
+    progress it was already showing."""
+
+    id: str
+    label: str = Field(max_length=200)
+
+
 class WeekPlanPreference(CamelModel):
     """One item the user explicitly picked in the wizard, with how often and
     roughly when they want it scheduled this week. Deliberately not looked up
     server-side from Interest/Goal — the client already has the title, and
-    this feature never needs to touch those tables."""
+    this feature never needs to touch those tables. That holds for the goal
+    context below too: goals live device-local, so the client is the only
+    thing that can supply it in the first place."""
 
     kind: Literal["interest", "goal"]
     id: str
     title: str = Field(max_length=200)
     times_per_week: int = Field(ge=1, le=14)
     time_of_day: WeekPlanTimeOfDay = "any"
+    # Goal-only planning context; every field is optional, and an interest
+    # simply leaves them all empty. Without these a goal reached the model as
+    # a bare title, so a week's worth of "Learn Spanish" blocks was the best
+    # it could do — no idea what the next real step was, when the goal is
+    # due, or that half of it was already scheduled.
+    deadline: str | None = None
+    progress_label: str | None = Field(default=None, max_length=120)
+    # The milestones still open, in order — the next actual steps.
+    open_milestones: list["WeekPlanMilestone"] = Field(default=[], max_length=20)
+    # Sessions already on the calendar for this goal inside the planning
+    # window (from the goal scheduler, or an earlier week-plan run), as
+    # human-readable "Mon 2026-09-14 09:00 — Draft: chapter 1" lines. These
+    # count toward times_per_week, so the model tops up rather than piling on.
+    scheduled_this_week: list[_ShortLine] = Field(default=[], max_length=40)
 
 
 class WeekPlanRequest(CamelModel):
@@ -510,9 +542,22 @@ class WeekPlanRequest(CamelModel):
     preferences: list[WeekPlanPreference] = Field(default=[], max_length=30)
 
 
+class WeekPlanProposal(PendingAction):
+    """A proposed event plus which wizard item asked for it. One pass proposes
+    every item's events at once, so the model is the only thing that knows
+    that mapping (see week_plan._PLAN_ITEM_ID) — and knowing it is what lets
+    the client link a goal's new sessions back to the goal on confirm,
+    instead of leaving them as orphans that never move its progress."""
+
+    source_kind: Literal["interest", "goal"] | None = None
+    source_id: str | None = None
+    # Set when the event does one specific open milestone of that goal.
+    source_milestone_id: str | None = None
+
+
 class WeekPlanResponse(CamelModel):
     message: str
-    pending_actions: list[PendingAction] = []
+    pending_actions: list[WeekPlanProposal] = []
 
 
 # ---- Interests ----
