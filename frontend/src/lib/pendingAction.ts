@@ -47,6 +47,12 @@ function goalTitle(id: string | undefined, goals: Goal[]) {
   return goals.find((g) => g.id === id)?.title ?? "(unknown goal)";
 }
 
+function formatDurationLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)}h${rest ? ` ${rest}m` : ""}`;
+}
+
 function dateAndMaybeTime(date: string | undefined, startMinutes: number | undefined) {
   if (!date) return startMinutes != null ? formatTimeLabel(startMinutes) : "";
   const day = relativeDayLabel(date);
@@ -70,6 +76,19 @@ export function describePendingAction(
           : `${relativeDayLabel(date)}, auto-picked free time`
         : "date not set";
       return `Create event "${title}" — ${when}`;
+    }
+    case "update_event": {
+      const title = taskTitle(str(a.event_id), tasks);
+      const changes: string[] = [];
+      if (a.title != null) changes.push(`title → "${str(a.title)}"`);
+      if (a.duration_minutes != null) {
+        changes.push(`duration → ${formatDurationLabel(num(a.duration_minutes)!)}`);
+      }
+      if (a.reminder_minutes_before != null) {
+        const mins = num(a.reminder_minutes_before)!;
+        changes.push(`reminder → ${mins === 0 ? "at start time" : `${mins} min before`}`);
+      }
+      return `Update "${title}"${changes.length ? ` — ${changes.join(", ")}` : ""}`;
     }
     case "move_event": {
       const title = taskTitle(str(a.event_id), tasks);
@@ -100,7 +119,9 @@ export function describePendingAction(
       const changes: string[] = [];
       if (a.title != null) changes.push(`title → "${str(a.title)}"`);
       if (a.start_minutes != null) changes.push(`time → ${formatTimeLabel(num(a.start_minutes)!)}`);
-      if (a.duration_minutes != null) changes.push(`duration → ${num(a.duration_minutes)} min`);
+      if (a.duration_minutes != null) {
+        changes.push(`duration → ${formatDurationLabel(num(a.duration_minutes)!)}`);
+      }
       if (a.freq != null || a.interval != null) changes.push("repeat frequency");
       if (a.days_of_week != null) changes.push("days");
       if (a.icon != null) changes.push("icon");

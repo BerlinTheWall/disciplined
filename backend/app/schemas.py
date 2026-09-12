@@ -15,6 +15,9 @@ class CamelModel(BaseModel):
     )
 
 
+HEX_COLOR_PATTERN = r"^#[0-9a-fA-F]{6}$"
+
+
 # ---- Auth ----
 
 
@@ -312,6 +315,8 @@ class GoalBase(CamelModel):
     description: str | None = Field(default=None, max_length=500)
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
+    # User-picked accent; null = fall back to the priority color.
+    color: str | None = Field(default=None, pattern=HEX_COLOR_PATTERN)
     order: int = 0
     linked_task_ids: list[str] = []
     linked_goal_ids: list[str] = []
@@ -337,6 +342,7 @@ class GoalUpdate(CamelModel):
     description: str | None = Field(default=None, max_length=500)
     start_date: str | None = None
     duration_count: int | None = Field(default=None, ge=1)
+    color: str | None = Field(default=None, pattern=HEX_COLOR_PATTERN)
     order: int | None = None
     linked_task_ids: list[str] | None = None
     linked_goal_ids: list[str] | None = None

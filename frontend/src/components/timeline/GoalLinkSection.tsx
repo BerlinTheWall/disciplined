@@ -3,13 +3,13 @@ import { Target } from "lucide-react";
 
 import { chipCls } from "./addItemOptions";
 import { periodLabel, relativePeriodName } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent } from "@/lib/goalPriority";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 
 // "Link to a goal" picker in the add/edit task sheet. Completing a linked task
 // advances its goal's progress. Only unfinished goals are offered; each chip
-// shows the goal title with its priority dot and period.
+// shows the goal title with its color dot and period.
 export function GoalLinkSection({
   goalId,
   onLink,
@@ -50,7 +50,7 @@ export function GoalLinkSection({
           >
             <span
               className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: goalColor(g.priority) }}
+              style={{ backgroundColor: goalAccent(g) }}
             />
             <span className="truncate max-w-40">{g.title}</span>
             <span className="text-[10px] text-fg-faint">

@@ -1,6 +1,6 @@
 import { addDaysISO, parseISODate } from "./date";
-import { currentPeriodKey, goalEndDate, periodStartDate } from "./goalPeriods";
-import type { Goal, GoalMilestone, GoalPeriod } from "@/types/goals";
+import { goalEndDate, periodStartDate } from "./goalPeriods";
+import type { Goal, GoalMilestone } from "@/types/goals";
 import type { Task } from "@/types/task";
 
 // How much of one milestone is actually done, 0..1: a milestone with its
@@ -247,9 +247,9 @@ export function goalProgress(goal: Goal, tasks: Task[], goals: Goal[], _depth = 
 
 // ── Pace ──────────────────────────────────────────────────────────────────
 // "On track" / "behind" / "at risk" — how a goal's progress compares to how
-// much of its own period has already elapsed. Only meaningful for the
-// period that's actually running right now (a past period is either done or
-// isn't, and a future one hasn't started), and only for goals with a real
+// much of its own run (start → end date) has already elapsed. Only
+// meaningful while that run is actually going (a finished one is either done
+// or isn't, and a future one hasn't started), and only for goals with a real
 // fill to compare against a clock — a plain check-off has no partial state
 // to be ahead of or behind.
 
@@ -271,32 +271,35 @@ export const GOAL_PACE_LABEL: Record<GoalPace, string> = {
   "at-risk": "At risk",
 };
 
-function elapsedFraction(period: GoalPeriod, periodKey: string): number {
-  const now = new Date();
-  if (period === "week") {
-    const monday = parseISODate(periodKey);
-    return Math.min(1, Math.max(0, (now.getTime() - monday.getTime()) / (7 * 86400000)));
-  }
-  if (period === "month") {
-    const [y, m] = periodKey.split("-").map(Number);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const elapsedDays = now.getDate() - 1 + now.getHours() / 24;
-    return Math.min(1, Math.max(0, elapsedDays / daysInMonth));
-  }
-  const y = Number(periodKey);
-  const start = new Date(y, 0, 1).getTime();
-  const end = new Date(y + 1, 0, 1).getTime();
-  return Math.min(1, Math.max(0, (now.getTime() - start) / (end - start)));
+// How far through its own run a goal is right now, 0..1 — i.e. how much of
+// it "should" be done by now if the work were spread evenly. Measured over
+// the goal's actual dates (startDate → goalEndDate, end day inclusive), not
+// the calendar period it's filed under, so a week goal started on a
+// Wednesday runs Wed → Tue instead of being judged against Mon → Sun. The
+// detail screen's "where you should be" marker and goalPace both read this,
+// so the marker and the pace pill can never disagree.
+export function goalExpectedFraction(
+  goal: Pick<Goal, "period" | "periodKey" | "startDate" | "durationCount">,
+  now: Date = new Date()
+): number {
+  const start = parseISODate(goal.startDate ?? periodStartDate(goal.period, goal.periodKey));
+  const end = parseISODate(
+    goalEndDate(goal.period, goal.periodKey, goal.startDate, goal.durationCount)
+  );
+  end.setDate(end.getDate() + 1); // run through the end date's own last moment
+  const span = end.getTime() - start.getTime();
+  if (span <= 0) return 1;
+  return Math.min(1, Math.max(0, (now.getTime() - start.getTime()) / span));
 }
 
 export function goalPace(goal: Goal, tasks: Task[], goals: Goal[]): GoalPace | null {
-  if (goal.periodKey !== currentPeriodKey(goal.period)) return null;
-
   const progress = goalProgress(goal, tasks, goals);
   if (progress.mode === "check" || progress.done || progress.fraction >= 1) return null;
 
-  const elapsed = elapsedFraction(goal.period, goal.periodKey);
-  if (elapsed <= 0) return null;
+  // Only while the goal is actually running — not yet started or already
+  // over both mean there's no live pace to report.
+  const elapsed = goalExpectedFraction(goal);
+  if (elapsed <= 0 || elapsed >= 1) return null;
 
   const gap = elapsed - progress.fraction;
   if (gap <= 0.05) return "on-track";

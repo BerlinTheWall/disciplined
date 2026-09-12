@@ -31,10 +31,11 @@ import type { EditItem } from "@/components/timeline/Timeline";
 import { hexToRgba } from "@/lib/color";
 import { parseISODate, todayISODate } from "@/lib/date";
 import { goalEndDate } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent } from "@/lib/goalPriority";
 import {
   GOAL_PACE_COLOR,
   GOAL_PACE_LABEL,
+  goalExpectedFraction,
   goalPace,
   goalProgress,
   isMilestoneDone,
@@ -273,7 +274,7 @@ function GoalDetailContent({
   roundShares(linkedIds.map((id) => p.shares[id] ?? 0)).forEach((share, i) => {
     linkedShareById[linkedIds[i]] = share;
   });
-  const accent = goalColor(goal.priority);
+  const accent = goalAccent(goal);
   const DescriptionIcon = (goal.category && CATEGORY_ICON[goal.category]) || FileText;
   // Every task this goal actually drives — its own links plus whatever's
   // attached to a milestone (how AI-scheduled sessions get linked) — so
@@ -344,6 +345,12 @@ function GoalDetailContent({
   const daysRemaining = Math.round(
     (parseISODate(endDate).getTime() - parseISODate(todayISODate()).getTime()) / 86400000
   );
+  // Where the bar "should" be by now if the work were spread evenly over the
+  // goal's dates — drawn as a faint tick on the progress bar. Hidden before
+  // the goal starts (nothing expected yet) and once it's done.
+  const expected = goalExpectedFraction(goal);
+  const showExpected = !p.done && expected > 0;
+  const expectedPercent = Math.round(expected * 100);
 
   return (
     <div className="relative px-5 pt-3 pb-[calc(28px+env(safe-area-inset-bottom))] max-w-md mx-auto">
@@ -494,22 +501,38 @@ function GoalDetailContent({
               )}
             </div>
             <p className="text-[14.5px] font-bold leading-tight mb-3 text-fg">{subtitle}</p>
-            <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
-                style={{ backgroundColor: accent }}
-                initial={false}
-                animate={{ width: `${Math.round((p.done ? 1 : p.fraction) * 100)}%` }}
-                transition={spring.gentle}
-              />
+            <div className="relative">
+              <div className="h-1.5 rounded-full bg-surface-subtle overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ backgroundColor: accent }}
+                  initial={false}
+                  animate={{ width: `${Math.round((p.done ? 1 : p.fraction) * 100)}%` }}
+                  transition={spring.gentle}
+                />
+              </div>
+              {/* Outside the bar's overflow-hidden track so the tick can
+                  stand a little taller than the bar itself. */}
+              {showExpected && (
+                <motion.div
+                  aria-hidden
+                  className="absolute -top-1 -bottom-1 w-0.5 -ml-px rounded-full bg-fg/35"
+                  initial={false}
+                  animate={{ left: `${expectedPercent}%` }}
+                  transition={spring.gentle}
+                />
+              )}
             </div>
-            <p className="text-right text-[10.5px] font-semibold text-fg-faint mt-1.5">
-              {daysRemaining > 0
-                ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
-                : daysRemaining === 0
-                  ? "Last day"
-                  : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
-            </p>
+            <div className="flex items-center justify-between gap-2 text-[10.5px] font-semibold text-fg-faint mt-1.5">
+              <span>{showExpected ? `Expected by now: ${expectedPercent}%` : ""}</span>
+              <span className="shrink-0">
+                {daysRemaining > 0
+                  ? `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left`
+                  : daysRemaining === 0
+                    ? "Last day"
+                    : `${-daysRemaining} day${-daysRemaining === 1 ? "" : "s"} overdue`}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -854,7 +877,7 @@ function GoalDetailContent({
               >
                 <span
                   className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: goalColor(lg.priority) }}
+                  style={{ backgroundColor: goalAccent(lg) }}
                 />
                 <span
                   className={`flex-1 min-w-0 text-sm truncate ${

@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 
 import { chipCls } from "@/components/timeline/addItemOptions";
 import { canLinkGoalPeriod, periodLabel, relativePeriodName } from "@/lib/goalPeriods";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent } from "@/lib/goalPriority";
 import { tap } from "@/lib/motion";
 import { useGoalStore } from "@/store/goalStore";
 import type { Goal } from "@/types/goals";
@@ -37,7 +37,7 @@ export default function LinkedGoalPicker({ goal, allGoals }: { goal: Goal; allGo
           >
             <span
               className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: goalColor(g.priority) }}
+              style={{ backgroundColor: goalAccent(g) }}
             />
             <span className="truncate max-w-32">{g.title}</span>
             <span className="text-[10px] text-fg-faint">

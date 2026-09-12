@@ -1,6 +1,6 @@
 import { addDaysISO, getWeekDates, parseISODate, todayISODate, toISODate } from "./date";
 import { currentPeriodKey, goalOverlapsPeriod, periodLabel, periodRange } from "./goalPeriods";
-import { goalColor, priorityRank } from "./goalPriority";
+import { goalAccent, priorityRank } from "./goalPriority";
 import { goalProgress } from "./goalProgress";
 import type { Goal, GoalPeriod } from "@/types/goals";
 import type { Task } from "@/types/task";
@@ -27,6 +27,8 @@ export interface PeriodStopItem {
   // one with its goal's accent instead of them all reading identically.
   goalId?: string;
   goalTitle?: string;
+  // The owning goal's color for a task item; the goal's own color for a
+  // goal item (tints its progress ring).
   goalAccent?: string;
 }
 
@@ -84,6 +86,7 @@ function goalItems(goals: Goal[], allGoals: Goal[], tasks: Task[]): PeriodStopIt
         fraction: p.fraction,
         percent: p.percent,
         sortKey: priorityRank(g.priority),
+        goalAccent: goalAccent(g),
       };
     })
     .sort((a, b) => a.sortKey - b.sortKey);
@@ -135,7 +138,7 @@ function buildWeekStops(activeKey: string, goals: Goal[], tasks: Task[]): Period
         sortKey: t.startMinutes,
         goalId: owner?.id,
         goalTitle: owner?.title,
-        goalAccent: owner ? goalColor(owner.priority) : undefined,
+        goalAccent: owner ? goalAccent(owner) : undefined,
       };
     });
     const parsedDate = parseISODate(date);

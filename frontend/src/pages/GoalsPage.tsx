@@ -19,10 +19,11 @@ import {
 import BottomSheet from "@/components/BottomSheet";
 import Collapse from "@/components/Collapse";
 import AllGoalsList from "@/components/goals/AllGoalsList";
+import GoalColorPicker from "@/components/goals/GoalColorPicker";
 import GoalDetailScreen from "@/components/goals/GoalDetailScreen";
 import GoalPlanWizard from "@/components/goals/GoalPlanWizard";
 import PeriodOverview from "@/components/goals/PeriodOverview";
-import { chipCls } from "@/components/timeline/addItemOptions";
+import { chipCls, COLOR_OPTIONS } from "@/components/timeline/addItemOptions";
 import CalendarMonth from "@/components/timeline/CalendarMonth";
 import { FieldPanel } from "@/components/timeline/FieldPanel";
 import { useFillRemainingHeight } from "@/hooks/useFillRemainingHeight";
@@ -48,7 +49,7 @@ import {
   relativePeriodName,
   shiftPeriodKey,
 } from "@/lib/goalPeriods";
-import { GOAL_ACCENT, GOAL_ACCENT_ON, goalColor } from "@/lib/goalPriority";
+import { goalColor } from "@/lib/goalPriority";
 import { spring, tap } from "@/lib/motion";
 import { useGoalFocusStore } from "@/store/goalFocusStore";
 import { useGoalPlanWizardStore } from "@/store/goalPlanWizardStore";
@@ -211,6 +212,11 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
   const [descError, setDescError] = useState("");
   const [newPriority, setNewPriority] = useState<Priority | null>(null);
   const [newCategory, setNewCategory] = useState<GoalCategory | null>(null);
+  // The new goal's own accent — the whole sheet (header, buttons, calendar
+  // panels) wears it as it's picked, so the goal reads as that color before
+  // it even exists.
+  const [newColor, setNewColor] = useState(COLOR_OPTIONS[0]);
+  const newColorOn = isLightColor(newColor) ? "#111827" : "#ffffff";
   const [newScale, setNewScale] = useState<GoalPeriod>("week");
   const [newStartDate, setNewStartDate] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
@@ -338,12 +344,14 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
       description: newDescription.trim() || null,
       startDate,
       durationCount,
+      color: newColor,
     });
     setTitle("");
     setNewDescription("");
     setDescError("");
     setNewPriority(null);
     setNewCategory(null);
+    setNewColor(COLOR_OPTIONS[0]);
     setEndDateTouched(false);
     setAddOpen(false);
     useGoalPlanWizardStore.getState().start(id);
@@ -484,21 +492,21 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                 this step's hero, typed directly onto the color instead of
                 sitting in a boxed input. */}
               <div
-                style={{ backgroundColor: GOAL_ACCENT }}
-                className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
+                style={{ backgroundColor: newColor }}
+                className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6 transition-colors duration-200"
               >
                 <motion.button
                   onClick={() => setAddOpen(false)}
                   whileTap={tap}
                   aria-label="Close"
-                  style={{ backgroundColor: "rgba(0,0,0,0.18)", color: GOAL_ACCENT_ON }}
+                  style={{ backgroundColor: "rgba(0,0,0,0.18)", color: newColorOn }}
                   className="w-9 h-9 rounded-full flex items-center justify-center mb-4"
                 >
                   <X size={18} />
                 </motion.button>
                 <div className="flex items-center gap-3">
                   <div
-                    style={{ backgroundColor: "#111827", color: GOAL_ACCENT }}
+                    style={{ backgroundColor: "#111827", color: newColor }}
                     className="w-14 h-14 rounded-full flex items-center justify-center shrink-0"
                   >
                     <Target size={26} />
@@ -509,8 +517,8 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                     onKeyDown={(e) => e.key === "Enter" && handleNext()}
                     placeholder="What's your goal?"
                     style={{
-                      color: GOAL_ACCENT_ON,
-                      caretColor: GOAL_ACCENT_ON,
+                      color: newColorOn,
+                      caretColor: newColorOn,
                       borderColor: "rgba(255,255,255,0.5)",
                     }}
                     className="flex-1 min-w-0 bg-transparent text-2xl font-semibold placeholder-white/50 border-b pb-1 focus:outline-none"
@@ -555,14 +563,17 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                   </span>
                 </motion.button>
 
+                <label className="text-xs font-bold tracking-wide text-fg-muted mt-5 mb-2 block">
+                  Color
+                </label>
+                <GoalColorPicker value={newColor} onChange={setNewColor} />
+
                 <motion.button
                   onClick={handleNext}
                   whileTap={tap}
                   disabled={!title.trim()}
                   style={
-                    title.trim()
-                      ? { backgroundColor: GOAL_ACCENT, color: GOAL_ACCENT_ON }
-                      : undefined
+                    title.trim() ? { backgroundColor: newColor, color: newColorOn } : undefined
                   }
                   className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
                     title.trim() ? "" : "bg-surface-raised text-fg-faint"
@@ -586,21 +597,21 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
               {/* Same full-bleed accent header as step 1, so the sheet reads as
                 one continuous flow instead of switching styles mid-way. */}
               <div
-                style={{ backgroundColor: GOAL_ACCENT }}
+                style={{ backgroundColor: newColor }}
                 className="px-5 pt-[calc(20px+env(safe-area-inset-top))] pb-6"
               >
                 <motion.button
                   onClick={() => goToStep(1)}
                   whileTap={tap}
                   aria-label="Back"
-                  style={{ backgroundColor: "rgba(0,0,0,0.18)", color: GOAL_ACCENT_ON }}
+                  style={{ backgroundColor: "rgba(0,0,0,0.18)", color: newColorOn }}
                   className="w-9 h-9 rounded-full flex items-center justify-center mb-4"
                 >
                   <ChevronLeft size={18} />
                 </motion.button>
                 <div className="flex items-center gap-3">
                   <div
-                    style={{ backgroundColor: "#111827", color: GOAL_ACCENT }}
+                    style={{ backgroundColor: "#111827", color: newColor }}
                     className="w-14 h-14 rounded-full flex items-center justify-center shrink-0"
                   >
                     <Target size={26} />
@@ -609,7 +620,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                     <p
                       className="text-sm mb-0.5 truncate"
                       style={{
-                        color: isLightColor(GOAL_ACCENT)
+                        color: isLightColor(newColor)
                           ? "rgba(17,24,39,0.7)"
                           : "rgba(255,255,255,0.85)",
                       }}
@@ -617,10 +628,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                       {formatShortDate(newStartDate)} · {newGoalDays}{" "}
                       {newGoalDays === 1 ? "day" : "days"}
                     </p>
-                    <p
-                      style={{ color: GOAL_ACCENT_ON }}
-                      className="truncate text-2xl font-semibold"
-                    >
+                    <p style={{ color: newColorOn }} className="truncate text-2xl font-semibold">
                       {title}
                     </p>
                   </div>
@@ -756,9 +764,7 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
                   whileTap={tap}
                   disabled={!title.trim()}
                   style={
-                    title.trim()
-                      ? { backgroundColor: GOAL_ACCENT, color: GOAL_ACCENT_ON }
-                      : undefined
+                    title.trim() ? { backgroundColor: newColor, color: newColorOn } : undefined
                   }
                   className={`mt-6 w-full flex items-center justify-center gap-2 rounded-full py-4 font-semibold ${
                     title.trim() ? "" : "bg-surface-raised text-fg-faint"
@@ -779,13 +785,13 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
       <FieldPanel
         open={addOpen && dateOpen}
         title="Start date"
-        color={GOAL_ACCENT}
-        onColor={GOAL_ACCENT_ON}
+        color={newColor}
+        onColor={newColorOn}
         onClose={() => setDateOpen(false)}
       >
         <CalendarMonth
           value={newStartDate}
-          color={GOAL_ACCENT}
+          color={newColor}
           onChange={(iso) => {
             setNewStartDate(iso);
             setDateOpen(false);
@@ -796,13 +802,13 @@ export default function GoalsPage({ onOpenSchedule }: { onOpenSchedule?: () => v
       <FieldPanel
         open={addOpen && endDateOpen}
         title="End date"
-        color={GOAL_ACCENT}
-        onColor={GOAL_ACCENT_ON}
+        color={newColor}
+        onColor={newColorOn}
         onClose={() => setEndDateOpen(false)}
       >
         <CalendarMonth
           value={effectiveEndDate}
-          color={GOAL_ACCENT}
+          color={newColor}
           onChange={(iso) => {
             setNewEndDate(iso);
             setEndDateTouched(true);

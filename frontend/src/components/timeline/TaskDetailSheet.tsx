@@ -18,7 +18,7 @@ import { repeatSummary } from "./addItemOptions";
 import type { EditItem } from "./Timeline";
 import { isLightColor } from "@/lib/color";
 import { formatFullDate } from "@/lib/date";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent } from "@/lib/goalPriority";
 import { anchorDay, getHabitStreak } from "@/lib/habits";
 import { ICONS } from "@/lib/icons";
 import { tap } from "@/lib/motion";
@@ -380,7 +380,7 @@ export default function TaskDetailSheet({
                 >
                   <span
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
-                    style={{ backgroundColor: goalColor(linkedGoal.priority) }}
+                    style={{ backgroundColor: goalAccent(linkedGoal) }}
                   >
                     <Target size={15} />
                   </span>

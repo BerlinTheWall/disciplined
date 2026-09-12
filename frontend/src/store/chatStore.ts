@@ -82,11 +82,23 @@ interface Actions {
 }
 
 // Only real exchanges go back to Gemini as context, capped to keep requests small.
+// History is text only — a bubble's pendingActions never cross the wire — so a
+// proposal the user never confirmed reads back to the model exactly like one
+// that ran. That is what turned a correction to a still-pending "I'll add
+// 'dentist'..." into an update_event against an event that had never been
+// created, so the unconfirmed state is spelled out in the text the model sees.
 function toHistory(messages: ChatBubble[]): ChatMessage[] {
   return messages
     .filter((m) => !m.error)
     .slice(-12)
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => ({
+      role: m.role,
+      content:
+        m.pendingActions?.length && !m.resolved
+          ? `${m.content}
+[This proposal is still awaiting confirmation — nothing was created or changed, and it has no id.]`
+          : m.content,
+    }));
 }
 
 export const useChatStore = create<State & Actions>()((set, get) => {

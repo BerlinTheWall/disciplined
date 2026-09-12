@@ -7,7 +7,7 @@ import { FieldPanel } from "@/components/timeline/FieldPanel";
 import TimeWheel from "@/components/timeline/TimeWheel";
 import { isLightColor } from "@/lib/color";
 import { formatShortDate } from "@/lib/date";
-import { goalColor } from "@/lib/goalPriority";
+import { goalAccent } from "@/lib/goalPriority";
 import { tap } from "@/lib/motion";
 import { formatTimeLabel, rangeLabel, timeStringToMinutes } from "@/lib/time";
 import { useGoalScheduleStore } from "@/store/goalScheduleStore";
@@ -47,7 +47,7 @@ export default function GoalScheduleSheet({ goal }: { goal: Goal }) {
   // Which proposal's time is being edited, if any — a single shared panel
   // (below) rather than one per row, same pattern the task edit sheet uses.
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const accent = goalColor(goal.priority);
+  const accent = goalAccent(goal);
   const onAccent = isLightColor(accent) ? "#111827" : "#ffffff";
   const editingStart =
     editingIndex != null ? num(proposals[editingIndex]?.args.start_minutes) : undefined;

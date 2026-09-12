@@ -1,4 +1,5 @@
 import { isLightColor } from "./color";
+import type { Goal } from "@/types/goals";
 import type { Priority } from "@/types/task";
 
 // Goal priority palette — coral/gold/teal, plus neutral slate for "no
@@ -16,6 +17,10 @@ export const GOAL_PRIORITY_COLOR: Record<Priority, string> = {
 export const GOAL_NONE_COLOR = "#a1a1aa"; // neutral slate
 
 export const goalColor = (p: Priority | null) => (p ? GOAL_PRIORITY_COLOR[p] : GOAL_NONE_COLOR);
+
+// A goal's own accent: the color the user picked, or — for goals created
+// before colors were pickable — its priority color, as it always was.
+export const goalAccent = (g: Pick<Goal, "color" | "priority">) => g.color ?? goalColor(g.priority);
 
 // Sort weight: high first … none last. Used to auto-place new/re-prioritized
 // goals before the user drags them.

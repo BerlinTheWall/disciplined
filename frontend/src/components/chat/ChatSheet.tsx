@@ -92,7 +92,7 @@ function Bubble({
             This will run exactly as follows
           </p>
           {message.pendingActions!.map((action, i) => (
-            <p key={i} className="text-[13px] text-fg">
+            <p key={i} className="text-[13px] text-fg break-words">
               {describePendingAction(action, { tasks, habits, goals })}
             </p>
           ))}

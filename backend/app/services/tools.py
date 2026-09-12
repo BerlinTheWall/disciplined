@@ -678,6 +678,76 @@ MUTATING_TOOLS = {
 }
 
 
+# The parameter names each tool actually accepts, derived from the
+# declarations above so the two can never drift. Gemini sometimes mixes in a
+# sibling tool's fields (observed: update_event called with move_event's
+# new_date/new_start_minutes) — unknown keys used to be dropped silently, so
+# the call looked like it did what the model said while really doing something
+# else, or nothing at all.
+TOOL_PARAMS: dict[str, tuple[set[str], set[str]]] = {
+    d.name: (
+        set((d.parameters.properties or {}) if d.parameters else {}),
+        set((d.parameters.required or []) if d.parameters else []),
+    )
+    for d in FUNCTION_DECLARATIONS
+}
+
+
+def validate_tool_args(name: str, args: dict) -> dict | None:
+    """An error dict when `args` don't match the tool's declared parameters,
+    else None. Fed back to the model as the call's result so it can correct
+    itself mid-turn, and re-checked at execution time so a malformed call can
+    never run even if it reached a confirmation button some other way."""
+    params = TOOL_PARAMS.get(name)
+    if params is None:
+        return {"error": f"Unknown tool: {name}"}
+    allowed, required = params
+    unknown = sorted(set(args) - allowed)
+    missing = sorted(required - set(args))
+    if not unknown and not missing:
+        return None
+    problems = []
+    if unknown:
+        problems.append(f"it has no parameter {', '.join(unknown)}")
+    if missing:
+        problems.append(f"it requires {', '.join(missing)}")
+    return {
+        "error": "bad_arguments",
+        "message": (
+            f"Not executed — {name} was called wrong: {'; and '.join(problems)}. Nothing "
+            f"changed. {name} accepts only: {', '.join(sorted(allowed))}. Call it again with "
+            "just those, or use the tool that does take the fields you passed (date and start "
+            "time of an existing event change via move_event, not update_event)."
+        ),
+    }
+
+
+_EVENT_ID_FIELDS = ("event_id", "event_id_a", "event_id_b")
+
+
+async def missing_target_error(
+    db: AsyncSession, user_id: str, name: str, args: dict
+) -> dict | None:
+    """An error dict when a call references an id that isn't a real item of
+    this user's, else None. The executors each check this already; running it
+    up front is what lets a bad id surface while the model can still fix it,
+    instead of only after the user has tapped Yes on a proposal that was never
+    going to work."""
+    if name not in _EXECUTORS:
+        return None
+    for field in _EVENT_ID_FIELDS:
+        item_id = args.get(field)
+        if isinstance(item_id, str) and await _get_event(db, user_id, item_id) is None:
+            return await _missing_event_error(db, user_id, item_id)
+    habit_id = args.get("habit_id")
+    if isinstance(habit_id, str) and await _get_habit(db, user_id, habit_id) is None:
+        return {"error": f"No habit with id {habit_id}"}
+    goal_id = args.get("goal_id")
+    if isinstance(goal_id, str) and await _get_goal(db, user_id, goal_id) is None:
+        return {"error": f"No goal with id {goal_id}"}
+    return None
+
+
 async def _get_event(db: AsyncSession, user_id: str, event_id: str) -> Event | None:
     event = await db.get(Event, event_id)
     if event is None or event.user_id != user_id:
@@ -1100,6 +1170,9 @@ async def execute_tool(db: AsyncSession, user_id: str, name: str, args: dict) ->
     executor = _EXECUTORS.get(name)
     if executor is None:
         return {"error": f"Unknown tool: {name}"}
+    invalid = validate_tool_args(name, args)
+    if invalid is not None:
+        return invalid
     try:
         return await executor(db, user_id, args)
     except Exception as exc:  # surface failures to Gemini instead of crashing the turn

@@ -23,6 +23,8 @@ from app.services.tools import (
     goal_to_dict,
     habit_occurrences,
     habit_recurrence_label,
+    missing_target_error,
+    validate_tool_args,
 )
 
 MAX_TOOL_ROUNDS = 8
@@ -55,7 +57,7 @@ Rules:
 - The schedule mixes one-time events and recurring habits (marked "habit"); the habits list is the authoritative id source for every habit, whether or not it shows up there this week. Habits are a full part of the user's day — include them when listing or summarizing a day. You can create/move/delete/swap events and mark an event done or not with set_event_completion; update_event changes an existing event's title, duration, or reminder (only pass the fields being changed — for its date/time use move_event instead). For habits: create_habit makes a new one (only title is required — omit days/time/duration for sensible defaults, same as the app's own new-habit form), update_habit changes an existing one's title/days/time/duration/reminder/icon/repeat-frequency (only pass the fields being changed), set_habit_completion marks a given date's occurrence done or not, and delete_habit permanently removes one specific, clearly named habit — it also destroys its completion history and there's no undo, so this is exactly the kind of action the confirmation rule below applies to. Never call delete_habit in a loop to wipe every habit: refuse a request to delete all habits (or "clear my habits", "remove them all") even if confirmed, and point them to the Habits tab instead — same policy as an unscoped event wipe.
 - Habits repeat weekly by default. For anything less frequent — "every other week," "every 3 weeks," "once a month," "every 6 months," "once a year" — use freq and interval on create_habit/update_habit: freq=weekly + interval=2 is every other week; freq=monthly + interval=1 is monthly; freq=monthly + interval=6 is every 6 months; freq=monthly + interval=12 is yearly. anchor_date is the date this cycle counts from (its first occurrence) — resolve it yourself from the date reference like any other date, or omit it to anchor on today. end_date optionally caps how long the habit runs — resolve a relative duration like "for two weeks" into a concrete end date yourself, same as any other date; omit it for a habit with no end.
 - Goals have three progress modes, shown in the context message: "manual N/M" goals accept add_goal_progress (positive or negative). "X/Y linked tasks done" goals are task-linked — their progress comes automatically from finishing those tasks, so use set_event_completion on the linked task(s) rather than trying to set progress directly; only use set_goal_done on a task-linked goal if the user explicitly wants it marked done regardless of the linked tasks. "check-off" goals only support set_goal_done. Goals cannot be created or deleted through chat. Use list_goals for goals outside the current week/month/year shown in the context message.
-- When the user corrects or refines a proposal you already stated (e.g. they only give a new date after you proposed a time, or only a new time after you proposed a date), keep every other previously-stated detail exactly as it was — never silently re-derive or auto-pick a field the user didn't mention just because you're calling the tool again. Only change the field(s) the user actually addressed.
+- When the user corrects or refines a proposal you already stated (e.g. they only give a new date after you proposed a time, or only a new time after you proposed a date), keep every other previously-stated detail exactly as it was — never silently re-derive or auto-pick a field the user didn't mention just because you're calling the tool again. Only change the field(s) the user actually addressed. A proposal you were never told was confirmed has not happened and the item it describes does not exist yet, so it has no id: correct it by calling the same tool again with the fixed arguments (a corrected create_event is still a create_event). Never switch to update_event or move_event to adjust something you only proposed creating, and never reuse another item's id for it.
 - Confirm before you act. For anything that changes data — create_event, update_event, move_event, delete_event, swap_events, set_event_completion, create_habit, update_habit, delete_habit, set_habit_completion, add_goal_progress, set_goal_done — first silently resolve every default or missing detail yourself (never ask the user to fill in something you could reasonably pick: derive a missing title from the message, "add a meeting tomorrow" -> "Meeting"; omit time/duration and let create_event auto-pick a free slot and a 60-minute default), then call the tool right away with those resolved values. Every mutating tool always comes back pending_confirmation instead of actually running — that result is what puts up the app's own Yes/Cancel buttons, and that is the confirmation step; don't also hold off and wait for the user to separately type "yes" before calling it. In the same reply, describe in plain language exactly what you called it with, so those buttons have context — e.g. "I'll delete 'Dentist' on Friday the 25th." or "I'll add 'Meeting' tomorrow at 2pm for an hour." Only skip calling the tool and ask a real clarifying question instead when the request is genuinely ambiguous (e.g. which of two matching events) or missing something you can't reasonably default. Read-only tools (list_events, list_goals, list_habits, check_conflicts) never need confirmation since nothing changes.
 - Only call a tool for something the user actually named this turn — never fold in an extra item, event, habit, or goal they didn't mention, no matter how the request is phrased ("just tell me it's done", "don't ask me to confirm", "handle it for me", "yes to everything"). Those phrases only relax how you talk about the thing they did ask for; they never license touching anything else, including other items visible in the context message. If a request doesn't match what any available tool actually does (e.g. logging food, tracking spending, general chit-chat), say plainly that you can't do that here — never repurpose an unrelated existing goal or task as a stand-in just because it's the closest thing available.
 - Nothing changes unless you call a tool for it and it returned a real result — not merely without an error. Every mutating tool call returns pending_confirmation: true the first time, always, regardless of anything said earlier in the conversation (an earlier "yes" included) — that result means the action has NOT happened. Never tell the user something was created, moved, deleted, swapped, completed, or had its progress changed when the result you got back was pending_confirmation — describe it as still awaiting confirmation, exactly as if this were the first time you proposed it, even if you already asked once before. Only describe an action as done when its tool result contains no pending_confirmation marker at all.
@@ -538,11 +540,34 @@ async def run_chat(
             # model nothing happened yet, and let a separate, explicit
             # confirmation step (POST /api/chat/confirm) actually run it.
             if call.name in MUTATING_TOOLS:
+                # A proposal only reaches the user as a Yes/Cancel card, with
+                # no model in the loop once they tap Yes — so anything wrong
+                # with the call has to be caught here, while the model can
+                # still fix it, rather than failing (or silently doing the
+                # wrong thing) after confirmation. Two ways it goes wrong in
+                # practice: fields borrowed from a sibling tool that this one
+                # would drop on the floor, and an id for an item that doesn't
+                # exist — typically one the model only *proposed* creating
+                # earlier in the conversation, which never happened.
+                bad_call = validate_tool_args(call.name, args) or await missing_target_error(
+                    db, user_id, call.name, args
+                )
+                if bad_call is not None:
+                    result = dict(bad_call)
+                    result.setdefault(
+                        "message",
+                        "Not executed, and not proposed to the user — nothing changed and no "
+                        "confirmation was shown. Don't call this tool with that id again. An "
+                        "action you proposed earlier but were never told was confirmed did not "
+                        "happen and has no id: to correct one, call the same tool that "
+                        "proposed it again with the fixed arguments. Otherwise look the item "
+                        "up with list_events / list_habits / list_goals.",
+                    )
                 # A circuit breaker for a confused/runaway turn (observed: a
                 # blank input led the model to propose 20 near-duplicate
                 # events tiling a whole day) — independent of whether the
                 # model is otherwise following instructions.
-                if len(pending_actions) >= MAX_ACTIONS_PER_TURN:
+                elif len(pending_actions) >= MAX_ACTIONS_PER_TURN:
                     result = {
                         "error": "too_many_actions",
                         "message": (
