@@ -63,9 +63,9 @@ type ReminderCategory = "health" | "work" | "study" | "general";
 // with a genuinely different natural tone get their own category — everything
 // else (meals, workouts, shopping, alarms, default) reads fine as general.
 function reminderCategory(icon: IconKey): ReminderCategory {
-  if (icon === "health") return "health";
-  if (icon === "work") return "work";
-  if (icon === "reading") return "study"; // closest icon to studying/exams
+  if (icon === "health" || icon === "meds" || icon === "mind") return "health";
+  if (icon === "work" || icon === "code" || icon === "call" || icon === "send") return "work";
+  if (icon === "reading" || icon === "study") return "study";
   return "general";
 }
 

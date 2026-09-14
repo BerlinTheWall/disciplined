@@ -100,19 +100,20 @@ export default function GoalDetailScreen({
   const p = goal ? goalProgress(goal, tasks, goals) : null;
   const pace = goal ? goalPace(goal, tasks, goals) : null;
 
-  const wasDoneRef = useRef(p?.done ?? false);
+  const done = p?.done;
+  const wasDoneRef = useRef(done ?? false);
   useEffect(() => {
-    if (!p) return;
+    if (done === undefined) return;
     const wasDone = wasDoneRef.current;
-    wasDoneRef.current = p.done;
-    if (!wasDone && p.done) {
+    wasDoneRef.current = done;
+    if (!wasDone && done) {
       setCelebrate(true);
       // Long enough for the confetti burst and its label to fully play out
       // and fade (see GoalCelebration) rather than getting cut off mid-way.
       const t = setTimeout(() => setCelebrate(false), 1600);
       return () => clearTimeout(t);
     }
-  }, [p?.done]);
+  }, [done]);
 
   return (
     <BottomSheet

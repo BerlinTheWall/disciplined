@@ -200,17 +200,41 @@ export interface ConfirmActionsResponse {
 
 export type WeekPlanTimeOfDay = "morning" | "afternoon" | "evening" | "any";
 
+// One still-open milestone of a picked goal. The id travels so a session
+// proposed for it can be linked back to that milestone (see
+// WeekPlanProposal.sourceMilestoneId and weekPlanStore.linkCreatedToGoals).
+export interface WeekPlanMilestone {
+  id: string;
+  label: string;
+}
+
 export interface WeekPlanPreference {
   kind: "interest" | "goal";
   id: string;
   title: string;
   timesPerWeek: number;
   timeOfDay: WeekPlanTimeOfDay;
+  // Goal-only planning context. Goals are device-local, so the server can't
+  // look any of this up — without it a goal reaches the model as a bare
+  // title. Interests leave it all unset. See weekPlanStore.generate.
+  deadline?: string | null;
+  progressLabel?: string | null;
+  openMilestones?: WeekPlanMilestone[];
+  scheduledThisWeek?: string[];
+}
+
+// A proposed event plus which wizard item asked for it — `sourceId` is what
+// lets a goal's confirmed sessions be linked back to that goal.
+export interface WeekPlanProposal extends PendingAction {
+  sourceKind?: "interest" | "goal" | null;
+  sourceId?: string | null;
+  // Set when the event does one specific open milestone of that goal.
+  sourceMilestoneId?: string | null;
 }
 
 export interface WeekPlanResponse {
   message: string;
-  pendingActions: PendingAction[];
+  pendingActions: WeekPlanProposal[];
 }
 
 // AI-suggested milestones for a goal (see backend/app/services/goal_milestones.py).
