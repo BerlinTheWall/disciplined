@@ -200,6 +200,14 @@ export interface ConfirmActionsResponse {
 
 export type WeekPlanTimeOfDay = "morning" | "afternoon" | "evening" | "any";
 
+// One still-open milestone of a picked goal. The id travels so a session
+// proposed for it can be linked back to that milestone (see
+// WeekPlanProposal.sourceMilestoneId and weekPlanStore.linkCreatedToGoals).
+export interface WeekPlanMilestone {
+  id: string;
+  label: string;
+}
+
 export interface WeekPlanPreference {
   kind: "interest" | "goal";
   id: string;
@@ -211,7 +219,7 @@ export interface WeekPlanPreference {
   // title. Interests leave it all unset. See weekPlanStore.generate.
   deadline?: string | null;
   progressLabel?: string | null;
-  openMilestones?: string[];
+  openMilestones?: WeekPlanMilestone[];
   scheduledThisWeek?: string[];
 }
 
@@ -220,6 +228,8 @@ export interface WeekPlanPreference {
 export interface WeekPlanProposal extends PendingAction {
   sourceKind?: "interest" | "goal" | null;
   sourceId?: string | null;
+  // Set when the event does one specific open milestone of that goal.
+  sourceMilestoneId?: string | null;
 }
 
 export interface WeekPlanResponse {
