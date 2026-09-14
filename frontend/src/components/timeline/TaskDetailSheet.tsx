@@ -237,6 +237,12 @@ export default function TaskDetailSheet({
 
             {/* Body */}
             <div className="p-4 pb-8 flex flex-col gap-2">
+              {data.description && (
+                <p className="p-3 rounded-2xl bg-surface-alt text-sm text-fg whitespace-pre-wrap break-words">
+                  {data.description}
+                </p>
+              )}
+
               {onShowOnCalendar && (
                 <motion.button
                   onClick={() => {

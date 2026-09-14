@@ -144,6 +144,7 @@ class EventBase(CamelModel):
     completed: bool = False
     priority: Priority | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, max_length=2000)
     # ISO UTC datetime, stamped by the client on every local edit — drives
     # the most-recent-edit-wins calendar reconciliation (see
     # app.services.calendar_time / outlook_graph.py / google_calendar.py).
@@ -166,6 +167,7 @@ class EventUpdate(CamelModel):
     completed: bool | None = None
     priority: Priority | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, max_length=2000)
     updated_at: str | None = None
 
 
@@ -192,6 +194,7 @@ class HabitBase(CamelModel):
     completed_dates: list[str] = []
     skipped_dates: list[str] = []
     reminder_minutes_before: int | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, max_length=2000)
     freq: Literal["weekly", "monthly"] = "weekly"
     interval: int = Field(default=1, ge=1, le=24)
     # The cycle's first occurrence — only load-bearing when interval>1 or
@@ -247,6 +250,7 @@ class HabitUpdate(CamelModel):
     completed_dates: list[str] | None = None
     skipped_dates: list[str] | None = None
     reminder_minutes_before: int | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, max_length=2000)
     freq: Literal["weekly", "monthly"] | None = None
     interval: int | None = Field(default=None, ge=1, le=24)
     anchor_date: str | None = None

@@ -25,6 +25,7 @@ import {
   chipCls,
   COLOR_OPTIONS,
   DAY_OPTIONS,
+  DESCRIPTION_MAX_LENGTH,
   DURATION_OPTIONS,
   durationTrackLabel,
   FIELD_PANEL_TITLES,
@@ -185,6 +186,7 @@ export default function AddItemSheet({
   // milestone link alone.
   const [editingMilestoneLink, setEditingMilestoneLink] = useState(false);
   const [reminder, setReminder] = useState<number | null>(null);
+  const [description, setDescription] = useState("");
   const [openRow, setOpenRow] = useState<EditRowKey | null>(null);
   const [done, setDone] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
@@ -230,6 +232,7 @@ export default function AddItemSheet({
       );
       setEndDate(editItem.type === "habit" ? (editItem.data.endDate ?? null) : null);
       setPriority(editItem.type === "task" ? (editItem.data.priority ?? null) : null);
+      setDescription(editItem.data.description ?? "");
       const linkedGoal =
         editItem.type === "task"
           ? useGoalStore.getState().goals.find((g) => g.linkedTaskIds.includes(editItem.data.id))
@@ -263,6 +266,7 @@ export default function AddItemSheet({
     setColor(COLOR_OPTIONS[0]);
     setIcon("alarm");
     setIconTouched(false);
+    setDescription("");
     setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
     setFreq("weekly");
     setRepeatInterval(1);
@@ -455,6 +459,7 @@ export default function AddItemSheet({
           anchorDate,
           endDate: finalEndDate,
           reminderMinutesBefore: reminder,
+          description: description.trim() || null,
         });
         deleteTask(editItem!.data.id);
       } else {
@@ -473,6 +478,7 @@ export default function AddItemSheet({
           date,
           priority,
           reminderMinutesBefore: reminder,
+          description: description.trim() || null,
         });
         deleteHabit(editItem!.data.id);
       }
@@ -492,6 +498,7 @@ export default function AddItemSheet({
           date,
           priority,
           reminderMinutesBefore: reminder,
+          description: description.trim() || null,
         });
         useGoalStore.getState().linkTask(goalLink, editItem!.data.id);
         if (goalLink) useGoalStore.getState().setWeight(goalLink, editItem!.data.id, goalWeight);
@@ -508,6 +515,7 @@ export default function AddItemSheet({
           anchorDate,
           endDate: finalEndDate,
           reminderMinutesBefore: reminder,
+          description: description.trim() || null,
         });
       }
     } else {
@@ -521,6 +529,7 @@ export default function AddItemSheet({
           date,
           priority,
           reminderMinutesBefore: reminder,
+          description: description.trim() || null,
         });
         if (pendingMilestone) {
           useGoalStore
@@ -556,6 +565,7 @@ export default function AddItemSheet({
           anchorDate,
           endDate: finalEndDate,
           reminderMinutesBefore: reminder,
+          description: description.trim() || null,
         });
       }
     }
@@ -618,6 +628,18 @@ export default function AddItemSheet({
   const onColor = isLightColor(color) ? "#111827" : "#ffffff";
   const HeaderIcon = ICONS[icon] ?? ICONS.default;
   const linkedGoal = goals.find((g) => g.id === goalLink);
+
+  const descriptionField = (
+    <textarea
+      value={description}
+      onChange={(e) => setDescription(e.target.value)}
+      placeholder="Add a description"
+      aria-label="Description"
+      rows={3}
+      maxLength={DESCRIPTION_MAX_LENGTH}
+      className="w-full rounded-2xl bg-surface-alt px-4 py-3 text-[15px] text-fg placeholder:text-fg-faint resize-none focus:outline-none"
+    />
+  );
 
   /* ---- field sections — shared by the wizard (create) and the single
      scrollable form (edit) ----------------------------------------- */
@@ -1281,6 +1303,8 @@ export default function AddItemSheet({
                 </div>
               )}
 
+              {descriptionField}
+
               <motion.button
                 onClick={handleSubmit}
                 whileTap={tap}
@@ -1429,6 +1453,8 @@ export default function AddItemSheet({
                               : "Tap the star to save this as a one-tap preset you can reuse later."}
                       </p>
                     )}
+
+                    <div className="pb-4">{descriptionField}</div>
 
                     {typeLinksBody}
 

@@ -28,6 +28,9 @@ export const COLOR_OPTIONS = [
 
 export const DURATION_OPTIONS = [15, 30, 45, 60, 90];
 
+// Mirrors the cap on EventBase.description in backend/app/schemas.py.
+export const DESCRIPTION_MAX_LENGTH = 2000;
+
 export const DAY_OPTIONS = [
   { label: "S", value: 0 },
   { label: "M", value: 1 },

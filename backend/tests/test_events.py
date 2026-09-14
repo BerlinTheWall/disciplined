@@ -126,3 +126,29 @@ async def test_cannot_modify_or_delete_another_users_event(client, auth_headers,
     still_there = await client.get(f"/api/events/{event_id}", headers=other_headers)
     assert still_there.status_code == 200
     assert still_there.json()["title"] == "Dentist"
+
+
+async def test_description_round_trips_and_survives_partial_updates(client, auth_headers):
+    created = await client.post(
+        "/api/events", json=_event(description="Bring the insurance card"), headers=auth_headers
+    )
+    assert created.status_code == 201, created.text
+    event_id = created.json()["id"]
+    assert created.json()["description"] == "Bring the insurance card"
+
+    # An update that doesn't mention it (e.g. an app build that predates the
+    # field) must leave it alone.
+    moved = await client.patch(
+        f"/api/events/{event_id}", json={"startMinutes": 660}, headers=auth_headers
+    )
+    assert moved.json()["description"] == "Bring the insurance card"
+
+    cleared = await client.patch(
+        f"/api/events/{event_id}", json={"description": None}, headers=auth_headers
+    )
+    assert cleared.json()["description"] is None
+
+
+async def test_description_length_is_capped(client, auth_headers):
+    res = await client.post("/api/events", json=_event(description="x" * 2001), headers=auth_headers)
+    assert res.status_code == 422
