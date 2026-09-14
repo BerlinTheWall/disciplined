@@ -16,6 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Goal, Habit, User
 
 
+# Every icon the app can render — a copy of the keys of ICONS in
+# frontend/src/lib/icons.ts (tests/test_icon_keys.py fails if they drift).
+# Offered as the enum on each tool's icon parameter.
+ICON_KEYS = (
+    "alarm", "morning", "sleep", "workout", "walk", "bike", "shower", "meal",
+    "coffee", "water", "meds", "health", "mind", "reading", "study", "writing",
+    "work", "code", "call", "send", "target", "social", "home", "clean",
+    "shopping", "money", "travel", "music", "game", "pet", "default",
+)
+
+
 def fmt_minutes(m: int) -> str:
     return f"{m // 60:02d}:{m % 60:02d}"
 
@@ -324,10 +335,7 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "icon": types.Schema(
                     type=types.Type.STRING,
-                    enum=[
-                        "alarm", "workout", "shower", "meal", "bike", "reading",
-                        "coffee", "work", "health", "shopping", "default",
-                    ],
+                    enum=list(ICON_KEYS),
                     description="Icon that best matches the event.",
                 ),
             },
@@ -566,10 +574,7 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "icon": types.Schema(
                     type=types.Type.STRING,
-                    enum=[
-                        "alarm", "workout", "shower", "meal", "bike", "reading",
-                        "coffee", "work", "health", "shopping", "default",
-                    ],
+                    enum=list(ICON_KEYS),
                     description="Icon that best matches the habit.",
                 ),
             },
@@ -622,10 +627,7 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "icon": types.Schema(
                     type=types.Type.STRING,
-                    enum=[
-                        "alarm", "workout", "shower", "meal", "bike", "reading",
-                        "coffee", "work", "health", "shopping", "default",
-                    ],
+                    enum=list(ICON_KEYS),
                     description="New icon.",
                 ),
             },

@@ -11,6 +11,11 @@ not shipped to a store, so everything so far sits under Unreleased. The first
 
 ### Added
 
+- **Twenty more icons.** Morning, sleep, walk, water, meds, mind, study,
+  writing, code, call, send, target, social, home, clean, money, travel, music,
+  game and pet join the original eleven, in the picker, title-based guessing
+  and the assistant's tools. The backend's copy of the icon list is now one
+  constant, checked against the frontend by `test_icon_keys.py`.
 - **A licence.** The repository is public and carried none, which meant default
   copyright by accident rather than by choice. Now explicitly proprietary, all
   rights reserved ([LICENSE](LICENSE)).
