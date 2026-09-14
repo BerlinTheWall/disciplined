@@ -13,6 +13,7 @@ export interface Task {
   date: string; // ISO date, e.g. "2026-06-17"
   priority?: Priority | null; // importance; optional — explicit null clears it on the server
   reminderMinutesBefore?: number | null; // minutes before start to notify; null/unset = no reminder
+  description?: string | null; // free-text notes; app-only, never sent to a connected calendar
   // ISO UTC datetime, stamped on every local edit — drives the most-recent-
   // edit-wins calendar reconciliation (backend outlook_graph.py/google_calendar.py,
   // frontend lib/deviceCalendarSync.ts).

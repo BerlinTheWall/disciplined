@@ -101,6 +101,9 @@ class Event(Base):
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
     priority: Mapped[str | None] = mapped_column(String, nullable=True)  # low|medium|high
     reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Free-text notes shown under the task. App-only: not sent to Outlook,
+    # Google or Apple, and not part of the sync signature.
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     # Set when this Task is linked (either direction) to the user's connected
     # Outlook calendar (see app.services.outlook_graph.reconcile_outlook_events)
     # — the Microsoft Graph event id. Unrelated to the Apple write path
@@ -146,6 +149,8 @@ class Habit(Base):
     days_of_week: Mapped[list] = mapped_column(JSONB, default=list)  # 0 = Sunday ... 6 = Saturday
     completed_dates: Mapped[list] = mapped_column(JSONB, default=list)  # ISO dates
     skipped_dates: Mapped[list] = mapped_column(JSONB, default=list)
+    # Free-text notes shown under the habit; app-only, same as Event.description.
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     # Recurrence beyond "every week": freq picks the unit, interval how many of
     # them between occurrences (freq=weekly + interval=2 = every other week;
     # freq=monthly + interval=6 = every 6 months). anchor_date is the cycle's

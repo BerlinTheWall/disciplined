@@ -11,6 +11,9 @@ not shipped to a store, so everything so far sits under Unreleased. The first
 
 ### Added
 
+- **Descriptions.** Tasks and habits carry an optional free-text description
+  (up to 2,000 characters), written in the add/edit sheet and shown on the
+  detail sheet. App-only: it is not sent to Outlook, Google or Apple.
 - **Twenty more icons.** Morning, sleep, walk, water, meds, mind, study,
   writing, code, call, send, target, social, home, clean, money, travel, music,
   game and pet join the original eleven, in the picker, title-based guessing
