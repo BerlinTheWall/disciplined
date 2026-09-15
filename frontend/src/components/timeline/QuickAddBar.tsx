@@ -567,13 +567,13 @@ export default function QuickAddBar({ onEditDetails }: QuickAddBarProps) {
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onFocus={openChat}
+          onFocus={() => openChat({ focusInput: true })}
           placeholder={PLACEHOLDER}
           className="flex-1 min-w-0 bg-transparent text-base text-fg placeholder-fg-faint focus:outline-none"
         />
         <motion.button
           type="button"
-          onClick={openChat}
+          onClick={() => openChat()}
           whileTap={tap}
           aria-label="Open assistant"
           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-fg-faint"

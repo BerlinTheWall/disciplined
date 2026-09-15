@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowUp, Loader2, Mic, Sparkles, Square, Trash2, Volume2, X } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
+import { useAutoFocus } from "@/hooks/useAutoFocus";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import {
   primeAudioChannel,
@@ -138,23 +139,39 @@ function TypingDots() {
 }
 
 export default function ChatSheet() {
-  const [isOpen, busy, messages, closeChat, clearChat, send, confirmPending, cancelPending] =
-    useChatStore(
-      useShallow((state) => [
-        state.isOpen,
-        state.busy,
-        state.messages,
-        state.closeChat,
-        state.clearChat,
-        state.send,
-        state.confirmPending,
-        state.cancelPending,
-      ])
-    );
+  const [
+    isOpen,
+    focusInput,
+    busy,
+    messages,
+    closeChat,
+    clearChat,
+    send,
+    confirmPending,
+    cancelPending,
+  ] = useChatStore(
+    useShallow((state) => [
+      state.isOpen,
+      state.focusInput,
+      state.busy,
+      state.messages,
+      state.closeChat,
+      state.clearChat,
+      state.send,
+      state.confirmPending,
+      state.cancelPending,
+    ])
+  );
 
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Opened by tapping the schedule quick-add field: hand focus over to this
+  // input, otherwise it stays on the field behind the sheet. Focus moves
+  // input-to-input, so an already-open keyboard stays up rather than
+  // dropping and re-opening. Other openers (voice, nudges, coach) don't ask
+  // for it — a keyboard popping over a spoken reply would be unwanted.
+  useAutoFocus(textareaRef, isOpen && focusInput);
 
   // Grow the input with its content (wrapping instead of scrolling sideways)
   // up to a cap, past which it scrolls internally. Re-measures on every

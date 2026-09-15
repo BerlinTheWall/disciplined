@@ -63,12 +63,15 @@ export interface ChatBubble {
 
 interface State {
   isOpen: boolean;
+  // Whether this open should move focus into the sheet's input — only when
+  // the user opened it by tapping a text field, never for voice/nudge opens.
+  focusInput: boolean;
   busy: boolean;
   messages: ChatBubble[];
 }
 
 interface Actions {
-  openChat: () => void;
+  openChat: (opts?: { focusInput?: boolean }) => void;
   closeChat: () => void;
   clearChat: () => void;
   // Sends `text` to the assistant and appends the exchange to the thread.
@@ -104,11 +107,12 @@ function toHistory(messages: ChatBubble[]): ChatMessage[] {
 export const useChatStore = create<State & Actions>()((set, get) => {
   return {
     isOpen: false,
+    focusInput: false,
     busy: false,
     messages: [],
 
-    openChat: () => set({ isOpen: true }),
-    closeChat: () => set({ isOpen: false }),
+    openChat: (opts) => set({ isOpen: true, focusInput: !!opts?.focusInput }),
+    closeChat: () => set({ isOpen: false, focusInput: false }),
     clearChat: () => set({ messages: [] }),
 
     send: async (text) => {
