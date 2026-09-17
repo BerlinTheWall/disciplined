@@ -1,37 +1,32 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LoaderCircle } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "@/components/BottomSheet";
 import { ApiError } from "@/lib/api";
 import { tap } from "@/lib/motion";
 import { useAuthStore } from "@/store/authStore";
+import { useVerifyEmailStore } from "@/store/verifyEmail";
 
 const fieldClass =
   "w-full bg-surface rounded-xl border border-border-input px-4 py-3 text-[15px] text-fg placeholder:text-fg-faint outline-none focus:border-border-focus transition-colors";
-
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  email: string;
-  message?: string;
-  // Signup already gets a code from register() itself — this is only for the
-  // blocked-login case, where nothing has been sent yet and the sheet would
-  // otherwise open on an empty code with no way to know that.
-  autoSendOnOpen?: boolean;
-}
 
 // Verification is a hard gate on login (see routers/auth.py) — this sheet is
 // the one way in for an unverified account, reached either right after
 // signup or when a login attempt comes back 403. Success logs the user
 // straight in (verifyEmail returns a fresh token), same as ForgotPasswordSheet.
-export default function VerifyEmailSheet({
-  isOpen,
-  onClose,
-  email,
-  message,
-  autoSendOnOpen,
-}: Props) {
+export default function VerifyEmailSheet() {
+  const [isOpen, email, autoSendOnOpen, message, handleClose] = useVerifyEmailStore(
+    useShallow((state) => [
+      state.show,
+      state.email,
+      state.autoSendOnOpen,
+      state.message,
+      state.handleClose,
+    ])
+  );
+
   const verifyEmail = useAuthStore((s) => s.verifyEmail);
   const resendVerification = useAuthStore((s) => s.resendVerification);
 
@@ -64,7 +59,7 @@ export default function VerifyEmailSheet({
   }, [isOpen, autoSendOnOpen, email, resendVerification]);
 
   function close() {
-    onClose();
+    handleClose();
     window.setTimeout(() => {
       setCode("");
       setNotice(null);
