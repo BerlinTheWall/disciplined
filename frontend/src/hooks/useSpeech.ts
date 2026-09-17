@@ -6,7 +6,8 @@ import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { SpeechRecognition as NativeSpeechRecognition } from "@capgo/capacitor-speech-recognition";
 import { create } from "zustand";
 
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { utcToday } from "@/lib/briefingLimit";
 import { useAzureVoiceStore } from "@/store/azureVoiceStore";
 import { useSettingsStore } from "@/store/settingsStore";
 
@@ -287,20 +288,26 @@ export function stopSpeaking() {
 // Recently synthesized clips, keyed by their exact text, so replays and
 // prefetched briefings start instantly instead of waiting on generation.
 const ttsCache = new Map<string, Blob>();
-const ttsInFlight = new Map<string, Promise<Blob | null>>();
+// "limit" = the backend refused a briefing because today's one briefing
+// synthesis is already spent — distinct from null (any other failure) so a
+// tap can explain why nothing plays instead of failing silently.
+type FetchOutcome = Blob | "limit" | null;
+const ttsInFlight = new Map<string, Promise<FetchOutcome>>();
 const TTS_CACHE_MAX = 8;
 
 type SpeechPurpose = "briefing" | "routine";
+
+export type SpeakOutcome = "played" | "limit" | "failed";
 
 async function fetchSpeech(
   text: string,
   timeoutMs?: number,
   purpose: SpeechPurpose = "routine"
-): Promise<Blob | null> {
+): Promise<FetchOutcome> {
   // The chosen Azure voice AND purpose folded into the cache key: the
-  // backend only honors the caller's voice choice for "briefing" (see
-  // routers/tts.py) — a "routine" request always gets the cheaper Standard
-  // voice regardless — so the two purposes must never share a cache entry
+  // backend uses the HD voice as-is only for "briefing" (see
+  // routers/tts.py) — a "routine" request gets that speaker's cheaper
+  // Standard twin — so the two purposes must never share a cache entry
   // for the same text, or one would serve back audio in the wrong voice.
   const voice = useAzureVoiceStore.getState().voice;
   const key = `${purpose}:${voice}:${text}`;
@@ -318,9 +325,14 @@ async function fetchSpeech(
         const oldest = ttsCache.keys().next().value!;
         ttsCache.delete(oldest);
       }
+      if (purpose === "briefing") {
+        useAzureVoiceStore.getState().setBriefingVoice(utcToday(), voice);
+      }
       return blob;
     })
-    .catch(() => null)
+    .catch((err): FetchOutcome =>
+      err instanceof ApiError && err.status === 429 && purpose === "briefing" ? "limit" : null
+    )
     .finally(() => {
       ttsInFlight.delete(key);
     });
@@ -416,17 +428,19 @@ function playAudioBlob(
   })();
 }
 
-// Fetches the human-like AI voice from the backend and plays it. Resolves true
-// only once playback has started; any failure (offline server, missing key,
-// blocked autoplay) resolves false so the caller can fall back.
+// Fetches the human-like AI voice from the backend and plays it. Resolves
+// "played" only once playback has started, "limit" when today's briefing
+// allowance is spent, and "failed" for anything else (offline server, missing
+// key, blocked autoplay) so the caller can fall back.
 async function playNaturalVoice(
   text: string,
   { onStart, onDone, onWord, timeoutMs }: SpeakCallbacks = {},
   purpose: SpeechPurpose = "routine"
-): Promise<boolean> {
-  const blob = await fetchSpeech(text, timeoutMs, purpose);
-  if (!blob) return false;
-  return playAudioBlob(blob, text, { onStart, onDone, onWord });
+): Promise<SpeakOutcome> {
+  const result = await fetchSpeech(text, timeoutMs, purpose);
+  if (result === "limit") return "limit";
+  if (!result) return "failed";
+  return (await playAudioBlob(result, text, { onStart, onDone, onWord })) ? "played" : "failed";
 }
 
 // Reporting whether audio actually started. Auto-play attempts (no user
@@ -440,7 +454,9 @@ export function speakNaturalOnly(
   purpose: SpeechPurpose = "routine"
 ): Promise<boolean> {
   if (!useSettingsStore.getState().voiceEnabled) return Promise.resolve(false);
-  return playNaturalVoice(text, { onDone, timeoutMs: 30_000 }, purpose);
+  return playNaturalVoice(text, { onDone, timeoutMs: 30_000 }, purpose).then(
+    (outcome) => outcome === "played"
+  );
 }
 
 // Assistant speech (reminders, chat replies, read-aloud summaries) — the only
@@ -452,11 +468,11 @@ export async function speakAssistant(
   text: string,
   callbacks: SpeakCallbacks = {},
   purpose: SpeechPurpose = "routine"
-) {
+): Promise<SpeakOutcome> {
   const { onStart, onDone, onWord, timeoutMs } = callbacks;
   if (!useSettingsStore.getState().voiceEnabled) {
     onDone?.();
-    return;
+    return "failed";
   }
   useSpeechState.setState({ pending: true });
   const wrapStart = () => {
@@ -467,7 +483,7 @@ export async function speakAssistant(
     useSpeechState.setState({ pending: false, speaking: false });
     onDone?.();
   };
-  const played = await playNaturalVoice(
+  const outcome = await playNaturalVoice(
     text,
     {
       onStart: wrapStart,
@@ -477,5 +493,6 @@ export async function speakAssistant(
     },
     purpose
   );
-  if (!played) wrapDone();
+  if (outcome !== "played") wrapDone();
+  return outcome;
 }
