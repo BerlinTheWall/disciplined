@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { immer } from "zustand/middleware/immer";
 
 import { api, setToken, type AuthUser, type UserSegment } from "@/lib/api";
 import { deviceTimezone } from "@/lib/timezone";
@@ -146,4 +147,31 @@ export const useAuthStore = create<State & Actions>()(
     }),
     { name: "disciplined-auth" }
   )
+);
+
+interface State2 {
+  error: string | null;
+}
+
+interface Actions2 {
+  setError: (val: string | null) => void;
+}
+
+const initialState2: State2 = {
+  error: null,
+};
+
+export const useAuthErrorStore = create<State2 & Actions2>()(
+  immer((set) => ({
+    ...initialState2,
+
+    setError: (val: string | null) =>
+      set((state) => {
+        state.error = val;
+      }),
+
+    reset: () => {
+      set(() => initialState2);
+    },
+  }))
 );

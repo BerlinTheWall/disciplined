@@ -9,7 +9,7 @@ import { FormInputs } from "@/components/form";
 import { INPUT_TYPE } from "@/constants/input-type";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { tap } from "@/lib/motion";
-import { useAuthStore } from "@/store/authStore";
+import { useAuthErrorStore, useAuthStore } from "@/store/authStore";
 import { useVerifyEmailStore } from "@/store/verifyEmail";
 import type { FormInputTypes } from "@/types/input-types";
 
@@ -24,6 +24,7 @@ const LoginForm = () => {
 
   const [login] = useAuthStore(useShallow((state) => [state.login]));
   const [handleShow] = useVerifyEmailStore(useShallow((state) => [state.handleShow]));
+  const [setError] = useAuthErrorStore(useShallow((state) => [state.setError]));
 
   const {
     handleSubmit,
@@ -36,6 +37,7 @@ const LoginForm = () => {
   });
 
   const onSubmit = handleSubmit(async (data) => {
+    setError(null);
     const email = data.email.trim();
     try {
       await login(email, data.password);
@@ -47,7 +49,7 @@ const LoginForm = () => {
           message: "This account hasn't been verified yet.",
         });
       } else {
-        console.log(err.message ?? "Something went wrong. Please try again.");
+        setError(err.message ?? "Something went wrong. Please try again.");
       }
     }
   });

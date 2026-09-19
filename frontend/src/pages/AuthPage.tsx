@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useShallow } from "zustand/shallow";
 
 import logo from "@/assets/logo.svg";
 import LoginForm from "@/components/auth/LoginForm";
@@ -7,6 +8,7 @@ import SignUpForm from "@/components/auth/SignUpForm";
 import VerifyEmailSheet from "@/components/auth/VerifyEmailSheet";
 import { AppleLogo, GoogleLogo } from "@/components/icons/ProviderLogos";
 import { spring, tap } from "@/lib/motion";
+import { useAuthErrorStore } from "@/store/authStore";
 import { useThemeStore } from "@/store/themeStore";
 
 type Mode = "login" | "signup";
@@ -20,9 +22,9 @@ const FORMS: Record<Mode, React.ReactNode> = {
 
 export default function AuthPage() {
   const theme = useThemeStore((s) => s.theme);
+  const [error, setError] = useAuthErrorStore(useShallow((state) => [state.error, state.setError]));
 
   const [mode, setMode] = useState<Mode>("login");
-  const [error, setError] = useState<string | null>(null);
 
   const isSignup = mode === "signup";
 
@@ -74,7 +76,7 @@ export default function AuthPage() {
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.15 }}
-                className="text-sm text-red-400 px-1 overflow-hidden"
+                className="text-sm text-red-400 px-1 overflow-hidden mt-3"
               >
                 {error}
               </motion.p>

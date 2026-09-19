@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { FormInputs } from "@/components/form";
 import { INPUT_TYPE } from "@/constants/input-type";
 import { tap } from "@/lib/motion";
-import { useAuthStore } from "@/store/authStore";
+import { useAuthErrorStore, useAuthStore } from "@/store/authStore";
 import { useVerifyEmailStore } from "@/store/verifyEmail";
 import type { FormInputTypes } from "@/types/input-types";
 
@@ -32,6 +32,7 @@ type FormSchemaType = yup.InferType<typeof schema>;
 const SignUpForm = () => {
   const [register] = useAuthStore(useShallow((state) => [state.register]));
   const [handleShow] = useVerifyEmailStore(useShallow((state) => [state.handleShow]));
+  const [setError] = useAuthErrorStore(useShallow((state) => [state.setError]));
 
   const {
     handleSubmit,
@@ -43,12 +44,13 @@ const SignUpForm = () => {
   });
 
   const onSubmit = handleSubmit(async (data) => {
+    setError(null);
     try {
       const email = data.email.trim();
       await register(email, data.password, data.firstName.trim(), data.lastName.trim());
       handleShow(email);
     } catch (err: any) {
-      console.log(err.message ?? "Something went wrong. Please try again.");
+      setError(err.message ?? "Something went wrong. Please try again.");
     }
   });
 
