@@ -30,6 +30,7 @@ dist
 dist-ssr
 .vite
 *.local
+.env
 
 # Editor directories and files
 .vscode/*
@@ -41,3 +42,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
