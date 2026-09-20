@@ -69,6 +69,7 @@ const LoginForm = () => {
       inputType: INPUT_TYPE.PASSWORD,
       name: "password",
       label: "Password",
+      placeholder: "Your password",
     },
   ];
 

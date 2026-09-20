@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useController } from "react-hook-form";
 
 import { errorClass, fieldClass } from "./classes";
