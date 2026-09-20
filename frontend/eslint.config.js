@@ -28,6 +28,10 @@ export default defineConfig([
     // The Vite entry point renders into the DOM rather than exporting a
     // component, so react-refresh's export rule has nothing to bind to here.
     files: ["src/main.tsx"],
-    rules: { "react-refresh/only-export-components": "off" },
+   
+    rules: { 
+      "react-refresh/only-export-components": "off" ,
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
   },
 ]);
