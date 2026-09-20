@@ -33,6 +33,24 @@ _ALLOWED_VOICES = {
     "en-US-Andrew:DragonHDLatestNeural",
 }
 
+# Each HD voice's Standard-tier counterpart — same speaker, cheaper rate. The
+# "routine" bucket used to ignore the caller's choice entirely and always use
+# settings.azure_tts_voice_standard (a female voice), so picking "Frank"
+# (Andrew) in Settings still read every reminder, chat reply and preview in a
+# woman's voice. Mapping to the twin keeps the cost split and the user's pick.
+_STANDARD_TWIN = {
+    "en-US-Ava:DragonHDLatestNeural": "en-US-AvaNeural",
+    "en-US-Andrew:DragonHDLatestNeural": "en-US-AndrewNeural",
+}
+
+
+def _resolve_voice(purpose: str, voice: str | None) -> str:
+    """Pick the voice server-side from purpose — a "routine" request can never
+    get the HD voice just by passing one, which would defeat the cost split."""
+    if purpose == "briefing":
+        return voice or settings.azure_tts_voice
+    return _STANDARD_TWIN.get(voice or "", settings.azure_tts_voice_standard)
+
 _TIMEOUT = httpx.Timeout(10.0)
 # Azure's WAV output format — real RIFF/PCM straight off the wire, which is
 # also what iOS's UNNotificationSound requires (see reminderAudio.ts).
@@ -100,10 +118,9 @@ class TTSRequest(BaseModel):
     # prompt cap in gemini.py) with real headroom, short enough to bound the
     # worst-case cost of a single call.
     text: str = Field(min_length=1, max_length=800)
-    # Only meaningful for purpose="briefing" (see below) — None uses
-    # settings.azure_tts_voice. Ignored for "routine": that bucket always
-    # uses the cheaper Standard voice regardless of what's passed here, since
-    # letting the caller pick would defeat the whole point of the split.
+    # For purpose="briefing" this HD voice is used as-is (None uses
+    # settings.azure_tts_voice). For "routine" it's swapped for its Standard
+    # twin (see _STANDARD_TWIN) — same speaker, cheaper voice.
     # Validated against _ALLOWED_VOICES below — never passed to Azure
     # unchecked (see that constant's comment for why).
     voice: str | None = None
@@ -186,10 +203,7 @@ async def tts(
     briefing, via Azure AI Speech. The client falls back to the device's
     local voice whenever this endpoint is unreachable or errors."""
     is_briefing = body.purpose == "briefing"
-    # Purpose decides the voice server-side, not the caller — a "routine"
-    # request can't get the HD voice just by passing a different `voice`,
-    # which would defeat the entire cost split.
-    voice = (body.voice or settings.azure_tts_voice) if is_briefing else settings.azure_tts_voice_standard
+    voice = _resolve_voice(body.purpose, body.voice)
     key = _cache_key(voice, body.text)
     cached = _audio_cache.get(key)
     if cached is not None:

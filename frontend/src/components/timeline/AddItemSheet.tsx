@@ -145,8 +145,7 @@ export default function AddItemSheet({
   const isEditing = !!editItem;
   const titleRef = useRef<HTMLInputElement>(null);
   // Adding starts with typing a title, so the keyboard opens itself; editing
-  // usually tweaks time/duration, so it must not (the only auto-open keyboard
-  // in the app, by design).
+  // usually tweaks time/duration, so it must not.
   useAutoFocus(titleRef, isOpen && !isEditing);
 
   const [step, setStep] = useState(1);

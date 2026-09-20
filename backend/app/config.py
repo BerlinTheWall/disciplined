@@ -74,11 +74,11 @@ class Settings(BaseSettings):
     # (e.g. "en-US-Ava:DragonHDLatestNeural" -> "en-US"). Full list:
     # https://speech.microsoft.com/portal/voicegallery
     azure_tts_voice: str = "en-US-Ava:DragonHDLatestNeural"
-    # The cheaper Standard-tier voice ($16/1M chars vs. HD's $22/1M) used for
-    # routine TTS (reminders, chat replies, weekly/monthly recaps — see
-    # routers/tts.py's purpose split) — high-volume utility speech doesn't
-    # need HD's expressiveness, and it's not user-selectable like the HD
-    # voice is (Settings > Voice), so there's no personality to preserve.
+    # Fallback Standard-tier voice ($16/1M chars vs. HD's $22/1M) for routine
+    # TTS (reminders, chat replies, weekly/monthly recaps — see
+    # routers/tts.py's purpose split) when the request names no voice.
+    # Normally routine speech uses the Standard twin of the user's chosen HD
+    # voice instead (routers/tts.py's _STANDARD_TWIN), so the speaker matches.
     azure_tts_voice_standard: str = "en-US-AriaNeural"
     # Transactional email (verification codes, password reset) via Resend's
     # HTTP API. Blank in dev is fine — services/email.py falls back to
