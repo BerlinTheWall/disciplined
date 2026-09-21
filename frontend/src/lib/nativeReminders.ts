@@ -171,20 +171,63 @@ export function syncNativeReminders(upcoming: NativeReminder[]) {
 // (or just-fired) reminder is never touched at all.
 let scheduledSignatures = new Map<number, string>();
 
+// Ids the OS currently holds for this module. Reminders own the positive id
+// space (see notifId), so the negative ones — coach check-ins, which run their
+// own resync cycle — are filtered out and never touched here.
+async function pendingReminderIds(): Promise<Set<number>> {
+  try {
+    const pending = await LocalNotifications.getPending();
+    return new Set(pending.notifications.map((n) => n.id).filter((id) => id > 0));
+  } catch {
+    // Never let a failed read cancel or forget anything: an empty set would
+    // read as "the OS holds nothing", which would drop every signature and
+    // reschedule the world on the next pass.
+    return new Set(scheduledSignatures.keys());
+  }
+}
+
 function signatureFor(r: NativeReminder, sound: string): string {
   return `${r.fireAt}|${r.title}|${r.body}|${sound}`;
 }
 
 async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string> | null) {
   const desired = new Map<number, { r: NativeReminder; sound: string; signature: string }>();
+  // Re-checked against the clock here rather than trusting the batch, which
+  // was collected before this sync's awaits (sound synthesis is a network
+  // round-trip, and a backgrounded app can sit mid-await for a long time).
+  // A fireAt that went past in the meantime is no longer schedulable: the
+  // Capacitor plugin refuses a past date outright, and ReminderTts's alarm
+  // would fire it *immediately* — speaking a stale reminder out of nowhere.
+  //
+  // Dropping those from `desired` must not imply cancelling them, though.
+  // collectUpcoming deliberately keeps a reminder in the batch for a grace
+  // period past its fire time, precisely so a resync landing in that window
+  // leaves the real alarm alone; cancelling one here would kill it in the
+  // moments before the OS delivers it, which is the silent-no-show this diff
+  // exists to prevent. So they go in a hands-off set instead: not
+  // rescheduled, not cancelled, left exactly as the OS has them.
+  const now = Date.now();
+  const justDue = new Set<number>();
   for (const r of batch) {
+    const id = notifId(r.key);
+    if (r.fireAt <= now) {
+      justDue.add(id);
+      continue;
+    }
     const sound = sounds?.get(r.speech) ?? "default";
-    desired.set(notifId(r.key), { r, sound, signature: signatureFor(r, sound) });
+    desired.set(id, { r, sound, signature: signatureFor(r, sound) });
   }
 
+  // Cancel against what the OS is actually holding rather than against this
+  // process's memory of it. scheduledSignatures starts empty on every launch,
+  // so anything scheduled in a previous session — a reminder for a task that
+  // has since been completed, deleted, or moved — was invisible to this step
+  // and stayed armed, firing later for an item that no longer exists.
   // Only ever touch reminder-owned (positive-id) notifications here — coach
   // check-ins (negative ids) are a separate resync cycle, see notifId above.
-  const toCancel = [...scheduledSignatures.keys()].filter((id) => !desired.has(id));
+  const toCancel = [...(await pendingReminderIds())].filter(
+    (id) => !desired.has(id) && !justDue.has(id)
+  );
   if (toCancel.length > 0) {
     await LocalNotifications.cancel({ notifications: toCancel.map((id) => ({ id })) });
   }
@@ -232,7 +275,15 @@ async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string
         id,
         title: r.title,
         body: r.body,
-        schedule: { at: new Date(r.fireAt) },
+        // allowWhileIdle is what makes this a wakeup alarm on Android. Without
+        // it the plugin schedules setExact(AlarmManager.RTC, ...) — an alarm
+        // that does NOT wake the device and that Doze defers to the next
+        // maintenance window, with App Standby buckets deferring a rarely
+        // opened app's alarms by many hours on top. That is how an 18:30
+        // reminder arrives at 20:00, or a day late. It costs a rate limit of
+        // roughly one firing per 9 minutes per app while the device is idle,
+        // which reminders comfortably fit inside. No effect on iOS.
+        schedule: { at: new Date(r.fireAt), allowWhileIdle: true },
         actionTypeId: "REMINDER",
         extra: r.data,
         channelId: "reminders",
@@ -241,9 +292,27 @@ async function scheduleBatch(batch: NativeReminder[], sounds: Map<string, string
     });
   }
 
-  scheduledSignatures = new Map(
-    [...desired.entries()].map(([id, { signature }]) => [id, signature])
-  );
+  // Record what the OS actually holds, not what we asked it to hold. Two
+  // things this catches that trusting `desired` cannot:
+  //
+  //  - A notification the plugin refused (it drops a past-dated one with
+  //    nothing but a log line, and resolves the call anyway). Marking it
+  //    scheduled would make the signature diff skip it forever, turning a
+  //    transient failure into a reminder that silently never fires.
+  //  - Anything already delivered, which drops out of pending on its own and
+  //    so is correctly forgotten rather than looking still-armed.
+  const settled = await pendingReminderIds();
+  const next = new Map<number, string>();
+  for (const [id, { signature }] of desired) {
+    if (settled.has(id)) next.set(id, signature);
+  }
+  // Keep a just-due reminder's existing signature so the next resync still
+  // recognises it as untouched rather than as something new to schedule.
+  for (const id of justDue) {
+    const prev = scheduledSignatures.get(id);
+    if (prev !== undefined) next.set(id, prev);
+  }
+  scheduledSignatures = next;
 }
 
 // Synthesizing sounds makes a sync take a while; if another sync is requested

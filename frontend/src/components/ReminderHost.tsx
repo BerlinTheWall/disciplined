@@ -4,7 +4,7 @@ import { BellRing, X } from "lucide-react";
 
 import { speakAssistant } from "@/hooks/useSpeech";
 import { assistantReminderLine } from "@/lib/assistantSpeech";
-import { parseISODate, todayISODate, toISODate } from "@/lib/date";
+import { localTimeAtMs, todayISODate, toISODate } from "@/lib/date";
 import { isHabitActiveOnDate } from "@/lib/habits";
 import { ICONS, type IconKey } from "@/lib/icons";
 import { spring, tap } from "@/lib/motion";
@@ -62,7 +62,7 @@ function nextFireAt(now: number): number | null {
     if (fireAt > now && (next === null || fireAt < next)) next = fireAt;
   };
   const consider = (date: string, startMinutes: number, minutesBefore: number) => {
-    push(new Date(date + "T00:00:00").getTime() + (startMinutes - minutesBefore) * 60_000);
+    push(localTimeAtMs(date, startMinutes - minutesBefore));
   };
 
   for (const t of useTaskStore.getState().tasks) {
@@ -97,7 +97,7 @@ function collectDue(now: number): ReminderAlert[] {
     color: string,
     icon: IconKey
   ) {
-    const startAt = new Date(date + "T00:00:00").getTime() + startMinutes * 60_000;
+    const startAt = localTimeAtMs(date, startMinutes);
     const fireAt = startAt - minutesBefore * 60_000;
     // startMinutes + lead time are part of the key so rescheduling an item
     // re-arms its reminder.
@@ -174,7 +174,7 @@ function collectUpcoming(now: number): NativeReminder[] {
     icon: IconKey
   ) => {
     const key = `${kind}:${id}:${date}:${startMinutes}:${minutesBefore}`;
-    const startAt = new Date(date + "T00:00:00").getTime() + startMinutes * 60_000;
+    const startAt = localTimeAtMs(date, startMinutes);
     const fireAt = snoozes[key] ?? startAt - minutesBefore * 60_000;
     // Keep a due-or-just-fired reminder in the native-scheduled set for a
     // while past its fire time, not just up to it. Resyncs happen far more
@@ -240,7 +240,7 @@ function speakReminder(reminder: ReminderAlert) {
   if (!useSettingsStore.getState().voiceEnabled) return;
   if (spokenKeys.has(reminder.key)) return;
   spokenKeys.add(reminder.key);
-  const startAt = parseISODate(reminder.date).getTime() + reminder.startMinutes * 60_000;
+  const startAt = localTimeAtMs(reminder.date, reminder.startMinutes);
   const minutesUntil = Math.round((startAt - Date.now()) / 60_000);
   void speakAssistant(
     assistantReminderLine(reminder.title, reminder.startMinutes, minutesUntil, reminder.icon)
@@ -341,7 +341,7 @@ function alertFromData(data: ReminderNotificationData): ReminderAlert | null {
     color: string,
     icon: IconKey
   ): ReminderAlert => {
-    const startAt = new Date(data.date + "T00:00:00").getTime() + startMinutes * 60_000;
+    const startAt = localTimeAtMs(data.date, startMinutes);
     return {
       key: data.key,
       kind: data.kind,

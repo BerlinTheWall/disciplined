@@ -5,6 +5,8 @@ import {
   getDayLabel,
   getWeekDates,
   isSameDay,
+  localTimeAt,
+  localTimeAtMs,
   parseISODate,
   relativeDayName,
   todayISODate,
@@ -111,5 +113,50 @@ describe("relativeDayName", () => {
 
   it("returns null when a real date is needed", () => {
     expect(relativeDayName(addDaysISO(todayISODate(), 5))).toBeNull();
+  });
+});
+
+describe("localTimeAt", () => {
+  // The timezone tests run in isn't fixed (UTC in CI, whatever the developer's
+  // machine is locally), so these assert the invariant rather than a specific
+  // clock reading: whatever the zone, 18:30 on a date must come back as 18:30.
+  const ISO = (d: Date) => toISODate(d);
+  const everyDayOf = (year: number) => {
+    const days: string[] = [];
+    const d = new Date(year, 0, 1);
+    while (d.getFullYear() === year) {
+      days.push(ISO(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return days;
+  };
+
+  it("keeps the wall-clock time on every day of the year, DST changeovers included", () => {
+    for (const iso of everyDayOf(2027)) {
+      const at = localTimeAt(iso, 18 * 60 + 30);
+      expect(`${iso} ${at.getHours()}:${at.getMinutes()}`).toBe(`${iso} 18:30`);
+    }
+  });
+
+  it("diverges from naive midnight-plus-milliseconds only where the UTC offset shifts", () => {
+    // The bug this helper replaces: adding startMinutes as raw ms to local
+    // midnight walks *through* a DST transition, landing an hour off. In a
+    // zone without DST (CI's UTC) nothing diverges and this just confirms the
+    // helper is equivalent to what it replaced.
+    const naive = (iso: string, m: number) => new Date(iso + "T00:00:00").getTime() + m * 60_000;
+    let shifted = 0;
+    for (const iso of everyDayOf(2027)) {
+      const midnight = new Date(iso + "T00:00:00");
+      const target = localTimeAt(iso, 18 * 60 + 30);
+      const offsetShifted = midnight.getTimezoneOffset() !== target.getTimezoneOffset();
+      if (offsetShifted) {
+        shifted++;
+        expect(naive(iso, 18 * 60 + 30)).not.toBe(localTimeAtMs(iso, 18 * 60 + 30));
+      } else {
+        expect(naive(iso, 18 * 60 + 30)).toBe(localTimeAtMs(iso, 18 * 60 + 30));
+      }
+    }
+    // A DST zone has exactly two changeovers a year; a fixed-offset zone none.
+    expect([0, 2]).toContain(shifted);
   });
 });
