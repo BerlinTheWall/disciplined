@@ -85,7 +85,9 @@ async function scheduleCoachBatch(batch: ScheduledCheckpoint[]) {
       id: c.id,
       title: c.title,
       body: c.body,
-      schedule: { at: new Date(c.fireAt) },
+      // Wakes the device and survives Doze — see the note in
+      // nativeReminders.ts's scheduleBatch.
+      schedule: { at: new Date(c.fireAt), allowWhileIdle: true },
       extra: c.data,
       channelId: "reminders",
     })),

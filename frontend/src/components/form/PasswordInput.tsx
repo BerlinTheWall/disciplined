@@ -65,7 +65,7 @@ export const PasswordInput = ({ input, control }: Props) => {
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </span>
       </div>
-      {error?.message && <span className="text-red-500 text-xs mt-1.5 ml-4">{error?.message}</span>}
+      {error?.message && <span className="text-red-500 text-xs mt-1.5 ml-1">{error?.message}</span>}
       {input?.helperText && (
         <span className="text-fg-muted text-xs mt-1.5 ml-4">{input?.helperText}</span>
       )}

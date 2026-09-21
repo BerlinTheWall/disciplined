@@ -9,6 +9,25 @@ export function parseISODate(iso: string) {
   return new Date(iso + "T00:00:00");
 }
 
+// Wall-clock time on a given day: `date` at `minutes` past local midnight.
+//
+// Never `parseISODate(iso).getTime() + minutes * 60_000` — adding raw
+// milliseconds to midnight walks through a DST transition instead of over it,
+// so on the two changeover days a year an 18:30 item lands at 19:30 (spring
+// forward) or 17:30 (fall back). setHours re-resolves the offset for the
+// target time, which is what "18:30 local" actually means.
+export function localTimeAt(iso: string, minutes: number) {
+  const d = parseISODate(iso);
+  d.setHours(0, minutes, 0, 0);
+  return d;
+}
+
+// Epoch ms of the same — what the reminder scheduler compares against
+// Date.now().
+export function localTimeAtMs(iso: string, minutes: number) {
+  return localTimeAt(iso, minutes).getTime();
+}
+
 export function toISODate(date: Date) {
   // Local calendar date — never toISOString(), which converts to UTC and is
   // off by one from evening/early-morning depending on the timezone.
