@@ -55,6 +55,8 @@ public class ReminderTtsPlugin extends Plugin {
         AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
 
+        long now = System.currentTimeMillis();
+
         JSONObject previous = readState(prefs);
         JSONObject desired = new JSONObject();
         try {
@@ -63,6 +65,18 @@ public class ReminderTtsPlugin extends Plugin {
                 int id = item.getInt("id");
                 String text = item.getString("text");
                 long at = item.getLong("at");
+                // An alarm in the past does not wait — setExactAndAllowWhileIdle
+                // delivers it immediately, so a batch that went stale while the
+                // app was backgrounded (sound synthesis is a network call, and a
+                // suspended WebView can sit mid-await for a long time) would make
+                // the phone speak a reminder for something that was due hours or
+                // days ago. Skipping it here also leaves it out of the stored
+                // state, so a later sync carrying a corrected time still
+                // schedules it normally. The caller filters these too; this is
+                // the backstop, because being wrong here is audible.
+                if (at <= now) {
+                    continue;
+                }
                 String soundUri = item.optString("soundUri", "");
                 desired.put(String.valueOf(id), at + "|" + text + "|" + soundUri);
             }
@@ -78,6 +92,14 @@ public class ReminderTtsPlugin extends Plugin {
             String key = keys.next();
             String prevSig = previous.optString(key, null);
             String newSig = desired.optString(key, null);
+            // An alarm whose time has already come is either delivered or in
+            // the act of being delivered. Cancelling it achieves nothing in
+            // the first case and silently swallows the reminder in the second,
+            // so leave it alone and simply stop tracking it (it is absent from
+            // `desired`, so it drops out of the stored state below).
+            if (signatureTime(prevSig) <= now) {
+                continue;
+            }
             if (newSig == null || !newSig.equals(prevSig)) {
                 alarmManager.cancel(pendingIntentFor(context, Integer.parseInt(key), null, null));
             }
@@ -92,13 +114,18 @@ public class ReminderTtsPlugin extends Plugin {
                 int id = item.getInt("id");
                 String key = String.valueOf(id);
                 String newSig = desired.optString(key, null);
-                if (newSig != null && newSig.equals(previous.optString(key, null))) {
+                // Dropped by the past-time guard above — nothing to schedule.
+                if (newSig == null) {
+                    continue;
+                }
+                if (newSig.equals(previous.optString(key, null))) {
                     continue;
                 }
                 String text = item.getString("text");
                 long at = item.getLong("at");
                 String soundUri = item.has("soundUri") ? item.getString("soundUri") : null;
                 scheduleAlarm(alarmManager, at, pendingIntentFor(context, id, text, soundUri));
+
             }
         } catch (JSONException e) {
             call.reject("Invalid item", e);
@@ -198,6 +225,26 @@ public class ReminderTtsPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("granted", powerManager.isIgnoringBatteryOptimizations(context.getPackageName()));
         call.resolve(result);
+    }
+
+    // The fire time out of a stored "at|text|soundUri" signature. A signature
+    // this can't read falls back to Long.MAX_VALUE, i.e. "not yet due", so the
+    // caller applies its ordinary cancel rules to it exactly as before this
+    // guard existed — an unreadable entry should not leave an alarm armed
+    // forever.
+    private static long signatureTime(String signature) {
+        if (signature == null) {
+            return Long.MAX_VALUE;
+        }
+        int sep = signature.indexOf('|');
+        if (sep <= 0) {
+            return Long.MAX_VALUE;
+        }
+        try {
+            return Long.parseLong(signature.substring(0, sep));
+        } catch (NumberFormatException e) {
+            return Long.MAX_VALUE;
+        }
     }
 
     private static JSONObject readState(SharedPreferences prefs) {
