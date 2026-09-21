@@ -90,13 +90,31 @@ export default function OnboardingWizard() {
   const go = (next: number) => setStep(([cur]) => [next, next >= cur ? 1 : -1]);
   const canContinue = step !== 5 || title.trim().length > 0;
 
-  // Fired the moment they pick one, not just at the end of the wizard — that
-  // way the answer is captured even if they later abandon onboarding partway
-  // through. Failure is swallowed in authStore.setSegment itself; a flaky
-  // request should never block moving on in the wizard.
+  // Tapping is local-only — the answer is sent once, on Continue. Sending it
+  // per tap meant browsing the four options fired four PATCHes, three of them
+  // for answers the user never settled on.
+  //
+  // The step is optional, so tapping the chosen option again clears it. There
+  // is no other way to take it back, and a picker you cannot un-pick isn't
+  // really optional.
   function chooseSegment(id: UserSegment) {
-    setSegment(id);
-    void useAuthStore.getState().setSegment(id);
+    setSegment((current) => (current === id ? null : id));
+  }
+
+  // Last value actually sent, so stepping back and forth over this screen
+  // doesn't re-send the same answer. Deliberately not cleared on deselect:
+  // once an answer has been recorded server-side there's no "unset" endpoint,
+  // and the local null just means "nothing more to send".
+  const [sentSegment, setSentSegment] = useState<UserSegment | null>(null);
+
+  // Failure is swallowed in authStore.setSegment itself; a flaky request
+  // should never block moving on in the wizard.
+  function leaveSegmentStep() {
+    if (segment !== null && segment !== sentSegment) {
+      setSentSegment(segment);
+      void useAuthStore.getState().setSegment(segment);
+    }
+    go(3);
   }
 
   // Done either way — the spotlight tour is superseded (still replayable from
@@ -335,7 +353,7 @@ export default function OnboardingWizard() {
 
             {step === 4 && (
               <>
-                {heading("When did you", "wake up")}
+                {heading("When do you", "wake up")}
                 <p className="text-fg-muted mb-8">Your day starts here.</p>
                 <div className="flex-1 flex items-center">
                   <div className="w-full">
@@ -475,7 +493,7 @@ export default function OnboardingWizard() {
 
             {step === 9 && (
               <>
-                {heading("When will you", "go to bed")}
+                {heading("When do you", "go to bed")}
                 <p className="text-fg-muted mb-8">
                   A clear sleep goal helps regulate your body's internal clock.
                 </p>
@@ -530,7 +548,7 @@ export default function OnboardingWizard() {
           </div>
         )}
         {step === 1 && primaryButton("Start planning", () => go(2))}
-        {step === 2 && primaryButton("Continue", () => go(3))}
+        {step === 2 && primaryButton("Continue", leaveSegmentStep)}
         {step === 3 && primaryButton("Let's plan my real week", () => go(4))}
         {step >= 4 && step <= 9 && primaryButton("Continue", () => go(step + 1), !canContinue)}
         {step === 10 && primaryButton("Finish Setup", finishSetup)}
