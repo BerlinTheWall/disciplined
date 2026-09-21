@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { useController } from "react-hook-form";
 
 import { errorClass, fieldClass } from "./classes";
@@ -49,10 +48,8 @@ export const TextInput = ({ input, control }: Props) => {
         )}
         <input
           {...input.props}
-          name={field.name}
+          {...field}
           placeholder={input.placeholder}
-          ref={field.ref}
-          value={field.value ?? ""}
           onChange={handleOnChanged}
           className={cn(
             fieldClass,

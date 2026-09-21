@@ -70,6 +70,9 @@ const LoginForm = () => {
       name: "password",
       label: "Password",
       placeholder: "Your password",
+      props: {
+        autoComplete: "current-password",
+      },
     },
   ];
 

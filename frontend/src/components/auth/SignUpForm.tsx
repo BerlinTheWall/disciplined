@@ -83,12 +83,20 @@ const SignUpForm = () => {
       name: "password",
       label: "Password",
       gridSize: "col-span-2",
+      placeholder: "Min. 8 characters",
+      props: {
+        autoComplete: "new-password",
+      },
     },
     {
       inputType: INPUT_TYPE.PASSWORD,
       name: "confirmPassword",
       label: "Confirm password",
       gridSize: "col-span-2",
+      placeholder: "Re-enter your password",
+      props: {
+        autoComplete: "new-password",
+      },
     },
   ];
 
