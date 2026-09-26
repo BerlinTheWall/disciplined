@@ -10,7 +10,7 @@ import { INPUT_TYPE } from "@/constants/input-type";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { tap } from "@/lib/motion";
 import { useAuthErrorStore, useAuthStore } from "@/store/authStore";
-import { useVerifyEmailStore } from "@/store/verifyEmail";
+import { useVerifyEmailStore } from "@/store/verifyEmailStore";
 import type { FormInputTypes } from "@/types/input-types";
 
 const schema = yup.object({
