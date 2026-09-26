@@ -1,16 +1,42 @@
 import { useEffect, useState } from "react";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { motion } from "framer-motion";
 import { LoaderCircle } from "lucide-react";
+import { useForm } from "react-hook-form";
+import * as yup from "yup";
 import { useShallow } from "zustand/shallow";
 
 import BottomSheet from "@/components/BottomSheet";
+import { FormInputs } from "@/components/form";
+import { INPUT_TYPE } from "@/constants/input-type";
 import { ApiError } from "@/lib/api";
 import { tap } from "@/lib/motion";
 import { useAuthStore } from "@/store/authStore";
-import { useVerifyEmailStore } from "@/store/verifyEmail";
+import { useVerifyEmailStore } from "@/store/verifyEmailStore";
+import type { FormInputTypes } from "@/types/input-types";
 
-const fieldClass =
-  "w-full bg-surface rounded-xl border border-border-input px-4 py-3 text-[15px] text-fg placeholder:text-fg-faint outline-none focus:border-border-focus transition-colors";
+const schema = yup.object({
+  code: yup
+    .string()
+    .label("Verification code")
+    .required()
+    .length(6, "Code must be exactly 6 digits")
+    .default(""),
+});
+type FormSchemaType = yup.InferType<typeof schema>;
+
+const Inputs: FormInputTypes[] = [
+  {
+    inputType: INPUT_TYPE.NUMBER,
+    name: "code",
+    placeholder: "123456",
+    maxLength: 6,
+    props: {
+      autoComplete: "one-time-code",
+      className: "tracking-[0.3em] text-center",
+    },
+  },
+];
 
 // Verification is a hard gate on login (see routers/auth.py) — this sheet is
 // the one way in for an unverified account, reached either right after
@@ -30,21 +56,34 @@ export default function VerifyEmailSheet() {
   const verifyEmail = useAuthStore((s) => s.verifyEmail);
   const resendVerification = useAuthStore((s) => s.resendVerification);
 
-  const [code, setCode] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const {
+    handleSubmit,
+    control,
+    reset,
+    formState: { isSubmitting },
+    watch,
+  } = useForm<FormSchemaType>({
+    resolver: yupResolver(schema),
+    defaultValues: schema.getDefault(),
+  });
 
   // Adjust state during render (rather than in the effect below) for the
   // synchronous "about to auto-send" reset — the effect is left to do only
   // the actual async call and its own promise-callback state updates, which
   // is the part React's rules actually want inside an effect.
   const [wasOpen, setWasOpen] = useState(isOpen);
+
+  const busy = isSubmitting || resending;
+
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     if (isOpen && autoSendOnOpen) {
       setError(null);
-      setBusy(true);
+      setResending(true);
     }
   }
 
@@ -55,43 +94,39 @@ export default function VerifyEmailSheet() {
       .catch((err: unknown) => {
         setError(err instanceof ApiError ? err.message : "Something went wrong — try again.");
       })
-      .finally(() => setBusy(false));
+      .finally(() => setResending(false));
   }, [isOpen, autoSendOnOpen, email, resendVerification]);
 
   function close() {
     handleClose();
     window.setTimeout(() => {
-      setCode("");
+      reset();
       setNotice(null);
       setError(null);
-      setBusy(false);
+      setResending(false);
     }, 250); // after the sheet's exit animation
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy || code.length !== 6) return;
+  const onSubmit = handleSubmit(async (data) => {
     setError(null);
-    setBusy(true);
     try {
-      await verifyEmail(email, code);
+      await verifyEmail(email, data.code);
       close();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong — try again.");
-      setBusy(false);
     }
-  }
+  });
 
   async function resend() {
     if (busy) return;
     setError(null);
-    setBusy(true);
+    setResending(true);
     try {
       setNotice(await resendVerification(email));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong — try again.");
     } finally {
-      setBusy(false);
+      setResending(false);
     }
   }
 
@@ -102,21 +137,14 @@ export default function VerifyEmailSheet() {
       <p className="text-sm text-fg-faint mb-5">
         {message ?? `Enter the code we sent to ${email}`}
       </p>
-      <form onSubmit={submit}>
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-          placeholder="123456"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          className={`${fieldClass} tracking-[0.3em] text-center`}
-        />
+      <form onSubmit={onSubmit}>
+        <FormInputs inputs={Inputs} control={control} />
         {notice && <p className="text-sm text-fg-muted mt-2">{notice}</p>}
         {error && <p className="text-sm text-red-400 mt-2">{error}</p>}
         <motion.button
           type="submit"
           whileTap={tap}
-          disabled={busy || code.length !== 6}
+          disabled={busy || watch("code").length !== 6}
           className="w-full bg-fg text-fg-inverse rounded-2xl py-3.5 font-semibold flex items-center justify-center gap-2 mt-5 disabled:opacity-60"
         >
           {busy && <LoaderCircle size={18} className="animate-spin" />}

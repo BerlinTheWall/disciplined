@@ -8,7 +8,7 @@ import { FormInputs } from "@/components/form";
 import { INPUT_TYPE } from "@/constants/input-type";
 import { tap } from "@/lib/motion";
 import { useAuthErrorStore, useAuthStore } from "@/store/authStore";
-import { useVerifyEmailStore } from "@/store/verifyEmail";
+import { useVerifyEmailStore } from "@/store/verifyEmailStore";
 import type { FormInputTypes } from "@/types/input-types";
 
 const schema = yup.object({
@@ -83,12 +83,20 @@ const SignUpForm = () => {
       name: "password",
       label: "Password",
       gridSize: "col-span-2",
+      placeholder: "Min. 8 characters",
+      props: {
+        autoComplete: "new-password",
+      },
     },
     {
       inputType: INPUT_TYPE.PASSWORD,
       name: "confirmPassword",
       label: "Confirm password",
       gridSize: "col-span-2",
+      placeholder: "Re-enter your password",
+      props: {
+        autoComplete: "new-password",
+      },
     },
   ];
 

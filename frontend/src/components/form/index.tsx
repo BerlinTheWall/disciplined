@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 
+import { NumberInput } from "./NumberInput";
 import { PasswordInput } from "./PasswordInput";
 import { TextInput } from "./TextInput";
 import { INPUT_TYPE } from "@/constants/input-type";
@@ -14,6 +15,8 @@ const HandleInputType = ({ control, field }: HandleInputTypeProps) => {
   switch (field.inputType) {
     case INPUT_TYPE.TEXT:
       return <TextInput input={field} control={control} />;
+    case INPUT_TYPE.NUMBER:
+      return <NumberInput input={field} control={control} />;
     case INPUT_TYPE.PASSWORD:
       return <PasswordInput input={field} control={control} />;
 

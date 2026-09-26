@@ -2,14 +2,15 @@ import { useController } from "react-hook-form";
 
 import { errorClass, fieldClass } from "./classes";
 import { cn } from "@/lib/cn";
-import type { TextInputType } from "@/types/input-types";
+import { validateNumberInput } from "@/lib/validate-number-input";
+import type { NumberInputType } from "@/types/input-types";
 
 type Props = {
-  input: TextInputType;
+  input: NumberInputType;
   control: any;
 };
 
-export const TextInput = ({ input, control }: Props) => {
+export const NumberInput = ({ input, control }: Props) => {
   const {
     field,
     fieldState: { error },
@@ -19,18 +20,23 @@ export const TextInput = ({ input, control }: Props) => {
   });
 
   const handleOnChanged = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!validateNumberInput(e.target.value)) {
+      return;
+    }
+
+    const val = e.target.value.replace(/,/g, "");
+
     if (input.maxLength) {
-      if (e.target.value.length > input.maxLength) {
+      if (val.length > input.maxLength) {
         return;
       }
 
-      field.onChange(e);
+      field.onChange(val);
     } else {
-      field.onChange(e);
+      field.onChange(val);
     }
-
-    if (input?.props?.onChange) {
-      input.props.onChange(e);
+    if (input.props?.onChange) {
+      input.props?.onChange(e);
     }
   };
 
@@ -49,6 +55,7 @@ export const TextInput = ({ input, control }: Props) => {
         <input
           {...input.props}
           {...field}
+          inputMode="numeric"
           placeholder={input.placeholder}
           onChange={handleOnChanged}
           className={cn(

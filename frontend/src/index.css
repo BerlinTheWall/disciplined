@@ -21,8 +21,8 @@
   --surface-raised: #e1e6ff;
   --surface-subtle: #dbdfe6;
   --surface-inverse: #0b1120;
-  --surface-feature: #0b1120;
-  --surface-feature-alt: #1b2436;
+  --surface-feature: #0b1120; /* not used */
+  --surface-feature-alt: #1b2436; /* not used */
   /* The unselected track of a segmented toggle (daily/weekly switch,
      Goals page's Week/Month/Year and Overview/All toggles) — needs to stay
      visibly darker than the selected pill inside it (bg-surface + shadow),
@@ -45,7 +45,7 @@
   --fg-faint: #9ca3af;
   --fg-disabled: #d1d5db;
   --fg-inverse: #ffffff;
-  --fg-muted-inverse: #9ca3af;
+  --fg-muted-inverse: #9ca3af; /* not used */
 
   --border: #dfe2e7;
   --border-strong: #c7cbd3;
@@ -92,8 +92,8 @@
   --surface-raised: #2c3752;
   --surface-subtle: #435071;
   --surface-inverse: #f4f6fa;
-  --surface-feature: #161f33;
-  --surface-feature-alt: #2a3552;
+  --surface-feature: #161f33; /* not used */
+  --surface-feature-alt: #2a3552; /* not used */
   --surface-toggle-track: #2c3752;
   --surface-card: var(--surface-alt);
   --surface-tint: rgba(156, 163, 175, 0.15);
@@ -103,7 +103,7 @@
   --fg-faint: #6b7280;
   --fg-disabled: #435071;
   --fg-inverse: #0b1120;
-  --fg-muted-inverse: #6b7280;
+  --fg-muted-inverse: #6b7280; /* not used */
 
   --border: #2c3752;
   --border-strong: #435071;
@@ -117,7 +117,7 @@
 
   --path-road: #2a2b40;
   --path-accent: #818cf8;
-  --path-ink: #c7c9fa;
+  --path-ink: #c7c9fa; /* not used */
   --path-today: #a855f7;
   --path-missed: #fb923c;
 }
@@ -135,6 +135,7 @@
   --shadow-soft: 0 1px 4px rgba(17, 24, 39, 0.05);
   --shadow-card: 0 2px 14px rgba(17, 24, 39, 0.06), 0 1px 3px rgba(17, 24, 39, 0.04);
 
+  /* not used */
   --color-surface: var(--surface);
   --color-surface-alt: var(--surface-alt);
   --color-surface-raised: var(--surface-raised);
@@ -157,6 +158,7 @@
   --color-border-strong: var(--border-strong);
   --color-border-input: var(--border-input);
   --color-border-focus: var(--border-focus);
+  /* not used */
 }
 
 /* ── Global base styles ────────────────────────────────────────────── */

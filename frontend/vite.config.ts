@@ -46,4 +46,8 @@ export default defineConfig({
     // identically in the packaged native builds where there is no .env file.
     __APP_RELEASE__: JSON.stringify(resolveRelease()),
   },
+
+  server: {
+    host: true,
+  },
 });

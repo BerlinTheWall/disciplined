@@ -18,10 +18,14 @@ export type TextInputType = General & {
   props?: Omit<InputHTMLAttributes<HTMLInputElement>, "name" | "placeholder">;
 };
 export type PasswordInputType = Omit<TextInputType, "endIcon">;
+export type NumberInputType = TextInputType;
 
 export type FormInputTypes =
   | (TextInputType & {
       inputType: INPUT_TYPE.TEXT;
+    })
+  | (NumberInputType & {
+      inputType: INPUT_TYPE.NUMBER;
     })
   | (PasswordInputType & {
       inputType: INPUT_TYPE.PASSWORD;

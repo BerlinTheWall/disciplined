@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useController } from "react-hook-form";
@@ -39,11 +38,9 @@ export const PasswordInput = ({ input, control }: Props) => {
         )}
         <input
           {...input.props}
+          {...field}
           type={showPassword ? "text" : "password"}
-          name={field.name}
           placeholder={input.placeholder}
-          ref={field.ref}
-          value={field.value ?? ""}
           onChange={(e) => {
             field.onChange(e);
             if (input.props?.onChange) {
